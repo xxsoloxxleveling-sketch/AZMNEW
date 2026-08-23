@@ -23,7 +23,7 @@ interface AboutViewProps {
 export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
   const roadmapMilestones = [
     {
-      year: '2022',
+      year: 'Early 2025',
       session: 'Session I',
       seats: '50 Seats',
       candidates: '450 Candidates',
@@ -31,7 +31,7 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
       detail: 'Launched the first standardized written test to identify high-potential students from underprivileged backgrounds.'
     },
     {
-      year: '2023',
+      year: 'Mid 2025',
       session: 'Session II',
       seats: '120 Seats',
       candidates: '980 Candidates',
@@ -39,7 +39,7 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
       detail: 'Eliminated manual paper checking by introducing optical mark recognition (OMR) scanners and direct fee stipends.'
     },
     {
-      year: '2024',
+      year: 'Late 2025',
       session: 'Session III',
       seats: '250 Seats',
       candidates: '1,750 Candidates',
@@ -47,7 +47,7 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
       detail: 'Expanded test hubs to Abbottabad and Haripur; awarded high-spec laptops and annual school fee coverage.'
     },
     {
-      year: '2025',
+      year: 'Early 2026',
       session: 'Session IV',
       seats: '380 Seats',
       candidates: '2,400 Candidates',
@@ -55,8 +55,8 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
       detail: 'Conferred Umrah packages to overall position holders alongside university BS semester grants.'
     },
     {
-      year: '2026',
-      session: 'Session V (Current)',
+      year: '2026 (Current)',
+      session: 'Session V',
       seats: '500 Seats',
       candidates: '3,500+ Expected',
       headline: 'Published 1,000 MCQs Question Bank',
@@ -64,6 +64,7 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
       isCurrent: true
     }
   ];
+
 
   const boardMembers = [
     {
@@ -301,8 +302,9 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
             Session I to Session V Evolution
           </h2>
           <p className="text-xs text-slate-600">
-            How AZM expanded from a local 50-seat initiative in 2022 to a region-wide 500-seat scholarship platform in 2026.
+            How AZM.AIO expanded from its inaugural 50-seat initiative in 2025 to a region-wide 500-seat scholarship platform in 2026.
           </p>
+
         </div>
 
         {/* Continuous Horizontal Milestone Timeline */}

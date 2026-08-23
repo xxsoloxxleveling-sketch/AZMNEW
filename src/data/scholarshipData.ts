@@ -88,7 +88,7 @@ export const OFFICIAL_DATA = {
     name: 'Mr. Sumama Khan',
     role: 'Founder & Director General',
     organization: 'AZM Group of Companies (Pvt.) Ltd.',
-    quote: 'When we initiated AZM.AIO in 2022, our single guiding purpose was to restore total faith in academic merit. True educational empowerment only begins when talent is recognized purely through transparent, standardized optical testing — free from favoritism, political discretion, or financial barriers. By self-funding every scholarship directly through AZM Group of Companies, we ensure that every deserving student receives an uncompromising standard of educational dignity and opportunity.'
+    quote: 'When we initiated AZM.AIO in 2025, our single guiding purpose was to restore total faith in academic merit. True educational empowerment only begins when talent is recognized purely through transparent, standardized optical testing — free from favoritism, political discretion, or financial barriers. By self-funding every scholarship directly through AZM Group of Companies, we ensure that every deserving student receives an uncompromising standard of educational dignity and opportunity.'
   },
   coFounder: {
     name: 'Mrs. Iram Zeb',
