@@ -70,11 +70,20 @@ export const OFFICIAL_DATA = {
   tagline: 'Empowering Potential. Inspiring Excellence.',
   urduQuote: 'صلاحیت کو موقعے، اور محنت کو پہچان',
   trustMandate: 'Independent, fair, and transparent: funded by AZM Group of Companies, not donations.',
+  cuin: '0321467',
+  secpReg: 'AZM.AIO (Pvt.) Ltd. (CUIN: 0321467)',
+  impactTrackRecord: {
+    umrahCount: '5 Holy Umrahs',
+    laptopCount: '18 Laptops',
+    scholarshipAmount: 'PKR 13 Lacs+',
+    cuinNumber: '0321467'
+  },
   helpline: '0305-1755551',
   helplineHours: 'Mon to Sat, 9:00 AM to 5:00 PM',
   email: 'azmgoc30@gmail.com',
   headOffice: 'Jadoon Public High School & College, Gandhian, Mansehra, KP, Pakistan',
   registrationFee: 'PKR 0 (Free Entry for Session V)',
+
   founder: {
     name: 'Mr. Sumama Khan',
     role: 'Founder & Director General',

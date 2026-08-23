@@ -46,8 +46,9 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
             <Logo size="md" variant="dark" />
             
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-950/80 text-sky-300 border border-blue-800/60 text-[11px] font-bold">
-              <span>SECP Registered Corporate Entity: AZM.AIO (Pvt.) Ltd.</span>
+              <span>SECP Registered Corporate Entity: AZM.AIO (Pvt.) Ltd. • CUIN: 0321467</span>
             </div>
+
 
             <p className="text-xs text-slate-300 leading-relaxed">
               Conducting standardized optical merit examinations and distributing verified academic stipends, laptops, and fee subsidies to deserving students from Grade 6th to BS level.
