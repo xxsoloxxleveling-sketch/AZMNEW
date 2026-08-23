@@ -79,15 +79,16 @@ export const OFFICIAL_DATA = {
     name: 'Mr. Sumama Khan',
     role: 'Founder & Director General',
     organization: 'AZM Group of Companies (Pvt.) Ltd.',
-    quote: 'True educational empowerment begins when merit is rewarded with absolute transparency and unyielding dedication to our youth.'
+    quote: 'When we initiated AZM.AIO in 2022, our single guiding purpose was to restore total faith in academic merit. True educational empowerment only begins when talent is recognized purely through transparent, standardized optical testing — free from favoritism, political discretion, or financial barriers. By self-funding every scholarship directly through AZM Group of Companies, we ensure that every deserving student receives an uncompromising standard of educational dignity and opportunity.'
   },
   coFounder: {
     name: 'Mrs. Iram Zeb',
     role: 'Co-Founder & Executive Director',
     organization: 'AZM Group of Companies (Pvt.) Ltd.',
-    quote: 'Our mission is to ensure that financial hardship never stands between an ambitious student and their academic aspirations.'
+    quote: 'Every child carries extraordinary potential, yet too many gifted students are forced to abandon their studies due to sudden financial distress or the loss of family support. Our welfare mandate is built on compassion and unyielding commitment — ensuring that orphan students, underprivileged families, and high-achieving scholars receive complete tuition coverage, high-spec laptops, and direct mentorship to pursue their dreams without compromise.'
   }
 };
+
 
 export const MONTHLY_ASSISTANCE_RATES: MonthlyAssistanceRate[] = [
   {
