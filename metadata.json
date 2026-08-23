@@ -1,0 +1,6 @@
+{
+  "name": "AZM.AIO Educational Scholarship Portal",
+  "description": "Official scholarship management and application portal for AZM.AIO (Pvt.) Ltd. Session V 2026. Includes 8-stage student registration, roll number slip lookup, examination syllabus, results desk, partner school directory, and fee calculator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
