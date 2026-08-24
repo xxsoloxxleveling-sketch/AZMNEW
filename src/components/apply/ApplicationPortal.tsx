@@ -62,6 +62,8 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const [createdStudent, setCreatedStudent] = useState<any>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [photoError, setPhotoError] = useState<string>('');
+  const [stageErrors, setStageErrors] = useState<{ [key: number]: string[] }>({});
+
   
   // Payment Method & Challan Modal State
   const [paymentTab, setPaymentTab] = useState<'easypaisa' | 'bank' | 'hub'>('easypaisa');
@@ -361,12 +363,27 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     e.preventDefault();
     setSubmitError('');
 
-    if (!formData.declarationAccepted) {
-      alert('Please accept the final declaration before submitting.');
+    // Pre-flight check all stages 1 to 7
+    const incomplete = getIncompleteStagesBefore8();
+    if (incomplete.length > 0) {
+      setSubmitError(
+        `Incomplete Fields: Stage ${incomplete[0].stage} (${incomplete[0].title}) is missing required information: ${incomplete[0].errors[0]}`
+      );
+      setCurrentStage(incomplete[0].stage);
+      setStageErrors((prev) => ({ ...prev, [incomplete[0].stage]: incomplete[0].errors }));
+      return;
+    }
+
+    // Check Stage 8 requirements
+    const stage8Errors = getStageErrors(8);
+    if (stage8Errors.length > 0) {
+      setSubmitError(stage8Errors[0]);
+      setStageErrors((prev) => ({ ...prev, 8: stage8Errors }));
       return;
     }
 
     setIsSubmitting(true);
+
     try {
       const backendPayload = {
         fullName: formData.fullName,
@@ -541,6 +558,123 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     { num: 8, title: 'Declaration & Signature', icon: CheckCircle2 },
   ];
 
+  // Real-time Stage Validation Logic
+  const getStageErrors = (stageNum: number): string[] => {
+    const errs: string[] = [];
+
+    switch (stageNum) {
+      case 1:
+        if (!formData.fullName?.trim()) errs.push('Candidate Full Name is required.');
+        if (!formData.fatherName?.trim()) errs.push("Father's / Guardian's Name is required.");
+        if (!formData.dob) errs.push('Date of Birth is required.');
+        if (!formData.cnicBForm?.trim()) {
+          errs.push('Candidate CNIC / B-Form Number is required.');
+        } else if (formData.cnicBForm.replace(/\D/g, '').length !== 13) {
+          errs.push('CNIC / B-Form must contain exactly 13 digits (e.g., 13503-1234567-1).');
+        }
+        if (!formData.photoUrl) errs.push('Passport-size Candidate Photograph (Max 200 KB) is required.');
+        break;
+
+      case 2:
+        if (!formData.permanentAddress?.trim()) errs.push('Permanent Residential Address is required.');
+        if (!formData.district?.trim()) errs.push('District is required.');
+        if (!formData.mobile?.trim()) errs.push('Active Student / Parent Mobile Number is required.');
+        if (!formData.whatsapp?.trim()) errs.push('Active WhatsApp Number is required for examination alerts.');
+        break;
+
+      case 3:
+        if (!formData.currentClass?.trim()) errs.push('Target Applied Grade / Class is required.');
+        if (!formData.schoolName?.trim()) errs.push('Current School / College Name is required.');
+        if (!formData.currentRollNo?.trim()) errs.push('Current School Roll Number is required.');
+        break;
+
+      case 4:
+        if (!formData.appliedCategory) errs.push('Please select a Scholarship Category.');
+        if (formData.isSpecialNeed && !formData.specialNeedDetails?.trim()) {
+          errs.push('Please describe special need / disability details.');
+        }
+        break;
+
+      case 5:
+        if (!formData.guardianOccupation?.trim()) errs.push("Guardian / Father's Occupation is required.");
+        if (!formData.monthlyHouseholdIncome || Number(formData.monthlyHouseholdIncome) <= 0) {
+          errs.push('Monthly Household Income must be greater than 0.');
+        }
+        if (!formData.emergencyContact?.trim()) errs.push('Emergency Contact Mobile is required.');
+        break;
+
+      case 6:
+        if (!formData.academicRecords || formData.academicRecords.length === 0) {
+          errs.push('Please add at least one academic record (e.g., Class 9th / 8th result) in the table above.');
+        }
+        break;
+
+      case 7:
+        if (!formData.documents?.bformUploaded) errs.push('Candidate B-Form / CNIC scanned copy is required.');
+        if (!formData.documents?.fatherCnicUploaded) errs.push('Father / Guardian CNIC scanned copy is required.');
+        if (!formData.documents?.dmcUploaded) errs.push('Previous Examination DMC / Result Card is required.');
+        if (!formData.documents?.domicileUploaded) errs.push('District Domicile Certificate (KP / Hazara) is required.');
+        break;
+
+      case 8:
+        if (!formData.declarationAccepted) errs.push('Please accept the legal terms and evaluation protocol undertaking.');
+        if (!formData.signatureDataUrl && !hasSignature) errs.push('Please draw your digital signature on the pad above.');
+        break;
+
+      default:
+        break;
+    }
+
+    return errs;
+  };
+
+  const isStageComplete = (stageNum: number): boolean => {
+    return getStageErrors(stageNum).length === 0;
+  };
+
+  const getIncompleteStagesBefore8 = () => {
+    const incomplete: { stage: number; title: string; errors: string[] }[] = [];
+    for (let s = 1; s <= 7; s++) {
+      const errs = getStageErrors(s);
+      if (errs.length > 0) {
+        incomplete.push({
+          stage: s,
+          title: stagesList[s - 1].title,
+          errors: errs,
+        });
+      }
+    }
+    return incomplete;
+  };
+
+  const handleProceedNext = (targetStage: number) => {
+    // If moving forward, validate the current stage first
+    if (targetStage > currentStage) {
+      const currentErrs = getStageErrors(currentStage);
+      if (currentErrs.length > 0) {
+        setStageErrors(prev => ({ ...prev, [currentStage]: currentErrs }));
+        setTimeout(() => {
+          const alertEl = document.getElementById('stage-validation-alert');
+          if (alertEl) {
+            alertEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+        return;
+      }
+    }
+
+    // Clear current stage error
+    setStageErrors(prev => {
+      const next = { ...prev };
+      delete next[currentStage];
+      return next;
+    });
+
+    setCurrentStage(targetStage);
+    window.scrollTo({ top: 180, behavior: 'smooth' });
+  };
+
+
   return (
     <div className="py-10 max-w-7xl mx-auto px-4 sm:px-6">
       {/* Header & Tab Switcher */}
@@ -608,29 +742,58 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
               {/* Stage Step Pills Carousel */}
               <div className="flex gap-2 overflow-x-auto py-3 no-scrollbar mt-2">
-                {stagesList.map((st) => (
-                  <button
-                    key={st.num}
-                    onClick={() => setCurrentStage(st.num)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
-                      currentStage === st.num
-                        ? 'bg-[#185b9d] text-white border-[#185b9d] shadow-xs'
-                        : currentStage > st.num
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : 'bg-slate-50 text-slate-600 border-slate-200'
-                    }`}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
-                      {st.num}
-                    </span>
-                    <span>{st.title}</span>
-                  </button>
-                ))}
+                {stagesList.map((st) => {
+                  const isCurrent = currentStage === st.num;
+                  const isDone = isStageComplete(st.num);
+                  const hasErr = !!stageErrors[st.num]?.length;
+
+                  return (
+                    <button
+                      key={st.num}
+                      type="button"
+                      onClick={() => handleProceedNext(st.num)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                        isCurrent
+                          ? 'bg-[#185b9d] text-white border-[#185b9d] shadow-sm ring-2 ring-[#185b9d]/30'
+                          : hasErr
+                          ? 'bg-rose-50 text-rose-800 border-rose-300'
+                          : isDone
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                          isCurrent
+                            ? 'bg-white/20 text-white'
+                            : hasErr
+                            ? 'bg-rose-200 text-rose-900'
+                            : isDone
+                            ? 'bg-emerald-200 text-emerald-900'
+                            : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {isDone && !isCurrent ? '✓' : hasErr && !isCurrent ? '!' : st.num}
+                      </span>
+                      <span>{st.title}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Form Content By Stage */}
-            <form onSubmit={currentStage === 8 ? handleFinalSubmit : (e) => { e.preventDefault(); setCurrentStage(prev => Math.min(prev + 1, 8)); }}>
+            <form
+              onSubmit={
+                currentStage === 8
+                  ? handleFinalSubmit
+                  : (e) => {
+                      e.preventDefault();
+                      handleProceedNext(currentStage + 1);
+                    }
+              }
+            >
+
               {/* STAGE 1: PERSONAL PROFILE */}
               {currentStage === 1 && (
                 <div className="space-y-4">
@@ -1306,11 +1469,94 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     Stage 8: Legal Declaration & Digital E-Signature
                   </h3>
 
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 text-xs text-slate-700 leading-relaxed">
+                  {/* PRE-SUBMISSION AUDIT & READINESS CHECKLIST */}
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                      <div className="flex items-center gap-2">
+                        <FileCheck className="w-5 h-5 text-[#185b9d]" />
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-800 block">
+                            Pre-Submission Application Audit (Stages 1 to 7)
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            Verify that all required data and documents are in place before final central registration
+                          </span>
+                        </div>
+                      </div>
+
+                      {getIncompleteStagesBefore8().length === 0 ? (
+                        <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-300 flex items-center gap-1.5 w-fit">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          100% Ready for Submission
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-[11px] font-bold border border-amber-300 flex items-center gap-1.5 w-fit">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
+                          {getIncompleteStagesBefore8().length} Stage(s) Incomplete
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Stage-by-stage status cards */}
+                    <div className="space-y-2 pt-1">
+                      {stagesList.slice(0, 7).map((st) => {
+                        const errs = getStageErrors(st.num);
+                        const isComplete = errs.length === 0;
+
+                        return (
+                          <div
+                            key={st.num}
+                            className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs transition-all ${
+                              isComplete
+                                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+                                : 'bg-rose-50/80 border-rose-200 text-rose-950'
+                            }`}
+                          >
+                            <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                              {isComplete ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5 sm:mt-0" />
+                              ) : (
+                                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5 sm:mt-0" />
+                              )}
+                              <div>
+                                <span className="font-bold block sm:inline text-slate-900">
+                                  Stage {st.num}: {st.title}
+                                </span>
+                                {!isComplete && (
+                                  <span className="text-[11px] text-rose-700 font-medium block sm:inline sm:ml-2">
+                                    • Missing: {errs.join(', ')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {isComplete ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-md self-start sm:self-center">
+                                Verified ✓
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleProceedNext(st.num)}
+                                className="text-[11px] font-bold text-rose-700 bg-white hover:bg-rose-100 px-3 py-1 rounded-lg border border-rose-300 shadow-xs flex items-center gap-1 transition self-start sm:self-center"
+                              >
+                                <span>Go to Stage {st.num} to Fix</span>
+                                <ArrowRight className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Legal Undertaking Box */}
+                  <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-3 text-xs text-slate-700 leading-relaxed">
                     <p className="font-semibold text-slate-900">
                       I solemnly affirm that all information provided in this Session V (2026) application is accurate and true to the best of my knowledge.
                     </p>
-                    <ul className="list-disc pl-4 space-y-1 text-slate-600">
+                    <ul className="list-disc pl-4 space-y-1 text-slate-600 text-[11px]">
                       <li>I understand that 100% of exam questions are drawn from AZM official question banks.</li>
                       <li>I agree to adhere strictly to the OMR optical examination regulations.</li>
                       <li>Any deliberate falsehood or forged document will result in instant disqualification and debarment.</li>
@@ -1365,13 +1611,33 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                 </div>
               )}
 
+              {/* STAGE INLINE VALIDATION ERROR ALERT */}
+              {stageErrors[currentStage] && stageErrors[currentStage].length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  id="stage-validation-alert"
+                  className="mt-6 p-4 rounded-2xl bg-rose-50 border-2 border-rose-200 text-rose-900 text-xs space-y-2 shadow-xs"
+                >
+                  <div className="flex items-center gap-2 text-rose-800 font-bold">
+                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                    <span>Please Complete Missing Information on Stage {currentStage} ({stagesList[currentStage - 1].title}):</span>
+                  </div>
+                  <ul className="list-disc pl-6 space-y-1 text-rose-700 font-medium text-[11px]">
+                    {stageErrors[currentStage].map((errText, eIdx) => (
+                      <li key={eIdx}>{errText}</li>
+                    ))}
+                  </ul>
+                </motion.div>
+              )}
+
               {/* Wizard Navigation & Action Buttons */}
-              <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between">
+              <div className="mt-8 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   {currentStage > 1 ? (
                     <button
                       type="button"
-                      onClick={() => setCurrentStage(prev => Math.max(prev - 1, 1))}
+                      onClick={() => handleProceedNext(Math.max(currentStage - 1, 1))}
                       className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5 focus:outline-hidden"
                     >
                       <ArrowLeft className="w-4 h-4" />
@@ -1393,7 +1659,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   {currentStage < 8 ? (
                     <button
                       type="button"
-                      onClick={() => setCurrentStage(prev => Math.min(prev + 1, 8))}
+                      onClick={() => handleProceedNext(currentStage + 1)}
                       className="px-6 py-2.5 text-xs font-bold text-white bg-[#185b9d] hover:bg-[#13497e] rounded-xl shadow-md transition-all flex items-center gap-2 focus:outline-hidden"
                     >
                       <span>Next: Stage {currentStage + 1}</span>
@@ -1428,6 +1694,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   <span>{submitError}</span>
                 </div>
               )}
+
             </form>
           </div>
 
