@@ -121,7 +121,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     );
   }
 
-  const { stats, attendanceTrends, feeDefaulters, recentActivity, demographics } = data;
+  if (!data) {
+    return (
+      <div className="py-32 flex flex-col items-center justify-center space-y-3">
+        <Loader2 className="w-8 h-8 text-[#185b9d] animate-spin" />
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Loading Overview Dashboard...
+        </span>
+      </div>
+    );
+  }
+
+  const stats = data.stats || {
+    totalStudents: 0,
+    attendancePercentage: 0,
+    feeCollectionPercentage: 0,
+    activeStaffCount: 0,
+    totalBilled: 0,
+    totalCollected: 0,
+  };
+  const attendanceTrends = data.attendanceTrends || [];
+  const feeDefaulters = data.feeDefaulters || [];
+  const recentActivity = data.recentActivity || [];
+  const demographics = data.demographics || {
+    byGender: { MALE: 0, FEMALE: 0 },
+    byClassLevel: {},
+    byScholarshipCategory: {},
+  };
 
   return (
     <div className="space-y-6">
@@ -193,11 +219,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         />
         <StatCard
           title="Fee Collection Rate"
-          value={`${stats.feeCollectionPercentage}%`}
+          value={`${stats.feeCollectionPercentage ?? 0}%`}
           icon={Receipt}
           color="indigo"
-          subtitle={`PKR ${stats.totalCollected.toLocaleString()} Collected`}
-          trend={`${stats.totalBilled ? 'PKR ' + stats.totalBilled.toLocaleString() : 'Total Due'}`}
+          subtitle={`PKR ${(stats.totalCollected ?? 0).toLocaleString()} Collected`}
+          trend={`${stats.totalBilled ? 'PKR ' + (stats.totalBilled ?? 0).toLocaleString() : 'Total Due'}`}
           trendType="neutral"
           onClick={() => onNavigate('fees')}
         />
@@ -284,7 +310,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-100 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-semibold text-emerald-700 block">Fee Income Collected</span>
-                <span className="text-lg font-bold text-emerald-950">PKR {stats.feeIncome.toLocaleString()}</span>
+                <span className="text-lg font-bold text-emerald-950">PKR {(stats.feeIncome ?? 0).toLocaleString()}</span>
               </div>
               <div className="p-2 rounded-lg bg-emerald-500 text-white">
                 <ArrowDownRight className="w-4 h-4" />
@@ -294,7 +320,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-100 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-semibold text-rose-700 block">Salary Disbursements</span>
-                <span className="text-lg font-bold text-rose-950">PKR {stats.salaryExpenses.toLocaleString()}</span>
+                <span className="text-lg font-bold text-rose-950">PKR {(stats.salaryExpenses ?? 0).toLocaleString()}</span>
               </div>
               <div className="p-2 rounded-lg bg-rose-500 text-white">
                 <ArrowUpRight className="w-4 h-4" />
@@ -304,8 +330,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-semibold text-slate-500 block">Net Monthly Balance</span>
-                <span className={`text-base font-extrabold ${stats.netCashFlow >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                  PKR {stats.netCashFlow.toLocaleString()}
+                <span className={`text-base font-extrabold ${(stats.netCashFlow ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  PKR {(stats.netCashFlow ?? 0).toLocaleString()}
                 </span>
               </div>
               <button
@@ -414,7 +440,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="font-bold text-rose-600">PKR {item.amountDue.toLocaleString()}</p>
+                    <p className="font-bold text-rose-600">PKR {(item.amountDue ?? 0).toLocaleString()}</p>
                     <StatusBadge status={item.status} size="sm" />
                   </div>
                 </div>
