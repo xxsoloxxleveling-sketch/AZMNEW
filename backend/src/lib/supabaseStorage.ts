@@ -2,7 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { logger } from './logger';
 
-export type StorageBucket = 'student-photos' | 'qr-codes' | 'registration-pdfs';
+export type StorageBucket = 'student-photos' | 'qr-codes' | 'registration-pdfs' | 'student-documents';
 
 class SupabaseStorageService {
   private client: SupabaseClient | null = null;
@@ -22,6 +22,33 @@ class SupabaseStorageService {
       }
     } else {
       logger.warn('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured. Storage will operate in fallback mode.');
+    }
+  }
+
+  /**
+   * Ensures that a storage bucket exists and is ready for uploads.
+   */
+  async ensureBucketExists(bucket: StorageBucket): Promise<void> {
+    if (!this.client) return;
+    try {
+      const { data: buckets } = await this.client.storage.listBuckets();
+      const found = (buckets || []).some((b) => b.name === bucket);
+      if (!found) {
+        await this.client.storage.createBucket(bucket, { public: true });
+      }
+    } catch {}
+  }
+
+  /**
+   * Retrieves the direct public URL for a file in a storage bucket.
+   */
+  getPublicUrl(bucket: StorageBucket, path: string): string | null {
+    if (!this.client) return null;
+    try {
+      const { data } = this.client.storage.from(bucket).getPublicUrl(path);
+      return data?.publicUrl || null;
+    } catch {
+      return null;
     }
   }
 

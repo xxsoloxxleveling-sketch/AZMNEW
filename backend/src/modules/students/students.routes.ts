@@ -29,6 +29,9 @@ router.get('/:id/qr', studentsController.getQr);
 // Emergency / Admin Data Purge & Fresh Start Endpoint
 router.post('/purge-all-system-data', studentsController.purgeAll);
 
+// Live Supabase Cloud Storage Upload for Candidate Documents
+router.post('/upload-document', studentsController.uploadDocument);
+
 // Public / Client Query Roster Endpoints
 router.get(
   '/',

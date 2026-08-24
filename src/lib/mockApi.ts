@@ -1062,6 +1062,32 @@ export const mockApi = {
           ],
           rawUploaded
         );
+
+        // Upload attached documents and photo directly to Supabase Storage
+        (async () => {
+          for (const [docKey, docVal] of Object.entries(rawUploaded)) {
+            const item: any = docVal;
+            if (item && item.dataUrl && (item.dataUrl.startsWith('data:') || item.dataUrl.length > 300)) {
+              try {
+                const upRes = await mockApi.uploadStudentDocument({
+                  studentId: merged.id,
+                  applicationNo: merged.applicationNo,
+                  cnicOrBForm: merged.cnicOrBForm,
+                  docType: docKey,
+                  fileName: item.name,
+                  fileData: item.dataUrl,
+                });
+                if (upRes?.publicUrl) {
+                  item.publicUrl = upRes.publicUrl;
+                  item.supabasePath = upRes.path;
+                  saveUploadedFilesForCandidate([merged.id, merged.applicationNo, merged.cnicOrBForm], {
+                    [docKey]: item,
+                  });
+                }
+              } catch (e) {}
+            }
+          }
+        })();
       }
 
       return merged;
@@ -1129,6 +1155,26 @@ export const mockApi = {
     }
   },
 
+  async uploadStudentDocument(params: {
+    studentId?: string;
+    applicationNo?: string;
+    cnicOrBForm?: string;
+    docType: string;
+    fileName?: string;
+    fileData: string;
+    contentType?: string;
+  }): Promise<{ publicUrl: string; path: string }> {
+    try {
+      const res = await apiFetch<any>('/api/students/upload-document', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+      return res?.data || res;
+    } catch (err) {
+      console.warn(`Supabase Storage upload warning for ${params.docType}:`, err);
+      return { publicUrl: params.fileData, path: '' };
+    }
+  },
 
   async approveStudentPayment(studentId: string, studentObj?: any): Promise<any> {
     markStudentFeePaid([

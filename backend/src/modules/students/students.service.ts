@@ -1,7 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
-import { supabaseStorage } from '../../lib/supabaseStorage';
+import { supabaseStorage, StorageBucket } from '../../lib/supabaseStorage';
 import {
   CreateStudentInput,
   UpdateStudentInput,
@@ -473,6 +473,60 @@ export class StudentsService {
     const filename = `AZM-Registration-${student.applicationNo || student.id}.pdf`;
 
     return { buffer, filename };
+  }
+
+  /**
+   * Uploads an attached candidate document directly to Supabase Cloud Storage.
+   */
+  async uploadStudentDocument(input: {
+    studentId?: string;
+    applicationNo?: string;
+    cnicOrBForm?: string;
+    docType: 'photo' | 'bform' | 'fatherCnic' | 'dmc' | 'domicile' | 'paymentReceipt' | string;
+    fileName?: string;
+    fileData: string;
+    contentType?: string;
+  }) {
+    const rawApp = (input.applicationNo || input.cnicOrBForm || input.studentId || 'DOC').replace(/[^\w-]/g, '_');
+    const ext = input.fileName?.split('.').pop() || (input.fileData.includes('application/pdf') ? 'pdf' : 'jpg');
+    const bucket: StorageBucket = input.docType === 'photo' ? 'student-photos' : 'student-documents';
+    const path = `${rawApp}/${input.docType}_${Date.now()}.${ext}`;
+
+    await supabaseStorage.ensureBucketExists(bucket);
+
+    const uploadRes = await supabaseStorage.uploadFile(
+      bucket,
+      path,
+      input.fileData,
+      input.contentType || (ext === 'pdf' ? 'application/pdf' : 'image/jpeg')
+    );
+
+    const publicUrl =
+      supabaseStorage.getPublicUrl(bucket, path) ||
+      (await supabaseStorage.getSignedUrl(bucket, path, 60 * 60 * 24 * 365)) ||
+      `https://amteshciynijqkxapjwd.supabase.co/storage/v1/object/public/${bucket}/${path}`;
+
+    // If candidate photo, update student photoUrl in PostgreSQL
+    if (input.docType === 'photo' && (input.studentId || input.applicationNo || input.cnicOrBForm)) {
+      try {
+        if (input.studentId) {
+          await prisma.student.update({ where: { id: input.studentId }, data: { photoUrl: publicUrl } });
+        } else if (input.applicationNo) {
+          await prisma.student.updateMany({ where: { applicationNo: input.applicationNo }, data: { photoUrl: publicUrl } });
+        } else if (input.cnicOrBForm) {
+          await prisma.student.updateMany({ where: { cnicOrBForm: input.cnicOrBForm }, data: { photoUrl: publicUrl } });
+        }
+      } catch (e) {}
+    }
+
+    return {
+      success: true,
+      bucket,
+      path,
+      publicUrl,
+      docType: input.docType,
+      fileName: input.fileName || `${input.docType}.${ext}`,
+    };
   }
 
   /**

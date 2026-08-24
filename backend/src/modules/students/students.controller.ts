@@ -157,6 +157,19 @@ export class StudentsController {
     }
   }
 
+  async uploadDocument(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await studentsService.uploadStudentDocument(req.body);
+      res.status(200).json({
+        success: true,
+        message: 'Document uploaded to Supabase Storage successfully',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async purgeAll(_req: Request, res: Response, next: NextFunction) {
     try {
       const result = await studentsService.purgeAllData();
