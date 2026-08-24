@@ -497,18 +497,20 @@ export function updateLocalStudentPayment(studentId: string, assignedRollNo?: st
     );
 
     if (idx >= 0) {
-      const year = new Date().getFullYear();
-      const seq = (idx + 1).toString().padStart(4, '0');
-      const rollNumber = assignedRollNo || list[idx].rollNumber || `AZMVS-${year}-${seq}`;
-      const qrToken = `VERIFIED-${rollNumber}`;
-      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(rollNumber)}`;
+      // Only assign roll number if explicitly provided or if release date has arrived and immediate release is on
+      let rollNumber = list[idx].rollNumber || null;
+      if (assignedRollNo && isRollNumberReleased()) {
+        rollNumber = assignedRollNo;
+      }
 
       list[idx] = {
         ...list[idx],
         feeStatus: 'PAID',
         rollNumber,
-        qrToken,
-        qrImageUrl,
+        qrToken: rollNumber ? `VERIFIED-${rollNumber}` : `FEE-PAID-${list[idx].applicationNo || list[idx].id}`,
+        qrImageUrl: rollNumber
+          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(rollNumber)}`
+          : undefined,
       };
       localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
       return list[idx];
@@ -516,6 +518,35 @@ export function updateLocalStudentPayment(studentId: string, assignedRollNo?: st
   } catch (err) {}
   return null;
 }
+
+export function releaseAllPaidRollNumbers(): number {
+  try {
+    const list = getLocalStudents();
+    const year = new Date().getFullYear();
+    let count = 0;
+
+    const updated = list.map((s, idx) => {
+      if (s.feeStatus === 'PAID' && !s.rollNumber) {
+        count++;
+        const seq = (idx + 1).toString().padStart(4, '0');
+        const rollNumber = `AZMVS-${year}-${seq}`;
+        return {
+          ...s,
+          rollNumber,
+          qrToken: `VERIFIED-${rollNumber}`,
+          qrImageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(rollNumber)}`,
+        };
+      }
+      return s;
+    });
+
+    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updated));
+    return count;
+  } catch (err) {
+    return 0;
+  }
+}
+
 
 
 // -------------------------------------------------------------
@@ -737,11 +768,9 @@ export const mockApi = {
       const existing = studentMap.get(k);
       if (existing) {
         const isPaid = existing.feeStatus === 'PAID' || s.feeStatus === 'PAID';
-        const roll =
-          s.rollNumber ||
-          existing.rollNumber ||
-          (isPaid ? `AZMVS-2026-${Math.floor(1000 + Math.random() * 9000)}` : null);
+        const roll = s.rollNumber || existing.rollNumber || null;
         studentMap.set(k, {
+
           ...existing,
           ...s,
           id: s.id || existing.id,
@@ -930,6 +959,11 @@ export const mockApi = {
   isRollNumberReleased(): boolean {
     return isRollNumberReleased();
   },
+
+  releaseAllPaidRollNumbers(): number {
+    return releaseAllPaidRollNumbers();
+  },
+
 
   async updateOfficeUse(studentId: string, officeUseData: any) {
     return apiFetch<any>(`/api/students/${studentId}/office-use`, {

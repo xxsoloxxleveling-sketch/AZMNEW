@@ -81,9 +81,13 @@ export const StudentsListView: React.FC = () => {
       sortable: true,
       render: (row) => (
         <div>
-          <span className={`font-bold block ${row.rollNumber ? 'text-[#185b9d]' : 'text-amber-600 text-xs'}`}>
-            {row.rollNumber || 'Pending Fee Approval'}
-          </span>
+          {row.rollNumber ? (
+            <span className="font-bold text-[#185b9d] block">{row.rollNumber}</span>
+          ) : row.feeStatus === 'PAID' ? (
+            <span className="font-bold text-sky-700 text-xs block">Roll No. Scheduled</span>
+          ) : (
+            <span className="font-bold text-amber-600 text-xs block">Fee Pending</span>
+          )}
           <span className="text-[11px] text-slate-400 font-mono">{row.applicationNo}</span>
         </div>
       ),
@@ -159,13 +163,13 @@ export const StudentsListView: React.FC = () => {
       className: 'text-right',
       render: (row) => (
         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {!row.rollNumber && (
+          {row.feeStatus !== 'PAID' && (
             <button
               onClick={async () => {
-                if (confirm(`Approve PKR 300 fee payment and issue Roll Number for ${row.fullName}?`)) {
+                if (confirm(`Approve PKR 300 fee payment for ${row.fullName}?`)) {
                   try {
                     await mockApi.approveStudentPayment(row.id);
-                    alert(`Payment approved for ${row.fullName}. Roll Number and Biometric QR Code assigned!`);
+                    alert(`Fee payment approved for ${row.fullName}. Status updated to PAID.`);
                     fetchStudents();
                   } catch (err: any) {
                     alert(err.message || 'Failed to approve payment');
@@ -177,6 +181,7 @@ export const StudentsListView: React.FC = () => {
               Approve Fee
             </button>
           )}
+
           <button
             onClick={() => setSelectedStudent(row)}
             title="View Full Profile"
