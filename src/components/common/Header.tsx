@@ -8,7 +8,9 @@ import {
   ArrowRight, 
   ChevronDown, 
   MessageCircle, 
-  Globe 
+  Globe,
+  Phone,
+  BellRing
 } from 'lucide-react';
 
 interface HeaderProps {

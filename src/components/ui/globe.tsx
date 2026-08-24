@@ -91,17 +91,27 @@ export const Globe: React.FC<GlobeProps> = ({ className = '', config }) => {
 
     // Defer WebGL globe instantiation until after initial render paint
     const initTimer = setTimeout(() => {
-      if (canvasRef.current) {
-        globe = createGlobe(canvasRef.current, initialConfig);
-        animate();
-        canvasRef.current.style.opacity = '1';
+      try {
+        if (canvasRef.current) {
+          globe = createGlobe(canvasRef.current, initialConfig);
+          animate();
+          canvasRef.current.style.opacity = '1';
+        }
+      } catch (err) {
+        console.warn('WebGL Globe initialization skipped:', err);
       }
     }, 600);
 
     return () => {
       clearTimeout(initTimer);
       cancelAnimationFrame(animationFrameId);
-      if (globe) globe.destroy();
+      if (globe && typeof globe.destroy === 'function') {
+        try {
+          globe.destroy();
+        } catch {
+          // ignore cleanup errors
+        }
+      }
       window.removeEventListener('resize', onResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
