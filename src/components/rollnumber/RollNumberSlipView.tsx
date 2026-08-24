@@ -259,17 +259,17 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
               <div className="md:col-span-3 flex flex-col items-center sm:items-start space-y-3">
                 <div className="relative">
                   <img
-                    src={selectedSlip.candidatePhoto}
-                    alt={selectedSlip.candidateName}
-                    className="w-28 h-32 rounded-xl object-cover border-2 border-slate-900 shadow-xs"
+                    src={selectedSlip.candidatePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80'}
+                    alt={selectedSlip.candidateName || 'Candidate'}
+                    className="w-28 h-32 rounded-xl object-cover border-2 border-slate-900 shadow-xs bg-slate-100"
                   />
                   <span className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-emerald-700 text-white font-bold text-[9px] rounded-md">
                     Verified
                   </span>
                 </div>
                 <div className="text-center sm:text-left font-mono text-[10px] text-slate-600">
-                  <span className="tracking-widest block font-bold text-slate-900">{selectedSlip.barcode}</span>
-                  <span>{selectedSlip.applicationId}</span>
+                  <span className="tracking-widest block font-bold text-slate-900">{selectedSlip.barcode || selectedSlip.rollNo || 'BARCODE'}</span>
+                  <span>{selectedSlip.applicationId || 'APP-2026'}</span>
                 </div>
               </div>
 
@@ -309,7 +309,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 <div className="p-3 rounded-2xl bg-slate-900 text-white w-full max-w-[180px] text-center">
                   <span className="text-[9px] uppercase font-bold text-amber-300 tracking-wider block">Official Roll No</span>
                   <span className="text-base font-extrabold font-mono text-white block tabular-nums">{selectedSlip.rollNo}</span>
-                  <span className="text-[9px] text-emerald-400 font-mono mt-0.5 block">{selectedSlip.seatIndex}</span>
+                  <span className="text-[9px] text-emerald-400 font-mono mt-0.5 block">{selectedSlip.seatIndex || 'SEAT-0101'}</span>
                 </div>
 
                 {/* QR Code Graphic */}
@@ -328,7 +328,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Examination Date:</span>
                 <span className="text-xs font-extrabold text-slate-900 font-mono flex items-center justify-center gap-1 mt-0.5">
                   <Calendar className="w-3.5 h-3.5 text-[#185b9d]" />
-                  {selectedSlip.examDate}
+                  {selectedSlip.examDate || 'Sunday, 15 November 2026'}
                 </span>
               </div>
 
@@ -336,14 +336,14 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Reporting Time:</span>
                 <span className="text-xs font-extrabold text-rose-700 font-mono flex items-center justify-center gap-1 mt-0.5">
                   <Clock className="w-3.5 h-3.5 text-rose-600" />
-                  {selectedSlip.reportingTime} (Strict)
+                  {selectedSlip.reportingTime || '09:00 AM'} (Strict)
                 </span>
               </div>
 
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Test Duration:</span>
                 <span className="text-xs font-extrabold text-[#185b9d] font-mono block mt-0.5">
-                  {selectedSlip.examStartTime}
+                  {selectedSlip.examStartTime || '10:00 AM - 12:00 PM (120 Mins)'}
                 </span>
               </div>
             </div>
@@ -355,7 +355,12 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 Mandatory Examination Day Instructions
               </h4>
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700 leading-snug">
-                {selectedSlip.specialInstructions.map((inst, iIdx) => (
+                {(selectedSlip.specialInstructions || [
+                  'Bring your original CNIC / B-Form along with this printed entry slip to the examination centre.',
+                  'Entry gate closes strictly 15 minutes before the reporting time (08:45 AM).',
+                  'Biometric verification will be carried out at the entry desk using your QR code.',
+                  'Mobile phones, smartwatches, and programmable calculators are strictly prohibited inside the hall.'
+                ]).map((inst, iIdx) => (
                   <li key={iIdx} className="flex items-start gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
                     <span className="font-bold text-[#185b9d]">{iIdx + 1}.</span>
                     <span>{inst}</span>
@@ -368,7 +373,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
             <div className="mt-8 pt-4 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-slate-500">
               <div>
                 <span>Security Token: </span>
-                <span className="font-mono font-bold text-slate-800">{selectedSlip.securityHash}</span>
+                <span className="font-mono font-bold text-slate-800">{selectedSlip.securityHash || `AUTH-${selectedSlip.rollNo}`}</span>
               </div>
               <div className="text-center sm:text-right">
                 <p className="font-bold text-slate-900">Director General (Examinations)</p>
@@ -381,3 +386,4 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
     </div>
   );
 };
+

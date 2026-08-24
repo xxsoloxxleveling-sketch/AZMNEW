@@ -88,28 +88,36 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
       }
 
       const slip: RollNumberSlip = {
-        rollNumber: rollNo,
+        rollNo: rollNo,
+        applicationId: student.applicationNo || student.id || 'APP-2026',
         candidateName: student.fullName,
         fatherName: student.fatherName,
         cnicBForm: student.cnicOrBForm,
-        appliedClass: student.currentClass,
+        classLevel: student.currentClass || 'SSC-II (Class 10th)',
+        candidatePhoto: student.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
         testCenter: student.officeUse?.testCentre || 'AZM Examination Center - Main Exam Hall, Mansehra',
-        reportingTime: student.officeUse?.testReportingTime || '09:00 AM',
-        testDate: student.officeUse?.testDate || 'Sunday, 15 November 2026',
         centerAddress: 'Main College Road, Mansehra / Abbottabad Regional Center, KP',
-        seatNumber: `HALL-${rollNo.split('-').pop() || 'A01'}`,
-        instructions: [
+        examDate: student.officeUse?.testDate || 'Sunday, 15 November 2026',
+        reportingTime: student.officeUse?.testReportingTime || '09:00 AM',
+        examStartTime: '10:00 AM - 12:00 PM (120 Mins)',
+        roomNo: 'HALL-01',
+        seatIndex: `SEAT-${rollNo.split('-').pop() || '0101'}`,
+        securityHash: `AZMVS-SHA256-${rollNo}`,
+        qrPayload: student.qrToken || `VERIFIED-${rollNo}`,
+        barcode: `||| |||| || ||||| ${rollNo}`,
+        specialInstructions: [
           'Bring your original CNIC / B-Form along with this printed entry slip to the examination centre.',
           'Entry gate closes strictly 15 minutes before the reporting time (08:45 AM).',
-          'Biometric verification will be carried out at the entry desk using your QR code.'
+          'Biometric verification will be carried out at the entry desk using your QR code.',
+          'Mobile phones, smartwatches, and programmable calculators are strictly prohibited inside the hall.'
         ],
-        qrDataUrl: student.qrImageUrl || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(rollNo)}`
       };
 
       return {
         success: true,
         data: slip
       };
+
     }
   } catch (err) {
     console.error('searchRollNumberSlip error:', err);
