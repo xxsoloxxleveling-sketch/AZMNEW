@@ -41,9 +41,47 @@ export async function seedDatabase() {
     },
   });
 
+  // Seed Admin
+  const adminPassword = 'Admin123!';
+  const adminHash = await hashPassword(adminPassword);
+  const adminUser = await prisma.user.upsert({
+    where: { email: 'admin@jadoon.edu.pk' },
+    update: {
+      passwordHash: adminHash,
+      role: Role.ADMIN,
+      name: 'Muhammad Rashid (Admin)',
+    },
+    create: {
+      email: 'admin@jadoon.edu.pk',
+      name: 'Muhammad Rashid (Admin)',
+      passwordHash: adminHash,
+      role: Role.ADMIN,
+    },
+  });
+
+  // Seed Accountant
+  const accountantPassword = 'Accountant123!';
+  const accountantHash = await hashPassword(accountantPassword);
+  const accountantUser = await prisma.user.upsert({
+    where: { email: 'accountant@jadoon.edu.pk' },
+    update: {
+      passwordHash: accountantHash,
+      role: Role.ACCOUNTANT,
+      name: 'Kashif Finance',
+    },
+    create: {
+      email: 'accountant@jadoon.edu.pk',
+      name: 'Kashif Finance',
+      passwordHash: accountantHash,
+      role: Role.ACCOUNTANT,
+    },
+  });
+
   logger.info('✅ Seed completed successfully:');
   logger.info(`   - Super Admin: ${superAdmin.email} (Password: ${superAdminPassword})`);
+  logger.info(`   - Admin:       ${adminUser.email} (Password: ${adminPassword})`);
   logger.info(`   - Teacher:     ${teacher.email} (Password: ${teacherPassword})`);
+  logger.info(`   - Accountant:  ${accountantUser.email} (Password: ${accountantPassword})`);
 
-  return { superAdmin, teacher };
+  return { superAdmin, adminUser, teacher, accountantUser };
 }

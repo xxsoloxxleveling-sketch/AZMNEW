@@ -16,7 +16,26 @@ import dashboardRoutes from './modules/dashboard/dashboard.routes';
 const app: Express = express();
 
 // Middlewares
-app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+const allowedOrigins = [
+  env.CORS_ORIGIN,
+  env.FRONTEND_URL,
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:4173',
+].filter(Boolean) as string[];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || env.NODE_ENV === 'development') {
+        callback(null, true);
+      } else {
+        callback(null, true); // Permissive for initial cloud verification
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

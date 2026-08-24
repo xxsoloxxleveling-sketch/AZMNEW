@@ -1,7 +1,8 @@
 import { getToken, clearToken } from './auth';
 
 export const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+  (import.meta as any).env?.VITE_API_URL ||
+  ((import.meta as any).env?.PROD ? 'https://azmnew.onrender.com' : 'http://localhost:5000');
 
 export interface ApiResponse<T = any> {
   success: boolean;

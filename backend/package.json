@@ -7,9 +7,13 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -26,6 +30,7 @@
     "@electric-sql/pglite": "^0.5.7",
     "@prisma/adapter-pg": "^5.22.0",
     "@prisma/client": "^5.22.0",
+    "@supabase/supabase-js": "^2.112.3",
     "@types/pg": "^8.23.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

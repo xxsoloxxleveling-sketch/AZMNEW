@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
+import { supabaseStorage } from '../../lib/supabaseStorage';
 import {
   CreateStudentInput,
   UpdateStudentInput,
@@ -73,11 +74,30 @@ export class StudentsService {
     const qrPayload = `https://jadoon.edu.pk/attend?token=${qrToken}`;
     const qrImageUrl = await qrService.generateQrDataUrl(qrPayload);
 
-    const { academicRecords, documents, ...baseData } = input;
+    // Persist QR Code to Supabase Storage
+    await supabaseStorage.uploadFile('qr-codes', `${rollNumber}-qr.png`, qrImageUrl, 'image/png');
+
+    // Persist Photo if provided
+    let photoUrl = input.photoUrl;
+    if (input.photoUrl && input.photoUrl.startsWith('data:')) {
+      const uploadRes = await supabaseStorage.uploadFile(
+        'student-photos',
+        `${rollNumber}-photo.png`,
+        input.photoUrl,
+        'image/png'
+      );
+      if (!uploadRes.error) {
+        const signed = await supabaseStorage.getSignedUrl('student-photos', `${rollNumber}-photo.png`, 86400 * 7);
+        if (signed) photoUrl = signed;
+      }
+    }
+
+    const { academicRecords, documents, photoUrl: _, ...baseData } = input;
 
     const student = await prisma.student.create({
       data: {
         ...baseData,
+        photoUrl,
         rollNumber,
         applicationNo,
         qrToken,

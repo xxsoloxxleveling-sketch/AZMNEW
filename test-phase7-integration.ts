@@ -52,7 +52,7 @@ async function runLiveIntegrationTest() {
     gender: 'MALE',
     dateOfBirth: '2009-05-15',
     age: 17,
-    cnicOrBForm: '13101-7788991-1',
+    cnicOrBForm: `13101-${Date.now().toString().slice(-7)}-1`,
     nationality: 'Pakistani',
     religion: 'Islam',
     address: 'PMA Road, Abbottabad',
