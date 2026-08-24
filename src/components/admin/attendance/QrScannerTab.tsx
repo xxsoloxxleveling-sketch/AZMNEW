@@ -270,8 +270,11 @@ export const QrScannerTab: React.FC<QrScannerTabProps> = ({ onAttendanceMarked }
             playsInline
             muted
             autoPlay
-            className={`w-full h-full object-cover ${!isCameraActive || cameraError ? 'hidden' : 'block'}`}
+            className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''} ${
+              !isCameraActive || cameraError ? 'hidden' : 'block'
+            }`}
           />
+
 
           {/* Fallback View when Camera is Off or Errored */}
           {(!isCameraActive || cameraError) && (

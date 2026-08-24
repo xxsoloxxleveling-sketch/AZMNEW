@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { OFFICIAL_DATA } from '../../data/scholarshipData';
 import { searchRollNumberSlip } from '../../services/api';
 import { RollNumberSlip, PageTab } from '../../types';
@@ -28,9 +29,35 @@ interface RollNumberSlipViewProps {
 export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelectTab }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSlip, setSelectedSlip] = useState<RollNumberSlip | null>(null);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [hasSearched, setHasSearched] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
+
+  useEffect(() => {
+    if (selectedSlip?.rollNo) {
+      const payload = selectedSlip.qrPayload || selectedSlip.rollNo;
+      QRCode.toDataURL(payload, {
+        width: 300,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#ffffff',
+        },
+      })
+        .then((url) => {
+          setQrCodeDataUrl(url);
+        })
+        .catch((err) => {
+          console.warn('QRCode generate fallback:', err);
+          setQrCodeDataUrl(
+            `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payload)}`
+          );
+        });
+    } else {
+      setQrCodeDataUrl('');
+    }
+  }, [selectedSlip]);
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -58,6 +85,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
   const printDocument = () => {
     window.print();
+
   };
 
   const downloadSlipAlert = () => {
@@ -312,13 +340,26 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                   <span className="text-[9px] text-emerald-400 font-mono mt-0.5 block">{selectedSlip.seatIndex || 'SEAT-0101'}</span>
                 </div>
 
-                {/* QR Code Graphic */}
-                <div className="p-2 rounded-xl bg-white border border-slate-300 shadow-2xs flex flex-col items-center">
-                  <div className="w-20 h-20 bg-slate-950 p-1.5 rounded-lg flex items-center justify-center text-white">
-                    <QrCode className="w-full h-full text-white" />
+                {/* Real Scannable Biometric QR Code Matrix */}
+                <div className="p-2 rounded-2xl bg-white border-2 border-slate-300 shadow-sm flex flex-col items-center">
+                  <div className="w-24 h-24 bg-white p-1 rounded-xl flex items-center justify-center border border-slate-200 shadow-inner overflow-hidden">
+                    {qrCodeDataUrl ? (
+                      <img
+                        src={qrCodeDataUrl}
+                        alt="Candidate Biometric QR Code"
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-slate-100 flex items-center justify-center">
+                        <QrCode className="w-8 h-8 text-slate-400 animate-pulse" />
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[8px] font-mono text-slate-500 mt-1">Scan for OMR Auth</span>
+                  <span className="text-[8px] font-mono text-slate-700 mt-1 font-bold tracking-tight">
+                    Scannable Biometric QR
+                  </span>
                 </div>
+
               </div>
             </div>
 

@@ -961,17 +961,24 @@ export function printStudentSlip(student: any) {
       </div>
     </div>
 
-    <div class="candidate-banner">
-      <div class="photo-frame">
-        ${student.photoUrl ? `<img src="${student.photoUrl}" alt="Photo" />` : '<span style="font-size: 10px; color: #94a3b8; text-align: center; line-height: 1.2;">Candidate<br/>Photo</span>'}
+    <div class="candidate-banner" style="justify-content: space-between;">
+      <div style="display: flex; gap: 16px; align-items: center;">
+        <div class="photo-frame">
+          ${student.photoUrl ? `<img src="${student.photoUrl}" alt="Photo" />` : '<span style="font-size: 10px; color: #94a3b8; text-align: center; line-height: 1.2;">Candidate<br/>Photo</span>'}
+        </div>
+        <div>
+          <div class="meta-title">${student.fullName || 'Candidate Name'}</div>
+          <div style="font-size: 12px; color: #475569; margin-top: 2px;">Father / Guardian: <strong>${student.fatherName || 'Father Name'}</strong></div>
+          <div style="font-size: 12px; color: #475569; margin-top: 2px;">CNIC / B-Form: <strong style="font-family: monospace;">${student.cnicOrBForm || student.cnicBForm || 'N/A'}</strong></div>
+          <div style="font-size: 12px; color: #185b9d; font-weight: 800; margin-top: 4px;">Application Reference: ${appNo}</div>
+        </div>
       </div>
-      <div>
-        <div class="meta-title">${student.fullName || 'Candidate Name'}</div>
-        <div style="font-size: 12px; color: #475569; margin-top: 2px;">Father / Guardian: <strong>${student.fatherName || 'Father Name'}</strong></div>
-        <div style="font-size: 12px; color: #475569; margin-top: 2px;">CNIC / B-Form: <strong style="font-family: monospace;">${student.cnicOrBForm || student.cnicBForm || 'N/A'}</strong></div>
-        <div style="font-size: 12px; color: #185b9d; font-weight: 800; margin-top: 4px;">Application Reference: ${appNo}</div>
+      <div style="text-align: center; flex-shrink: 0;">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(student.rollNumber || appNo)}" alt="QR" style="width: 80px; height: 80px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 2px; background: #fff;" />
+        <div style="font-size: 9px; font-weight: 700; color: #64748b; margin-top: 2px;">BIOMETRIC QR</div>
       </div>
     </div>
+
 
     <div class="grid">
       <div class="info-card">
