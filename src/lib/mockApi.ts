@@ -1,6 +1,8 @@
 import { setToken, setRefreshToken, setUser, getUser, getToken } from './auth';
 import { apiFetch, apiDownloadPdf } from './apiClient';
 
+export const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'https://azmnew.onrender.com';
+
 export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'TEACHER' | 'ACCOUNTANT';
 
 export interface CurrentUser {
