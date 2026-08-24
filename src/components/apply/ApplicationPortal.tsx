@@ -1638,47 +1638,47 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/70 to-slate-50 border border-emerald-200/80 space-y-4 text-xs">
                 <div className="flex items-center justify-between border-b border-emerald-200 pb-3">
                   <div>
-                    <span className="font-bold text-slate-900 block text-sm">JazzCash / EasyPaisa Direct Transfer</span>
+                    <span className="font-bold text-slate-900 block text-sm">JazzCash / EasyPaisa Mobile Transfer</span>
                     <span className="text-slate-500 text-[11px]">Send PKR 300 from any mobile wallet in Pakistan</span>
                   </div>
                   <span className="px-2.5 py-0.5 rounded-md bg-emerald-600 text-white font-bold text-[10px]">
-                    Recommended
+                    Instant Verification
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
                     <div>
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Number / Mobile</span>
-                      <span className="text-sm font-extrabold font-mono text-slate-900">0305-1755551</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">JazzCash / Mobile Number</span>
+                      <span className="text-base font-extrabold font-mono text-slate-900">0305-1755551</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => copyToClipboard('03051755551', 'mobileNo')}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-bold text-[11px] flex items-center gap-1"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-bold text-xs flex items-center gap-1 transition-all"
                     >
-                      {copiedField === 'mobileNo' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedField === 'mobileNo' ? 'Copied' : 'Copy'}</span>
+                      {copiedField === 'mobileNo' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedField === 'mobileNo' ? 'Copied!' : 'Copy'}</span>
                     </button>
                   </div>
 
-                  <div className="p-3 bg-white rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Title</span>
-                    <span className="text-sm font-extrabold text-slate-900">AZM.AIO (Pvt.) Ltd.</span>
+                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Title / Name</span>
+                    <span className="text-base font-extrabold text-slate-900">Sumama Khan</span>
                   </div>
                 </div>
 
                 <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 space-y-1">
-                  <strong>Important: Payment Reference / Note</strong>
+                  <strong>Important: Payment Reference / Remarks</strong>
                   <p className="text-[11px] text-amber-800">
-                    When making the transfer, enter your Application ID (<strong>{submittedAppId}</strong>) in the remarks/purpose field.
+                    When making the mobile transfer, please put your Application ID (<strong>{submittedAppId}</strong>) in the remarks/purpose field.
                   </p>
                 </div>
 
                 {/* Instant WhatsApp Proof Button */}
                 <a
                   href={`https://wa.me/923051755551?text=${encodeURIComponent(
-                    `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026) Scholarship Exam.\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Fee Amount: PKR 300\n\nPlease find attached my payment receipt/screenshot for quick verification and Roll Number activation.`
+                    `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026) Scholarship Exam.\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Fee Amount: PKR 300\n• Paid Via: JazzCash / Mobile Transfer (To: Sumama Khan)\n\nPlease find attached my payment receipt/screenshot for quick verification and Roll Number activation.`
                   )}`}
                   target="_blank"
                   rel="noreferrer"
@@ -1695,44 +1695,69 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/70 to-slate-50 border border-blue-200/80 space-y-4 text-xs">
                 <div className="flex items-center justify-between border-b border-blue-200 pb-3">
                   <div>
-                    <span className="font-bold text-slate-900 block text-sm">Direct Bank Transfer / Online IBFT</span>
-                    <span className="text-slate-500 text-[11px]">Pay via banking app or visit any bank branch</span>
+                    <span className="font-bold text-slate-900 block text-sm">Direct Commercial Bank Accounts (IBFT / Online)</span>
+                    <span className="text-slate-500 text-[11px]">Transfer via banking app, ATM, or over-the-counter deposit</span>
                   </div>
                   <span className="px-2.5 py-0.5 rounded-md bg-blue-700 text-white font-bold text-[10px]">
-                    Bank / ATM
+                    2 Bank Options
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-3 bg-white rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Title</span>
-                    <span className="text-xs font-bold text-slate-900">AZM.AIO (Pvt.) Ltd.</span>
-                    <span className="text-[10px] text-slate-500 block">SECP CUIN: {OFFICIAL_DATA.cuin}</span>
-                  </div>
-
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Number</span>
-                      <span className="text-xs font-extrabold font-mono text-slate-900">0321467001</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Bank 1: Faysal Bank */}
+                  <div className="p-4 bg-white rounded-2xl border border-blue-200 shadow-xs space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <span className="font-bold text-slate-900 text-xs">Option A: Faysal Bank</span>
+                      <span className="px-2 py-0.5 bg-blue-50 text-blue-800 text-[10px] font-bold rounded">Bank Faysal</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard('0321467001', 'bankAcc')}
-                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-bold text-[11px] flex items-center gap-1"
-                    >
-                      {copiedField === 'bankAcc' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedField === 'bankAcc' ? 'Copied' : 'Copy'}</span>
-                    </button>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Number</span>
+                      <div className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-200">
+                        <span className="text-xs font-extrabold font-mono text-slate-900">3126701000006213</span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard('3126701000006213', 'faysalAcc')}
+                          className="px-2 py-1 bg-white hover:bg-slate-100 rounded-lg text-slate-700 font-bold text-[10px] flex items-center gap-1 border border-slate-200"
+                        >
+                          {copiedField === 'faysalAcc' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedField === 'faysalAcc' ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Title</span>
+                      <span className="text-xs font-extrabold text-slate-900">Sumama Khan</span>
+                    </div>
                   </div>
 
-                  <div className="p-3 bg-white rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Bank Name</span>
-                    <span className="text-xs font-bold text-slate-900">Bank of Khyber / Meezan Bank</span>
-                  </div>
+                  {/* Bank 2: Bank Alfalah */}
+                  <div className="p-4 bg-white rounded-2xl border border-rose-200 shadow-xs space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <span className="font-bold text-slate-900 text-xs">Option B: Bank Alfalah</span>
+                      <span className="px-2 py-0.5 bg-rose-50 text-rose-800 text-[10px] font-bold rounded">Alfalah</span>
+                    </div>
 
-                  <div className="p-3 bg-white rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Branch</span>
-                    <span className="text-xs font-bold text-slate-900">Main City Branch, Mansehra</span>
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Number</span>
+                      <div className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-200">
+                        <span className="text-xs font-extrabold font-mono text-slate-900">83861010161490</span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard('83861010161490', 'alfalahAcc')}
+                          className="px-2 py-1 bg-white hover:bg-slate-100 rounded-lg text-slate-700 font-bold text-[10px] flex items-center gap-1 border border-slate-200"
+                        >
+                          {copiedField === 'alfalahAcc' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedField === 'alfalahAcc' ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Title</span>
+                      <span className="text-xs font-extrabold text-slate-900">Sumama Khan</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1745,17 +1770,21 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     <Receipt className="w-4 h-4" />
                     <span>View Official 3-Part Bank Challan</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-xl flex items-center gap-1.5"
+                  <a
+                    href={`https://wa.me/923051755551?text=${encodeURIComponent(
+                      `Hello AZM Accounts Desk,\n\nI have completed PKR 300 fee payment via Bank IBFT for Session V (2026).\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Transferred To: Sumama Khan\n\nPlease find attached my bank transfer receipt for verification.`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2.5 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5"
                   >
-                    <Printer className="w-4 h-4" />
-                    <span>Print Deposit Slip</span>
-                  </button>
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Send Bank Receipt on WhatsApp</span>
+                  </a>
                 </div>
               </div>
             )}
+
 
             {/* TAB 3: Walk-In Cash at Hubs */}
             {paymentTab === 'hub' && (
@@ -1895,12 +1924,15 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         <div><span className="text-slate-500">Candidate:</span> <strong className="text-slate-900">{formData.fullName || 'Candidate'}</strong></div>
                         <div><span className="text-slate-500">Father Name:</span> <span className="text-slate-800">{formData.fatherName}</span></div>
                         <div><span className="text-slate-500">Class:</span> <span className="text-slate-800">{formData.currentClass}</span></div>
-                        <div><span className="text-slate-500">CNIC / B-Form:</span> <span className="text-slate-800">{formData.cnicBForm}</span></div>
-                        <div><span className="text-slate-500">Account No:</span> <strong className="text-slate-900">0321467001</strong></div>
+                        <div><span className="text-slate-500">Account Title:</span> <strong className="text-slate-900">Sumama Khan</strong></div>
+                        <div><span className="text-slate-500">Faysal Bank:</span> <strong className="text-slate-900 font-mono">3126701000006213</strong></div>
+                        <div><span className="text-slate-500">Bank Alfalah:</span> <strong className="text-slate-900 font-mono">83861010161490</strong></div>
+                        <div><span className="text-slate-500">JazzCash:</span> <span className="text-slate-800 font-mono">0305-1755551</span></div>
                         <div className="pt-2 border-t border-slate-200">
-                          <span className="text-slate-500">Amount (Fee):</span> <strong className="text-emerald-700 text-xs">PKR 300/-</strong>
+                          <span className="text-slate-500">Amount (Fee):</span> <strong className="text-emerald-700 text-xs font-bold">PKR 300/- (Fixed)</strong>
                         </div>
                       </div>
+
 
                       <div className="pt-6 border-t border-slate-300 flex justify-between text-[9px] text-slate-400">
                         <span>Bank Officer Stamp</span>

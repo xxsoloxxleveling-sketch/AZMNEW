@@ -85,6 +85,29 @@ export const OFFICIAL_DATA = {
   headOffice: 'Jadoon Public High School & College, Gandhian, Mansehra, KP, Pakistan',
   registrationFee: 'PKR 300 (Nominal Entry Fee for Session V)',
 
+  paymentAccounts: {
+    jazzcash: {
+      accountName: 'JazzCash / EasyPaisa',
+      accountTitle: 'Sumama Khan / AZM.AIO (Pvt.) Ltd.',
+      accountNumber: '03051755551',
+      formattedNumber: '0305-1755551',
+      type: 'Mobile Wallet'
+    },
+    faysalBank: {
+      bankName: 'Faysal Bank',
+      accountTitle: 'Sumama Khan',
+      accountNumber: '3126701000006213',
+      type: 'Commercial Bank'
+    },
+    bankAlfalah: {
+      bankName: 'Bank Alfalah',
+      accountTitle: 'Sumama Khan',
+      accountNumber: '83861010161490',
+      type: 'Commercial Bank'
+    }
+  },
+
+
 
   founder: {
     name: 'Mr. Sumama Khan',
