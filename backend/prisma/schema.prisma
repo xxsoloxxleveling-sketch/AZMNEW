@@ -52,6 +52,7 @@ model Student {
   qrToken            String              @unique
   qrImageUrl         String?
   photoUrl           String?
+  uploadedDocsJson   String?
   status             StudentStatus       @default(ACTIVE)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @default(now()) @updatedAt

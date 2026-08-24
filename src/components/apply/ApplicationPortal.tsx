@@ -444,6 +444,27 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           uploadedAt: new Date().toISOString(),
         },
       });
+
+      // Upload directly to Supabase Storage
+      mockApi.uploadStudentDocument({
+        cnicOrBForm: formData.cnicBForm || 'TEMP_CANDIDATE',
+        docType: 'photo',
+        fileName: file.name || 'Candidate_Passport_Photo.jpg',
+        fileData: dataUrl,
+      }).then((upRes) => {
+        if (upRes?.publicUrl) {
+          setFormData((prev) => ({ ...prev, photoUrl: upRes.publicUrl }));
+          saveUploadedFilesForCandidate([formData.cnicBForm, formData.fullName], {
+            photo: {
+              name: file.name || 'Candidate_Passport_Photo.jpg',
+              size: sizeFormatted,
+              dataUrl: upRes.publicUrl,
+              publicUrl: upRes.publicUrl,
+              uploadedAt: new Date().toISOString(),
+            },
+          });
+        }
+      }).catch(() => {});
     } catch (err) {
       console.warn('Photo compression fallback:', err);
     }
@@ -526,6 +547,35 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           uploadedAt: new Date().toISOString(),
         },
       });
+
+      // Upload directly to Supabase Storage
+      mockApi.uploadStudentDocument({
+        cnicOrBForm: formData.cnicBForm || 'TEMP_CANDIDATE',
+        docType: targetField,
+        fileName: standardDocName,
+        fileData: dataUrl,
+      }).then((upRes) => {
+        if (upRes?.publicUrl) {
+          setUploadedDocs((prev) => ({
+            ...prev,
+            [docKey]: {
+              name: standardDocName,
+              size: sizeFormatted,
+              dataUrl: upRes.publicUrl,
+              publicUrl: upRes.publicUrl,
+            },
+          }));
+          saveUploadedFilesForCandidate([formData.cnicBForm, formData.fullName], {
+            [targetField]: {
+              name: standardDocName,
+              size: sizeFormatted,
+              dataUrl: upRes.publicUrl,
+              publicUrl: upRes.publicUrl,
+              uploadedAt: new Date().toISOString(),
+            },
+          });
+        }
+      }).catch(() => {});
     } catch (err) {
       console.warn('Document compression fallback:', err);
     }

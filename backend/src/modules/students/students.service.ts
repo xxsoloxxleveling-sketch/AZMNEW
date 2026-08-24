@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
 import { supabaseStorage, StorageBucket } from '../../lib/supabaseStorage';
+import { logger } from '../../lib/logger';
 import {
   CreateStudentInput,
   UpdateStudentInput,
@@ -11,6 +12,35 @@ import {
 import { AppError } from '../../middleware/error.middleware';
 
 export class StudentsService {
+  /**
+   * Formats a raw database student and attaches parsed live Supabase documents.
+   */
+  formatStudentWithDocuments(student: any) {
+    if (!student) return null;
+    let uploadedDocuments: Record<string, any> = {};
+
+    if (student.uploadedDocsJson) {
+      try {
+        uploadedDocuments = JSON.parse(student.uploadedDocsJson);
+      } catch {}
+    }
+
+    if (student.photoUrl && !uploadedDocuments.photo) {
+      uploadedDocuments.photo = {
+        name: `${student.fullName}_Passport_Photo.jpg`,
+        size: 'Supabase Cloud Storage',
+        dataUrl: student.photoUrl,
+        publicUrl: student.photoUrl,
+        uploadedAt: student.createdAt,
+      };
+    }
+
+    return {
+      ...student,
+      uploadedDocuments: Object.keys(uploadedDocuments).length > 0 ? uploadedDocuments : undefined,
+    };
+  }
+
   /**
    * Generates sequential Roll Number in format AZMVS-YYYY-XXXX (collision-proof)
    */
@@ -123,6 +153,13 @@ export class StudentsService {
   }
 
   /**
+   * Alias for getRegistrationPdf
+   */
+  async generateRegistrationPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
+    return this.getRegistrationPdf(id);
+  }
+
+  /**
    * Creates a student record with all registration form fields (Parts A-I),
    * auto-generates Application Number and a fixed PKR 300 Registration Fee Challan.
    * Roll Number and Biometric QR Code will be issued upon Admin/Accountant fee approval.
@@ -170,6 +207,7 @@ export class StudentsService {
           data: {
             ...baseData,
             photoUrl,
+            uploadedDocsJson: input.uploadedDocuments ? JSON.stringify(input.uploadedDocuments) : null,
             applicationNo,
             rollNumber: null, // Defer roll number until fee is approved
             qrToken,
@@ -240,8 +278,7 @@ export class StudentsService {
     });
 
     return {
-      ...student,
-      uploadedDocuments: input.uploadedDocuments || undefined,
+      ...this.formatStudentWithDocuments(student),
       feeChallan: feeRecord,
     };
   }
@@ -361,7 +398,7 @@ export class StudentsService {
     ]);
 
     return {
-      students,
+      students: students.map((s) => this.formatStudentWithDocuments(s)),
       pagination: {
         page,
         limit,
@@ -381,6 +418,7 @@ export class StudentsService {
         academicRecords: true,
         documents: true,
         officeUse: true,
+        feeRecords: true,
       },
     });
 
@@ -390,7 +428,7 @@ export class StudentsService {
       throw error;
     }
 
-    return student;
+    return this.formatStudentWithDocuments(student);
   }
 
   /**
@@ -408,10 +446,11 @@ export class StudentsService {
         academicRecords: true,
         documents: true,
         officeUse: true,
+        feeRecords: true,
       },
     });
 
-    return updated;
+    return this.formatStudentWithDocuments(updated);
   }
 
   /**
@@ -464,9 +503,9 @@ export class StudentsService {
   }
 
   /**
-   * Generates filled 2-page registration PDF matching official form.
+   * Generates Registration PDF buffer for downloading.
    */
-  async generateRegistrationPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
+  async getRegistrationPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
     const student = await this.getStudentById(id);
     const html = pdfService.generateStudentRegistrationHtml(student);
     const buffer = await pdfService.generatePdfFromHtml(html);
@@ -506,17 +545,43 @@ export class StudentsService {
       (await supabaseStorage.getSignedUrl(bucket, path, 60 * 60 * 24 * 365)) ||
       `https://amteshciynijqkxapjwd.supabase.co/storage/v1/object/public/${bucket}/${path}`;
 
-    // If candidate photo, update student photoUrl in PostgreSQL
-    if (input.docType === 'photo' && (input.studentId || input.applicationNo || input.cnicOrBForm)) {
+    // Find student in PostgreSQL
+    const student = await prisma.student.findFirst({
+      where: input.studentId
+        ? { id: input.studentId }
+        : input.applicationNo
+        ? { applicationNo: input.applicationNo }
+        : { cnicOrBForm: input.cnicOrBForm },
+    });
+
+    let currentDocs: Record<string, any> = {};
+    if (student?.uploadedDocsJson) {
       try {
-        if (input.studentId) {
-          await prisma.student.update({ where: { id: input.studentId }, data: { photoUrl: publicUrl } });
-        } else if (input.applicationNo) {
-          await prisma.student.updateMany({ where: { applicationNo: input.applicationNo }, data: { photoUrl: publicUrl } });
-        } else if (input.cnicOrBForm) {
-          await prisma.student.updateMany({ where: { cnicOrBForm: input.cnicOrBForm }, data: { photoUrl: publicUrl } });
-        }
-      } catch (e) {}
+        currentDocs = JSON.parse(student.uploadedDocsJson);
+      } catch {}
+    }
+
+    currentDocs[input.docType] = {
+      name: input.fileName || `${input.docType}.${ext}`,
+      size: 'Supabase Cloud Attached',
+      dataUrl: publicUrl,
+      publicUrl,
+      supabasePath: path,
+      uploadedAt: new Date().toISOString(),
+    };
+
+    if (student) {
+      try {
+        await prisma.student.update({
+          where: { id: student.id },
+          data: {
+            uploadedDocsJson: JSON.stringify(currentDocs),
+            ...(input.docType === 'photo' ? { photoUrl: publicUrl } : {}),
+          },
+        });
+      } catch (err) {
+        logger.warn('Failed to update student document in PostgreSQL:', err);
+      }
     }
 
     return {
