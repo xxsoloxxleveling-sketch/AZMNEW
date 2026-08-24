@@ -475,16 +475,33 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   };
 
   const handleDownloadStudentPdf = async () => {
-    if (!createdStudent?.id) return;
     setIsDownloadingPdf(true);
     try {
-      await mockApi.downloadStudentPdf(createdStudent.id, createdStudent.rollNumber);
+      const studentData = createdStudent || {
+        id: submittedAppId || formData.id,
+        applicationNo: submittedAppId || formData.id,
+        fullName: formData.fullName,
+        fatherName: formData.fatherName,
+        cnicOrBForm: formData.cnicBForm,
+        currentClass: formData.currentClass,
+        discipline: formData.discipline,
+        schoolName: formData.schoolName,
+        district: formData.district,
+        province: formData.province,
+        mobile: formData.mobile,
+        parentMobile: formData.parentMobile,
+        emergencyContact: formData.emergencyContact,
+        photoUrl: formData.photoUrl,
+        createdAt: new Date().toISOString(),
+      };
+      await mockApi.downloadStudentPdf(studentData.id, studentData.rollNumber, studentData);
     } catch (err: any) {
-      alert(err.message || 'Failed to download PDF');
+      console.warn('Download PDF notice:', err);
     } finally {
       setIsDownloadingPdf(false);
     }
   };
+
 
   // Partner School Submit to Live Database
   const handlePartnerSubmit = async (e: React.FormEvent) => {
