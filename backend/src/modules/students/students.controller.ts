@@ -175,23 +175,10 @@ export class StudentsController {
       const { id, docType } = req.params;
       const doc = await studentsService.getStudentDocument(id, docType);
       
-      if (!doc || !doc.url) {
-        return res.status(404).json({ success: false, message: `Document '${docType}' not found for student.` });
-      }
-
-      if (doc.url.startsWith('data:')) {
-        const parts = doc.url.split(',');
-        const mime = parts[0].match(/:(.*?);/)?.[1] || doc.contentType || 'image/jpeg';
-        const buffer = Buffer.from(parts[1], 'base64');
-        res.setHeader('Content-Type', mime);
-        res.setHeader('Content-Length', buffer.length);
-        res.setHeader('Cache-Control', 'public, max-age=86400');
-        return res.send(buffer);
-      } else if (doc.url.startsWith('http')) {
-        return res.redirect(doc.url);
-      }
-
-      res.status(404).json({ success: false, message: 'Document data unavailable.' });
+      res.setHeader('Content-Type', doc.contentType || 'image/jpeg');
+      res.setHeader('Content-Length', doc.buffer.length);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(doc.buffer);
     } catch (error) {
       next(error);
     }

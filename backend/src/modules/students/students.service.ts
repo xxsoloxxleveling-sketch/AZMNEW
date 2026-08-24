@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../../lib/prisma';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
@@ -10,6 +12,13 @@ import {
   OfficeUseUpdateInput,
 } from './students.schema';
 import { AppError } from '../../middleware/error.middleware';
+
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  try {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  } catch {}
+}
 
 export class StudentsService {
   /**
@@ -515,7 +524,7 @@ export class StudentsService {
   }
 
   /**
-   * Uploads an attached candidate document directly to Supabase Cloud Storage.
+   * Uploads an attached candidate document directly to Supabase Cloud Storage + server disk backup.
    */
   async uploadStudentDocument(input: {
     studentId?: string;
@@ -529,23 +538,41 @@ export class StudentsService {
     const rawApp = (input.applicationNo || input.cnicOrBForm || input.studentId || 'DOC').replace(/[^\w-]/g, '_');
     const ext = input.fileName?.split('.').pop() || (input.fileData.includes('application/pdf') ? 'pdf' : 'jpg');
     const bucket: StorageBucket = input.docType === 'photo' ? 'student-photos' : 'student-documents';
-    const path = `${rawApp}/${input.docType}_${Date.now()}.${ext}`;
+    const pathName = `${rawApp}/${input.docType}_${Date.now()}.${ext}`;
 
+    // 1. Save locally to server uploads directory
+    try {
+      const candDir = path.join(UPLOADS_DIR, rawApp);
+      if (!fs.existsSync(candDir)) {
+        fs.mkdirSync(candDir, { recursive: true });
+      }
+      let buffer: Buffer;
+      if (input.fileData.startsWith('data:')) {
+        const b64 = input.fileData.split(',')[1];
+        buffer = Buffer.from(b64, 'base64');
+      } else {
+        buffer = Buffer.from(input.fileData, 'utf-8');
+      }
+      fs.writeFileSync(path.join(candDir, `${input.docType}.${ext}`), buffer);
+    } catch (diskErr) {
+      logger.warn('Disk storage save warning:', diskErr);
+    }
+
+    // 2. Upload to Supabase Storage if available
     await supabaseStorage.ensureBucketExists(bucket);
-
-    const uploadRes = await supabaseStorage.uploadFile(
+    await supabaseStorage.uploadFile(
       bucket,
-      path,
+      pathName,
       input.fileData,
       input.contentType || (ext === 'pdf' ? 'application/pdf' : 'image/jpeg')
     );
 
     const publicUrl =
-      supabaseStorage.getPublicUrl(bucket, path) ||
-      (await supabaseStorage.getSignedUrl(bucket, path, 60 * 60 * 24 * 365)) ||
-      `https://amteshciynijqkxapjwd.supabase.co/storage/v1/object/public/${bucket}/${path}`;
+      supabaseStorage.getPublicUrl(bucket, pathName) ||
+      (await supabaseStorage.getSignedUrl(bucket, pathName, 60 * 60 * 24 * 365)) ||
+      `https://amteshciynijqkxapjwd.supabase.co/storage/v1/object/public/${bucket}/${pathName}`;
 
-    // Find student in PostgreSQL
+    // 3. Find student in PostgreSQL
     const student = await prisma.student.findFirst({
       where: input.studentId
         ? { id: input.studentId }
@@ -563,10 +590,10 @@ export class StudentsService {
 
     currentDocs[input.docType] = {
       name: input.fileName || `${input.docType}.${ext}`,
-      size: 'Supabase Cloud Attached',
-      dataUrl: publicUrl,
+      size: 'Cloud Storage Attached',
+      dataUrl: input.fileData.startsWith('data:') ? input.fileData : publicUrl,
       publicUrl,
-      supabasePath: path,
+      supabasePath: pathName,
       uploadedAt: new Date().toISOString(),
     };
 
@@ -576,7 +603,7 @@ export class StudentsService {
           where: { id: student.id },
           data: {
             uploadedDocsJson: JSON.stringify(currentDocs),
-            ...(input.docType === 'photo' ? { photoUrl: publicUrl } : {}),
+            ...(input.docType === 'photo' ? { photoUrl: input.fileData.startsWith('data:') ? input.fileData : publicUrl } : {}),
           },
         });
       } catch (err) {
@@ -587,7 +614,7 @@ export class StudentsService {
     return {
       success: true,
       bucket,
-      path,
+      path: pathName,
       publicUrl,
       docType: input.docType,
       fileName: input.fileName || `${input.docType}.${ext}`,
@@ -595,9 +622,24 @@ export class StudentsService {
   }
 
   /**
-   * Retrieves a student's document or photo URL/content for direct streaming.
+   * Retrieves a student's document or photo as a direct binary buffer for image streaming.
    */
-  async getStudentDocument(studentIdentifier: string, docType: string) {
+  async getStudentDocument(studentIdentifier: string, docType: string): Promise<{ buffer: Buffer; contentType: string }> {
+    const rawApp = studentIdentifier.replace(/[^\w-]/g, '_');
+
+    // 1. Check server disk storage first
+    const candDir = path.join(UPLOADS_DIR, rawApp);
+    const possibleExts = ['jpg', 'jpeg', 'png', 'pdf', 'webp'];
+    for (const ext of possibleExts) {
+      const p = path.join(candDir, `${docType}.${ext}`);
+      if (fs.existsSync(p)) {
+        const buffer = fs.readFileSync(p);
+        const mime = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
+        return { buffer, contentType: mime };
+      }
+    }
+
+    // 2. Check PostgreSQL database records
     const student = await prisma.student.findFirst({
       where: {
         OR: [
@@ -608,40 +650,34 @@ export class StudentsService {
       },
     });
 
-    if (!student) {
-      const error: AppError = new Error('Student not found');
-      error.statusCode = 404;
-      throw error;
+    if (student) {
+      if (docType === 'photo' && student.photoUrl && student.photoUrl.startsWith('data:')) {
+        const parts = student.photoUrl.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+        return { buffer: Buffer.from(parts[1], 'base64'), contentType: mime };
+      }
+
+      if (student.uploadedDocsJson) {
+        try {
+          const docs = JSON.parse(student.uploadedDocsJson);
+          const doc = docs[docType] || docs[`${docType}Uploaded`];
+          if (doc && doc.dataUrl && doc.dataUrl.startsWith('data:')) {
+            const parts = doc.dataUrl.split(',');
+            const mime = parts[0].match(/:(.*?);/)?.[1] || doc.fileType || 'image/jpeg';
+            return { buffer: Buffer.from(parts[1], 'base64'), contentType: mime };
+          }
+        } catch (e) {}
+      }
     }
 
-    if (docType === 'photo' && student.photoUrl) {
-      return {
-        url: student.photoUrl,
-        contentType: 'image/jpeg',
-      };
-    }
-
-    if (student.uploadedDocsJson) {
-      try {
-        const docs = JSON.parse(student.uploadedDocsJson);
-        const doc = docs[docType] || docs[`${docType}Uploaded`];
-        if (doc) {
-          return {
-            url: doc.publicUrl || doc.dataUrl,
-            contentType: doc.fileType || (doc.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
-            name: doc.name,
-          };
-        }
-      } catch (e) {}
-    }
-
-    if (docType === 'photo' && student.photoUrl) {
-      return { url: student.photoUrl, contentType: 'image/jpeg' };
-    }
-
-    const error: AppError = new Error(`Document '${docType}' not found for candidate`);
-    error.statusCode = 404;
-    throw error;
+    // 3. Fallback placeholder SVG
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+      <rect width="400" height="400" fill="#f8fafc"/>
+      <circle cx="200" cy="160" r="70" fill="#cbd5e1"/>
+      <path d="M60 360 C60 260, 340 260, 340 360 Z" fill="#94a3b8"/>
+      <text x="200" y="385" font-family="sans-serif" font-size="16" font-weight="bold" fill="#64748b" text-anchor="middle">Official Document Record</text>
+    </svg>`;
+    return { buffer: Buffer.from(svg, 'utf-8'), contentType: 'image/svg+xml' };
   }
 
   /**
