@@ -19,11 +19,11 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: JWT_ACCESS_SECRET
-        generateValue: true
+        value: azm-aio-production-jwt-access-secret-2026-v1
       - key: JWT_REFRESH_SECRET
-        generateValue: true
+        value: azm-aio-production-jwt-refresh-secret-2026-v1
       - key: QR_SECRET
-        generateValue: true
+        value: azm-aio-production-qr-biometric-secret-2026-v1
       - key: CORS_ORIGIN
         value: http://localhost:5173
       - key: FRONTEND_URL

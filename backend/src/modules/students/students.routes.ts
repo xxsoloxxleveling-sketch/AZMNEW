@@ -29,7 +29,19 @@ router.get('/:id/qr', studentsController.getQr);
 // Emergency / Admin Data Purge & Fresh Start Endpoint
 router.post('/purge-all-system-data', studentsController.purgeAll);
 
-// Protected routes (Admin / Teachers)
+// Public / Client Query Roster Endpoints
+router.get(
+  '/',
+  validateQuery(studentQuerySchema),
+  studentsController.getAll
+);
+
+router.get(
+  '/:id',
+  studentsController.getById
+);
+
+// Protected routes for modifications (Admin / Teachers)
 router.use(authenticate);
 
 // Admin Walk-in Registration
@@ -40,24 +52,11 @@ router.post(
   studentsController.adminRegister
 );
 
-// Standard CRUD
-router.get(
-  '/',
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
-  validateQuery(studentQuerySchema),
-  studentsController.getAll
-);
 router.post(
   '/',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(createStudentSchema),
   studentsController.create
-);
-
-router.get(
-  '/:id',
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
-  studentsController.getById
 );
 router.patch(
   '/:id',

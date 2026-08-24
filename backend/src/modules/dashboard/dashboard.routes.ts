@@ -6,13 +6,12 @@ import { Role } from '@prisma/client';
 
 const router = Router();
 
-// Protect dashboard route
-router.use(authenticate);
-
 router.get(
   '/overview',
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER, Role.ACCOUNTANT),
   dashboardController.getOverview
 );
+
+// Protected routes (Admin / Teachers)
+router.use(authenticate);
 
 export default router;
