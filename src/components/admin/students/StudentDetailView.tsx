@@ -14,10 +14,15 @@ import {
   Printer,
   Trash2,
   AlertTriangle,
+  MapPin,
+  Building2,
+  Save,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   MockStudent,
   MockStudentDocument,
+  MockTestCenter,
   mockApi,
   printStudentDossier,
 } from '../../../lib/mockApi';
@@ -39,9 +44,31 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Test Center & Hall Allocation State
+  const [testCenters, setTestCenters] = useState<MockTestCenter[]>([]);
+  const [assignedCenter, setAssignedCenter] = useState<string>(
+    student.testCenterName || student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra'
+  );
+  const [assignedHall, setAssignedHall] = useState<string>(
+    student.assignedHall || 'Hall E (Matric SSC-II Main Examination Hall)'
+  );
+  const [assignedRoom, setAssignedRoom] = useState<string>(student.assignedRoom || 'Hall 301-E');
+  const [seatNo, setSeatNo] = useState<string>(student.seatNo || 'Seat #01');
+  const [isSavingAllocation, setIsSavingAllocation] = useState<boolean>(false);
+  const [allocationSuccess, setAllocationSuccess] = useState<boolean>(false);
+
   useEffect(() => {
     loadDocuments();
+    loadCenters();
   }, [student.id, student.applicationNo]);
+
+  const loadCenters = async () => {
+    try {
+      const data = await mockApi.getTestCenters();
+      setTestCenters(data);
+    } catch (e) {}
+  };
+
 
   const loadDocuments = async () => {
     const docs = await mockApi.getStudentDocuments(student.id);
@@ -77,6 +104,35 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
       setIsDeleting(false);
     }
   };
+
+  const handleSaveAllocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingAllocation(true);
+    try {
+      const selectedCenterObj = testCenters.find((tc) => tc.name === assignedCenter);
+      const updated = await mockApi.updateStudentAllocation(student.id, {
+        testCenterId: selectedCenterObj?.id,
+        testCenterName: assignedCenter,
+        assignedHall,
+        assignedRoom,
+        seatNo,
+      });
+      if (updated) {
+        student.testCenterName = assignedCenter;
+        student.assignedHall = assignedHall;
+        student.assignedRoom = assignedRoom;
+        student.seatNo = seatNo;
+      }
+      setAllocationSuccess(true);
+      setTimeout(() => setAllocationSuccess(false), 3500);
+      alert(`Exam Center & Hall seating allocation successfully assigned to ${student.fullName}!`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update center allocation.');
+    } finally {
+      setIsSavingAllocation(false);
+    }
+  };
+
 
   return (
     <div className="space-y-6">
@@ -323,6 +379,127 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Card 3.5: Exam Test Center & Room Allocation */}
+          <div className="bg-white rounded-3xl p-6 border border-blue-200/80 shadow-sm space-y-4 relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#185b9d] flex items-center justify-center font-bold">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Exam Test Center &amp; Hall Allocation</h3>
+                  <p className="text-[11px] text-slate-500">Assign candidate to examination center, hall, and room/desk.</p>
+                </div>
+              </div>
+              {allocationSuccess && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 animate-fade-in">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Saved
+                </span>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveAllocation} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700">
+                  Assigned Test Center
+                </label>
+                <div className="relative">
+                  <select
+                    value={assignedCenter}
+                    onChange={(e) => setAssignedCenter(e.target.value)}
+                    className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none transition"
+                  >
+                    {testCenters.length > 0 ? (
+                      testCenters.map((tc) => (
+                        <option key={tc.id} value={tc.name}>
+                          {tc.name} ({tc.district})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Main Campus Examination Center, Mansehra">
+                          Main Campus Examination Center, Mansehra
+                        </option>
+                        <option value="Govt Post Graduate College, Abbottabad">
+                          Govt Post Graduate College, Abbottabad
+                        </option>
+                        <option value="Haripur Public School &amp; College">
+                          Haripur Public School &amp; College
+                        </option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700">
+                    Assigned Hall / Class
+                  </label>
+                  <select
+                    value={assignedHall}
+                    onChange={(e) => {
+                      setAssignedHall(e.target.value);
+                      if (e.target.value.includes('101')) setAssignedRoom('Room 101-A');
+                      else if (e.target.value.includes('102')) setAssignedRoom('Room 102-B');
+                      else if (e.target.value.includes('201')) setAssignedRoom('Room 201-C');
+                      else if (e.target.value.includes('202')) setAssignedRoom('Room 202-D');
+                      else if (e.target.value.includes('301')) setAssignedRoom('Hall 301-E');
+                      else if (e.target.value.includes('Auditorium')) setAssignedRoom('Auditorium Hall');
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none transition"
+                  >
+                    <option value="Hall A (Junior Examination Wing)">Hall A (Room 101-A - Class 6th)</option>
+                    <option value="Hall B (Middle Standard Wing)">Hall B (Room 102-B - Class 7th)</option>
+                    <option value="Hall C (Middle Assessment Hall)">Hall C (Room 201-C - Class 8th)</option>
+                    <option value="Hall D (Matric SSC-I Hall)">Hall D (Room 202-D - Class 9th)</option>
+                    <option value="Hall E (Matric SSC-II Main Examination Hall)">Hall E (Hall 301-E - Class 10th)</option>
+                    <option value="Hall F (Intermediate / College Wing)">Hall F (Auditorium - 1st/2nd Year)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700">
+                    Room Number / Room Tag
+                  </label>
+                  <input
+                    type="text"
+                    value={assignedRoom}
+                    onChange={(e) => setAssignedRoom(e.target.value)}
+                    placeholder="e.g. Room 101-A / Hall 301"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none transition"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700">
+                    Assigned Desk / Seat Number
+                  </label>
+                  <input
+                    type="text"
+                    value={seatNo}
+                    onChange={(e) => setSeatNo(e.target.value)}
+                    placeholder="e.g. Seat #14 / Desk A-02"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white text-xs font-mono font-bold text-[#185b9d] focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none transition"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingAllocation}
+                  className="w-full py-2.5 px-4 bg-[#185b9d] hover:bg-[#13487c] text-white rounded-xl font-bold text-xs shadow-md shadow-blue-900/10 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSavingAllocation ? 'Saving Allocation...' : 'Save Center & Hall'}</span>
+                </button>
+              </div>
+            </form>
           </div>
 
           {/* Card 4: Submitted Candidate Documents & Storage */}

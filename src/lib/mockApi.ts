@@ -54,6 +54,12 @@ export interface MockStudent {
   createdAt: string;
   attendancePercentage?: number;
   feeStatus?: 'PAID' | 'PARTIAL' | 'UNPAID' | 'OVERDUE';
+  testCenterId?: string;
+  testCenterName?: string;
+  assignedHallId?: string;
+  assignedHall?: string;
+  assignedRoom?: string;
+  seatNo?: string;
   academicRecords?: {
     examLevel: string;
     boardOrUni?: string;
@@ -1091,6 +1097,139 @@ export const mockApi = {
       body: JSON.stringify(officeUseData),
     });
   },
+
+  async updateStudentAllocation(
+    studentId: string,
+    allocation: {
+      testCenterId?: string;
+      testCenterName?: string;
+      assignedHallId?: string;
+      assignedHall?: string;
+      assignedRoom?: string;
+      seatNo?: string;
+    }
+  ): Promise<MockStudent | null> {
+    const list = getLocalStudents();
+    const cleanId = studentId.toLowerCase().trim();
+    const cleanDigits = studentId.replace(/\D/g, '');
+
+    const idx = list.findIndex(
+      (s) =>
+        s.id.toLowerCase() === cleanId ||
+        (s.applicationNo && s.applicationNo.toLowerCase() === cleanId) ||
+        (s.rollNumber && s.rollNumber.toLowerCase() === cleanId) ||
+        (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits)
+    );
+
+    if (idx >= 0) {
+      list[idx] = {
+        ...list[idx],
+        ...allocation,
+        officeUse: {
+          ...(list[idx].officeUse || {}),
+          testCentre: allocation.testCenterName || list[idx].officeUse?.testCentre,
+        },
+      };
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
+      try {
+        await apiFetch<any>(`/api/students/${studentId}/office-use`, {
+          method: 'PATCH',
+          body: JSON.stringify({ testCentre: allocation.testCenterName, ...allocation }),
+        });
+      } catch (e) {}
+      return list[idx];
+    } else {
+      const all = await this.getStudents();
+      const st = all.find(
+        (s) =>
+          s.id.toLowerCase() === cleanId ||
+          (s.applicationNo && s.applicationNo.toLowerCase() === cleanId) ||
+          (s.rollNumber && s.rollNumber.toLowerCase() === cleanId) ||
+          (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits)
+      );
+      if (st) {
+        const updated: MockStudent = {
+          ...st,
+          ...allocation,
+          officeUse: {
+            ...(st.officeUse || {}),
+            testCentre: allocation.testCenterName || st.officeUse?.testCentre,
+          },
+        };
+        saveLocalStudent(updated);
+        return updated;
+      }
+    }
+    return null;
+  },
+
+  async batchAssignStudentsToHall(
+    hallId: string,
+    hallInfo: { hallName: string; roomNumber: string; testCenterName?: string; testCenterId?: string },
+    studentIds: string[]
+  ): Promise<number> {
+    const all = await this.getStudents();
+    let updatedCount = 0;
+
+    studentIds.forEach((sid, idx) => {
+      const cleanId = sid.toLowerCase().trim();
+      const cleanDigits = sid.replace(/\D/g, '');
+      const existing = all.find(
+        (s) =>
+          s.id.toLowerCase() === cleanId ||
+          (s.applicationNo && s.applicationNo.toLowerCase() === cleanId) ||
+          (s.rollNumber && s.rollNumber.toLowerCase() === cleanId) ||
+          (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits)
+      );
+      if (existing) {
+        const updated: MockStudent = {
+          ...existing,
+          assignedHallId: hallId,
+          assignedHall: hallInfo.hallName,
+          assignedRoom: hallInfo.roomNumber,
+          testCenterName: hallInfo.testCenterName || existing.testCenterName || 'Main Campus Examination Center',
+          testCenterId: hallInfo.testCenterId || existing.testCenterId,
+          seatNo: existing.seatNo || `Seat #${idx + 1}`,
+          officeUse: {
+            ...(existing.officeUse || {}),
+            testCentre: hallInfo.testCenterName || existing.officeUse?.testCentre,
+          },
+        };
+        saveLocalStudent(updated);
+        updatedCount++;
+      }
+    });
+
+    return updatedCount;
+  },
+
+  async unassignStudentFromHall(studentId: string): Promise<boolean> {
+    const list = getLocalStudents();
+    const cleanId = studentId.toLowerCase().trim();
+    const cleanDigits = studentId.replace(/\D/g, '');
+
+    const idx = list.findIndex(
+      (s) =>
+        s.id.toLowerCase() === cleanId ||
+        (s.applicationNo && s.applicationNo.toLowerCase() === cleanId) ||
+        (s.rollNumber && s.rollNumber.toLowerCase() === cleanId) ||
+        (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits)
+    );
+
+    if (idx >= 0) {
+      list[idx] = {
+        ...list[idx],
+        assignedHallId: undefined,
+        assignedHall: undefined,
+        assignedRoom: undefined,
+        seatNo: undefined,
+      };
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
+      return true;
+    }
+    return false;
+  },
+
 
 
   async downloadStudentPdf(studentId: string, rollNumber?: string, studentObj?: any): Promise<void> {
