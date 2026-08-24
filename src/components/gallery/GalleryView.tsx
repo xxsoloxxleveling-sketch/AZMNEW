@@ -152,7 +152,10 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ onSelectTab }) => {
               <img
                 src={item.image}
                 alt={item.title}
+                width={400}
+                height={256}
                 loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent opacity-75 group-hover:opacity-90 transition-opacity" />

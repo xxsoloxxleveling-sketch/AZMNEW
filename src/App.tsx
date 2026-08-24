@@ -2,37 +2,84 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { PageTab } from './types';
 import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
-import { WhatsAppButton } from './components/common/WhatsAppButton';
 import { HeroSection } from './components/home/HeroSection';
 import { AlertsSection } from './components/home/AlertsSection';
-import { RegistrationAlertModal } from './components/home/RegistrationAlertModal';
-import { PartnerMarquee } from './components/home/PartnerMarquee';
-import { WorkflowBento } from './components/home/WorkflowBento';
-import { FeeCalculator } from './components/home/FeeCalculator';
-import { LeadershipSection } from './components/home/LeadershipSection';
-import { StudentTestimonials } from './components/home/StudentTestimonials';
-import { FaqSection } from './components/home/FaqSection';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 
 import { AuthProvider, useAuth } from './lib/authContext';
 import { AdminTab } from './components/admin/layout/AdminSidebar';
-import { AdminLayout } from './components/admin/layout/AdminLayout';
-import { DashboardView } from './components/admin/dashboard/DashboardView';
-import { StudentsListView } from './components/admin/students/StudentsListView';
-import { AttendanceHubView } from './components/admin/attendance/AttendanceHubView';
-import { TeacherScanView } from './components/admin/attendance/TeacherScanView';
-import { FeesListView } from './components/admin/fees/FeesListView';
-import { StaffListView } from './components/admin/staff/StaffListView';
-import { PayrollListView } from './components/admin/payroll/PayrollListView';
-import { TransactionsListView } from './components/admin/transactions/TransactionsListView';
-import { SettingsView } from './components/admin/settings/SettingsView';
-import { ExamHallsView } from './components/admin/halls/ExamHallsView';
-import { DocumentVaultView } from './components/admin/storage/DocumentVaultView';
-import { AdminWalkInModal } from './components/admin/students/AdminWalkInModal';
+import type { MockStudent } from './lib/mockApi';
 
-import { GenerateChallanModal } from './components/admin/fees/GenerateChallanModal';
-import { mockApi, MockStudent } from './lib/mockApi';
+// Lazy Loaded Below-The-Fold Public Components
+const WhatsAppButton = lazy(() =>
+  import('./components/common/WhatsAppButton').then((m) => ({ default: m.WhatsAppButton }))
+);
+const RegistrationAlertModal = lazy(() =>
+  import('./components/home/RegistrationAlertModal').then((m) => ({ default: m.RegistrationAlertModal }))
+);
+const PartnerMarquee = lazy(() =>
+  import('./components/home/PartnerMarquee').then((m) => ({ default: m.PartnerMarquee }))
+);
+const WorkflowBento = lazy(() =>
+  import('./components/home/WorkflowBento').then((m) => ({ default: m.WorkflowBento }))
+);
+const FeeCalculator = lazy(() =>
+  import('./components/home/FeeCalculator').then((m) => ({ default: m.FeeCalculator }))
+);
+const LeadershipSection = lazy(() =>
+  import('./components/home/LeadershipSection').then((m) => ({ default: m.LeadershipSection }))
+);
+const StudentTestimonials = lazy(() =>
+  import('./components/home/StudentTestimonials').then((m) => ({ default: m.StudentTestimonials }))
+);
+const FaqSection = lazy(() =>
+  import('./components/home/FaqSection').then((m) => ({ default: m.FaqSection }))
+);
+
+// Protected Admin Views (Lazy Loaded strictly on Authenticated access)
+const AdminLayout = lazy(() =>
+  import('./components/admin/layout/AdminLayout').then((m) => ({ default: m.AdminLayout }))
+);
+const DashboardView = lazy(() =>
+  import('./components/admin/dashboard/DashboardView').then((m) => ({ default: m.DashboardView }))
+);
+const StudentsListView = lazy(() =>
+  import('./components/admin/students/StudentsListView').then((m) => ({ default: m.StudentsListView }))
+);
+const AttendanceHubView = lazy(() =>
+  import('./components/admin/attendance/AttendanceHubView').then((m) => ({ default: m.AttendanceHubView }))
+);
+const TeacherScanView = lazy(() =>
+  import('./components/admin/attendance/TeacherScanView').then((m) => ({ default: m.TeacherScanView }))
+);
+const FeesListView = lazy(() =>
+  import('./components/admin/fees/FeesListView').then((m) => ({ default: m.FeesListView }))
+);
+const StaffListView = lazy(() =>
+  import('./components/admin/staff/StaffListView').then((m) => ({ default: m.StaffListView }))
+);
+const PayrollListView = lazy(() =>
+  import('./components/admin/payroll/PayrollListView').then((m) => ({ default: m.PayrollListView }))
+);
+const TransactionsListView = lazy(() =>
+  import('./components/admin/transactions/TransactionsListView').then((m) => ({ default: m.TransactionsListView }))
+);
+const SettingsView = lazy(() =>
+  import('./components/admin/settings/SettingsView').then((m) => ({ default: m.SettingsView }))
+);
+const ExamHallsView = lazy(() =>
+  import('./components/admin/halls/ExamHallsView').then((m) => ({ default: m.ExamHallsView }))
+);
+const DocumentVaultView = lazy(() =>
+  import('./components/admin/storage/DocumentVaultView').then((m) => ({ default: m.DocumentVaultView }))
+);
+const AdminWalkInModal = lazy(() =>
+  import('./components/admin/students/AdminWalkInModal').then((m) => ({ default: m.AdminWalkInModal }))
+);
+const GenerateChallanModal = lazy(() =>
+  import('./components/admin/fees/GenerateChallanModal').then((m) => ({ default: m.GenerateChallanModal }))
+);
 
 // Public Lazy Views
 const LoginPage = lazy(() =>
@@ -182,6 +229,7 @@ function AppContent() {
   };
 
   const openGlobalFeeChallanModal = async () => {
+    const { mockApi } = await import('./lib/mockApi');
     const list = await mockApi.getStudents();
     setStudentsForChallan(list);
     setIsGlobalFeeOpen(true);
@@ -299,76 +347,78 @@ function AppContent() {
     const meta = getTabMeta();
 
     return (
-      <AdminLayout
-        currentTab={adminTab}
-        onSelectTab={(tab) => {
-          if (tab === 'scan') {
-            navigateTo('scan');
-          } else {
-            setAdminTab(tab);
-            window.location.hash = tab;
-          }
-        }}
-        title={meta.title}
-        subtitle={meta.subtitle}
-        onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
-        onOpenMarkAttendance={() => {
-          setAdminTab('attendance');
-          window.location.hash = 'attendance';
-        }}
-        onOpenGenerateFee={openGlobalFeeChallanModal}
-        onNavigatePublic={(path) => {
-          if (path === '/') navigateTo('public');
-          else if (path === '/register') navigateTo('register');
-          else if (path === '/partner-registration') navigateTo('partner-registration');
-        }}
-      >
-        {adminTab === 'dashboard' && (
-          <DashboardView
-            onNavigate={(tab) => {
+      <Suspense fallback={<ViewLoadingFallback />}>
+        <AdminLayout
+          currentTab={adminTab}
+          onSelectTab={(tab) => {
+            if (tab === 'scan') {
+              navigateTo('scan');
+            } else {
               setAdminTab(tab);
               window.location.hash = tab;
-            }}
-            onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
-            onOpenMarkAttendance={() => {
-              setAdminTab('attendance');
-              window.location.hash = 'attendance';
-            }}
-            onOpenGenerateFee={openGlobalFeeChallanModal}
-          />
-        )}
-        {adminTab === 'students' && <StudentsListView />}
-        {adminTab === 'halls' && <ExamHallsView onOpenQrScanner={() => navigateTo('scan')} />}
-        {adminTab === 'storage' && <DocumentVaultView />}
-        {adminTab === 'attendance' && <AttendanceHubView />}
-        {adminTab === 'fees' && <FeesListView />}
-        {adminTab === 'staff' && <StaffListView />}
-        {adminTab === 'payroll' && <PayrollListView />}
-        {adminTab === 'transactions' && <TransactionsListView />}
-        {adminTab === 'settings' && <SettingsView />}
-
-
-        {/* Global Action Modals */}
-        <AdminWalkInModal
-          isOpen={isGlobalAddStudentOpen}
-          onClose={() => setIsGlobalAddStudentOpen(false)}
-          onSuccess={() => {
-            alert('Student walk-in admission enrolled successfully.');
-            if (adminTab === 'students') {
-              window.location.reload();
             }
           }}
-        />
-
-        <GenerateChallanModal
-          isOpen={isGlobalFeeOpen}
-          onClose={() => setIsGlobalFeeOpen(false)}
-          onSuccess={() => {
-            alert('Fee challans issued successfully.');
+          title={meta.title}
+          subtitle={meta.subtitle}
+          onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
+          onOpenMarkAttendance={() => {
+            setAdminTab('attendance');
+            window.location.hash = 'attendance';
           }}
-          students={studentsForChallan}
-        />
-      </AdminLayout>
+          onOpenGenerateFee={openGlobalFeeChallanModal}
+          onNavigatePublic={(path) => {
+            if (path === '/') navigateTo('public');
+            else if (path === '/register') navigateTo('register');
+            else if (path === '/partner-registration') navigateTo('partner-registration');
+          }}
+        >
+          {adminTab === 'dashboard' && (
+            <DashboardView
+              onNavigate={(tab) => {
+                setAdminTab(tab);
+                window.location.hash = tab;
+              }}
+              onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
+              onOpenMarkAttendance={() => {
+                setAdminTab('attendance');
+                window.location.hash = 'attendance';
+              }}
+              onOpenGenerateFee={openGlobalFeeChallanModal}
+            />
+          )}
+          {adminTab === 'students' && <StudentsListView />}
+          {adminTab === 'halls' && <ExamHallsView onOpenQrScanner={() => navigateTo('scan')} />}
+          {adminTab === 'storage' && <DocumentVaultView />}
+          {adminTab === 'attendance' && <AttendanceHubView />}
+          {adminTab === 'fees' && <FeesListView />}
+          {adminTab === 'staff' && <StaffListView />}
+          {adminTab === 'payroll' && <PayrollListView />}
+          {adminTab === 'transactions' && <TransactionsListView />}
+          {adminTab === 'settings' && <SettingsView />}
+
+
+          {/* Global Action Modals */}
+          <AdminWalkInModal
+            isOpen={isGlobalAddStudentOpen}
+            onClose={() => setIsGlobalAddStudentOpen(false)}
+            onSuccess={() => {
+              alert('Student walk-in admission enrolled successfully.');
+              if (adminTab === 'students') {
+                window.location.reload();
+              }
+            }}
+          />
+
+          <GenerateChallanModal
+            isOpen={isGlobalFeeOpen}
+            onClose={() => setIsGlobalFeeOpen(false)}
+            onSuccess={() => {
+              alert('Fee challans issued successfully.');
+            }}
+            students={studentsForChallan}
+          />
+        </AdminLayout>
+      </Suspense>
     );
   }
 
@@ -408,12 +458,14 @@ function AppContent() {
                 onSelectTab={handleSelectTab}
                 onOpenAlertModal={() => setIsAlertModalOpen(true)}
               />
-              <PartnerMarquee />
-              <WorkflowBento onSelectTab={handleSelectTab} />
-              <StudentTestimonials onSelectTab={handleSelectTab} />
-              <FeeCalculator onSelectTab={handleSelectTab} />
-              <LeadershipSection />
-              <FaqSection onSelectTab={handleSelectTab} />
+              <Suspense fallback={<div className="h-24" />}>
+                <PartnerMarquee />
+                <WorkflowBento onSelectTab={handleSelectTab} />
+                <StudentTestimonials onSelectTab={handleSelectTab} />
+                <FeeCalculator onSelectTab={handleSelectTab} />
+                <LeadershipSection />
+                <FaqSection onSelectTab={handleSelectTab} />
+              </Suspense>
             </motion.div>
           )}
 
@@ -568,15 +620,15 @@ function AppContent() {
         {isMockModalOpen && (
           <MockExamModal isOpen={isMockModalOpen} onClose={() => setIsMockModalOpen(false)} />
         )}
+        {isAlertModalOpen && (
+          <RegistrationAlertModal
+            isOpen={isAlertModalOpen}
+            onClose={() => setIsAlertModalOpen(false)}
+            onSelectTab={handleSelectTab}
+          />
+        )}
+        <WhatsAppButton />
       </Suspense>
-
-      <RegistrationAlertModal
-        isOpen={isAlertModalOpen}
-        onClose={() => setIsAlertModalOpen(false)}
-        onSelectTab={handleSelectTab}
-      />
-
-      <WhatsAppButton />
 
       <Footer onSelectTab={handleSelectTab} language={language} />
     </div>

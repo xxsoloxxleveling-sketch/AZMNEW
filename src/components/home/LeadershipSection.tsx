@@ -116,6 +116,10 @@ export const LeadershipSection: React.FC = () => {
                       <img
                         src={leader.photo}
                         alt={leader.name}
+                        width={144}
+                        height={176}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                       />
                       <span className="absolute bottom-2 left-2 right-2 px-2 py-0.5 bg-slate-950/85 backdrop-blur-xs text-[10px] font-bold text-center text-white rounded-md border border-white/20">

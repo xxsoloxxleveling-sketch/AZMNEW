@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { CurrentUser, Role, mockApi, LoginResponse } from './mockApi';
+import type { CurrentUser, Role, LoginResponse } from './mockApi';
 import { getUser, clearAll, setUser as persistUser } from './auth';
 
 interface AuthContextType {
@@ -16,23 +16,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<CurrentUser | null>(() => getUser<CurrentUser>());
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(!getUser<CurrentUser>());
 
   useEffect(() => {
-    // Initial sync with mockApi / storage
-    mockApi.getCurrentUser().then((u) => {
-      setUser(u);
-      if (u) {
-        persistUser(u);
-      }
+    // Only fetch current user if a session or token is present
+    const cached = getUser<CurrentUser>();
+    if (cached) {
+      import('./mockApi').then(({ mockApi }) => {
+        mockApi.getCurrentUser().then((u) => {
+          setUser(u);
+          if (u) {
+            persistUser(u);
+          }
+          setIsLoading(false);
+        });
+      });
+    } else {
       setIsLoading(false);
-    });
-
+    }
   }, []);
 
   const login = async (email: string, pass: string): Promise<LoginResponse> => {
     setIsLoading(true);
     try {
+      const { mockApi } = await import('./mockApi');
       const res = await mockApi.login(email, pass);
       setUser(res.user);
       return res;
@@ -49,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const switchRole = async (newRole: Role) => {
     setIsLoading(true);
     try {
+      const { mockApi } = await import('./mockApi');
       const u = await mockApi.switchRole(newRole);
       setUser(u);
       persistUser(u);

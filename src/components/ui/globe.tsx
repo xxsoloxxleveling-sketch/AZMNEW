@@ -38,17 +38,23 @@ export const Globe: React.FC<GlobeProps> = ({ className = '', config }) => {
   const pointerInteractionMovement = useRef(0);
 
   useEffect(() => {
+    // Check if mobile screen (< 768px) - skip heavy WebGL 9000-point globe on mobile for instant LCP/TBT
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobile) return;
+
     let phi = 0;
-    let width = 0;
+    let cachedRenderWidth = 600;
     let animationFrameId: number;
     let isVisible = true;
+    let globe: any = null;
 
     const onResize = () => {
       if (canvasRef.current) {
-        width = canvasRef.current.offsetWidth;
+        const measuredWidth = canvasRef.current.offsetWidth || 600;
+        cachedRenderWidth = Math.min(measuredWidth * 1.5, 1200);
       }
     };
-    window.addEventListener('resize', onResize);
+    window.addEventListener('resize', onResize, { passive: true });
     onResize();
 
     const handleVisibilityChange = () => {
@@ -58,45 +64,45 @@ export const Globe: React.FC<GlobeProps> = ({ className = '', config }) => {
 
     if (!canvasRef.current) return;
 
-    const renderWidth = Math.min((width || 600) * 1.5, 1200);
     const initialConfig: COBEOptions = {
       ...DEFAULT_GLOBE_CONFIG,
       ...(config || {}),
-      width: renderWidth,
-      height: renderWidth,
+      width: cachedRenderWidth,
+      height: cachedRenderWidth,
       baseColor: (config?.baseColor ?? DEFAULT_GLOBE_CONFIG.baseColor) as [number, number, number],
       markerColor: (config?.markerColor ?? DEFAULT_GLOBE_CONFIG.markerColor) as [number, number, number],
       glowColor: (config?.glowColor ?? DEFAULT_GLOBE_CONFIG.glowColor) as [number, number, number],
     };
 
-    const globe = createGlobe(canvasRef.current, initialConfig);
+    globe = createGlobe(canvasRef.current, initialConfig);
 
     const animate = () => {
-      if (isVisible) {
+      if (isVisible && globe) {
         if (pointerInteracting.current === null) {
           phi += 0.003;
         }
-        const currentWidth = Math.min((canvasRef.current?.offsetWidth || width || 600) * 1.5, 1200);
+        // Use cachedRenderWidth (NO layout reads inside animation loop)
         globe.update({
           phi: phi + pointerInteractionMovement.current,
-          width: currentWidth,
-          height: currentWidth,
+          width: cachedRenderWidth,
+          height: cachedRenderWidth,
         });
       }
       animationFrameId = requestAnimationFrame(animate);
     };
 
-    animate();
-
-    setTimeout(() => {
+    // Defer animation slightly to yield main thread during initial paint
+    const initTimer = setTimeout(() => {
+      animate();
       if (canvasRef.current) {
         canvasRef.current.style.opacity = '1';
       }
-    }, 50);
+    }, 100);
 
     return () => {
+      clearTimeout(initTimer);
       cancelAnimationFrame(animationFrameId);
-      globe.destroy();
+      if (globe) globe.destroy();
       window.removeEventListener('resize', onResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

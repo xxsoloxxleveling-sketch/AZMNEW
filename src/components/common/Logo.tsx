@@ -35,6 +35,11 @@ export const Logo: React.FC<LogoProps> = ({
           <img
             src="/pictures/logo_cropped.png"
             alt="AZM.AIO Official Logo"
+            width={size === 'xl' ? 120 : size === 'lg' ? 88 : size === 'md' ? 56 : 40}
+            height={size === 'xl' ? 120 : size === 'lg' ? 88 : size === 'md' ? 56 : 40}
+            decoding="async"
+            // @ts-ignore
+            fetchpriority="high"
             onError={() => setLoadError(true)}
             className="w-full h-full object-contain filter drop-shadow-[0_2px_8px_rgba(24,91,157,0.35)]"
           />
@@ -42,6 +47,9 @@ export const Logo: React.FC<LogoProps> = ({
           <img
             src="/pictures/Logo1.jpeg"
             alt="AZM.AIO Official Logo"
+            width={size === 'xl' ? 120 : size === 'lg' ? 88 : size === 'md' ? 56 : 40}
+            height={size === 'xl' ? 120 : size === 'lg' ? 88 : size === 'md' ? 56 : 40}
+            decoding="async"
             className="w-full h-full object-contain"
           />
         )}

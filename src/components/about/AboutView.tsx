@@ -128,6 +128,10 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
             <img
               src="/pictures/Session 4/WhatsApp Image 2026-07-14 at 2.49.46 PM.jpeg"
               alt="Session IV OMR Examination Center Hall"
+              width={400}
+              height={224}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
@@ -141,6 +145,10 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
             <img
               src="/pictures/Winter Session 3 and ceremony/WhatsApp Image 2026-07-14 at 2.48.17 PM (1).jpeg"
               alt="Grand Award Distribution Ceremony"
+              width={400}
+              height={224}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
@@ -154,6 +162,10 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
             <img
               src="/pictures/Winter Session 3 and ceremony/WhatsApp Image 2026-07-14 at 2.48.33 PM (2).jpeg"
               alt="High Achievers Felicitation"
+              width={400}
+              height={224}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
