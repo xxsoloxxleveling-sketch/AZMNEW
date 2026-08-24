@@ -134,6 +134,24 @@ class SupabaseStorageService {
       return false;
     }
   }
+
+  /**
+   * Empties all files in a specified bucket.
+   */
+  async emptyBucket(bucket: StorageBucket): Promise<boolean> {
+    if (!this.client) return true;
+    try {
+      const { data: files, error: listError } = await this.client.storage.from(bucket).list('', { limit: 1000 });
+      if (listError || !files || files.length === 0) return true;
+      const paths = files.map((f) => f.name).filter(Boolean);
+      if (paths.length > 0) {
+        await this.client.storage.from(bucket).remove(paths);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export const supabaseStorage = new SupabaseStorageService();

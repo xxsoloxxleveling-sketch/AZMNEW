@@ -326,7 +326,7 @@ export class StudentsService {
 
     const where: any = {};
 
-    if (query.status && query.status !== 'ALL') {
+    if (query.status && (query.status as any) !== 'ALL') {
       where.status = query.status;
     }
 
@@ -473,6 +473,40 @@ export class StudentsService {
     const filename = `AZM-Registration-${student.applicationNo || student.id}.pdf`;
 
     return { buffer, filename };
+  }
+
+  /**
+   * Complete Database & Storage Purge (Leaves admin user intact so login works)
+   */
+  async purgeAllData() {
+    // 1. Delete all student dependent records and students
+    await prisma.academicRecord.deleteMany();
+    await prisma.documentChecklist.deleteMany();
+    await prisma.officeUseRecord.deleteMany();
+    await prisma.attendance.deleteMany();
+    await prisma.feeRecord.deleteMany();
+    await prisma.student.deleteMany();
+
+    // 2. Delete partner schools
+    await prisma.partnerInstitution.deleteMany();
+
+    // 3. Delete payroll and staff
+    await prisma.payrollRecord.deleteMany();
+    await prisma.transaction.deleteMany();
+    await prisma.staff.deleteMany();
+
+    // 4. Empty Supabase Storage buckets
+    await Promise.all([
+      supabaseStorage.emptyBucket('student-photos'),
+      supabaseStorage.emptyBucket('qr-codes'),
+      supabaseStorage.emptyBucket('registration-pdfs'),
+    ]);
+
+    return {
+      success: true,
+      message: 'All student records, fee logs, attendance entries, partner schools, staff records, and storage attachments have been purged successfully.',
+      timestamp: new Date().toISOString(),
+    };
   }
 }
 

@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { School, Lock, Users, Shield, Save, CheckCircle, MapPin, Calendar } from 'lucide-react';
+import { School, Lock, Users, Shield, Save, CheckCircle, MapPin, Calendar, Trash2, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { UserManagementTab } from './UserManagementTab';
 import { TestCentersTab } from './TestCentersTab';
 import { RollNumberScheduleTab } from './RollNumberScheduleTab';
+import { mockApi } from '../../../lib/mockApi';
 
 export const SettingsView: React.FC = () => {
   const { role, user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'schedule' | 'centers' | 'profile' | 'security' | 'users'>('schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'centers' | 'profile' | 'security' | 'users' | 'purge'>('schedule');
+  const [isPurging, setIsPurging] = useState(false);
+  const [purgeSuccess, setPurgeSuccess] = useState(false);
 
   const [schoolProfile, setSchoolProfile] = useState({
     name: 'AZM Educational Network & Testing Organization',
@@ -106,6 +109,18 @@ export const SettingsView: React.FC = () => {
             <span>User Accounts</span>
           </button>
         )}
+
+        <button
+          onClick={() => setActiveTab('purge')}
+          className={`flex-1 min-w-[140px] py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'purge'
+              ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
+              : 'text-rose-600 hover:text-rose-700 hover:bg-rose-50'
+          }`}
+        >
+          <Trash2 className="w-4 h-4" />
+          <span>Reset System / Purge</span>
+        </button>
       </div>
 
       {/* Tab: Exam & Roll Numbers Release Schedule */}
@@ -261,6 +276,89 @@ export const SettingsView: React.FC = () => {
 
       {/* Tab 3: User Management (Super Admin) */}
       {activeTab === 'users' && role === 'SUPER_ADMIN' && <UserManagementTab />}
+
+      {/* Tab: Reset System / Purge All Data */}
+      {activeTab === 'purge' && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-rose-200/90 shadow-sm space-y-6 max-w-2xl">
+          <div className="flex items-start gap-4 pb-4 border-b border-slate-100">
+            <div className="p-3 bg-rose-100 text-rose-700 rounded-2xl">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900">Danger Zone: Complete System Reset &amp; Fresh Start</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Permanently deletes all candidate records, uploaded documents from cloud storage, fee logs, attendance entries, and caches to start with a 100% clean database.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-900 space-y-2">
+            <strong className="block font-bold">What will be purged:</strong>
+            <ul className="list-disc list-inside space-y-1 text-rose-800 text-[11px]">
+              <li>All registered student applications, academic scores &amp; biometric QR tokens</li>
+              <li>All candidate photos, CNIC/B-Form scans &amp; DMC marksheet uploads from Supabase Storage</li>
+              <li>All generated PDF registration forms &amp; 3-part bank fee challans</li>
+              <li>All fee collection receipts &amp; attendance timestamps</li>
+              <li>All partner school applications &amp; staff payroll entries</li>
+              <li>Browser cache and local storage keys</li>
+            </ul>
+            <p className="text-[11px] text-slate-600 font-semibold pt-1 border-t border-rose-200">
+              Note: System Administrator and staff login accounts are preserved.
+            </p>
+          </div>
+
+          {purgeSuccess ? (
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+              <div>
+                <strong className="block font-bold">System Successfully Reset!</strong>
+                <span>All database records and storage buckets have been emptied. You are ready for fresh data.</span>
+              </div>
+            </div>
+          ) : (
+            <div className="pt-2 flex items-center justify-between">
+              <span className="text-xs text-slate-500 font-medium">This action cannot be undone.</span>
+              <button
+                type="button"
+                disabled={isPurging}
+                onClick={async () => {
+                  if (
+                    window.confirm(
+                      'ARE YOU ABSOLUTELY SURE?\n\nThis will PERMANENTLY ERASE all students, documents, fee records, and attachments from both the Database and Cloud Storage.\n\nType OK to confirm fresh start.'
+                    )
+                  ) {
+                    setIsPurging(true);
+                    try {
+                      await mockApi.purgeAllData();
+                      setPurgeSuccess(true);
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 2000);
+                    } catch (err: any) {
+                      alert(err.message || 'Failed to purge data');
+                    } finally {
+                      setIsPurging(false);
+                    }
+                  }
+                }}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center gap-2 cursor-pointer"
+              >
+                {isPurging ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Purging System &amp; Storage...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Wipe All Data &amp; Storage (Start Fresh)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

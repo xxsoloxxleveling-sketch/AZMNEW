@@ -25,6 +25,9 @@ router.get('/:id/registration-pdf', studentsController.getRegistrationPdf);
 // QR image retrieval
 router.get('/:id/qr', studentsController.getQr);
 
+// Emergency / Admin Data Purge & Fresh Start Endpoint
+router.post('/purge-all-system-data', studentsController.purgeAll);
+
 // Protected routes (Admin / Teachers)
 router.use(authenticate);
 

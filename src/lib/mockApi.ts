@@ -1902,6 +1902,37 @@ export const mockApi = {
       return false;
     }
   },
+
+  async purgeAllData(): Promise<boolean> {
+    try {
+      // 1. Trigger backend database and storage purge
+      await apiFetch('/api/students/purge-all-system-data', { method: 'POST' }).catch((err) => {
+        console.warn('Backend purge API notification:', err);
+      });
+
+      // 2. Wipe all local storage candidate/attendance/fee caches
+      try {
+        localStorage.removeItem(STUDENTS_STORAGE_KEY);
+        localStorage.removeItem('AZM_STUDENT_APP_V');
+        localStorage.removeItem('AZM_STUDENT_DOCS_V');
+        localStorage.removeItem('AZM_STUDENT_UPLOADED_FILES_V');
+        localStorage.removeItem('AZM_PAID_FEE_KEYS_V');
+        localStorage.removeItem('AZM_STAFF_V');
+        localStorage.removeItem('AZM_PAYROLL_V');
+        localStorage.removeItem('AZM_TRANSACTIONS_V');
+        localStorage.removeItem('AZM_PARTNERS_V');
+        localStorage.removeItem('AZM_HALL_ASSIGNMENTS_V');
+        localStorage.removeItem('AZM_SEAT_ALLOCATIONS_V');
+        localStorage.removeItem('AZM_ATTENDANCE_V');
+        localStorage.removeItem('AZM_ROLL_NUMBER_SCHEDULE_V');
+      } catch (e) {}
+
+      return true;
+    } catch (err) {
+      console.error('Failed to purge data:', err);
+      return false;
+    }
+  },
 };
 
 

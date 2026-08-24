@@ -156,6 +156,19 @@ export class StudentsController {
       next(error);
     }
   }
+
+  async purgeAll(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await studentsService.purgeAllData();
+      res.status(200).json({
+        success: true,
+        message: 'All system data and storage attachments have been purged successfully.',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const studentsController = new StudentsController();
