@@ -140,10 +140,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                  Jadoon PS & College
+                  AZMAIO Portal
                 </h1>
                 <p className="text-xs font-medium text-slate-500 mt-0.5">
-                  School Management & Examination Portal
+                  Management & Examination Portal
                 </p>
               </div>
             </div>

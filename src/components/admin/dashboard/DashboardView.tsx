@@ -83,7 +83,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span>Academic Session 2026-2027</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
-            Welcome to Jadoon PS Administration Desk
+            Welcome to AZMAIO Administration Desk
           </h2>
           <p className="text-xs text-blue-100/90 max-w-xl leading-relaxed">
             Real-time biometric attendance, automated fee collections, student scholarship registry, and institutional payroll ledger.

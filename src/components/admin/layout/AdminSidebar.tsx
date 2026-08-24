@@ -140,7 +140,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="text-sm font-extrabold text-slate-900 truncate tracking-tight">
-                Jadoon PS & College
+                AZMAIO Portal
               </h1>
               <p className="text-[11px] font-medium text-slate-400 truncate">
                 Admin Management Portal
