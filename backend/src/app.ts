@@ -3,6 +3,7 @@ import cors from 'cors';
 import { errorHandler } from './middleware/error.middleware';
 import { prisma } from './lib/prisma';
 import { env } from './config/env';
+import authRoutes from './modules/auth/auth.routes';
 
 const app: Express = express();
 
@@ -38,6 +39,9 @@ app.get('/api/health', async (_req: Request, res: Response) => {
     },
   });
 });
+
+// Mount module routes
+app.use('/api/auth', authRoutes);
 
 // Fallback 404 for unknown routes
 app.use((req: Request, res: Response, _next: NextFunction) => {

@@ -120,16 +120,20 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
             <ul className="space-y-3 text-xs text-slate-300">
               <li className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
                 <strong className="text-white block font-medium">1. Jadoon Public High School & College</strong>
-                <span className="text-slate-400 text-[11px]">Gandhian, Karakoram Highway (Head Office)</span>
+                <span className="text-slate-400 text-[11px] block">Gandhian, Karakoram Highway (Head Office)</span>
+                <span className="text-emerald-400 text-[11px] font-mono font-semibold">0305-1755551</span>
               </li>
               <li className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
                 <strong className="text-white block font-medium">2. Dubai International School & College</strong>
-                <span className="text-slate-400 text-[11px]">Kashmir Road, Near Shinkiari Chowk</span>
+                <span className="text-slate-400 text-[11px] block">Kashmir Road • Pervez (Principal)</span>
+                <a href="tel:+923005643177" className="text-emerald-400 hover:underline text-[11px] font-mono font-semibold">+92 300 5643177</a>
               </li>
               <li className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
                 <strong className="text-white block font-medium">3. Khyber Public School & College</strong>
-                <span className="text-slate-400 text-[11px]">Abbottabad Road, Near College Chowk</span>
+                <span className="text-slate-400 text-[11px] block">College Chowk • Asfandyar (Vice Principal)</span>
+                <a href="tel:+923315014441" className="text-emerald-400 hover:underline text-[11px] font-mono font-semibold">+92 331 5014441</a>
               </li>
+
             </ul>
           </div>
 

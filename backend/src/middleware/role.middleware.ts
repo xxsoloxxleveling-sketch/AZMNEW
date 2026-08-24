@@ -1,8 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
 
-// Scaffolded for Phase 0 - will be fully implemented in Phase 1
-export function authorizeRoles(..._allowedRoles: string[]) {
-  return (_req: Request, _res: Response, next: NextFunction) => {
+export function authorizeRoles(...allowedRoles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          message: 'Authentication required before role authorization',
+        },
+      });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          message: `Forbidden: role '${req.user.role}' is not authorized to access this resource`,
+          allowedRoles,
+        },
+      });
+    }
+
     next();
   };
 }
