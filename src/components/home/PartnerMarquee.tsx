@@ -12,12 +12,13 @@ export const PartnerMarquee: React.FC = () => {
         <div className="flex items-center gap-2">
           <GraduationCap className="w-4 h-4 text-[#185b9d]" />
           <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
-            150+ Affiliated Educational Institutions & Examination Centers
+            Official Partner Schools & Affiliated Campuses
           </span>
         </div>
         <span className="text-[11px] text-slate-500 font-medium">
-          Mansehra • Abbottabad • Haripur • Battagram • Torghar • KP
+          Mansehra • Hazara Division • Khyber Pakhtunkhwa
         </span>
+
       </div>
 
       <div className="relative w-full overflow-hidden">
