@@ -116,59 +116,130 @@ export async function fetchPublicMeritList(params?: {
 // -------------------------------------------------------------
 // 3. Application Submissions API
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// 3. Application Submissions API
+// -------------------------------------------------------------
 export async function submitStudentApplication(
   payload: StudentApplicationData
-): Promise<ApiResponse<{ applicationId: string; trackingToken: string }>> {
+): Promise<ApiResponse<{ applicationId: string; rollNumber?: string; id?: string; qrToken?: string; qrImageUrl?: string }>> {
   try {
-    const response = await fetch(`${API_BASE_URL}/applications/student`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (response.ok) {
-      const data = await response.json();
-      return { success: true, data };
-    }
-  } catch (err) {
-    // Backend not connected
-  }
+    const { mockApi } = await import('../lib/mockApi');
+    
+    // Map frontend wizard model to backend registration schema
+    const backendPayload = {
+      fullName: payload.fullName,
+      fatherName: payload.fatherName,
+      gender: payload.gender?.toUpperCase() === 'FEMALE' ? 'FEMALE' : 'MALE',
+      dateOfBirth: payload.dob || '2008-01-01',
+      age: Number(payload.age) || 16,
+      cnicOrBForm: payload.cnicBForm,
+      nationality: 'Pakistani',
+      religion: 'Islam',
+      address: payload.permanentAddress || 'Address',
+      district: payload.district || 'Abbottabad',
+      province: payload.province || 'Khyber Pakhtunkhwa',
+      studentMobile: payload.mobile,
+      parentMobile: payload.emergencyContact || payload.mobile || '0300-0000000',
+      whatsapp: payload.whatsapp,
+      email: payload.email,
+      currentClass: payload.currentClass || 'SSC-II (Class 10th)',
+      hsscGroup: payload.discipline,
+      schoolName: payload.schoolName || 'School',
+      boardOrUniversity: payload.boardUniversity || 'BISE Abbottabad',
+      currentRollNo: payload.currentRollNo,
+      scholarshipCategory: payload.appliedCategory?.includes('Orphan')
+        ? 'ORPHAN'
+        : payload.appliedCategory?.includes('Disability')
+        ? 'PERSON_WITH_DISABILITY'
+        : payload.appliedCategory?.includes('Needy') || payload.isSpecialNeed
+        ? 'FINANCIALLY_NEEDY'
+        : 'GENERAL_MERIT',
+      guardianOccupation: payload.guardianOccupation,
+      guardianMonthlyIncome: Number(payload.monthlyHouseholdIncome) || 0,
+      emergencyContact: payload.emergencyContact || payload.mobile || '0300-0000000',
+      emergencyRelation: 'Guardian',
+      referralSource: 'AZM.AIO Online Apply Portal',
+      photoUrl: payload.photoUrl,
+      academicRecords: (payload.academicRecords || []).map((r) => ({
+        examLevel: r.gradeClass || 'Class 9th',
+        boardOrUni: r.institute || 'BISE',
+        yearOfPassing: r.passingYear || '2025',
+        totalMarks: Number(r.totalMarks) || 550,
+        obtainedMarks: Number(r.obtainedMarks) || 450,
+        percentage: Number(r.percentage) || 80,
+      })),
+      documents: {
+        bformCnicCopy: !!payload.documents?.bformUploaded,
+        fatherCnicCopy: !!payload.documents?.fatherCnicUploaded,
+        passportPhotos: !!payload.photoUrl,
+        previousResultCard: !!payload.documents?.dmcUploaded,
+        domicileCertificate: !!payload.documents?.domicileUploaded,
+        incomeCertificate: !!payload.documents?.incomeCertUploaded,
+      },
+    };
 
-  // Generates unique authenticated tracking ID
-  const randomNum = Math.floor(10000 + Math.random() * 90000);
-  const generatedId = `APP-V-${randomNum}`;
-  return {
-    success: true,
-    data: {
-      applicationId: generatedId,
-      trackingToken: `SEC-AZM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-    },
-    message: 'Application received and registered successfully.'
-  };
+    const student = await mockApi.createStudent(backendPayload);
+    return {
+      success: true,
+      data: {
+        id: student.id,
+        applicationId: student.applicationNo || `APP-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        rollNumber: student.rollNumber,
+        qrToken: student.qrToken,
+        qrImageUrl: student.qrImageUrl,
+      },
+      message: 'Application received and registered into central database.',
+    };
+  } catch (err: any) {
+    console.error('Student registration error:', err);
+    throw err;
+  }
 }
 
 export async function submitPartnerSchoolApplication(
   payload: PartnerSchoolData
-): Promise<ApiResponse<{ partnerId: string }>> {
+): Promise<ApiResponse<{ partnerId: string; partnerCode?: string; id?: string }>> {
   try {
-    const response = await fetch(`${API_BASE_URL}/applications/partner`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (response.ok) {
-      const data = await response.json();
-      return { success: true, data };
-    }
-  } catch (err) {
-    // Backend offline
-  }
+    const { mockApi } = await import('../lib/mockApi');
 
-  const generatedId = `PS-V-${Math.floor(1000 + Math.random() * 9000)}`;
-  return {
-    success: true,
-    data: { partnerId: generatedId },
-    message: 'Partner institution affiliation request submitted.'
-  };
+    const backendPayload = {
+      institutionName: payload.institutionName,
+      institutionType:
+        payload.category?.toLowerCase().includes('college') || payload.category?.toLowerCase().includes('inter')
+          ? 'COLLEGE'
+          : payload.category?.toLowerCase().includes('uni')
+          ? 'UNIVERSITY'
+          : 'SCHOOL',
+      campus: payload.campus || 'Main Campus',
+      address: payload.address || 'Campus Address',
+      district: payload.district || 'Abbottabad',
+      province: 'Khyber Pakhtunkhwa',
+      contactName: payload.contactPerson || 'Principal / Administrator',
+      contactDesignation: payload.designation || 'Head of Institution',
+      contactMobile: payload.whatsapp || payload.phone || '0300-0000000',
+      contactWhatsapp: payload.whatsapp,
+      contactEmail: payload.email,
+      website: payload.website,
+      classesOffered: payload.classesOffered || ['SSC', 'HSSC'],
+      studentStrength: Number(payload.approxStudents) || 100,
+      expectedApplicants: Number(payload.expectedApplicants) || 50,
+      agreedToTerms: true,
+    };
+
+    const partner = await mockApi.registerPartner(backendPayload);
+    return {
+      success: true,
+      data: {
+        id: partner.id,
+        partnerId: partner.partnerCode || `PRT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        partnerCode: partner.partnerCode,
+      },
+      message: 'Partner institution affiliation request submitted successfully.',
+    };
+  } catch (err: any) {
+    console.error('Partner affiliation error:', err);
+    throw err;
+  }
 }
 
 // -------------------------------------------------------------

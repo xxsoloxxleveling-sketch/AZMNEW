@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StudentApplicationData, PartnerSchoolData, PageTab } from '../../types';
 import { MONTHLY_ASSISTANCE_RATES, BENEFICIARY_CATEGORIES, OFFICIAL_DATA } from '../../data/scholarshipData';
-import { submitStudentApplication, submitPartnerSchoolApplication } from '../../services/api';
+import { mockApi } from '../../lib/mockApi';
 import { 
   User, 
   Phone, 
@@ -24,7 +24,10 @@ import {
   AlertCircle,
   FileCheck,
   Eye,
-  Plus
+  Plus,
+  Camera,
+  Loader2,
+  Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -39,6 +42,17 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [submittedAppId, setSubmittedAppId] = useState<string>('');
   const [saveStatus, setSaveStatus] = useState<string>('');
+  
+  // Real API & Submission States
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string>('');
+  const [createdStudent, setCreatedStudent] = useState<any>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const [photoError, setPhotoError] = useState<string>('');
+
+  const [isPartnerSubmitting, setIsPartnerSubmitting] = useState<boolean>(false);
+  const [createdPartner, setCreatedPartner] = useState<any>(null);
+  const [isDownloadingPartnerPdf, setIsDownloadingPartnerPdf] = useState<boolean>(false);
 
   // Signature canvas ref
   const sigCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -221,46 +235,192 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     }));
   };
 
-  // Complete Application Submit
+  // Photo Upload Handler with Max 200KB Validation
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhotoError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
 
+    // Strict 200 KB validation
+    const maxSizeBytes = 200 * 1024;
+    if (file.size > maxSizeBytes) {
+      setPhotoError(
+        `File size (${(file.size / 1024).toFixed(0)} KB) exceeds the maximum 200 KB limit. Please compress or select a smaller photo.`
+      );
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const dataUrl = uploadEvent.target?.result as string;
+      setFormData((prev) => ({
+        ...prev,
+        photoUrl: dataUrl,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Complete Application Submit to Live Database
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError('');
+
     if (!formData.declarationAccepted) {
       alert('Please accept the final declaration before submitting.');
       return;
     }
 
-    const res = await submitStudentApplication(formData);
-    const finalId = res.data?.applicationId || `APP-V-${Math.floor(10000 + Math.random() * 90000)}`;
-    setSubmittedAppId(finalId);
-    setIsSubmitted(true);
-
+    setIsSubmitting(true);
     try {
-      localStorage.removeItem('AZM_STUDENT_APP_V');
-    } catch (err) {}
+      const backendPayload = {
+        fullName: formData.fullName,
+        fatherName: formData.fatherName,
+        gender: formData.gender?.toUpperCase() === 'FEMALE' ? 'FEMALE' : 'MALE',
+        dateOfBirth: formData.dob || '2008-01-01',
+        age: Number(formData.age) || 16,
+        cnicOrBForm: formData.cnicBForm,
+        nationality: 'Pakistani',
+        religion: 'Islam',
+        address: formData.permanentAddress || 'Campus Address',
+        district: formData.district || 'Abbottabad',
+        province: formData.province || 'Khyber Pakhtunkhwa',
+        studentMobile: formData.mobile,
+        parentMobile: formData.emergencyContact || formData.mobile || '0300-0000000',
+        whatsapp: formData.whatsapp,
+        email: formData.email,
+        currentClass: formData.currentClass || 'SSC-II (Class 10th)',
+        hsscGroup: formData.discipline,
+        schoolName: formData.schoolName || 'School',
+        boardOrUniversity: formData.boardUniversity || 'BISE Abbottabad',
+        currentRollNo: formData.currentRollNo,
+        scholarshipCategory: formData.appliedCategory?.includes('Orphan')
+          ? 'ORPHAN'
+          : formData.appliedCategory?.includes('Disability')
+          ? 'PERSON_WITH_DISABILITY'
+          : formData.appliedCategory?.includes('Needy') || formData.isSpecialNeed
+          ? 'FINANCIALLY_NEEDY'
+          : 'GENERAL_MERIT',
+        guardianOccupation: formData.guardianOccupation,
+        guardianMonthlyIncome: Number(formData.monthlyHouseholdIncome) || 0,
+        emergencyContact: formData.emergencyContact || formData.mobile || '0300-0000000',
+        emergencyRelation: 'Guardian',
+        referralSource: 'AZM.AIO Online Apply Portal',
+        photoUrl: formData.photoUrl,
+        academicRecords: (formData.academicRecords || []).map((r) => ({
+          examLevel: r.gradeClass || 'Class 9th',
+          boardOrUni: r.institute || 'BISE',
+          yearOfPassing: r.passingYear || '2025',
+          totalMarks: Number(r.totalMarks) || 550,
+          obtainedMarks: Number(r.obtainedMarks) || 450,
+          percentage: Number(r.percentage) || 80,
+        })),
+        documents: {
+          bformCnicCopy: !!formData.documents?.bformUploaded,
+          fatherCnicCopy: !!formData.documents?.fatherCnicUploaded,
+          passportPhotos: !!formData.photoUrl,
+          previousResultCard: !!formData.documents?.dmcUploaded,
+          domicileCertificate: !!formData.documents?.domicileUploaded,
+          incomeCertificate: !!formData.documents?.incomeCertUploaded,
+        },
+      };
 
-    // Trigger celebratory confetti dynamically
-    try {
-      const confettiModule = await import('canvas-confetti');
-      const confetti = confettiModule.default || confettiModule;
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 }
-      });
-    } catch (err) {}
+      const student = await mockApi.createStudent(backendPayload);
+      setCreatedStudent(student);
+      setSubmittedAppId(student.applicationNo || student.id);
+      setIsSubmitted(true);
+
+      try {
+        localStorage.removeItem('AZM_STUDENT_APP_V');
+      } catch (err) {}
+
+      // Trigger celebratory confetti dynamically
+      try {
+        const confettiModule = await import('canvas-confetti');
+        const confetti = confettiModule.default || confettiModule;
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 },
+        });
+      } catch (err) {}
+    } catch (err: any) {
+      setSubmitError(
+        err.message ||
+          'Failed to submit registration. Please check that your CNIC is not already registered.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Partner School Submit
+  const handleDownloadStudentPdf = async () => {
+    if (!createdStudent?.id) return;
+    setIsDownloadingPdf(true);
+    try {
+      await mockApi.downloadStudentPdf(createdStudent.id, createdStudent.rollNumber);
+    } catch (err: any) {
+      alert(err.message || 'Failed to download PDF');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  // Partner School Submit to Live Database
   const handlePartnerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await submitPartnerSchoolApplication(partnerData);
-    setIsPartnerSubmitted(true);
+    setIsPartnerSubmitting(true);
     try {
-      const confettiModule = await import('canvas-confetti');
-      const confetti = confettiModule.default || confettiModule;
-      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-    } catch (err) {}
+      const backendPayload = {
+        institutionName: partnerData.institutionName,
+        institutionType:
+          partnerData.category?.toLowerCase().includes('college') || partnerData.category?.toLowerCase().includes('inter')
+            ? 'COLLEGE'
+            : partnerData.category?.toLowerCase().includes('uni')
+            ? 'UNIVERSITY'
+            : 'SCHOOL',
+        campus: partnerData.campus || 'Main Campus',
+        address: partnerData.address || 'Campus Address',
+        district: partnerData.district || 'Abbottabad',
+        province: 'Khyber Pakhtunkhwa',
+        contactName: partnerData.contactPerson || 'Principal / Administrator',
+        contactDesignation: partnerData.designation || 'Head of Institution',
+        contactMobile: partnerData.whatsapp || '0300-0000000',
+        contactWhatsapp: partnerData.whatsapp,
+        contactEmail: `${partnerData.institutionName.toLowerCase().replace(/[^a-z0-9]/g, '')}@partner.edu.pk`,
+        website: 'https://jadoon.edu.pk',
+        classesOffered: ['SSC', 'HSSC'],
+        studentStrength: Number(partnerData.totalStudentStrength) || 100,
+        expectedApplicants: Number(partnerData.expectedApplicants) || 50,
+        agreedToTerms: true,
+      };
+
+      const partner = await mockApi.registerPartner(backendPayload);
+      setCreatedPartner(partner);
+      setIsPartnerSubmitted(true);
+      try {
+        const confettiModule = await import('canvas-confetti');
+        const confetti = confettiModule.default || confettiModule;
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      } catch (err) {}
+    } catch (err: any) {
+      alert(err.message || 'Failed to submit partner affiliation.');
+    } finally {
+      setIsPartnerSubmitting(false);
+    }
+  };
+
+  const handleDownloadPartnerPdf = async () => {
+    if (!createdPartner?.id) return;
+    setIsDownloadingPartnerPdf(true);
+    try {
+      await mockApi.downloadPartnerPdf(createdPartner.id, createdPartner.partnerCode);
+    } catch (err: any) {
+      alert(err.message || 'Failed to download partner agreement PDF');
+    } finally {
+      setIsDownloadingPartnerPdf(false);
+    }
   };
 
 
@@ -457,23 +617,66 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Candidate Passport Photo Preview
-                      </label>
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={formData.photoUrl}
-                          alt="Candidate Preview"
-                          className="w-12 h-12 rounded-xl object-cover border-2 border-[#185b9d]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => alert('Photo crop & verification preview active.')}
-                          className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium"
-                        >
-                          Change / Recrop
-                        </button>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700">
+                          Passport Size Photo (Max 200 KB) *
+                        </label>
+                        <span className="text-[10px] font-semibold text-[#185b9d] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                          Max 200 KB
+                        </span>
                       </div>
+                      
+                      <div className="flex items-center gap-3">
+                        {formData.photoUrl ? (
+                          <div className="relative group">
+                            <img
+                              src={formData.photoUrl}
+                              alt="Candidate Preview"
+                              className="w-14 h-14 rounded-2xl object-cover border-2 border-[#185b9d] shadow-sm"
+                            />
+                            <label className="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity text-white text-[10px] font-bold">
+                              Change
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/jpg,image/webp"
+                                onChange={handlePhotoUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                        ) : (
+                          <label className="w-14 h-14 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#185b9d] bg-slate-50 flex flex-col items-center justify-center cursor-pointer transition-colors text-slate-400 hover:text-[#185b9d]">
+                            <Camera className="w-5 h-5" />
+                            <span className="text-[9px] font-bold mt-0.5">Upload</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/webp"
+                              onChange={handlePhotoUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                        <div className="space-y-1">
+                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition">
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>{formData.photoUrl ? 'Replace Photo' : 'Select Photo (Max 200 KB)'}</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/webp"
+                              onChange={handlePhotoUpload}
+                              className="hidden"
+                            />
+                          </label>
+                          <p className="text-[10px] text-slate-400">JPG, PNG or WebP with white / light background</p>
+                        </div>
+                      </div>
+
+                      {photoError && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-1.5">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                          <span>{photoError}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -899,9 +1102,15 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               {/* STAGE 7: DOCUMENT UPLOAD MATRIX */}
               {currentStage === 7 && (
                 <div className="space-y-4">
-                  <h3 className="text-lg font-bold text-slate-900 border-b pb-2">
-                    Stage 7: Mandatory Document Upload Matrix
-                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-2 gap-2">
+                    <h3 className="text-lg font-bold text-slate-900">
+                      Stage 7: Mandatory Document Upload Matrix
+                    </h3>
+                    <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 inline-flex items-center gap-1 w-fit">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      No file size limit for documents
+                    </span>
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {[
@@ -1068,15 +1277,32 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   ) : (
                     <button
                       type="submit"
+                      disabled={isSubmitting}
                       id="btn-final-submit-application"
-                      className="px-8 py-3 text-xs font-extrabold text-white bg-gradient-to-r from-[#185b9d] via-emerald-600 to-[#299b46] hover:opacity-95 rounded-xl shadow-lg transition-all flex items-center gap-2 transform hover:scale-[1.02] focus:outline-hidden"
+                      className="px-8 py-3 text-xs font-extrabold text-white bg-gradient-to-r from-[#185b9d] via-emerald-600 to-[#299b46] hover:opacity-95 disabled:opacity-60 rounded-xl shadow-lg transition-all flex items-center gap-2 transform hover:scale-[1.02] focus:outline-hidden"
                     >
-                      <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>Submit Official Session V Application</span>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 text-white animate-spin" />
+                          <span>Registering in Central Database...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                          <span>Submit Official Session V Application</span>
+                        </>
+                      )}
                     </button>
                   )}
                 </div>
               </div>
+
+              {submitError && (
+                <div className="mt-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                  <span>{submitError}</span>
+                </div>
+              )}
             </form>
           </div>
 
@@ -1094,11 +1320,17 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
               {/* Candidate Info Snippet */}
               <div className="flex items-center gap-3">
-                <img
-                  src={formData.photoUrl}
-                  alt="Candidate"
-                  className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-400"
-                />
+                {formData.photoUrl ? (
+                  <img
+                    src={formData.photoUrl}
+                    alt="Candidate"
+                    className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-400"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-slate-500">
+                    <User className="w-6 h-6" />
+                  </div>
+                )}
                 <div>
                   <div className="text-sm font-bold text-white font-display">
                     {formData.fullName || 'Candidate Full Name'}
@@ -1163,29 +1395,62 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               Welcome to Session V (2026) Candidate Register!
             </h2>
             <p className="text-xs text-slate-600 max-w-md mx-auto">
-              Your application has been logged into the AZM central admissions ledger. Save your official Application ID below for tracking and Roll Number Slip retrieval.
+              Your application has been registered into the central database with an official sequential roll number and cryptographically signed biometric QR code.
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 max-w-sm mx-auto space-y-1">
-            <span className="text-[11px] text-slate-500 uppercase font-bold tracking-wider">
-              Official Application ID
-            </span>
-            <div className="text-2xl font-extrabold font-mono text-[#185b9d]">
-              {submittedAppId}
+          {/* QR Code & Credentials Card */}
+          <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 max-w-md mx-auto space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-left">
+              <div className="p-3 bg-white rounded-xl border border-slate-200">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Application No</span>
+                <span className="text-sm font-extrabold font-mono text-[#185b9d] block mt-0.5">
+                  {submittedAppId}
+                </span>
+              </div>
+              <div className="p-3 bg-white rounded-xl border border-slate-200">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Assigned Roll No</span>
+                <span className="text-sm font-extrabold font-mono text-emerald-700 block mt-0.5">
+                  {createdStudent?.rollNumber || 'JPS-2026'}
+                </span>
+              </div>
             </div>
-            <span className="text-[10px] text-emerald-700 font-semibold block">
-              Candidate: {formData.fullName} ({formData.currentClass})
-            </span>
+
+            {createdStudent?.qrImageUrl && (
+              <div className="p-3 bg-white rounded-xl border border-slate-200 inline-block text-center">
+                <img
+                  src={createdStudent.qrImageUrl}
+                  alt="Biometric Examination QR"
+                  className="w-32 h-32 mx-auto rounded-lg"
+                />
+                <span className="text-[10px] font-mono text-slate-400 block mt-1">
+                  Signed Biometric Examination QR
+                </span>
+              </div>
+            )}
+
+            <div className="text-xs text-slate-600 font-medium">
+              Candidate: <strong>{formData.fullName}</strong> | Class: <strong>{formData.currentClass}</strong>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-slate-100">
             <button
-              onClick={() => onSelectTab('roll-number')}
-              className="px-6 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs shadow-md flex items-center gap-2"
+              onClick={handleDownloadStudentPdf}
+              disabled={isDownloadingPdf}
+              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-md flex items-center gap-2 transition"
             >
-              <FileCheck className="w-4 h-4" />
-              <span>Preview Roll Number Slip</span>
+              {isDownloadingPdf ? (
+                <>
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  <span>Generating Official PDF Slip...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Download Official PDF Slip (2-Page)</span>
+                </>
+              )}
             </button>
 
             <button
@@ -1193,11 +1458,14 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center gap-2"
             >
               <Printer className="w-4 h-4" />
-              <span>Print Application Receipt</span>
+              <span>Print Confirmation</span>
             </button>
 
             <button
-              onClick={() => setIsSubmitted(false)}
+              onClick={() => {
+                setIsSubmitted(false);
+                setCreatedStudent(null);
+              }}
               className="px-4 py-2.5 text-xs text-slate-500 hover:text-slate-900"
             >
               Submit Another Application
@@ -1347,11 +1615,21 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
             <button
               type="submit"
+              disabled={isPartnerSubmitting}
               id="btn-partner-submit"
-              className="w-full py-3 bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 bg-[#185b9d] hover:bg-[#13497e] disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
             >
-              <Building2 className="w-4 h-4" />
-              <span>Enroll Institution in AZM Affiliation Network</span>
+              {isPartnerSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  <span>Enrolling Institution in Network...</span>
+                </>
+              ) : (
+                <>
+                  <Building2 className="w-4 h-4" />
+                  <span>Enroll Institution in AZM Affiliation Network</span>
+                </>
+              )}
             </button>
           </form>
         </div>
@@ -1367,14 +1645,38 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
             Institution Enrollment Confirmed!
           </h2>
           <p className="text-xs text-slate-600">
-            Thank you, <strong>{partnerData.institutionName || 'Principal'}</strong>. Our admissions team will dispatch official Session V Question Banks and enrollment ledgers to your campus address.
+            Thank you, <strong>{partnerData.institutionName || 'Principal'}</strong>. Your institution has been enrolled into the AZM Affiliation Ledger with Partner Code <strong>{createdPartner?.partnerCode || 'PRT-2026'}</strong>.
           </p>
-          <button
-            onClick={() => setIsPartnerSubmitted(false)}
-            className="px-5 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 rounded-xl"
-          >
-            Back to Portal
-          </button>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+            <button
+              onClick={handleDownloadPartnerPdf}
+              disabled={isDownloadingPartnerPdf}
+              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-md flex items-center gap-2 transition"
+            >
+              {isDownloadingPartnerPdf ? (
+                <>
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  <span>Generating Official Agreement PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Download Affiliation Agreement PDF</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                setIsPartnerSubmitted(false);
+                setCreatedPartner(null);
+              }}
+              className="px-5 py-2.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl"
+            >
+              Back to Portal
+            </button>
+          </div>
         </div>
       )}
     </div>
