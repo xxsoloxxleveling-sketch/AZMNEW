@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   UserPlus,
   QrCode,
@@ -47,8 +47,10 @@ export const StudentsListView: React.FC = () => {
         }),
         mockApi.getRollNumberStatus().catch(() => null),
       ]);
-      setStudents(data);
+      setStudents(Array.isArray(data) ? data : []);
       if (statusData) setRollStatus(statusData);
+    } catch {
+      setStudents([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -145,7 +147,9 @@ export const StudentsListView: React.FC = () => {
       render: (row) => (
         <div>
           <span className="font-semibold text-slate-800 block">{row.currentClass}</span>
-          <span className="text-[11px] text-slate-400">{row.scholarshipCategory.replace(/_/g, ' ')}</span>
+          <span className="text-[11px] text-slate-400">
+            {(row.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ')}
+          </span>
         </div>
       ),
     },

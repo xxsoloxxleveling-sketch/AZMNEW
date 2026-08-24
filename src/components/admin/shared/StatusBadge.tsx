@@ -90,8 +90,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
     }
   };
 
-  const formatText = (text: string) => {
-    return text.replace(/_/g, ' ');
+  const formatText = (text?: string) => {
+    return (text || '').replace(/_/g, ' ');
   };
 
   const paddingClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs';
