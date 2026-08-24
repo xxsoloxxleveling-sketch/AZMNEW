@@ -236,7 +236,7 @@ export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
     reportingTime: '09:00 AM',
     testDate: 'Sunday, 15 November 2026',
     contactPerson: 'Prof. Dr. Sumama Khan',
-    contactPhone: '0305-1755551',
+    contactPhone: '0344-0197194',
     status: 'ACTIVE',
     createdAt: '2025-01-10T00:00:00Z',
   },
@@ -252,7 +252,7 @@ export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
     reportingTime: '09:00 AM',
     testDate: 'Sunday, 15 November 2026',
     contactPerson: 'Admissions & Testing Coordinator',
-    contactPhone: '0305-1755551',
+    contactPhone: '0344-0197194',
     status: 'ACTIVE',
     createdAt: '2025-01-12T00:00:00Z',
   },
@@ -268,7 +268,7 @@ export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
     reportingTime: '09:00 AM',
     testDate: 'Sunday, 15 November 2026',
     contactPerson: 'Controller of Examination',
-    contactPhone: '0305-1755551',
+    contactPhone: '0344-0197194',
     status: 'ACTIVE',
     createdAt: '2025-01-15T00:00:00Z',
   },
@@ -284,7 +284,7 @@ export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
     reportingTime: '09:00 AM',
     testDate: 'Sunday, 15 November 2026',
     contactPerson: 'Regional Coordinator',
-    contactPhone: '0305-1755551',
+    contactPhone: '0344-0197194',
     status: 'ACTIVE',
     createdAt: '2025-01-20T00:00:00Z',
   },
@@ -411,6 +411,77 @@ export function saveLocalStudent(student: MockStudent): void {
 
 
 
+export function deleteLocalStudent(idOrAppNo: string): boolean {
+  try {
+    const list = getLocalStudents();
+    const clean = idOrAppNo.toLowerCase().trim();
+    const cleanDigits = idOrAppNo.replace(/\D/g, '');
+    const filtered = list.filter(
+      (s) =>
+        s.id.toLowerCase() !== clean &&
+        (!s.applicationNo || s.applicationNo.toLowerCase() !== clean) &&
+        (!s.rollNumber || s.rollNumber.toLowerCase() !== clean) &&
+        (!cleanDigits || cleanDigits.length < 5 || !s.cnicOrBForm || s.cnicOrBForm.replace(/\D/g, '') !== cleanDigits)
+    );
+    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(filtered));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+export interface RollNumberReleaseConfig {
+  isScheduled: boolean; // true = schedule on/after releaseDateTime; false = immediate on payment approval
+  releaseDateTime: string; // ISO string e.g. "2026-10-15T09:00:00"
+  announcementTitle: string;
+  announcementMessage: string;
+  emergencyNotice?: string;
+  updatedAt: string;
+}
+
+const DEFAULT_RELEASE_CONFIG: RollNumberReleaseConfig = {
+  isScheduled: true,
+  releaseDateTime: '2026-10-15T09:00:00',
+  announcementTitle: 'Roll Number Slips Official Release Schedule',
+  announcementMessage:
+    'Official Roll Number Slips, Assigned Test Centers, and Examination Hall seatings will be released on Thursday, 15 October 2026 at 09:00 AM PST.',
+  emergencyNotice:
+    'Your registration and fee verification are permanently confirmed in the examination registry.',
+  updatedAt: '2026-08-24T00:00:00Z',
+};
+
+const RELEASE_CONFIG_STORAGE_KEY = 'AZM_ROLL_NUMBER_RELEASE_CONFIG_V';
+
+export function getRollNumberReleaseConfig(): RollNumberReleaseConfig {
+  try {
+    const raw = localStorage.getItem(RELEASE_CONFIG_STORAGE_KEY);
+    if (raw) return { ...DEFAULT_RELEASE_CONFIG, ...JSON.parse(raw) };
+  } catch (err) {}
+  return DEFAULT_RELEASE_CONFIG;
+}
+
+export function saveRollNumberReleaseConfig(
+  config: Partial<RollNumberReleaseConfig>
+): RollNumberReleaseConfig {
+  try {
+    const current = getRollNumberReleaseConfig();
+    const updated = { ...current, ...config, updatedAt: new Date().toISOString() };
+    localStorage.setItem(RELEASE_CONFIG_STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (err) {
+    return DEFAULT_RELEASE_CONFIG;
+  }
+}
+
+export function isRollNumberReleased(): boolean {
+  const config = getRollNumberReleaseConfig();
+  if (!config.isScheduled) return true; // Immediate release mode
+  if (!config.releaseDateTime) return true;
+  const targetDate = new Date(config.releaseDateTime).getTime();
+  const now = Date.now();
+  return now >= targetDate;
+}
+
 export function updateLocalStudentPayment(studentId: string, assignedRollNo?: string): MockStudent | null {
   try {
     const list = getLocalStudents();
@@ -445,6 +516,7 @@ export function updateLocalStudentPayment(studentId: string, assignedRollNo?: st
   } catch (err) {}
   return null;
 }
+
 
 // -------------------------------------------------------------
 // LIVE API SERVICES CONNECTED TO EXPRESS BACKEND (PHASE 7)
@@ -835,12 +907,37 @@ export const mockApi = {
   },
 
 
+  async deleteStudent(studentId: string): Promise<boolean> {
+    try {
+      await apiFetch<any>(`/api/students/${studentId}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.warn('Backend student deletion notice:', err);
+    }
+    deleteLocalStudent(studentId);
+    return true;
+  },
+
+  getRollNumberReleaseConfig(): RollNumberReleaseConfig {
+    return getRollNumberReleaseConfig();
+  },
+
+  updateRollNumberReleaseConfig(config: Partial<RollNumberReleaseConfig>): RollNumberReleaseConfig {
+    return saveRollNumberReleaseConfig(config);
+  },
+
+  isRollNumberReleased(): boolean {
+    return isRollNumberReleased();
+  },
+
   async updateOfficeUse(studentId: string, officeUseData: any) {
     return apiFetch<any>(`/api/students/${studentId}/office-use`, {
       method: 'PATCH',
       body: JSON.stringify(officeUseData),
     });
   },
+
 
   async downloadStudentPdf(studentId: string, rollNumber?: string, studentObj?: any): Promise<void> {
     try {
@@ -1209,7 +1306,7 @@ export const mockApi = {
       reportingTime: data.reportingTime || '09:00 AM',
       testDate: data.testDate || 'Sunday, 15 November 2026',
       contactPerson: data.contactPerson || 'Center Superintendent',
-      contactPhone: data.contactPhone || '0305-1755551',
+      contactPhone: data.contactPhone || '0344-0197194',
       status: data.status || 'ACTIVE',
       createdAt: new Date().toISOString(),
     };
@@ -1426,7 +1523,7 @@ export const mockApi = {
             <text x="40" y="135" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">ROLL NUMBER:</text>
             <text x="170" y="135" font-family="Courier, monospace" font-size="13" font-weight="bold" fill="#185b9d">${s.rollNumber || 'PENDING'}</text>
             <text x="40" y="165" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">PAYMENT CHANNEL:</text>
-            <text x="170" y="165" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">JazzCash / Bank (03051755551 / Sumama Khan)</text>
+            <text x="170" y="165" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">JazzCash / Bank (03440197194 / Sumama Khan)</text>
             <text x="40" y="195" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">TRANSACTION REF:</text>
             <text x="170" y="195" font-family="Courier, monospace" font-size="13" font-weight="bold" fill="#0f172a">TXN-${s.id.toUpperCase()}-300</text>
             <rect x="40" y="220" width="520" height="45" fill="#f0fdf4" stroke="#22c55e" stroke-width="2" rx="8"/>
@@ -1655,7 +1752,7 @@ export function printStudentSlip(student: any) {
       <div class="pay-methods">
         <div class="pay-card">
           <strong style="color: #15803d;">📱 JazzCash:</strong><br/>
-          Account: <strong style="font-family: monospace; color: #0f172a;">03051755551</strong><br/>
+          Account: <strong style="font-family: monospace; color: #0f172a;">03440197194</strong><br/>
           Title: <strong>Sumama Khan</strong>
         </div>
         <div class="pay-card">
@@ -1665,7 +1762,7 @@ export function printStudentSlip(student: any) {
         </div>
       </div>
       <p style="font-size: 10px; color: #166534; margin-top: 8px; font-weight: 600;">
-        Send payment screenshot with your Application ID (${appNo}) to WhatsApp <strong>0305-1755551</strong> for clearance.
+        Send payment screenshot with your Application ID (${appNo}) to WhatsApp <strong>0344-0197194</strong> for clearance.
       </p>
     </div>
 
@@ -1674,7 +1771,7 @@ export function printStudentSlip(student: any) {
       <ul>
         <li>Retain this official confirmation slip for your records.</li>
         <li>Your Roll Number Slip with test center assignment will be issued once payment is verified.</li>
-        <li>Helpline / Support: <strong>0305-1755551</strong> / <strong>info@azmaio.com</strong>.</li>
+        <li>Helpline / Support: <strong>0344-0197194</strong> / <strong>info@azmaio.com</strong>.</li>
       </ul>
     </div>
 
@@ -1838,7 +1935,7 @@ export function printStudentDossier(student: any) {
     </div>
     <div class="grid-3">
       <div class="item"><div class="label">Candidate Mobile / WhatsApp</div><div class="val" style="font-family: monospace;">${student.whatsapp || student.mobile || '0300-XXXXXXX'}</div></div>
-      <div class="item"><div class="label">Father / Guardian Mobile</div><div class="val" style="font-family: monospace; color: #185b9d;">${student.parentMobile || student.emergencyContact || '0305-1755551'}</div></div>
+      <div class="item"><div class="label">Father / Guardian Mobile</div><div class="val" style="font-family: monospace; color: #185b9d;">${student.parentMobile || student.emergencyContact || '0344-0197194'}</div></div>
       <div class="item"><div class="label">Email Address</div><div class="val">${student.email || 'student@azmaio.com'}</div></div>
     </div>
     <div class="item" style="margin-bottom: 10px;">

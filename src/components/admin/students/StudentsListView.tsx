@@ -6,20 +6,26 @@ import {
   Filter,
   Eye,
   Download,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { DataTable, Column } from '../shared/DataTable';
 import { StatusBadge } from '../shared/StatusBadge';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
 import { AdminWalkInModal } from './AdminWalkInModal';
 import { StudentDetailView } from './StudentDetailView';
+import { useAuth } from '../../../lib/authContext';
 
 export const StudentsListView: React.FC = () => {
+  const { role } = useAuth();
   const [students, setStudents] = useState<MockStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState<MockStudent | null>(null);
   const [isWalkInOpen, setIsWalkInOpen] = useState(false);
   const [classFilter, setClassFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchStudents = async () => {
     setIsLoading(true);
@@ -42,11 +48,28 @@ export const StudentsListView: React.FC = () => {
     setStudents((prev) => [newStudent, ...prev]);
   };
 
+  const handleConfirmDelete = async () => {
+    if (!studentToDelete) return;
+    setIsDeleting(true);
+    try {
+      await mockApi.deleteStudent(studentToDelete.id);
+      setStudentToDelete(null);
+      await fetchStudents();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete student.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (selectedStudent) {
     return (
       <StudentDetailView
         student={selectedStudent}
-        onBack={() => setSelectedStudent(null)}
+        onBack={() => {
+          setSelectedStudent(null);
+          fetchStudents();
+        }}
       />
     );
   }
@@ -149,7 +172,7 @@ export const StudentsListView: React.FC = () => {
                   }
                 }
               }}
-              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition"
+              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition cursor-pointer"
             >
               Approve Fee
             </button>
@@ -157,21 +180,32 @@ export const StudentsListView: React.FC = () => {
           <button
             onClick={() => setSelectedStudent(row)}
             title="View Full Profile"
-            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-[#185b9d] transition"
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-[#185b9d] transition cursor-pointer"
           >
             <Eye className="w-4 h-4" />
           </button>
           <button
             onClick={() => mockApi.downloadStudentPdf(row.id, row.rollNumber)}
             title="Download Registration PDF"
-            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-[#185b9d] transition"
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-[#185b9d] transition cursor-pointer"
           >
             <Download className="w-4 h-4" />
           </button>
+
+          {role === 'SUPER_ADMIN' && (
+            <button
+              onClick={() => setStudentToDelete(row)}
+              title="Delete Candidate (Super Admin Only)"
+              className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       ),
     },
   ];
+
 
   return (
     <div className="space-y-6">
@@ -228,6 +262,52 @@ export const StudentsListView: React.FC = () => {
         onClose={() => setIsWalkInOpen(false)}
         onSuccess={handleStudentCreated}
       />
+
+      {/* Super Admin Delete Confirmation Modal */}
+      {studentToDelete && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-5 border border-slate-200 shadow-2xl">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-2">
+              <h3 className="text-base font-black text-slate-900">
+                Permanently Delete Candidate?
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                You are about to permanently delete <strong className="text-slate-800">{studentToDelete.fullName}</strong> (
+                <span className="font-mono text-slate-700">{studentToDelete.applicationNo || studentToDelete.id}</span>). This will remove all registration records, fee receipts, and uploaded document attachments.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-100 text-[11px] text-rose-800 font-semibold text-center">
+              ⚠️ This action is restricted to Super Admin and cannot be undone.
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setStudentToDelete(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{isDeleting ? 'Deleting...' : 'Delete Candidate'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

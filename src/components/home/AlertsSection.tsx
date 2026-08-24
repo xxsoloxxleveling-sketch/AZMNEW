@@ -226,7 +226,7 @@ export const AlertsSection: React.FC<AlertsSectionProps> = ({ onSelectTab, onOpe
             </div>
             <div>
               <div className="text-xs sm:text-sm font-bold">Have queries regarding registration or exam dates?</div>
-              <div className="text-[11px] text-slate-400">Direct candidate helpline: 0305-1755551 (9 AM to 5 PM PST)</div>
+              <div className="text-[11px] text-slate-400">Direct candidate helpline: 0344-0197194 (9 AM to 5 PM PST)</div>
             </div>
           </div>
 

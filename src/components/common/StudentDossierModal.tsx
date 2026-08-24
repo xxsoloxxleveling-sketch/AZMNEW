@@ -210,7 +210,7 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
               <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200">
                 <span className="text-[#185b9d] text-[10px] font-bold uppercase block">Father / Guardian Mobile</span>
                 <span className="font-mono font-extrabold text-[#185b9d]">
-                  {student.parentMobile || (student as any).emergencyContact || '0305-1755551'}
+                  {student.parentMobile || (student as any).emergencyContact || '0344-0197194'}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">

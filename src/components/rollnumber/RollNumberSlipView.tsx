@@ -157,7 +157,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
           </button>
         </div>
 
-        {errorMsg && (
+        {errorMsg && !errorMsg.startsWith('SCHEDULED_RELEASE:::') && (
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-3">
             <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
@@ -168,8 +168,58 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
         )}
       </div>
 
+      {/* Scheduled Roll Number Release Notice Card */}
+      {errorMsg && errorMsg.startsWith('SCHEDULED_RELEASE:::') && (() => {
+        const [, candName, appNo, dateFormatted, noticeMsg] = errorMsg.split(':::');
+        return (
+          <div className="bg-white rounded-3xl border-2 border-blue-200/80 p-6 sm:p-8 space-y-6 shadow-sm no-print max-w-2xl mx-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800">
+                  Registration &amp; Fee Verified ✓
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1">
+                  {candName || 'Candidate'} ({appNo || 'APP-2026'})
+                </h3>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/70 border border-blue-100 space-y-3">
+              <div className="flex items-center gap-2 text-[#185b9d] font-bold text-xs sm:text-sm">
+                <Calendar className="w-4 h-4" />
+                <span>Roll Number Slip &amp; Test Center Release Schedule</span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {noticeMsg || 'Roll Number Slips with assigned test centers and examination hall seats will be published on the official portal on the scheduled date.'}
+              </p>
+              <div className="p-3 bg-white rounded-xl border border-blue-200/80 flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-medium">Scheduled Release:</span>
+                <span className="text-xs font-black text-[#185b9d] font-mono">{dateFormatted}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                Your admission is secured in the examination database.
+              </span>
+              <a
+                href="https://wa.me/923440197194?text=Hello%20AZM.AIO%20Helpline%2C%20inquiring%20about%20my%20Roll%20Number%20Slip%20release."
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-2 bg-[#25D366] text-white rounded-xl text-xs font-bold hover:bg-[#20bd5a] transition flex items-center gap-1.5"
+              >
+                <span>WhatsApp Helpline</span>
+              </a>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Initial Clean State when no search performed yet */}
-      {!hasSearched && !selectedSlip && (
+      {!hasSearched && !selectedSlip && !errorMsg && (
         <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-10 text-center space-y-4 shadow-sm no-print max-w-2xl mx-auto">
           <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#185b9d] border border-blue-100 flex items-center justify-center mx-auto">
             <FileQuestion className="w-7 h-7" />
@@ -192,7 +242,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
       )}
 
       {/* Explicit Not Found State */}
-      {hasSearched && !selectedSlip && !isLoading && (
+      {hasSearched && !selectedSlip && !isLoading && errorMsg && !errorMsg.startsWith('SCHEDULED_RELEASE:::') && (
         <div className="bg-white rounded-3xl border border-slate-200/90 p-8 sm:p-10 text-center space-y-4 shadow-sm no-print max-w-2xl mx-auto">
           <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
             <AlertTriangle className="w-7 h-7" />
@@ -205,7 +255,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
           </p>
           <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <a
-              href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Helpline%2C%20I%20cannot%20find%20my%20Roll%20Number%20Slip."
+              href="https://wa.me/923440197194?text=Hello%20AZM.AIO%20Helpline%2C%20I%20cannot%20find%20my%20Roll%20Number%20Slip."
               target="_blank"
               rel="noreferrer"
               className="px-4 py-2 bg-[#25D366] text-white rounded-xl text-xs font-bold hover:bg-[#20bd5a] transition-colors"
@@ -221,6 +271,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
           </div>
         </div>
       )}
+
 
 
       {/* ================= OFFICIAL PRINTABLE ROLL NUMBER SLIP DOCUMENT ================= */}

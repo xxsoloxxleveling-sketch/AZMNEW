@@ -43,7 +43,7 @@ const DEFAULT_HALLS: ExamHall[] = [
     wing: 'Ground Floor, East Wing',
     capacity: 60,
     invigilatorName: 'Prof. Asim Khan',
-    invigilatorPhone: '0305-1755551',
+    invigilatorPhone: '0344-0197194',
     reportingTime: '09:00 AM',
     examDate: 'Sunday, 15 Nov 2026',
   },
@@ -55,7 +55,7 @@ const DEFAULT_HALLS: ExamHall[] = [
     wing: 'Ground Floor, West Wing',
     capacity: 60,
     invigilatorName: 'Madam Samina Bibi',
-    invigilatorPhone: '0305-1755551',
+    invigilatorPhone: '0344-0197194',
     reportingTime: '09:00 AM',
     examDate: 'Sunday, 15 Nov 2026',
   },
@@ -67,7 +67,7 @@ const DEFAULT_HALLS: ExamHall[] = [
     wing: '1st Floor, Academic Block',
     capacity: 75,
     invigilatorName: 'Sir Tariq Mahmood',
-    invigilatorPhone: '0305-1755551',
+    invigilatorPhone: '0344-0197194',
     reportingTime: '09:00 AM',
     examDate: 'Sunday, 15 Nov 2026',
   },
@@ -79,7 +79,7 @@ const DEFAULT_HALLS: ExamHall[] = [
     wing: '1st Floor, Science Wing',
     capacity: 80,
     invigilatorName: 'Sir Naveed Qureshi',
-    invigilatorPhone: '0305-1755551',
+    invigilatorPhone: '0344-0197194',
     reportingTime: '09:00 AM',
     examDate: 'Sunday, 15 Nov 2026',
   },
@@ -91,7 +91,7 @@ const DEFAULT_HALLS: ExamHall[] = [
     wing: '2nd Floor, Central Wing',
     capacity: 90,
     invigilatorName: 'Dr. Sumama Khan',
-    invigilatorPhone: '0305-1755551',
+    invigilatorPhone: '0344-0197194',
     reportingTime: '09:00 AM',
     examDate: 'Sunday, 15 Nov 2026',
   },
@@ -103,7 +103,7 @@ const DEFAULT_HALLS: ExamHall[] = [
     wing: 'Main Campus Central Auditorium',
     capacity: 150,
     invigilatorName: 'Prof. Dr. M. Jadoon (Chief Supt.)',
-    invigilatorPhone: '0305-1755551',
+    invigilatorPhone: '0344-0197194',
     reportingTime: '09:00 AM',
     examDate: 'Sunday, 15 Nov 2026',
   },
@@ -140,7 +140,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
     wing: '',
     capacity: 60,
     invigilatorName: '',
-    invigilatorPhone: '0305-1755551',
+    invigilatorPhone: '0344-0197194',
     reportingTime: '09:00 AM',
     examDate: 'Sunday, 15 Nov 2026',
   });
@@ -249,7 +249,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
       wing: '',
       capacity: 60,
       invigilatorName: '',
-      invigilatorPhone: '0305-1755551',
+      invigilatorPhone: '0344-0197194',
       reportingTime: '09:00 AM',
       examDate: 'Sunday, 15 Nov 2026',
     });
@@ -606,7 +606,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                     <td className="py-3 px-4 font-mono font-bold text-slate-900">{rollNo}</td>
                     <td className="py-3 px-4 font-mono text-slate-600">{s.cnicOrBForm || 'N/A'}</td>
                     <td className="py-3 px-4 font-mono text-slate-600">
-                      {s.parentMobile || s.studentMobile || s.mobile || '0305-1755551'}
+                      {s.parentMobile || s.studentMobile || s.mobile || '0344-0197194'}
                     </td>
                     <td className="py-3 px-4 text-center">
                       {status === 'PRESENT' && (

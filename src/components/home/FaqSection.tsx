@@ -97,13 +97,13 @@ export const FaqSection: React.FC<FaqSectionProps> = ({ onSelectTab }) => {
             </div>
             <div>
               <div className="text-xs font-bold text-white">Still have questions about your application?</div>
-              <div className="text-[11px] text-slate-400">Direct candidate helpline: 0305-1755551 or chat on WhatsApp.</div>
+              <div className="text-[11px] text-slate-400">Direct candidate helpline: 0344-0197194 or chat on WhatsApp.</div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <a
-              href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Scholarship%20Desk"
+              href="https://wa.me/923440197194?text=Hello%20AZM.AIO%20Scholarship%20Desk"
               target="_blank"
               rel="noreferrer"
               className="px-4 py-2 bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold rounded-xl shadow-xs transition-colors"

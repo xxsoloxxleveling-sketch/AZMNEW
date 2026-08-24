@@ -75,11 +75,29 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
       if (!isFeePaid) {
         return {
           success: false,
-          error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Please deposit PKR 300 via JazzCash (03051755551) or Faysal Bank (3126701000006213) and send receipt to WhatsApp 0305-1755551 to activate your Roll Number Slip.`
+          error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Please deposit PKR 300 via JazzCash (03440197194) or Faysal Bank (3126701000006213) and send receipt to WhatsApp 0344-0197194 to activate your Roll Number Slip.`
+        };
+      }
+
+      // Check if Super Admin scheduled release date is in the future
+      if (!mockApi.isRollNumberReleased()) {
+        const releaseConfig = mockApi.getRollNumberReleaseConfig();
+        const dateFormatted = new Date(releaseConfig.releaseDateTime).toLocaleString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        return {
+          success: false,
+          error: `SCHEDULED_RELEASE:::${student.fullName}:::${student.applicationNo}:::${dateFormatted}:::${releaseConfig.announcementMessage}`,
         };
       }
 
       // Ensure roll number follows AZMVS format
+
       const year = new Date().getFullYear();
       let rollNo = student.rollNumber;
       if (!rollNo || rollNo.startsWith('JPS-')) {

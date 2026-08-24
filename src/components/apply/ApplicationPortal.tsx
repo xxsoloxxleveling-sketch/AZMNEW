@@ -2127,11 +2127,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   <div className="p-3.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-bold block">JazzCash / Mobile Number</span>
-                      <span className="text-base font-extrabold font-mono text-slate-900">0305-1755551</span>
+                      <span className="text-base font-extrabold font-mono text-slate-900">0344-0197194</span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard('03051755551', 'mobileNo')}
+                      onClick={() => copyToClipboard('03440197194', 'mobileNo')}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-bold text-xs flex items-center gap-1 transition-all"
                     >
                       {copiedField === 'mobileNo' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -2154,7 +2154,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
                 {/* Instant WhatsApp Proof Button */}
                 <a
-                  href={`https://wa.me/923051755551?text=${encodeURIComponent(
+                  href={`https://wa.me/923440197194?text=${encodeURIComponent(
                     `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026) Scholarship Exam.\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Fee Amount: PKR 300\n• Paid Via: JazzCash / Mobile Transfer (To: Sumama Khan)\n\nPlease find attached my payment receipt/screenshot for quick verification and Roll Number activation.`
                   )}`}
                   target="_blank"
@@ -2162,7 +2162,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   className="w-full py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  <span>Send Fee Screenshot on WhatsApp (+92 305 1755551)</span>
+                  <span>Send Fee Screenshot on WhatsApp (+92 344 0197194)</span>
                 </a>
               </div>
             )}
@@ -2248,7 +2248,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     <span>View Official 3-Part Bank Challan</span>
                   </button>
                   <a
-                    href={`https://wa.me/923051755551?text=${encodeURIComponent(
+                    href={`https://wa.me/923440197194?text=${encodeURIComponent(
                       `Hello AZM Accounts Desk,\n\nI have completed PKR 300 fee payment via Bank IBFT for Session V (2026).\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Transferred To: Sumama Khan\n\nPlease find attached my bank transfer receipt for verification.`
                     )}`}
                     target="_blank"
@@ -2282,7 +2282,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                       <strong className="text-slate-900 block font-bold">1. Jadoon Public High School & College (Head Office)</strong>
                       <span className="text-slate-500 text-[11px]">Karakoram Highway, Gandhian, Mansehra • Mon-Sat (8:30 AM - 4:30 PM)</span>
                     </div>
-                    <span className="font-mono text-xs font-bold text-[#185b9d]">0305-1755551</span>
+                    <span className="font-mono text-xs font-bold text-[#185b9d]">0344-0197194</span>
                   </div>
 
                   <div className="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -2404,7 +2404,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         <div><span className="text-slate-500">Account Title:</span> <strong className="text-slate-900">Sumama Khan</strong></div>
                         <div><span className="text-slate-500">Faysal Bank:</span> <strong className="text-slate-900 font-mono">3126701000006213</strong></div>
                         <div><span className="text-slate-500">Bank Alfalah:</span> <strong className="text-slate-900 font-mono">83861010161490</strong></div>
-                        <div><span className="text-slate-500">JazzCash:</span> <span className="text-slate-800 font-mono">0305-1755551</span></div>
+                        <div><span className="text-slate-500">JazzCash:</span> <span className="text-slate-800 font-mono">0344-0197194</span></div>
                         <div className="pt-2 border-t border-slate-200">
                           <span className="text-slate-500">Amount (Fee):</span> <strong className="text-emerald-700 text-xs font-bold">PKR 300/- (Fixed)</strong>
                         </div>

@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { School, Lock, Users, Shield, Save, CheckCircle, MapPin } from 'lucide-react';
+import { School, Lock, Users, Shield, Save, CheckCircle, MapPin, Calendar } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { UserManagementTab } from './UserManagementTab';
 import { TestCentersTab } from './TestCentersTab';
+import { RollNumberScheduleTab } from './RollNumberScheduleTab';
 
 export const SettingsView: React.FC = () => {
   const { role, user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'centers' | 'security' | 'users'>('centers');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'centers' | 'profile' | 'security' | 'users'>('schedule');
 
   const [schoolProfile, setSchoolProfile] = useState({
     name: 'AZM Educational Network & Testing Organization',
     tagline: 'Empowering Future Leaders through Merit-Based Scholarships',
     campus: 'Main Regional Headquarters, Hazara Division, KP',
-    phone: '0305-1755551 / info@azmaio.com',
+    phone: '0344-0197194 / info@azmaio.com',
     email: 'info@azmaio.com',
     website: 'https://azmaio.com',
     principalName: 'Prof. Dr. Sumama Khan',
@@ -43,10 +44,22 @@ export const SettingsView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Settings Navigation Tabs */}
-      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs max-w-2xl">
+      <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs max-w-4xl">
+        <button
+          onClick={() => setActiveTab('schedule')}
+          className={`flex-1 min-w-[140px] py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'schedule'
+              ? 'bg-[#185b9d] text-white shadow-md shadow-blue-500/20'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>Roll No. Schedule</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('centers')}
-          className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-[130px] py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
             activeTab === 'centers'
               ? 'bg-[#185b9d] text-white shadow-md shadow-blue-500/20'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -58,7 +71,7 @@ export const SettingsView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('profile')}
-          className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-[130px] py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
             activeTab === 'profile'
               ? 'bg-[#185b9d] text-white shadow-md shadow-blue-500/20'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -70,7 +83,7 @@ export const SettingsView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('security')}
-          className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-[100px] py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
             activeTab === 'security'
               ? 'bg-[#185b9d] text-white shadow-md shadow-blue-500/20'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -83,7 +96,7 @@ export const SettingsView: React.FC = () => {
         {role === 'SUPER_ADMIN' && (
           <button
             onClick={() => setActiveTab('users')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[130px] py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'users'
                 ? 'bg-[#185b9d] text-white shadow-md shadow-blue-500/20'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -94,6 +107,10 @@ export const SettingsView: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Tab: Exam & Roll Numbers Release Schedule */}
+      {activeTab === 'schedule' && <RollNumberScheduleTab />}
+
 
 
       {/* Tab 1: School Profile */}

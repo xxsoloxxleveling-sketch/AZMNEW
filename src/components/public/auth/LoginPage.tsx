@@ -314,7 +314,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
               </p>
             </div>
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-medium">
-              IT Support Helpline: <strong className="text-slate-900">0305-1755551</strong>
+              IT Support Helpline: <strong className="text-slate-900">0344-0197194</strong>
             </div>
             <button
               onClick={() => setForgotPasswordModal(false)}

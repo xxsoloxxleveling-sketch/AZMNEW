@@ -98,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-3 sm:gap-4 text-slate-300">
             {/* WhatsApp Link */}
             <a 
-              href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Scholarship%20Desk%2C%20I%20have%20an%20inquiry%20regarding%20Session%20V%20Scholarship%20Test."
+              href="https://wa.me/923440197194?text=Hello%20AZM.AIO%20Scholarship%20Desk%2C%20I%20have%20an%20inquiry%20regarding%20Session%20V%20Scholarship%20Test."
               target="_blank" 
               rel="noreferrer"
               className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
@@ -112,8 +112,8 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-1.5 text-slate-300">
               <Phone className="w-3.5 h-3.5 text-[#38bdf8]" />
               <span className="hidden md:inline">Helpline:</span>
-              <a href="tel:03051755551" className="text-white font-mono font-semibold hover:text-[#38bdf8] transition-colors">
-                0305-1755551
+              <a href="tel:03440197194" className="text-white font-mono font-semibold hover:text-[#38bdf8] transition-colors">
+                0344-0197194
               </a>
             </div>
           </div>
@@ -343,7 +343,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Mobile Language Switcher & WhatsApp Link */}
             <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-800">
               <a
-                href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Scholarship%20Desk"
+                href="https://wa.me/923440197194?text=Hello%20AZM.AIO%20Scholarship%20Desk"
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-1.5 text-emerald-400 font-semibold py-1.5"
