@@ -457,7 +457,10 @@ function AppContent() {
               transition={{ duration: 0.2 }}
             >
               <Suspense fallback={<ViewLoadingFallback />}>
-                <ApplicationClosedNotice onSelectTab={handleSelectTab} />
+                <ApplicationPortal
+                  initialClass={prefillClass}
+                  onSelectTab={handleSelectTab}
+                />
               </Suspense>
             </motion.div>
           )}
