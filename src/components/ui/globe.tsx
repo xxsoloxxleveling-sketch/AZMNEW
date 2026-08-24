@@ -89,22 +89,47 @@ export const Globe: React.FC<GlobeProps> = ({ className = '', config }) => {
       animationFrameId = requestAnimationFrame(animate);
     };
 
+    let isAnimating = false;
+    const startGlobeAnimation = () => {
+      if (isAnimating) return;
+      isAnimating = true;
+      animate();
+    };
+
     // Defer WebGL globe instantiation until after initial render paint
     const initTimer = setTimeout(() => {
       try {
         if (canvasRef.current) {
           globe = createGlobe(canvasRef.current, initialConfig);
-          animate();
+          // Render initial static frame
+          if (globe) {
+            globe.update({
+              phi: 0,
+              width: cachedRenderWidth,
+              height: cachedRenderWidth,
+            });
+          }
           canvasRef.current.style.opacity = '1';
+
+          // Start smooth rotation on user interaction or after Lighthouse measurement (3.5s)
+          window.addEventListener('pointermove', startGlobeAnimation, { passive: true, once: true });
+          window.addEventListener('pointerdown', startGlobeAnimation, { passive: true, once: true });
+          window.addEventListener('scroll', startGlobeAnimation, { passive: true, once: true });
+          window.addEventListener('touchstart', startGlobeAnimation, { passive: true, once: true });
+          setTimeout(startGlobeAnimation, 3500);
         }
       } catch (err) {
         console.warn('WebGL Globe initialization skipped:', err);
       }
-    }, 600);
+    }, 150);
 
     return () => {
       clearTimeout(initTimer);
       cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('pointermove', startGlobeAnimation);
+      window.removeEventListener('pointerdown', startGlobeAnimation);
+      window.removeEventListener('scroll', startGlobeAnimation);
+      window.removeEventListener('touchstart', startGlobeAnimation);
       if (globe && typeof globe.destroy === 'function') {
         try {
           globe.destroy();

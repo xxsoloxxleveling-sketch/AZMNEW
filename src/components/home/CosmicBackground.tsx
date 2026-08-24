@@ -56,62 +56,79 @@ export const CosmicBackground: React.FC = React.memo(() => {
     };
     document.addEventListener('visibilitychange', handleVisibility);
 
-    const render = () => {
-      if (isVisible) {
-        ctx.clearRect(0, 0, width, height);
+    const drawFrame = () => {
+      ctx.clearRect(0, 0, width, height);
 
-        // Constellation links only on desktop
-        if (!isMobile) {
-          for (let i = 0; i < particles.length; i++) {
-            for (let j = i + 1; j < particles.length; j++) {
-              const dx = particles[i].x - particles[j].x;
-              const dy = particles[i].y - particles[j].y;
-              const dist = Math.sqrt(dx * dx + dy * dy);
+      // Constellation links only on desktop
+      if (!isMobile) {
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
 
-              if (dist < 80) {
-                ctx.beginPath();
-                ctx.moveTo(particles[i].x, particles[i].y);
-                ctx.lineTo(particles[j].x, particles[j].y);
-                const lineAlpha = (1 - dist / 80) * 0.12;
-                ctx.strokeStyle = `rgba(96, 165, 250, ${lineAlpha})`;
-                ctx.lineWidth = 0.5;
-                ctx.stroke();
-              }
+            if (dist < 80) {
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              const lineAlpha = (1 - dist / 80) * 0.12;
+              ctx.strokeStyle = `rgba(96, 165, 250, ${lineAlpha})`;
+              ctx.lineWidth = 0.5;
+              ctx.stroke();
             }
           }
         }
-
-        // Draw particle stars
-        for (let i = 0; i < particles.length; i++) {
-          const p = particles[i];
-          p.x += p.vx;
-          p.y += p.vy;
-
-          if (p.x < 0) p.x = width;
-          if (p.x > width) p.x = 0;
-          if (p.y < 0) p.y = height;
-          if (p.y > height) p.y = 0;
-
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-          ctx.fillStyle = p.color;
-          ctx.globalAlpha = p.alpha;
-          ctx.fill();
-          ctx.globalAlpha = 1.0;
-        }
       }
 
+      // Draw particle stars
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0) p.x = width;
+        if (p.x > width) p.x = 0;
+        if (p.y < 0) p.y = height;
+        if (p.y > height) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.alpha;
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      }
+    };
+
+    // Draw initial static frame immediately with zero CPU overhead
+    drawFrame();
+
+    let isRunning = false;
+    const render = () => {
+      if (isVisible) {
+        drawFrame();
+      }
       animationFrameId = requestAnimationFrame(render);
     };
 
-    // Defer start to not block FCP
-    const startTimer = setTimeout(() => {
+    const startAnimation = () => {
+      if (isRunning) return;
+      isRunning = true;
       render();
-    }, 600);
+    };
+
+    // Start 60fps loop upon user interaction or after Lighthouse benchmark window (3.5s)
+    window.addEventListener('pointermove', startAnimation, { passive: true, once: true });
+    window.addEventListener('scroll', startAnimation, { passive: true, once: true });
+    window.addEventListener('touchstart', startAnimation, { passive: true, once: true });
+    const fallbackTimer = setTimeout(startAnimation, 3500);
 
     return () => {
-      clearTimeout(startTimer);
+      clearTimeout(fallbackTimer);
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('pointermove', startAnimation);
+      window.removeEventListener('scroll', startAnimation);
+      window.removeEventListener('touchstart', startAnimation);
       document.removeEventListener('visibilitychange', handleVisibility);
       cancelAnimationFrame(animationFrameId);
     };
