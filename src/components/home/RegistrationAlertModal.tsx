@@ -104,8 +104,9 @@ export const RegistrationAlertModal: React.FC<RegistrationAlertModalProps> = ({
                 Urgent Registration Notice
               </span>
               <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-800/60">
-                Free Entry (PKR 0 Fee)
+                Entry Fee: PKR 300
               </span>
+
             </div>
 
             <div className="space-y-1.5">
@@ -151,8 +152,9 @@ export const RegistrationAlertModal: React.FC<RegistrationAlertModalProps> = ({
             <ul className="space-y-2 text-xs text-slate-300">
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                <span>100% Free: No test fee, registration charges, or hidden costs.</span>
+                <span>Nominal PKR 300 entry fee covers testing materials and OMR result processing.</span>
               </li>
+
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                 <span>100% Questions from published ~1,000 MCQs course books per grade.</span>

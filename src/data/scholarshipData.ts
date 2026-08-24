@@ -17,8 +17,9 @@ export const OFFICIAL_ALERTS: AlertItem[] = [
   {
     id: 'alert-1',
     title: 'Session V (2026) Online Test Registration Active',
-    subtitle: '100% Free Entry • PKR 0 Registration Fee',
+    subtitle: 'Standardized Merit Entry • PKR 300 Registration Fee',
     message: 'Registrations are open for students from Class 6th to BS Level. Over 500 scholarship seats with PKR 5.2M+ in direct educational grants, Umrah tickets, laptops, and fee subsidies.',
+
     type: 'registration',
     badge: 'Registration Active',
     date: 'Deadline: 30 August 2026',
@@ -82,7 +83,8 @@ export const OFFICIAL_DATA = {
   helplineHours: 'Mon to Sat, 9:00 AM to 5:00 PM',
   email: 'azmgoc30@gmail.com',
   headOffice: 'Jadoon Public High School & College, Gandhian, Mansehra, KP, Pakistan',
-  registrationFee: 'PKR 0 (Free Entry for Session V)',
+  registrationFee: 'PKR 300 (Nominal Entry Fee for Session V)',
+
 
   founder: {
     name: 'Mr. Sumama Khan',

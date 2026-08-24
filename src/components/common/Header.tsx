@@ -91,7 +91,8 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-emerald-400 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>{language === 'ur' ? 'سیشن 5 (2026) رجسٹریشن جاری ہے • مفت داخلہ' : 'Session V (2026) Registration Open • PKR 0 Fee'}</span>
+            <span>{language === 'ur' ? 'سیشن 5 (2026) رجسٹریشن جاری ہے • فیس 300 روپے' : 'Session V (2026) Registration Open • PKR 300 Fee'}</span>
+
           </div>
           
           <div className="flex items-center gap-3 sm:gap-4 text-slate-300">

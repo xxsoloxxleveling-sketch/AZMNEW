@@ -11,9 +11,10 @@ export const FaqSection: React.FC<FaqSectionProps> = ({ onSelectTab }) => {
 
   const faqs = [
     {
-      q: 'Is there any fee or hidden charge to take the Session V scholarship exam?',
-      a: 'No. The AZM.AIO scholarship test is 100% free of charge (PKR 0 registration fee, PKR 0 test fee, PKR 0 processing charge). We do not collect bank slips or challans from students.'
+      q: 'What is the registration fee for the Session V scholarship exam?',
+      a: 'A nominal test fee of PKR 300 is charged per candidate to cover standardized examination material, customized OMR bubble sheet processing, and official result certification.'
     },
+
     {
       q: 'What is the 8-stage online application process?',
       a: 'The online portal guides you through 8 straightforward steps: 1) Basic Profile, 2) Contact Information, 3) Current School & Grade, 4) Category Choice (A to F), 5) Guardian Financial Profile, 6) Previous DMC Marks Matrix, 7) Document Uploads (B-Form & CNIC copy), and 8) Digital Signature Declaration. You can save your draft at any time.'

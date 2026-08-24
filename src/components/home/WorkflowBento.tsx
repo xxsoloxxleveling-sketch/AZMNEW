@@ -28,7 +28,8 @@ export const WorkflowBento: React.FC<WorkflowBentoProps> = ({ onSelectTab }) => 
       icon: FileCheck2,
       summary: 'Register online in 3 minutes or visit any of our 3 Mansehra hubs with your B-Form/CNIC.',
       bullets: [
-        'PKR 0 registration fee (100% free entry)',
+        'Nominal PKR 300 registration & processing fee',
+
         'Immediate Application Tracking ID',
         'Official ~1,000 MCQs course book download'
       ],

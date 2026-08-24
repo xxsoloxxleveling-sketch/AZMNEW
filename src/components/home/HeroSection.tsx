@@ -111,7 +111,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         >
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
           <span className="text-xs sm:text-sm font-semibold text-amber-300 group-hover:text-amber-200">
-            {language === 'ur' ? 'سیشن 5 ٹیسٹ رجسٹریشن جاری ہے • مفت داخلہ' : 'Session V Scholarship Test Registration is Open (PKR 0 Fee)'}
+            {language === 'ur' ? 'سیشن 5 ٹیسٹ رجسٹریشن جاری ہے • فیس 300 روپے' : 'Session V Scholarship Test Registration is Open (PKR 300 Fee)'}
+
           </span>
           <ChevronRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
         </motion.button>
