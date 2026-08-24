@@ -8,6 +8,7 @@ import {
   Download,
   Trash2,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { DataTable, Column } from '../shared/DataTable';
 import { StatusBadge } from '../shared/StatusBadge';
@@ -20,6 +21,7 @@ export const StudentsListView: React.FC = () => {
   const { role } = useAuth();
   const [students, setStudents] = useState<MockStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<MockStudent | null>(null);
   const [isWalkInOpen, setIsWalkInOpen] = useState(false);
   const [classFilter, setClassFilter] = useState('ALL');
@@ -27,8 +29,9 @@ export const StudentsListView: React.FC = () => {
   const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchStudents = async () => {
-    setIsLoading(true);
+  const fetchStudents = async (showFullLoading = true) => {
+    if (showFullLoading) setIsLoading(true);
+    setIsRefreshing(true);
     try {
       const data = await mockApi.getStudents({
         classLevel: classFilter,
@@ -37,11 +40,22 @@ export const StudentsListView: React.FC = () => {
       setStudents(data);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchStudents();
+
+    // Auto-refresh when tab gains focus or every 10 seconds for real-time registration sync
+    const handleFocus = () => fetchStudents(false);
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(() => fetchStudents(false), 10000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
   }, [classFilter, statusFilter]);
 
   const handleStudentCreated = (newStudent: MockStudent) => {
@@ -229,13 +243,24 @@ export const StudentsListView: React.FC = () => {
         emptyTitle="No Students Enrolled"
         emptyMessage="Start by adding your first student walk-in registration or sync from online applications."
         actions={
-          <button
-            onClick={() => setIsWalkInOpen(true)}
-            className="px-4 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-md transition flex items-center gap-2"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Add Student</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchStudents(true)}
+              disabled={isRefreshing}
+              className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Fetch latest student registrations from database"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-[#185b9d] ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Syncing...' : 'Sync Live'}</span>
+            </button>
+            <button
+              onClick={() => setIsWalkInOpen(true)}
+              className="px-4 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-md transition flex items-center gap-2"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Add Student</span>
+            </button>
+          </div>
         }
         filters={
           <div className="flex items-center gap-2">

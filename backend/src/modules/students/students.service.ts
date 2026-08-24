@@ -321,26 +321,26 @@ export class StudentsService {
    */
   async getStudents(query: StudentQueryInput) {
     const page = query.page || 1;
-    const limit = query.limit || 20;
+    const limit = query.limit || 500;
     const skip = (page - 1) * limit;
 
     const where: any = {};
 
-    if (query.status) {
+    if (query.status && query.status !== 'ALL') {
       where.status = query.status;
     }
 
-    if (query.classLevel) {
-      where.currentClass = query.classLevel;
+    if (query.classLevel && query.classLevel !== 'ALL') {
+      where.currentClass = { contains: query.classLevel, mode: 'insensitive' };
     }
 
     if (query.search && query.search.trim()) {
       const s = query.search.trim();
       where.OR = [
-        { fullName: { contains: s } },
-        { rollNumber: { contains: s } },
-        { cnicOrBForm: { contains: s } },
-        { applicationNo: { contains: s } },
+        { fullName: { contains: s, mode: 'insensitive' } },
+        { rollNumber: { contains: s, mode: 'insensitive' } },
+        { cnicOrBForm: { contains: s, mode: 'insensitive' } },
+        { applicationNo: { contains: s, mode: 'insensitive' } },
       ];
     }
 
@@ -354,6 +354,7 @@ export class StudentsService {
           academicRecords: true,
           documents: true,
           officeUse: true,
+          feeRecords: true,
         },
       }),
       prisma.student.count({ where }),

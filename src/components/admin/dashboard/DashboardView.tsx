@@ -15,6 +15,7 @@ import {
   Loader2,
   Sparkles,
   Banknote,
+  RefreshCw,
 } from 'lucide-react';
 import { StatCard } from '../shared/StatCard';
 import { StatusBadge } from '../shared/StatusBadge';
@@ -36,12 +37,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadDashboard = (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
+    setIsRefreshing(true);
     mockApi.getDashboardOverview()
       .then((res) => {
-        if (isMounted && res) {
+        if (res) {
           setData(res);
         }
       })
@@ -49,13 +52,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         console.warn('Dashboard fetch warning:', err);
       })
       .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
+        setIsRefreshing(false);
       });
+  };
+
+  useEffect(() => {
+    loadDashboard(true);
+
+    const handleFocus = () => loadDashboard(false);
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(() => loadDashboard(false), 12000);
 
     return () => {
-      isMounted = false;
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
     };
   }, []);
 
@@ -92,6 +103,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Action Buttons in Hero */}
         <div className="flex flex-wrap items-center gap-2.5 z-10">
+          <button
+            onClick={() => loadDashboard(true)}
+            disabled={isRefreshing}
+            className="px-3.5 py-2.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold backdrop-blur-xs border border-white/20 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Refresh metrics from central database"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Syncing...' : 'Sync Live'}</span>
+          </button>
           <button
             onClick={onOpenMarkAttendance}
             className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-900/20 transition flex items-center gap-2"

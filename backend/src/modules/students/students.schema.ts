@@ -145,7 +145,7 @@ export const studentQuerySchema = z.object({
   limit: z
     .string()
     .optional()
-    .transform((val) => (val ? Math.max(1, Math.min(100, parseInt(val, 10))) : 20)),
+    .transform((val) => (val ? Math.max(1, Math.min(1000, parseInt(val, 10))) : 500)),
 });
 
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;

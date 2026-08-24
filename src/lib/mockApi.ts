@@ -364,11 +364,11 @@ export function getCanonicalStudentKey(s: {
   fatherName?: string;
   rollNumber?: string | null;
 }): string {
-  if (s.applicationNo && s.applicationNo.trim()) return s.applicationNo.trim().toUpperCase();
   if (s.cnicOrBForm) {
     const digits = s.cnicOrBForm.replace(/\D/g, '');
     if (digits.length >= 5) return `CNIC_${digits}`;
   }
+  if (s.applicationNo && s.applicationNo.trim()) return s.applicationNo.trim().toUpperCase();
   if (s.rollNumber && s.rollNumber.trim()) return s.rollNumber.trim().toUpperCase();
   if (s.fullName && s.fatherName) {
     return `NAME_${s.fullName.trim().toLowerCase()}_${s.fatherName.trim().toLowerCase()}`;
@@ -845,10 +845,11 @@ export const mockApi = {
     let serverList: MockStudent[] = [];
     try {
       const params = new URLSearchParams();
+      params.append('limit', '500');
       if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
       if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
       if (filters?.search) params.append('search', filters.search);
-      const query = params.toString() ? `?${params.toString()}` : '';
+      const query = `?${params.toString()}`;
 
       const res: any = await apiFetch<any>(`/api/students${query}`);
       const raw = Array.isArray(res) ? res : Array.isArray(res?.students) ? res.students : [];
@@ -858,6 +859,13 @@ export const mockApi = {
         feeStatus: s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : 'UNPAID'),
         attendancePercentage: s.attendancePercentage ?? 100,
       }));
+
+      // Cache server records to local storage to keep state fresh across reloads
+      if (serverList.length > 0) {
+        serverList.forEach((s) => {
+          saveLocalStudent(s);
+        });
+      }
     } catch (err) {
       console.warn('Live students fetch error:', err);
     }
