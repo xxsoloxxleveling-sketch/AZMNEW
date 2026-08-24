@@ -117,17 +117,18 @@ export const Header: React.FC<HeaderProps> = ({
               </a>
             </div>
 
-            {/* Language Switcher */}
-            {onToggleLanguage && (
-              <button
-                onClick={onToggleLanguage}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold border border-slate-700 transition-colors"
-                title="Switch Language (English / اردو)"
-              >
-                <Globe className="w-3 h-3 text-[#38bdf8]" />
-                <span>{language === 'en' ? 'اردو' : 'English'}</span>
-              </button>
-            )}
+            {/* Admin / Faculty Portal Link */}
+            <button
+              onClick={() => {
+                window.location.hash = 'login';
+                window.dispatchEvent(new HashChangeEvent('hashchange'));
+              }}
+              className="flex items-center gap-1 text-slate-300 hover:text-white font-medium transition-colors bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/80"
+              title="Admin & Faculty Management Portal"
+            >
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              <span>Admin Portal</span>
+            </button>
           </div>
         </div>
       </div>

@@ -1,0 +1,77 @@
+import { Router } from 'express';
+import { studentsController } from './students.controller';
+import { validateBody } from '../../middleware/validate.middleware';
+import {
+  createStudentSchema,
+  updateStudentSchema,
+  officeUseUpdateSchema,
+} from './students.schema';
+import { authenticate } from '../../middleware/auth.middleware';
+import { authorizeRoles } from '../../middleware/role.middleware';
+import { Role } from '@prisma/client';
+
+const router = Router();
+
+// Public self-registration endpoint (Candidate online registration)
+router.post(
+  '/register',
+  validateBody(createStudentSchema),
+  studentsController.register
+);
+
+// Registration PDF export (accessible publicly or authenticated with candidate ID / App No)
+router.get('/:id/registration-pdf', studentsController.getRegistrationPdf);
+
+// QR image retrieval
+router.get('/:id/qr', studentsController.getQr);
+
+// Protected routes (Admin / Teachers)
+router.use(authenticate);
+
+// Admin Walk-in Registration
+router.post(
+  '/admin-register',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateBody(createStudentSchema),
+  studentsController.adminRegister
+);
+
+// Standard CRUD
+router.get(
+  '/',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
+  studentsController.getAll
+);
+router.post(
+  '/',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateBody(createStudentSchema),
+  studentsController.create
+);
+
+router.get(
+  '/:id',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
+  studentsController.getById
+);
+router.patch(
+  '/:id',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateBody(updateStudentSchema),
+  studentsController.update
+);
+router.delete(
+  '/:id',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.delete
+);
+
+// Part L: Office Use Record Update
+router.patch(
+  '/:id/office-use',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateBody(officeUseUpdateSchema),
+  studentsController.updateOfficeUse
+);
+
+export default router;

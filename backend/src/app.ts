@@ -4,6 +4,14 @@ import { errorHandler } from './middleware/error.middleware';
 import { prisma } from './lib/prisma';
 import { env } from './config/env';
 import authRoutes from './modules/auth/auth.routes';
+import studentsRoutes from './modules/students/students.routes';
+import partnersRoutes from './modules/partners/partners.routes';
+import attendanceRoutes from './modules/attendance/attendance.routes';
+import feesRoutes from './modules/fees/fees.routes';
+import staffRoutes from './modules/staff/staff.routes';
+import payrollRoutes from './modules/payroll/payroll.routes';
+import transactionsRoutes from './modules/transactions/transactions.routes';
+import dashboardRoutes from './modules/dashboard/dashboard.routes';
 
 const app: Express = express();
 
@@ -42,6 +50,14 @@ app.get('/api/health', async (_req: Request, res: Response) => {
 
 // Mount module routes
 app.use('/api/auth', authRoutes);
+app.use('/api/students', studentsRoutes);
+app.use('/api/partners', partnersRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/fees', feesRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/transactions', transactionsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Fallback 404 for unknown routes
 app.use((req: Request, res: Response, _next: NextFunction) => {
