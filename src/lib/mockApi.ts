@@ -1,4 +1,4 @@
-import { setToken, setUser, getUser, getToken } from './auth';
+import { setToken, setRefreshToken, setUser, getUser, getToken } from './auth';
 import { apiFetch, apiDownloadPdf } from './apiClient';
 
 export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'TEACHER' | 'ACCOUNTANT';
@@ -691,6 +691,9 @@ export const mockApi = {
     };
 
     setToken(res.accessToken);
+    if (res.refreshToken) {
+      setRefreshToken(res.refreshToken);
+    }
     setUser(user);
     currentUser = user;
 

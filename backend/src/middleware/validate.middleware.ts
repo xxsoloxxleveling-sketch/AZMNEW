@@ -23,6 +23,30 @@ export const validateBody = (schema: ZodSchema) => {
       }
       next(error);
     }
+  };
+};
 
+export const validateQuery = (schema: ZodSchema) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      req.query = (await schema.parseAsync(req.query)) as any;
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const fieldErrors = error.flatten().fieldErrors;
+        const messages = Object.entries(fieldErrors)
+          .map(([field, errs]) => `${field}: ${(errs as string[]).join(', ')}`)
+          .join('; ');
+
+        return res.status(400).json({
+          success: false,
+          error: {
+            message: `Query validation failed: ${messages || 'Invalid query parameters'}`,
+            details: fieldErrors,
+          },
+        });
+      }
+      next(error);
+    }
   };
 };

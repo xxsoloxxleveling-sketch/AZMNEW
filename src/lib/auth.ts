@@ -4,6 +4,7 @@
  */
 
 const TOKEN_KEY = 'jps_access_token';
+const REFRESH_TOKEN_KEY = 'jps_refresh_token';
 const USER_KEY = 'jps_current_user';
 
 export function wipeAllCookies(): void {
@@ -51,6 +52,26 @@ export const authStorage = {
     }
   },
 
+  setRefreshToken(token: string): void {
+    try {
+      localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    } catch {}
+  },
+
+  getRefreshToken(): string | null {
+    try {
+      return localStorage.getItem(REFRESH_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  },
+
+  clearRefreshToken(): void {
+    try {
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    } catch {}
+  },
+
   setUser(user: any): void {
     wipeAllCookies();
     try {
@@ -81,6 +102,7 @@ export const authStorage = {
   clearAll(): void {
     wipeAllCookies();
     this.clearToken();
+    this.clearRefreshToken();
     this.clearUser();
   },
 
@@ -92,6 +114,9 @@ export const authStorage = {
 export const setToken = authStorage.setToken.bind(authStorage);
 export const getToken = authStorage.getToken.bind(authStorage);
 export const clearToken = authStorage.clearToken.bind(authStorage);
+export const setRefreshToken = authStorage.setRefreshToken.bind(authStorage);
+export const getRefreshToken = authStorage.getRefreshToken.bind(authStorage);
+export const clearRefreshToken = authStorage.clearRefreshToken.bind(authStorage);
 export const setUser = authStorage.setUser.bind(authStorage);
 export const getUser = authStorage.getUser.bind(authStorage);
 export const clearUser = authStorage.clearUser.bind(authStorage);

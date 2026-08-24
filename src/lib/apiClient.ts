@@ -1,4 +1,4 @@
-import { getToken, clearToken } from './auth';
+import { getToken, setToken, clearToken, getRefreshToken, setRefreshToken, clearRefreshToken } from './auth';
 
 export const API_BASE_URL =
   (import.meta as any).env?.VITE_API_URL ||
@@ -15,16 +15,56 @@ export interface ApiResponse<T = any> {
   };
 }
 
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return null;
+
+      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success && data?.data?.accessToken) {
+        setToken(data.data.accessToken);
+        if (data.data.refreshToken) {
+          setRefreshToken(data.data.refreshToken);
+        }
+        return data.data.accessToken as string;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 /**
  * Standard HTTP client wrapping fetch with automatic JWT Bearer token attachment,
- * JSON serialization, and backend error envelope parsing.
+ * JSON serialization, automatic token refresh, and backend error envelope parsing.
  */
 export async function apiFetch<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-  const token = getToken();
+  let token = getToken();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -35,14 +75,24 @@ export async function apiFetch<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     headers,
   });
 
-  // Handle 401 Unauthorized
-  if (response.status === 401 && !endpoint.includes('/api/auth/login')) {
-    clearToken();
+  // Handle 401 Unauthorized by attempting automatic token refresh
+  if (response.status === 401 && !endpoint.includes('/api/auth/login') && !endpoint.includes('/api/auth/refresh')) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      headers['Authorization'] = `Bearer ${newToken}`;
+      response = await fetch(url, {
+        ...options,
+        headers,
+      });
+    } else {
+      clearToken();
+      clearRefreshToken();
+    }
   }
 
   const data: ApiResponse<T> = await response.json().catch(() => ({
@@ -72,7 +122,6 @@ export async function apiFetch<T = any>(
     err.details = data.error?.details;
     throw err;
   }
-
 
   return (data.data !== undefined ? data.data : (data as any)) as T;
 }

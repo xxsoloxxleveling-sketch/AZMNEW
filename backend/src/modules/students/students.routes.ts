@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { studentsController } from './students.controller';
-import { validateBody } from '../../middleware/validate.middleware';
+import { validateBody, validateQuery } from '../../middleware/validate.middleware';
 import {
   createStudentSchema,
   updateStudentSchema,
   officeUseUpdateSchema,
+  studentQuerySchema,
 } from './students.schema';
 import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
@@ -43,6 +44,7 @@ router.post(
 router.get(
   '/',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
+  validateQuery(studentQuerySchema),
   studentsController.getAll
 );
 router.post(

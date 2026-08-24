@@ -320,8 +320,8 @@ export class StudentsService {
    * Retrieves paginated list of students with search & filter options.
    */
   async getStudents(query: StudentQueryInput) {
-    const page = query.page || 1;
-    const limit = query.limit || 500;
+    const page = parseInt(String(query.page || 1), 10) || 1;
+    const limit = parseInt(String(query.limit || 500), 10) || 500;
     const skip = (page - 1) * limit;
 
     const where: any = {};

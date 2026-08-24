@@ -7,8 +7,8 @@ export class TransactionsService {
     page?: number;
     limit?: number;
   }) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
+    const page = parseInt(String(query.page || 1), 10) || 1;
+    const limit = parseInt(String(query.limit || 20), 10) || 20;
     const skip = (page - 1) * limit;
 
     const where: any = {};

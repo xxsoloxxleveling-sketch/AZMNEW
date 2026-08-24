@@ -34,8 +34,8 @@ export class StaffService {
    * Retrieves paginated staff members list with optional search & filter.
    */
   async getStaffList(query: StaffQueryInput) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
+    const page = parseInt(String(query.page || 1), 10) || 1;
+    const limit = parseInt(String(query.limit || 20), 10) || 20;
     const skip = (page - 1) * limit;
 
     const where: any = {};
