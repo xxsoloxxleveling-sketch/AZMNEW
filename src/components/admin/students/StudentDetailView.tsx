@@ -72,96 +72,10 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
   const loadDocuments = async () => {
     try {
       const docs = await mockApi.getStudentDocuments(student.id || student.applicationNo || student.cnicOrBForm);
-      if (docs && docs.length > 0) {
-        setDocuments(docs);
-      } else {
-        // Direct reliable candidate document fallback
-        const appKey = student.applicationNo || student.id || 'APP-2026';
-        const serverApiBase = (import.meta as any).env?.VITE_API_URL || 'https://azmnew.onrender.com';
-        const baseDocUrl = `${serverApiBase}/api/students/${appKey}/document`;
-
-        const fallbackList: MockStudentDocument[] = [
-          {
-            id: `doc_photo_${student.id}`,
-            studentId: student.id,
-            studentName: student.fullName,
-            rollNumber: student.rollNumber || 'PENDING',
-            applicationNo: appKey,
-            currentClass: student.currentClass || 'SSC',
-            docType: 'CANDIDATE_PHOTO',
-            title: `${student.fullName} - Passport Photograph`,
-            fileUrl: `${baseDocUrl}/photo`,
-            fileSize: '142 KB',
-            fileType: 'image/jpeg',
-            uploadedAt: student.createdAt || new Date().toISOString(),
-            status: 'VERIFIED',
-          },
-          {
-            id: `doc_cnic_${student.id}`,
-            studentId: student.id,
-            studentName: student.fullName,
-            rollNumber: student.rollNumber || 'PENDING',
-            applicationNo: appKey,
-            currentClass: student.currentClass || 'SSC',
-            docType: 'CNIC_BFORM',
-            title: `${student.fullName} - Candidate B-Form / CNIC`,
-            fileUrl: `${baseDocUrl}/bform`,
-            fileSize: '480 KB',
-            fileType: 'image/jpeg',
-            uploadedAt: student.createdAt || new Date().toISOString(),
-            status: 'VERIFIED',
-          },
-          {
-            id: `doc_fcnic_${student.id}`,
-            studentId: student.id,
-            studentName: student.fullName,
-            rollNumber: student.rollNumber || 'PENDING',
-            applicationNo: appKey,
-            currentClass: student.currentClass || 'SSC',
-            docType: 'CNIC_BFORM',
-            title: `${student.fullName} - Father / Guardian CNIC`,
-            fileUrl: `${baseDocUrl}/fatherCnic`,
-            fileSize: '340 KB',
-            fileType: 'image/jpeg',
-            uploadedAt: student.createdAt || new Date().toISOString(),
-            status: 'VERIFIED',
-          },
-          {
-            id: `doc_dmc_${student.id}`,
-            studentId: student.id,
-            studentName: student.fullName,
-            rollNumber: student.rollNumber || 'PENDING',
-            applicationNo: appKey,
-            currentClass: student.currentClass || 'SSC',
-            docType: 'PREVIOUS_DMC',
-            title: `${student.fullName} - DMC Marksheet (${student.currentClass || 'SSC'})`,
-            fileUrl: `${baseDocUrl}/dmc`,
-            fileSize: '820 KB',
-            fileType: 'image/jpeg',
-            uploadedAt: student.createdAt || new Date().toISOString(),
-            status: student.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING_REVIEW',
-          },
-          {
-            id: `doc_pay_${student.id}`,
-            studentId: student.id,
-            studentName: student.fullName,
-            rollNumber: student.rollNumber || 'PENDING',
-            applicationNo: appKey,
-            currentClass: student.currentClass || 'SSC',
-            docType: 'PAYMENT_CHALLAN',
-            title: `${student.fullName} - PKR 300 Fee Deposit Receipt`,
-            fileUrl: `${baseDocUrl}/paymentReceipt`,
-            fileSize: '310 KB',
-            fileType: 'image/jpeg',
-            uploadedAt: student.createdAt || new Date().toISOString(),
-            status: student.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING_REVIEW',
-          },
-        ];
-
-        setDocuments(fallbackList);
-      }
+      setDocuments(docs || []);
     } catch (e) {
       console.warn('Failed to load documents:', e);
+      setDocuments([]);
     }
   };
 
@@ -607,8 +521,17 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {documents.map((doc) => {
+            {documents.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 space-y-1.5">
+                <FileCheck className="w-7 h-7 text-slate-300 mx-auto" />
+                <p className="text-xs font-bold text-slate-600">No Attached Documents</p>
+                <p className="text-[11px] text-slate-400">
+                  Candidate did not upload additional physical documents during registration.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {documents.map((doc) => {
                 const isPdf =
                   doc.fileType === 'application/pdf' ||
                   doc.title.toLowerCase().endsWith('.pdf') ||
@@ -696,7 +619,8 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
                   </div>
                 );
               })}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

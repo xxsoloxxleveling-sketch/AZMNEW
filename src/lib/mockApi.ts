@@ -1813,14 +1813,15 @@ export const mockApi = {
 
       const candKey = s.applicationNo || s.id;
 
-      // 1. Candidate Photo
+      // 1. Candidate Photo (Only if actually uploaded or photoUrl exists)
+      const photoFile = up.photo;
       const photoUrl =
-        up.photo?.publicUrl ||
-        up.photo?.dataUrl ||
-        s.photoUrl ||
-        `${API_BASE_URL}/api/students/${s.id}/document/photo`;
+        photoFile?.publicUrl ||
+        photoFile?.dataUrl ||
+        (s.photoUrl && !s.photoUrl.includes('supabase.co/storage') ? s.photoUrl : null) ||
+        `${API_BASE_URL}/api/students/${s.applicationNo || s.id}/document/photo`;
 
-      if (photoUrl) {
+      if (photoFile || s.photoUrl) {
         docMap.set(`${candKey}_PHOTO`, {
           id: `doc_photo_${s.id}`,
           studentId: s.id,
@@ -1829,24 +1830,19 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CANDIDATE_PHOTO',
-          title: up.photo?.name || `${s.fullName} - Passport Photograph`,
+          title: photoFile?.name || `${s.fullName}_Passport_Photo.jpg`,
           fileUrl: photoUrl,
-          fileSize: up.photo?.size || '142 KB',
+          fileSize: photoFile?.size || 'Candidate Photo',
           fileType: 'image/jpeg',
-          uploadedAt: up.photo?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          uploadedAt: photoFile?.uploadedAt || s.createdAt || new Date().toISOString(),
           status: 'VERIFIED',
         });
       }
 
-      // 2. CNIC / B-Form Document (Only if actually uploaded)
+      // 2. CNIC / B-Form Document (ONLY IF ACTUALLY UPLOADED)
       const bformFile = up.bform || up.bformUploaded || up.cnic || up.candidateCnic;
-      const bformUrl =
-        bformFile?.publicUrl ||
-        bformFile?.dataUrl ||
-        bformFile?.fileUrl ||
-        `${API_BASE_URL}/api/students/${s.id}/document/bform`;
-
-      if (bformFile || s.documents?.bformCnicCopy) {
+      if (bformFile && (bformFile.dataUrl || bformFile.publicUrl || bformFile.fileUrl)) {
+        const bformUrl = bformFile.publicUrl || bformFile.dataUrl || bformFile.fileUrl;
         docMap.set(`${candKey}_BFORM`, {
           id: `doc_cnic_${s.id}`,
           studentId: s.id,
@@ -1855,24 +1851,19 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: bformFile?.name || `${s.fullName} - Candidate B-Form / CNIC`,
+          title: bformFile.name || `${s.fullName}_Candidate_BForm_CNIC.jpg`,
           fileUrl: bformUrl,
-          fileSize: bformFile?.size || '480 KB',
-          fileType: bformUrl.includes('application/pdf') || bformFile?.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-          uploadedAt: bformFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          fileSize: bformFile.size || 'Candidate Attachment',
+          fileType: bformUrl.includes('application/pdf') || bformFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: bformFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: 'VERIFIED',
         });
       }
 
-      // 3. Father / Guardian CNIC (Only if actually uploaded)
+      // 3. Father / Guardian CNIC (ONLY IF ACTUALLY UPLOADED)
       const fatherCnicFile = up.fatherCnic || up.fatherCnicUploaded || up.fcnic;
-      const fatherCnicUrl =
-        fatherCnicFile?.publicUrl ||
-        fatherCnicFile?.dataUrl ||
-        fatherCnicFile?.fileUrl ||
-        `${API_BASE_URL}/api/students/${s.id}/document/fatherCnic`;
-
-      if (fatherCnicFile || s.documents?.fatherCnicCopy) {
+      if (fatherCnicFile && (fatherCnicFile.dataUrl || fatherCnicFile.publicUrl || fatherCnicFile.fileUrl)) {
+        const fatherCnicUrl = fatherCnicFile.publicUrl || fatherCnicFile.dataUrl || fatherCnicFile.fileUrl;
         docMap.set(`${candKey}_FATHER_CNIC`, {
           id: `doc_fcnic_${s.id}`,
           studentId: s.id,
@@ -1881,24 +1872,19 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: fatherCnicFile?.name || `${s.fullName} - Father / Guardian CNIC`,
+          title: fatherCnicFile.name || `${s.fullName}_Father_CNIC.jpg`,
           fileUrl: fatherCnicUrl,
-          fileSize: fatherCnicFile?.size || '340 KB',
-          fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile?.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-          uploadedAt: fatherCnicFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          fileSize: fatherCnicFile.size || 'Candidate Attachment',
+          fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: fatherCnicFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: 'VERIFIED',
         });
       }
 
-      // 4. Academic Transcript / DMC (Only if actually uploaded)
+      // 4. Academic Transcript / DMC (ONLY IF ACTUALLY UPLOADED)
       const dmcFile = up.dmc || up.dmcUploaded || up.resultCard || up.previousResult;
-      const dmcUrl =
-        dmcFile?.publicUrl ||
-        dmcFile?.dataUrl ||
-        dmcFile?.fileUrl ||
-        `${API_BASE_URL}/api/students/${s.id}/document/dmc`;
-
-      if (dmcFile || s.documents?.previousResultCard) {
+      if (dmcFile && (dmcFile.dataUrl || dmcFile.publicUrl || dmcFile.fileUrl)) {
+        const dmcUrl = dmcFile.publicUrl || dmcFile.dataUrl || dmcFile.fileUrl;
         docMap.set(`${candKey}_DMC`, {
           id: `doc_dmc_${s.id}`,
           studentId: s.id,
@@ -1907,24 +1893,19 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'PREVIOUS_DMC',
-          title: dmcFile?.name || `${s.fullName} - DMC Marksheet (${s.currentClass || 'Class'})`,
+          title: dmcFile.name || `${s.fullName}_DMC_Marksheet.jpg`,
           fileUrl: dmcUrl,
-          fileSize: dmcFile?.size || '820 KB',
-          fileType: dmcUrl.includes('application/pdf') || dmcFile?.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-          uploadedAt: dmcFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          fileSize: dmcFile.size || 'Candidate Attachment',
+          fileType: dmcUrl.includes('application/pdf') || dmcFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: dmcFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
         });
       }
 
-      // 5. Payment Deposit Receipt (Only if actually uploaded)
+      // 5. Payment Deposit Receipt (ONLY IF ACTUALLY UPLOADED)
       const feeFile = up.paymentReceipt || up.incomeCertUploaded || up.receipt || up.challan;
-      const feeUrl =
-        feeFile?.publicUrl ||
-        feeFile?.dataUrl ||
-        feeFile?.fileUrl ||
-        `${API_BASE_URL}/api/students/${s.id}/document/paymentReceipt`;
-
-      if (feeFile || s.documents?.incomeCertificate) {
+      if (feeFile && (feeFile.dataUrl || feeFile.publicUrl || feeFile.fileUrl)) {
+        const feeUrl = feeFile.publicUrl || feeFile.dataUrl || feeFile.fileUrl;
         docMap.set(`${candKey}_FEE`, {
           id: `doc_pay_${s.id}`,
           studentId: s.id,
@@ -1933,24 +1914,19 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'PAYMENT_CHALLAN',
-          title: feeFile?.name || `${s.fullName} - PKR 300 Fee Deposit Receipt`,
+          title: feeFile.name || `${s.fullName}_Fee_Payment_Receipt.jpg`,
           fileUrl: feeUrl,
-          fileSize: feeFile?.size || '310 KB',
-          fileType: feeUrl.includes('application/pdf') || feeFile?.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
-          uploadedAt: feeFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          fileSize: feeFile.size || 'Candidate Attachment',
+          fileType: feeUrl.includes('application/pdf') || feeFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
+          uploadedAt: feeFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
         });
       }
 
-      // 6. Domicile Certificate (Optional - Only if actually uploaded)
+      // 6. Domicile Certificate (ONLY IF ACTUALLY UPLOADED)
       const domicileFile = up.domicile || up.domicileUploaded;
-      const domicileUrl =
-        domicileFile?.publicUrl ||
-        domicileFile?.dataUrl ||
-        domicileFile?.fileUrl ||
-        `${API_BASE_URL}/api/students/${s.id}/document/domicile`;
-
-      if (domicileFile || s.documents?.domicileCertificate) {
+      if (domicileFile && (domicileFile.dataUrl || domicileFile.publicUrl || domicileFile.fileUrl)) {
+        const domicileUrl = domicileFile.publicUrl || domicileFile.dataUrl || domicileFile.fileUrl;
         docMap.set(`${candKey}_DOMICILE`, {
           id: `doc_dom_${s.id}`,
           studentId: s.id,
@@ -1959,14 +1935,14 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: domicileFile?.name || `${s.fullName} - Domicile Certificate (Optional)`,
+          title: domicileFile.name || `${s.fullName}_Domicile_Certificate.jpg`,
           fileUrl: domicileUrl,
-          fileSize: domicileFile?.size || '390 KB',
+          fileSize: domicileFile.size || 'Candidate Attachment',
           fileType:
-            domicileUrl.includes('application/pdf') || domicileFile?.name?.endsWith('.pdf')
+            domicileUrl.includes('application/pdf') || domicileFile.name?.endsWith('.pdf')
               ? 'application/pdf'
               : 'image/jpeg',
-          uploadedAt: domicileFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          uploadedAt: domicileFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: 'VERIFIED',
         });
       }
