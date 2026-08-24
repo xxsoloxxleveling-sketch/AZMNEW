@@ -342,10 +342,39 @@ export function getUploadedFilesForCandidate(keys: (string | undefined | null)[]
   return {};
 }
 
+export function getCanonicalStudentKey(s: {
+  id?: string;
+  applicationNo?: string;
+  cnicOrBForm?: string;
+  fullName?: string;
+  fatherName?: string;
+  rollNumber?: string | null;
+}): string {
+  if (s.applicationNo && s.applicationNo.trim()) return s.applicationNo.trim().toUpperCase();
+  if (s.cnicOrBForm) {
+    const digits = s.cnicOrBForm.replace(/\D/g, '');
+    if (digits.length >= 5) return `CNIC_${digits}`;
+  }
+  if (s.rollNumber && s.rollNumber.trim()) return s.rollNumber.trim().toUpperCase();
+  if (s.fullName && s.fatherName) {
+    return `NAME_${s.fullName.trim().toLowerCase()}_${s.fatherName.trim().toLowerCase()}`;
+  }
+  return s.id ? s.id.trim().toLowerCase() : `STD_${Math.random()}`;
+}
+
 export function getLocalStudents(): MockStudent[] {
   try {
     const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const list: MockStudent[] = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    // Strict deduplication on read
+    const map = new Map<string, MockStudent>();
+    list.forEach((s) => {
+      const key = getCanonicalStudentKey(s);
+      map.set(key, s);
+    });
+    return Array.from(map.values());
   } catch (err) {
     return [];
   }
@@ -354,19 +383,22 @@ export function getLocalStudents(): MockStudent[] {
 export function saveLocalStudent(student: MockStudent): void {
   try {
     const list = getLocalStudents();
-    const cleanCnic = student.cnicOrBForm ? student.cnicOrBForm.replace(/\D/g, '') : '';
-    const idx = list.findIndex(
-      (s) =>
-        s.id === student.id ||
-        (s.applicationNo && s.applicationNo === student.applicationNo) ||
-        (cleanCnic && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanCnic)
-    );
+    const cleanKey = getCanonicalStudentKey(student);
+
+    const idx = list.findIndex((s) => getCanonicalStudentKey(s) === cleanKey);
     if (idx >= 0) {
       list[idx] = { ...list[idx], ...student };
     } else {
       list.unshift(student);
     }
-    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
+
+    const dedupedMap = new Map<string, MockStudent>();
+    list.forEach((s) => {
+      dedupedMap.set(getCanonicalStudentKey(s), s);
+    });
+
+    const finalArray = Array.from(dedupedMap.values());
+    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(finalArray));
 
     if (student.uploadedDocuments) {
       saveUploadedFilesForCandidate(
@@ -376,6 +408,7 @@ export function saveLocalStudent(student: MockStudent): void {
     }
   } catch (err) {}
 }
+
 
 
 export function updateLocalStudentPayment(studentId: string, assignedRollNo?: string): MockStudent | null {
@@ -616,36 +649,68 @@ export const mockApi = {
       console.warn('Live students fetch error:', err);
     }
 
-    // Merge with local persistent students
+    // Merge with local persistent students into a single canonical map
     const localList = getLocalStudents();
-    const mergedMap = new Map<string, MockStudent>();
+    const studentMap = new Map<string, MockStudent>();
 
+    // 1. Seed with local
     localList.forEach((s) => {
-      if (s.id) mergedMap.set(s.id, s);
-      if (s.applicationNo) mergedMap.set(s.applicationNo, s);
-      if (s.cnicOrBForm) mergedMap.set(s.cnicOrBForm.replace(/\D/g, ''), s);
+      const k = getCanonicalStudentKey(s);
+      studentMap.set(k, s);
     });
 
+    // 2. Merge server list
     serverList.forEach((s) => {
-      const key = s.id || s.applicationNo || s.cnicOrBForm?.replace(/\D/g, '');
-      const existing = mergedMap.get(key) || (s.cnicOrBForm ? mergedMap.get(s.cnicOrBForm.replace(/\D/g, '')) : null);
+      const k = getCanonicalStudentKey(s);
+      const existing = studentMap.get(k);
       if (existing) {
         const isPaid = existing.feeStatus === 'PAID' || s.feeStatus === 'PAID';
-        const roll = s.rollNumber || existing.rollNumber || (isPaid ? `AZMVS-2026-${Math.floor(1000 + Math.random() * 9000)}` : null);
-        mergedMap.set(key, {
+        const roll =
+          s.rollNumber ||
+          existing.rollNumber ||
+          (isPaid ? `AZMVS-2026-${Math.floor(1000 + Math.random() * 9000)}` : null);
+        studentMap.set(k, {
           ...existing,
           ...s,
-          feeStatus: isPaid ? 'PAID' : (s.feeStatus || 'UNPAID'),
+          id: s.id || existing.id,
+          applicationNo: s.applicationNo || existing.applicationNo,
+          uploadedDocuments: existing.uploadedDocuments || s.uploadedDocuments,
+          academicRecords: s.academicRecords?.length ? s.academicRecords : existing.academicRecords,
+          feeStatus: isPaid ? 'PAID' : s.feeStatus || 'UNPAID',
           rollNumber: roll,
+          attendancePercentage: s.attendancePercentage ?? existing.attendancePercentage ?? 100,
         });
       } else {
-        if (key) mergedMap.set(key, s);
+        studentMap.set(k, s);
       }
     });
 
-    const result = Array.from(new Set(mergedMap.values()));
+    let result = Array.from(studentMap.values());
+
+    if (filters?.search) {
+      const q = filters.search.toLowerCase().trim();
+      const qDigits = filters.search.replace(/\D/g, '');
+      result = result.filter(
+        (s) =>
+          s.fullName.toLowerCase().includes(q) ||
+          s.fatherName.toLowerCase().includes(q) ||
+          (s.applicationNo && s.applicationNo.toLowerCase().includes(q)) ||
+          (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
+          (qDigits.length >= 4 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '').includes(qDigits))
+      );
+    }
+
+    if (filters?.classLevel && filters.classLevel !== 'ALL') {
+      result = result.filter((s) => s.currentClass?.includes(filters.classLevel!));
+    }
+
+    if (filters?.status && filters.status !== 'ALL') {
+      result = result.filter((s) => s.status === filters.status);
+    }
+
     return result;
   },
+
 
   async getStudentById(id: string): Promise<MockStudent> {
     const local = getLocalStudents().find(
@@ -1179,7 +1244,7 @@ export const mockApi = {
     } catch (e) {}
 
     const students = await this.getStudents();
-    const generatedDocs: MockStudentDocument[] = [];
+    const docMap = new Map<string, MockStudentDocument>();
 
     students.forEach((s) => {
       const cleanTarget = studentId ? studentId.toLowerCase().trim() : '';
@@ -1192,7 +1257,6 @@ export const mockApi = {
         (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits);
 
       if (!matches) return;
-
 
       const localCandidate = getLocalStudents().find(
         (l) =>
@@ -1218,6 +1282,7 @@ export const mockApi = {
         ...(s.uploadedDocuments || {}),
       };
 
+      const candKey = s.applicationNo || s.id;
 
       // 1. Candidate Photo
       const photoUrl =
@@ -1233,7 +1298,7 @@ export const mockApi = {
           </svg>`
         )}`;
 
-      generatedDocs.push({
+      docMap.set(`${candKey}_PHOTO`, {
         id: `doc_photo_${s.id}`,
         studentId: s.id,
         studentName: s.fullName,
@@ -1278,7 +1343,7 @@ export const mockApi = {
           </svg>`
         )}`;
 
-      generatedDocs.push({
+      docMap.set(`${candKey}_BFORM`, {
         id: `doc_cnic_${s.id}`,
         studentId: s.id,
         studentName: s.fullName,
@@ -1330,7 +1395,7 @@ export const mockApi = {
           </svg>`
         )}`;
 
-      generatedDocs.push({
+      docMap.set(`${candKey}_DMC`, {
         id: `doc_dmc_${s.id}`,
         studentId: s.id,
         studentName: s.fullName,
@@ -1375,7 +1440,7 @@ export const mockApi = {
           </svg>`
         )}`;
 
-      generatedDocs.push({
+      docMap.set(`${candKey}_FEE`, {
         id: `doc_pay_${s.id}`,
         studentId: s.id,
         studentName: s.fullName,
@@ -1393,7 +1458,7 @@ export const mockApi = {
 
       // 5. Father / Guardian CNIC
       if (up.fatherCnic?.dataUrl) {
-        generatedDocs.push({
+        docMap.set(`${candKey}_FATHER_CNIC`, {
           id: `doc_fcnic_${s.id}`,
           studentId: s.id,
           studentName: s.fullName,
@@ -1412,7 +1477,7 @@ export const mockApi = {
 
       // 6. Domicile Certificate
       if (up.domicile?.dataUrl) {
-        generatedDocs.push({
+        docMap.set(`${candKey}_DOMICILE`, {
           id: `doc_dom_${s.id}`,
           studentId: s.id,
           studentName: s.fullName,
@@ -1433,13 +1498,14 @@ export const mockApi = {
       }
     });
 
-    // Merge status updates
+    const generatedDocs = Array.from(docMap.values());
 
     return generatedDocs.map((doc) => {
       const overridden = savedDocs.find((saved) => saved.id === doc.id);
       return overridden ? { ...doc, ...overridden } : doc;
     });
   },
+
 
 
   async updateDocumentStatus(
