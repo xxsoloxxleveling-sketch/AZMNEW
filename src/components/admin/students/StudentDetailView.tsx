@@ -1,20 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   Download,
   QrCode,
-  CheckCircle2,
-  XCircle,
   FileText,
   User,
-  Phone,
   BookOpen,
   Award,
-  ShieldCheck,
-  Building,
+  FileCheck,
+  Eye,
+  Check,
+  X,
   Printer,
 } from 'lucide-react';
-import { MockStudent, mockApi, printStudentDossier } from '../../../lib/mockApi';
+import {
+  MockStudent,
+  MockStudentDocument,
+  mockApi,
+  printStudentDossier,
+} from '../../../lib/mockApi';
 import { StatusBadge } from '../shared/StatusBadge';
 import { StudentDossierModal } from '../../common/StudentDossierModal';
 
@@ -26,13 +30,17 @@ interface StudentDetailViewProps {
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, onBack }) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDossierOpen, setIsDossierOpen] = useState(false);
-  const [selectedLightboxImage, setSelectedLightboxImage] = useState<string | null>(null);
-  const [docStatuses, setDocStatuses] = useState<Record<string, 'VERIFIED' | 'PENDING' | 'REJECTED'>>({
-    photo: 'VERIFIED',
-    cnic: 'VERIFIED',
-    dmc: student.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING',
-    payment: student.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING',
-  });
+  const [documents, setDocuments] = useState<MockStudentDocument[]>([]);
+  const [selectedDoc, setSelectedDoc] = useState<MockStudentDocument | null>(null);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [student.id, student.applicationNo]);
+
+  const loadDocuments = async () => {
+    const docs = await mockApi.getStudentDocuments(student.id);
+    setDocuments(docs);
+  };
 
   const handleDownloadPdf = async () => {
     setIsDownloading(true);
@@ -43,11 +51,12 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
     }
   };
 
-  const toggleDocStatus = (docKey: string, status: 'VERIFIED' | 'REJECTED') => {
-    setDocStatuses((prev) => ({
-      ...prev,
-      [docKey]: prev[docKey] === status ? 'PENDING' : status,
-    }));
+  const handleUpdateStatus = async (docId: string, status: 'VERIFIED' | 'REJECTED') => {
+    await mockApi.updateDocumentStatus(docId, status);
+    loadDocuments();
+    if (selectedDoc && selectedDoc.id === docId) {
+      setSelectedDoc((prev) => (prev ? { ...prev, status } : null));
+    }
   };
 
   return (
@@ -90,391 +99,367 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
         </div>
       </div>
 
-
       {/* Header Profile Card with Biometric QR */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
           <img
             src={
+              student.uploadedDocuments?.photo?.dataUrl ||
               student.photoUrl ||
-              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80'
+              `data:image/svg+xml;utf8,${encodeURIComponent(
+                `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+                  <rect width="200" height="200" fill="#e2e8f0"/>
+                  <circle cx="100" cy="80" r="40" fill="#94a3b8"/>
+                  <path d="M30 180 C30 130, 170 130, 170 180 Z" fill="#64748b"/>
+                </svg>`
+              )}`
             }
             alt={student.fullName}
-            className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 border-white shadow-md ring-4 ring-slate-100"
+            className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 border-slate-200 shadow-sm"
           />
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                {student.fullName}
-              </h2>
-              <StatusBadge status={student.status} size="sm" />
+              <h2 className="text-2xl font-black text-slate-900">{student.fullName}</h2>
+              <StatusBadge status={student.status} />
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                  student.feeStatus === 'PAID'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {student.feeStatus === 'PAID' ? 'Fee Verified (PKR 300 Paid)' : 'Pending Fee Verification'}
+              </span>
             </div>
             <p className="text-xs text-slate-500 font-medium">
-              Father Name: <strong className="text-slate-800 font-semibold">{student.fatherName}</strong>
+              S/D of <strong className="text-slate-700">{student.fatherName}</strong> • {student.currentClass}
             </p>
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs text-slate-600 pt-1">
-              <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-[#185b9d] font-bold border border-blue-100">
-                Roll No: {student.rollNumber}
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 pt-1 text-xs text-slate-600 font-mono">
+              <span className="bg-slate-100 px-2.5 py-1 rounded-lg">App: {student.applicationNo || student.id}</span>
+              <span className="bg-blue-50 text-[#185b9d] font-bold px-2.5 py-1 rounded-lg">
+                Roll: {student.rollNumber || 'PENDING FEE'}
               </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold border border-slate-200">
-                App No: {student.applicationNo}
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-100">
-                {student.currentClass}
-              </span>
+              <span className="bg-slate-100 px-2.5 py-1 rounded-lg">CNIC: {student.cnicOrBForm || 'N/A'}</span>
             </div>
           </div>
         </div>
 
-        {/* Biometric QR Card */}
-        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center shrink-0 flex flex-col items-center shadow-xs">
-          <img
-            src={
-              student.qrImageUrl ||
-              `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${student.rollNumber}`
-            }
-            alt="Student QR Token"
-            className="w-28 h-28 rounded-xl bg-white p-1 border border-slate-200"
-          />
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-2 flex items-center gap-1">
-            <QrCode className="w-3 h-3 text-[#185b9d]" /> Signed Biometric QR
+        {/* Biometric QR Token Card */}
+        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col items-center gap-2 text-center min-w-[160px]">
+          <div className="p-2 bg-white rounded-xl shadow-2xs border border-slate-200">
+            {student.qrImageUrl ? (
+              <img src={student.qrImageUrl} alt="QR Matrix" className="w-24 h-24 object-contain" />
+            ) : (
+              <QrCode className="w-24 h-24 text-slate-800" />
+            )}
+          </div>
+          <span className="text-[10px] font-mono font-bold text-slate-500 max-w-[150px] truncate">
+            {student.rollNumber || student.qrToken || student.id}
+          </span>
+          <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider bg-emerald-50 px-2 py-0.5 rounded-md">
+            Biometric Valid
           </span>
         </div>
       </div>
 
-      {/* Grid of Parts A to L */}
+      {/* Grid: 2 Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Part A & B: Personal & Contact */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-slate-100 text-slate-900 font-bold text-sm">
-            <User className="w-4 h-4 text-[#185b9d]" />
-            <h3>Parts A & B: Personal & Contact Details</h3>
+        {/* Left Column: Personal, Contact & Academic */}
+        <div className="space-y-6">
+          {/* Card 1: Personal & Contact */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
+              <User className="w-4 h-4 text-[#185b9d]" />
+              <h3 className="text-sm font-bold text-slate-900">Parts A & B: Personal & Contact Information</h3>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[11px]">Date of Birth</span>
+                <span className="font-semibold text-slate-800">{student.dateOfBirth} (Age: {student.age || 16})</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Gender & Religion</span>
+                <span className="font-semibold text-slate-800">{student.gender} • {student.religion || 'Islam'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Father / Parent Mobile</span>
+                <span className="font-semibold text-slate-800 font-mono">{student.parentMobile}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Student Mobile / WhatsApp</span>
+                <span className="font-semibold text-slate-800 font-mono">{student.studentMobile || student.whatsapp || 'N/A'}</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-slate-400 block text-[11px]">Permanent Address</span>
+                <span className="font-semibold text-slate-800">{student.address}, {student.district}, {student.province}</span>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
-            <div>
-              <span className="text-slate-400 block font-medium">CNIC / B-Form</span>
-              <span className="font-bold text-slate-800">{student.cnicOrBForm}</span>
+          {/* Card 2: Academic Record Details */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
+              <BookOpen className="w-4 h-4 text-[#185b9d]" />
+              <h3 className="text-sm font-bold text-slate-900">Part C: Academic Examination Record</h3>
             </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Gender / Age</span>
-              <span className="font-bold text-slate-800">
-                {student.gender} ({student.age} years)
-              </span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Date of Birth</span>
-              <span className="font-bold text-slate-800">{student.dateOfBirth}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Nationality / Religion</span>
-              <span className="font-bold text-slate-800">{student.nationality} / {student.religion}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Parent / Guardian Mobile</span>
-              <span className="font-bold text-slate-800">{student.parentMobile}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Student Mobile / WhatsApp</span>
-              <span className="font-bold text-slate-800">{student.studentMobile || student.whatsapp || 'N/A'}</span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-slate-400 block font-medium">Permanent Address</span>
-              <span className="font-bold text-slate-800">
-                {student.address}, {student.district}, {student.province}
-              </span>
-            </div>
-          </div>
-        </div>
 
-        {/* Part C & D: Educational & Scholarship Category */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-slate-100 text-slate-900 font-bold text-sm">
-            <BookOpen className="w-4 h-4 text-[#185b9d]" />
-            <h3>Parts C & D: Academic & Scholarship Category</h3>
-          </div>
-
-          <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
-            <div>
-              <span className="text-slate-400 block font-medium">Current Class</span>
-              <span className="font-bold text-slate-800">{student.currentClass}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Group / Discipline</span>
-              <span className="font-bold text-slate-800">{student.hsscGroup || 'General Science'}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">School / Institute</span>
-              <span className="font-bold text-slate-800">{student.schoolName}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Board / University</span>
-              <span className="font-bold text-slate-800">{student.boardOrUniversity}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Scholarship Applied</span>
-              <span className="font-bold text-[#185b9d]">{student.scholarshipCategory.replace(/_/g, ' ')}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Referral Source (Part I)</span>
-              <span className="font-bold text-slate-800">{student.referralSource || 'School Administration'}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Emergency Contact</span>
-              <span className="font-bold text-slate-800">
-                {student.emergencyContact} ({student.emergencyRelation})
-              </span>
-            </div>
-            <div>
-              <span className="text-slate-400 block font-medium">Monthly Household Income</span>
-              <span className="font-bold text-slate-800">
-                PKR {student.guardianMonthlyIncome?.toLocaleString() || 'N/A'}
-              </span>
+            <div className="space-y-3">
+              {student.academicRecords && student.academicRecords.length > 0 ? (
+                <div className="border border-slate-100 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
+                      <tr>
+                        <th className="p-3">Examination Level</th>
+                        <th className="p-3">Board / Institute</th>
+                        <th className="p-3">Year</th>
+                        <th className="p-3 text-right">Marks / %</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {student.academicRecords.map((rec, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50">
+                          <td className="p-3 font-semibold text-slate-800">{rec.examLevel}</td>
+                          <td className="p-3 text-slate-600">{rec.boardOrUni || '-'}</td>
+                          <td className="p-3 font-mono text-slate-500">{rec.yearOfPassing || '-'}</td>
+                          <td className="p-3 text-right font-mono font-bold text-emerald-700">
+                            {rec.obtainedMarks}/{rec.totalMarks} ({rec.percentage}%)
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-500 text-center">
+                  Enrolled Class: <strong className="text-slate-700">{student.currentClass}</strong> • School:{' '}
+                  <strong className="text-slate-700">{student.schoolName}</strong>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Part G: Academic Examination Records Table */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-slate-100 text-slate-900 font-bold text-sm">
-            <Award className="w-4 h-4 text-[#185b9d]" />
-            <h3>Part G: Academic Examination Records</h3>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
-                  <th className="py-2 px-3">Examination / Level</th>
-                  <th className="py-2 px-3">Board / Institute</th>
-                  <th className="py-2 px-3">Year</th>
-                  <th className="py-2 px-3">Total</th>
-                  <th className="py-2 px-3">Obtained</th>
-                  <th className="py-2 px-3">%</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {student.academicRecords && student.academicRecords.length > 0 ? (
-                  student.academicRecords.map((rec, idx) => (
-                    <tr key={idx}>
-                      <td className="py-2.5 px-3 font-semibold text-slate-800">{rec.examLevel}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{rec.boardOrUni || '-'}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{rec.yearOfPassing || '-'}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{rec.totalMarks || '-'}</td>
-                      <td className="py-2.5 px-3 font-bold text-slate-900">{rec.obtainedMarks || '-'}</td>
-                      <td className="py-2.5 px-3 font-bold text-emerald-600">{rec.percentage ? `${rec.percentage}%` : '-'}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-slate-400">
-                      No previous academic examination transcripts logged.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Part H: Submitted Candidate Documents & Storage Section */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-              <ShieldCheck className="w-4 h-4 text-[#185b9d]" />
-              <h3>Submitted Candidate Documents & Storage</h3>
+        {/* Right Column: Scholarship, Documents, & Inspection */}
+        <div className="space-y-6">
+          {/* Card 3: Scholarship Category */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
+              <Award className="w-4 h-4 text-[#185b9d]" />
+              <h3 className="text-sm font-bold text-slate-900">Parts D & E: Scholarship Category & Household</h3>
             </div>
-            <span className="text-[11px] text-slate-500 font-medium">Uploaded from student side</span>
+
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[11px]">Applied Category</span>
+                <span className="font-bold text-[#185b9d]">{student.scholarshipCategory}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Guardian Occupation</span>
+                <span className="font-semibold text-slate-800">{student.guardianOccupation || 'Self-Employed / Business'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Monthly Household Income</span>
+                <span className="font-semibold text-slate-800 font-mono">
+                  PKR {Number(student.guardianMonthlyIncome || 75000).toLocaleString()}/month
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Emergency Contact Person</span>
+                <span className="font-semibold text-slate-800">
+                  {student.emergencyContact} ({student.emergencyRelation || 'Father'})
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-              Application Attachments & Scans
-            </span>
+          {/* Card 4: Submitted Candidate Documents & Storage */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <FileCheck className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-bold text-slate-900">Submitted Candidate Documents & Storage</h3>
+              </div>
+              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                {documents.length} Attachments
+              </span>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* 1. Candidate Photo */}
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={
-                      student.photoUrl ||
-                      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80'
-                    }
-                    alt="Photo"
-                    onClick={() =>
-                      setSelectedLightboxImage(
-                        student.photoUrl ||
-                          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=600'
-                      )
-                    }
-                    className="w-12 h-14 rounded-lg object-cover border border-slate-300 shadow-2xs cursor-pointer hover:opacity-80 transition"
-                  />
-                  <div>
-                    <div className="font-bold text-xs text-slate-900">Candidate Photograph</div>
-                    <div className="text-[10px] text-slate-500">JPG • 142 KB</div>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold bg-emerald-100 text-emerald-800">
-                      {docStatuses.photo} ✓
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() =>
-                    setSelectedLightboxImage(
-                      student.photoUrl ||
-                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=600'
-                    )
-                  }
-                  className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer"
-                >
-                  Inspect
-                </button>
-              </div>
+              {documents.map((doc) => {
+                const isPdf =
+                  doc.fileType === 'application/pdf' ||
+                  doc.title.toLowerCase().endsWith('.pdf') ||
+                  doc.fileUrl.startsWith('data:application/pdf');
 
-              {/* 2. CNIC / B-Form Document */}
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                return (
                   <div
-                    onClick={() =>
-                      setSelectedLightboxImage(
-                        student.photoUrl ||
-                          'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600'
-                      )
-                    }
-                    className="w-12 h-14 rounded-lg bg-blue-100 text-[#185b9d] flex items-center justify-center font-bold text-xs border border-blue-200 cursor-pointer"
+                    key={doc.id}
+                    className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-blue-200 transition-all flex flex-col justify-between gap-3 shadow-2xs"
                   >
-                    CNIC
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-slate-900">Student CNIC / B-Form</div>
-                    <div className="text-[10px] font-mono text-slate-500">{student.cnicOrBForm || 'N/A'}</div>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold bg-emerald-100 text-emerald-800">
-                      {docStatuses.cnic} ✓
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() =>
-                    setSelectedLightboxImage(
-                      student.photoUrl ||
-                        'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600'
-                    )
-                  }
-                  className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer"
-                >
-                  Inspect
-                </button>
-              </div>
+                    <div className="flex items-start gap-3">
+                      {/* Document Preview Thumbnail */}
+                      <div
+                        onClick={() => setSelectedDoc(doc)}
+                        className="w-12 h-14 rounded-xl overflow-hidden bg-white border border-slate-200 shadow-2xs flex-shrink-0 cursor-pointer flex items-center justify-center relative group"
+                      >
+                        {isPdf ? (
+                          <div className="flex flex-col items-center justify-center text-[10px] font-black text-rose-600">
+                            <FileText className="w-5 h-5 text-rose-500 mb-0.5" />
+                            <span>PDF</span>
+                          </div>
+                        ) : (
+                          <img
+                            src={doc.fileUrl}
+                            alt={doc.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                          <Eye className="w-4 h-4 text-white" />
+                        </div>
+                      </div>
 
-              {/* 3. Previous Academic DMC */}
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    onClick={() =>
-                      setSelectedLightboxImage(
-                        'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600'
-                      )
-                    }
-                    className="w-12 h-14 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs border border-emerald-200 cursor-pointer"
-                  >
-                    DMC
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-slate-900">Previous Academic DMC</div>
-                    <div className="text-[10px] text-slate-500">{student.currentClass} Transcript</div>
-                    <span
-                      className={`inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold ${
-                        docStatuses.dmc === 'VERIFIED'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {docStatuses.dmc}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() =>
-                    setSelectedLightboxImage(
-                      'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600'
-                    )
-                  }
-                  className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer"
-                >
-                  Inspect
-                </button>
-              </div>
+                      <div className="min-w-0 flex-1">
+                        <h4
+                          onClick={() => setSelectedDoc(doc)}
+                          className="font-bold text-xs text-slate-900 truncate hover:text-[#185b9d] cursor-pointer"
+                          title={doc.title}
+                        >
+                          {doc.title}
+                        </h4>
+                        <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                          {doc.fileSize} • {isPdf ? 'PDF Document' : 'Scanned Image'}
+                        </p>
+                        <span
+                          className={`inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold ${
+                            doc.status === 'VERIFIED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : doc.status === 'REJECTED'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {doc.status}
+                        </span>
+                      </div>
+                    </div>
 
-              {/* 4. Payment Deposit Receipt */}
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    onClick={() =>
-                      setSelectedLightboxImage(
-                        'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600'
-                      )
-                    }
-                    className="w-12 h-14 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-xs border border-amber-200 cursor-pointer"
-                  >
-                    FEE
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <button
+                        onClick={() => setSelectedDoc(doc)}
+                        className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer flex items-center gap-1"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>Inspect</span>
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleUpdateStatus(doc.id, 'VERIFIED')}
+                          title="Verify Document"
+                          className="p-1 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 cursor-pointer"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleUpdateStatus(doc.id, 'REJECTED')}
+                          title="Reject Document"
+                          className="p-1 rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-bold text-xs text-slate-900">PKR 300 Paid Slip</div>
-                    <div className="text-[10px] text-slate-500">JazzCash / Bank Receipt</div>
-                    <span
-                      className={`inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold ${
-                        docStatuses.payment === 'VERIFIED'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {docStatuses.payment}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() =>
-                    setSelectedLightboxImage(
-                      'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600'
-                    )
-                  }
-                  className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer"
-                >
-                  Inspect
-                </button>
-              </div>
+                );
+              })}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Lightbox Preview Modal */}
-      {selectedLightboxImage && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+      {/* Lightbox Preview Modal for Real Submitted Documents */}
+      {selectedDoc && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
             <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-100">Candidate Attachment Inspection</h3>
+              <div>
+                <h3 className="text-sm font-bold text-slate-100">{selectedDoc.title}</h3>
+                <p className="text-[11px] text-slate-400">
+                  {student.fullName} ({student.rollNumber || student.applicationNo}) • {selectedDoc.fileSize}
+                </p>
+              </div>
               <button
-                onClick={() => setSelectedLightboxImage(null)}
+                onClick={() => setSelectedDoc(null)}
                 className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
               >
                 ✕
               </button>
             </div>
-            <div className="p-6 bg-slate-100 flex items-center justify-center min-h-[300px]">
-              <img
-                src={selectedLightboxImage}
-                alt="Inspection"
-                className="max-h-[500px] w-auto max-w-full object-contain rounded-xl shadow-md border border-slate-300 bg-white"
-              />
+
+            <div className="p-6 bg-slate-100 flex items-center justify-center min-h-[350px] overflow-auto">
+              {selectedDoc.fileType === 'application/pdf' ||
+              selectedDoc.title.toLowerCase().endsWith('.pdf') ||
+              selectedDoc.fileUrl.startsWith('data:application/pdf') ? (
+                <div className="w-full h-[480px] bg-white rounded-2xl p-4 shadow-md flex flex-col items-center justify-center border border-slate-300">
+                  <FileText className="w-16 h-16 text-rose-500 mb-3" />
+                  <h4 className="text-sm font-bold text-slate-900">{selectedDoc.title}</h4>
+                  <p className="text-xs text-slate-500 mb-4">Official Candidate PDF Attachment</p>
+                  <a
+                    href={selectedDoc.fileUrl}
+                    download={selectedDoc.title}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-5 py-2.5 rounded-xl bg-[#185b9d] text-white font-bold text-xs shadow-md hover:bg-[#13497d] transition flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download / Open PDF Document</span>
+                  </a>
+                </div>
+              ) : (
+                <img
+                  src={selectedDoc.fileUrl}
+                  alt={selectedDoc.title}
+                  className="max-h-[500px] w-auto max-w-full object-contain rounded-xl shadow-md border border-slate-300 bg-white"
+                />
+              )}
             </div>
-            <div className="px-6 py-4 bg-white border-t border-slate-200 flex justify-end">
-              <button
-                onClick={() => setSelectedLightboxImage(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-800 font-bold text-xs hover:bg-slate-200 cursor-pointer"
-              >
-                Close Preview
-              </button>
+
+            <div className="px-6 py-4 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500">Document Status:</span>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${
+                    selectedDoc.status === 'VERIFIED'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : selectedDoc.status === 'REJECTED'
+                      ? 'bg-rose-100 text-rose-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {selectedDoc.status}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={selectedDoc.fileUrl}
+                  download={selectedDoc.title}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download File</span>
+                </a>
+                <button
+                  onClick={() => setSelectedDoc(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -489,4 +474,3 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
     </div>
   );
 };
-

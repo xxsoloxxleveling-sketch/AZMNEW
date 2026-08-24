@@ -1281,9 +1281,51 @@ export const mockApi = {
         uploadedAt: up.paymentReceipt?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
         status: s.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING_REVIEW',
       });
+
+      // 5. Father / Guardian CNIC
+      if (up.fatherCnic?.dataUrl) {
+        generatedDocs.push({
+          id: `doc_fcnic_${s.id}`,
+          studentId: s.id,
+          studentName: s.fullName,
+          rollNumber: s.rollNumber || 'PENDING',
+          applicationNo: s.applicationNo || 'APP-2026',
+          currentClass: s.currentClass || 'SSC',
+          docType: 'CNIC_BFORM',
+          title: up.fatherCnic.name || 'Father / Guardian CNIC Front & Back',
+          fileUrl: up.fatherCnic.dataUrl,
+          fileSize: up.fatherCnic.size || '340 KB',
+          fileType: 'image/jpeg',
+          uploadedAt: up.fatherCnic.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          status: 'VERIFIED',
+        });
+      }
+
+      // 6. Domicile Certificate
+      if (up.domicile?.dataUrl) {
+        generatedDocs.push({
+          id: `doc_dom_${s.id}`,
+          studentId: s.id,
+          studentName: s.fullName,
+          rollNumber: s.rollNumber || 'PENDING',
+          applicationNo: s.applicationNo || 'APP-2026',
+          currentClass: s.currentClass || 'SSC',
+          docType: 'CNIC_BFORM',
+          title: up.domicile.name || 'Domicile Certificate (KP / Hazara)',
+          fileUrl: up.domicile.dataUrl,
+          fileSize: up.domicile.size || '390 KB',
+          fileType:
+            up.domicile.dataUrl.includes('application/pdf') || up.domicile.name?.endsWith('.pdf')
+              ? 'application/pdf'
+              : 'image/jpeg',
+          uploadedAt: up.domicile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          status: 'VERIFIED',
+        });
+      }
     });
 
     // Merge status updates
+
     return generatedDocs.map((doc) => {
       const overridden = savedDocs.find((saved) => saved.id === doc.id);
       return overridden ? { ...doc, ...overridden } : doc;
