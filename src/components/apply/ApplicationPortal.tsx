@@ -229,6 +229,19 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     }
   };
 
+  const clearSignature = () => {
+    const canvas = sigCanvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+    setHasSignature(false);
+    setFormData(prev => ({ ...prev, signatureDataUrl: '' }));
+  };
+
+
   const [newGrade, setNewGrade] = useState('');
   const [newYear, setNewYear] = useState('');
   const [newTotalMarks, setNewTotalMarks] = useState<number>(0);
