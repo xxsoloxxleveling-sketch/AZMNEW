@@ -595,6 +595,56 @@ export class StudentsService {
   }
 
   /**
+   * Retrieves a student's document or photo URL/content for direct streaming.
+   */
+  async getStudentDocument(studentIdentifier: string, docType: string) {
+    const student = await prisma.student.findFirst({
+      where: {
+        OR: [
+          { id: studentIdentifier },
+          { applicationNo: studentIdentifier },
+          { cnicOrBForm: studentIdentifier },
+        ],
+      },
+    });
+
+    if (!student) {
+      const error: AppError = new Error('Student not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (docType === 'photo' && student.photoUrl) {
+      return {
+        url: student.photoUrl,
+        contentType: 'image/jpeg',
+      };
+    }
+
+    if (student.uploadedDocsJson) {
+      try {
+        const docs = JSON.parse(student.uploadedDocsJson);
+        const doc = docs[docType] || docs[`${docType}Uploaded`];
+        if (doc) {
+          return {
+            url: doc.publicUrl || doc.dataUrl,
+            contentType: doc.fileType || (doc.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
+            name: doc.name,
+          };
+        }
+      } catch (e) {}
+    }
+
+    if (docType === 'photo' && student.photoUrl) {
+      return { url: student.photoUrl, contentType: 'image/jpeg' };
+    }
+
+    const error: AppError = new Error(`Document '${docType}' not found for candidate`);
+    error.statusCode = 404;
+    throw error;
+  }
+
+  /**
    * Complete Database & Storage Purge (Leaves admin user intact so login works)
    */
   async purgeAllData() {

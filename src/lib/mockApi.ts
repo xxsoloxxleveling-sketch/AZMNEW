@@ -1812,7 +1812,12 @@ export const mockApi = {
       const candKey = s.applicationNo || s.id;
 
       // 1. Candidate Photo
-      const photoUrl = up.photo?.publicUrl || up.photo?.dataUrl || s.photoUrl;
+      const photoUrl =
+        up.photo?.publicUrl ||
+        up.photo?.dataUrl ||
+        s.photoUrl ||
+        `${API_BASE_URL}/api/students/${s.id}/document/photo`;
+
       if (photoUrl) {
         docMap.set(`${candKey}_PHOTO`, {
           id: `doc_photo_${s.id}`,
@@ -1833,8 +1838,13 @@ export const mockApi = {
 
       // 2. CNIC / B-Form Document (Only if actually uploaded)
       const bformFile = up.bform || up.bformUploaded || up.cnic || up.candidateCnic;
-      const bformUrl = bformFile?.publicUrl || bformFile?.dataUrl || bformFile?.fileUrl;
-      if (bformUrl) {
+      const bformUrl =
+        bformFile?.publicUrl ||
+        bformFile?.dataUrl ||
+        bformFile?.fileUrl ||
+        `${API_BASE_URL}/api/students/${s.id}/document/bform`;
+
+      if (bformFile || s.documents?.bformCnicCopy) {
         docMap.set(`${candKey}_BFORM`, {
           id: `doc_cnic_${s.id}`,
           studentId: s.id,
@@ -1843,19 +1853,24 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: bformFile.name || `${s.fullName} - Candidate B-Form / CNIC`,
+          title: bformFile?.name || `${s.fullName} - Candidate B-Form / CNIC`,
           fileUrl: bformUrl,
-          fileSize: bformFile.size || '480 KB',
-          fileType: bformUrl.includes('application/pdf') || bformFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-          uploadedAt: bformFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          fileSize: bformFile?.size || '480 KB',
+          fileType: bformUrl.includes('application/pdf') || bformFile?.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: bformFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: 'VERIFIED',
         });
       }
 
       // 3. Father / Guardian CNIC (Only if actually uploaded)
       const fatherCnicFile = up.fatherCnic || up.fatherCnicUploaded || up.fcnic;
-      const fatherCnicUrl = fatherCnicFile?.publicUrl || fatherCnicFile?.dataUrl || fatherCnicFile?.fileUrl;
-      if (fatherCnicUrl) {
+      const fatherCnicUrl =
+        fatherCnicFile?.publicUrl ||
+        fatherCnicFile?.dataUrl ||
+        fatherCnicFile?.fileUrl ||
+        `${API_BASE_URL}/api/students/${s.id}/document/fatherCnic`;
+
+      if (fatherCnicFile || s.documents?.fatherCnicCopy) {
         docMap.set(`${candKey}_FATHER_CNIC`, {
           id: `doc_fcnic_${s.id}`,
           studentId: s.id,
@@ -1864,19 +1879,24 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: fatherCnicFile.name || `${s.fullName} - Father / Guardian CNIC`,
+          title: fatherCnicFile?.name || `${s.fullName} - Father / Guardian CNIC`,
           fileUrl: fatherCnicUrl,
-          fileSize: fatherCnicFile.size || '340 KB',
-          fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-          uploadedAt: fatherCnicFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          fileSize: fatherCnicFile?.size || '340 KB',
+          fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile?.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: fatherCnicFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: 'VERIFIED',
         });
       }
 
       // 4. Academic Transcript / DMC (Only if actually uploaded)
       const dmcFile = up.dmc || up.dmcUploaded || up.resultCard || up.previousResult;
-      const dmcUrl = dmcFile?.publicUrl || dmcFile?.dataUrl || dmcFile?.fileUrl;
-      if (dmcUrl) {
+      const dmcUrl =
+        dmcFile?.publicUrl ||
+        dmcFile?.dataUrl ||
+        dmcFile?.fileUrl ||
+        `${API_BASE_URL}/api/students/${s.id}/document/dmc`;
+
+      if (dmcFile || s.documents?.previousResultCard) {
         docMap.set(`${candKey}_DMC`, {
           id: `doc_dmc_${s.id}`,
           studentId: s.id,
@@ -1885,19 +1905,24 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'PREVIOUS_DMC',
-          title: dmcFile.name || `${s.fullName} - DMC Marksheet (${s.currentClass || 'Class'})`,
+          title: dmcFile?.name || `${s.fullName} - DMC Marksheet (${s.currentClass || 'Class'})`,
           fileUrl: dmcUrl,
-          fileSize: dmcFile.size || '820 KB',
-          fileType: dmcUrl.includes('application/pdf') || dmcFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-          uploadedAt: dmcFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          fileSize: dmcFile?.size || '820 KB',
+          fileType: dmcUrl.includes('application/pdf') || dmcFile?.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: dmcFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
         });
       }
 
       // 5. Payment Deposit Receipt (Only if actually uploaded)
       const feeFile = up.paymentReceipt || up.incomeCertUploaded || up.receipt || up.challan;
-      const feeUrl = feeFile?.publicUrl || feeFile?.dataUrl || feeFile?.fileUrl;
-      if (feeUrl) {
+      const feeUrl =
+        feeFile?.publicUrl ||
+        feeFile?.dataUrl ||
+        feeFile?.fileUrl ||
+        `${API_BASE_URL}/api/students/${s.id}/document/paymentReceipt`;
+
+      if (feeFile || s.documents?.incomeCertificate) {
         docMap.set(`${candKey}_FEE`, {
           id: `doc_pay_${s.id}`,
           studentId: s.id,
@@ -1906,19 +1931,24 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'PAYMENT_CHALLAN',
-          title: feeFile.name || `${s.fullName} - PKR 300 Fee Deposit Receipt`,
+          title: feeFile?.name || `${s.fullName} - PKR 300 Fee Deposit Receipt`,
           fileUrl: feeUrl,
-          fileSize: feeFile.size || '310 KB',
-          fileType: feeUrl.includes('application/pdf') || feeFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
-          uploadedAt: feeFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          fileSize: feeFile?.size || '310 KB',
+          fileType: feeUrl.includes('application/pdf') || feeFile?.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
+          uploadedAt: feeFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
         });
       }
 
       // 6. Domicile Certificate (Optional - Only if actually uploaded)
       const domicileFile = up.domicile || up.domicileUploaded;
-      const domicileUrl = domicileFile?.publicUrl || domicileFile?.dataUrl || domicileFile?.fileUrl;
-      if (domicileUrl) {
+      const domicileUrl =
+        domicileFile?.publicUrl ||
+        domicileFile?.dataUrl ||
+        domicileFile?.fileUrl ||
+        `${API_BASE_URL}/api/students/${s.id}/document/domicile`;
+
+      if (domicileFile || s.documents?.domicileCertificate) {
         docMap.set(`${candKey}_DOMICILE`, {
           id: `doc_dom_${s.id}`,
           studentId: s.id,
@@ -1927,14 +1957,14 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: domicileFile.name || `${s.fullName} - Domicile Certificate (Optional)`,
+          title: domicileFile?.name || `${s.fullName} - Domicile Certificate (Optional)`,
           fileUrl: domicileUrl,
-          fileSize: domicileFile.size || '390 KB',
+          fileSize: domicileFile?.size || '390 KB',
           fileType:
-            domicileUrl.includes('application/pdf') || domicileFile.name?.endsWith('.pdf')
+            domicileUrl.includes('application/pdf') || domicileFile?.name?.endsWith('.pdf')
               ? 'application/pdf'
               : 'image/jpeg',
-          uploadedAt: domicileFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          uploadedAt: domicileFile?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: 'VERIFIED',
         });
       }

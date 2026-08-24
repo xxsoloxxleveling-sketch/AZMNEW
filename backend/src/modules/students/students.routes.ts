@@ -44,6 +44,12 @@ router.get(
   studentsController.getById
 );
 
+// Stream / Serve Student Attached Documents & Photos Directly
+router.get(
+  '/:id/document/:docType',
+  studentsController.serveDocument
+);
+
 // Protected routes for modifications (Admin / Teachers)
 router.use(authenticate);
 
