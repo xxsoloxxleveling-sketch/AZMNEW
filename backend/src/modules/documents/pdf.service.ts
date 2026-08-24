@@ -1,40 +1,125 @@
-import puppeteer from 'puppeteer';
 import { logger } from '../../lib/logger';
+
+/**
+ * Async Mutex Queue ensuring only one PDF generation runs at any single instant.
+ * Prevents concurrent Chromium process spawning and eliminates Render Free Tier OOM crashes.
+ */
+class PdfGenerationQueue {
+  private queue: Promise<void> = Promise.resolve();
+
+  async enqueue<T>(task: () => Promise<T>): Promise<T> {
+    let taskResolve: () => void = () => {};
+    const waitPromise = new Promise<void>((resolve) => {
+      taskResolve = resolve;
+    });
+
+    const previousQueue = this.queue;
+    this.queue = this.queue.then(() => waitPromise);
+
+    await previousQueue;
+    try {
+      return await task();
+    } finally {
+      taskResolve();
+    }
+  }
+}
+
+const pdfQueue = new PdfGenerationQueue();
 
 export class PdfService {
   /**
-   * Generates a PDF buffer from an HTML string using Puppeteer.
+   * Launches a memory-optimized Chromium browser instance.
+   * Prioritizes puppeteer-core + @sparticuz/chromium on Linux/Render serverless,
+   * falling back to standard puppeteer in local development.
+   */
+  private async launchBrowser() {
+    const memoryOptimizedArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-default-apps',
+      '--disable-sync',
+      '--disable-translate',
+      '--hide-scrollbars',
+      '--metrics-recording-only',
+      '--mute-audio',
+    ];
+
+    // Try @sparticuz/chromium + puppeteer-core (Render Linux cloud)
+    try {
+      if (process.platform === 'linux') {
+        const chromiumModule = await import('@sparticuz/chromium');
+        const chromium = chromiumModule.default || chromiumModule;
+        const puppeteerCoreModule = await import('puppeteer-core');
+        const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
+
+        const executablePath = await chromium.executablePath();
+        if (executablePath) {
+          logger.info('🚀 Launching memory-optimized @sparticuz/chromium for PDF generation');
+          return await puppeteerCore.launch({
+            args: [...chromium.args, ...memoryOptimizedArgs],
+            defaultViewport: (chromium as any).defaultViewport || { width: 1280, height: 800 },
+            executablePath,
+            headless: (chromium as any).headless ?? true,
+          });
+        }
+      }
+    } catch (coreErr: any) {
+      logger.warn('@sparticuz/chromium launch notice, falling back to standard puppeteer:', coreErr.message);
+    }
+
+    // Fallback: standard puppeteer (for Windows/Mac local development or standard containers)
+    const puppeteerModule = await import('puppeteer');
+    const puppeteer = puppeteerModule.default || puppeteerModule;
+
+    return puppeteer.launch({
+      headless: true,
+      args: memoryOptimizedArgs,
+    });
+  }
+
+  /**
+   * Generates a PDF buffer from an HTML string.
+   * Serialized through a concurrency queue to ensure only 1 Chromium instance runs at a time.
    */
   async generatePdfFromHtml(html: string): Promise<Buffer> {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    return pdfQueue.enqueue(async () => {
+      logger.info('📄 Processing PDF generation in isolated queue slot...');
+      const browser = await this.launchBrowser();
+
+      try {
+        const page = await browser.newPage();
+        await page.setContent(html, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        });
+
+        const pdfUint8Array = await page.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: {
+            top: '10mm',
+            bottom: '10mm',
+            left: '10mm',
+            right: '10mm',
+          },
+        });
+
+        await page.close();
+        return Buffer.from(pdfUint8Array);
+      } catch (err) {
+        logger.error('Error generating PDF via Puppeteer:', err);
+        throw err;
+      } finally {
+        await browser.close();
+      }
     });
-
-    try {
-      const page = await browser.newPage();
-      await page.setContent(html, {
-        waitUntil: 'domcontentloaded',
-      });
-
-      const pdfUint8Array = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '10mm',
-          bottom: '10mm',
-          left: '10mm',
-          right: '10mm',
-        },
-      });
-
-      return Buffer.from(pdfUint8Array);
-    } catch (err) {
-      logger.error('Error generating PDF via Puppeteer:', err);
-      throw err;
-    } finally {
-      await browser.close();
-    }
   }
 
   /**
@@ -255,7 +340,7 @@ export class PdfService {
       </tr>
     </table>
 
-    <!-- PART F Preview -->
+    <!-- PART F -->
     <div class="section-bar">Part F: Candidate Verification Token</div>
     <table style="width: 100%; margin-top: 4px;">
       <tr>

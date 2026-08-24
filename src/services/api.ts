@@ -159,9 +159,14 @@ export async function searchCandidateResult(query: string): Promise<ApiResponse<
 
   try {
     const response = await fetch(`${API_BASE_URL}/results/search?query=${encodeURIComponent(clean)}`);
-    if (response.ok) {
-      const data = await response.json();
-      return { success: true, data };
+    const data = await response.json();
+    if (response.ok && data.success) {
+      return { success: true, data: data.data };
+    } else {
+      return {
+        success: false,
+        error: data.error?.message || `No result record found for "${clean}". Session V results will be announced on 20 November 2026.`,
+      };
     }
   } catch (err) {
     // Backend not reached
@@ -187,7 +192,7 @@ export async function fetchPublicMeritList(params?: {
     const response = await fetch(`${API_BASE_URL}/results/merit-list?${queryParams.toString()}`);
     if (response.ok) {
       const data = await response.json();
-      return { success: true, data };
+      return { success: true, data: data.data || (Array.isArray(data) ? data : []) };
     }
   } catch (err) {
     // Backend not reached
@@ -341,9 +346,13 @@ export async function submitGrievanceTicket(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    if (response.ok) {
-      const data = await response.json();
-      return { success: true, data };
+    const data = await response.json();
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        data: data.data,
+        message: data.message || 'Grievance ticket registered successfully',
+      };
     }
   } catch (err) {
     // Backend offline

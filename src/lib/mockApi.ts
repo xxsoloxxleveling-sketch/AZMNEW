@@ -1031,11 +1031,27 @@ export const mockApi = {
       );
     }
 
-    // 2. Strip multi-megabyte base64 blobs from network payload so it registers in milliseconds
+    // 2. Prepare sanitized uploadedDocuments without huge base64 strings so network payload is light
+    const sanitizedUploadedDocs: Record<string, any> = {};
+    for (const [key, val] of Object.entries(rawUploaded)) {
+      const item: any = val;
+      if (item) {
+        sanitizedUploadedDocs[key] = {
+          name: item.name,
+          size: item.size,
+          publicUrl: item.publicUrl,
+          supabasePath: item.supabasePath,
+          dataUrl: item.publicUrl || (item.dataUrl && item.dataUrl.length < 500 ? item.dataUrl : undefined),
+          uploadedAt: item.uploadedAt || new Date().toISOString(),
+        };
+      }
+    }
+
     const { uploadedDocuments, ...cleanData } = studentData;
     const networkPayload: any = {
       ...cleanData,
       photoUrl: cleanData.photoUrl && cleanData.photoUrl.length < 300000 ? cleanData.photoUrl : undefined,
+      uploadedDocuments: Object.keys(sanitizedUploadedDocs).length > 0 ? sanitizedUploadedDocs : undefined,
     };
 
     try {
@@ -1069,7 +1085,7 @@ export const mockApi = {
         (async () => {
           for (const [docKey, docVal] of Object.entries(rawUploaded)) {
             const item: any = docVal;
-            if (item && item.dataUrl && (item.dataUrl.startsWith('data:') || item.dataUrl.length > 300)) {
+            if (item && item.dataUrl && item.dataUrl.startsWith('data:')) {
               try {
                 const upRes = await mockApi.uploadStudentDocument({
                   studentId: merged.id,
@@ -1237,6 +1253,55 @@ export const mockApi = {
     });
   },
 
+  async getExamHalls(): Promise<any[]> {
+    try {
+      const res = await apiFetch<any[]>('/exam-halls');
+      if (res.success && res.data && res.data.length > 0) return res.data;
+    } catch (e) {
+      console.warn('API /exam-halls failed, falling back to local:', e);
+    }
+    return [];
+  },
+
+  async createExamHall(data: any): Promise<any> {
+    try {
+      const res = await apiFetch<any>('/exam-halls', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      if (res.success && res.data) return res.data;
+    } catch (e) {
+      console.warn('API create exam hall failed:', e);
+    }
+    return {
+      id: `hall_${Date.now()}`,
+      ...data,
+    };
+  },
+
+  async updateExamHall(id: string, data: any): Promise<any> {
+    try {
+      const res = await apiFetch<any>(`/exam-halls/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+      if (res.success && res.data) return res.data;
+    } catch (e) {
+      console.warn('API update exam hall failed:', e);
+    }
+    return { id, ...data };
+  },
+
+  async deleteExamHall(id: string): Promise<boolean> {
+    try {
+      await apiFetch(`/exam-halls/${id}`, { method: 'DELETE' });
+      return true;
+    } catch (e) {
+      console.warn('API delete exam hall failed:', e);
+    }
+    return true;
+  },
+
   async updateStudentAllocation(
     studentId: string,
     allocation: {
@@ -1248,6 +1313,15 @@ export const mockApi = {
       seatNo?: string;
     }
   ): Promise<MockStudent | null> {
+    try {
+      await apiFetch<any>(`/exam-halls/students/${studentId}/allocation`, {
+        method: 'PATCH',
+        body: JSON.stringify(allocation),
+      });
+    } catch (e) {
+      console.warn('Live API allocation error, applying locally:', e);
+    }
+
     const list = getLocalStudents();
     const cleanId = studentId.toLowerCase().trim();
     const cleanDigits = studentId.replace(/\D/g, '');
@@ -1270,34 +1344,7 @@ export const mockApi = {
         },
       };
       localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
-      try {
-        await apiFetch<any>(`/api/students/${studentId}/office-use`, {
-          method: 'PATCH',
-          body: JSON.stringify({ testCentre: allocation.testCenterName, ...allocation }),
-        });
-      } catch (e) {}
       return list[idx];
-    } else {
-      const all = await this.getStudents();
-      const st = all.find(
-        (s) =>
-          s.id.toLowerCase() === cleanId ||
-          (s.applicationNo && s.applicationNo.toLowerCase() === cleanId) ||
-          (s.rollNumber && s.rollNumber.toLowerCase() === cleanId) ||
-          (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits)
-      );
-      if (st) {
-        const updated: MockStudent = {
-          ...st,
-          ...allocation,
-          officeUse: {
-            ...(st.officeUse || {}),
-            testCentre: allocation.testCenterName || st.officeUse?.testCentre,
-          },
-        };
-        saveLocalStudent(updated);
-        return updated;
-      }
     }
     return null;
   },
@@ -1307,6 +1354,20 @@ export const mockApi = {
     hallInfo: { hallName: string; roomNumber: string; testCenterName?: string; testCenterId?: string },
     studentIds: string[]
   ): Promise<number> {
+    try {
+      await apiFetch<any>(`/exam-halls/${hallId}/batch-assign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          studentIds,
+          hallName: hallInfo.hallName,
+          roomNumber: hallInfo.roomNumber,
+          testCenterName: hallInfo.testCenterName,
+        }),
+      });
+    } catch (e) {
+      console.warn('Live batch assign error, applying locally:', e);
+    }
+
     const all = await this.getStudents();
     let updatedCount = 0;
 
@@ -1343,6 +1404,14 @@ export const mockApi = {
   },
 
   async unassignStudentFromHall(studentId: string): Promise<boolean> {
+    try {
+      await apiFetch<any>(`/exam-halls/students/${studentId}/allocation`, {
+        method: 'DELETE',
+      });
+    } catch (e) {
+      console.warn('Live unassign error, updating locally:', e);
+    }
+
     const list = getLocalStudents();
     const cleanId = studentId.toLowerCase().trim();
     const cleanDigits = studentId.replace(/\D/g, '');
@@ -1657,6 +1726,12 @@ export const mockApi = {
 
   // 10. User Management (Super Admin)
   async getUsers(): Promise<MockUserAccount[]> {
+    try {
+      const res = await apiFetch<MockUserAccount[]>('/users');
+      if (res.success && res.data) return res.data;
+    } catch (e) {
+      console.warn('API /users failed, falling back to local list:', e);
+    }
     return [
       {
         id: 'usr_001',
@@ -1693,7 +1768,16 @@ export const mockApi = {
     ];
   },
 
-  async createUser(payload: { name: string; email: string; role: Role }): Promise<MockUserAccount> {
+  async createUser(payload: { name: string; email: string; role: Role; password?: string }): Promise<MockUserAccount> {
+    try {
+      const res = await apiFetch<MockUserAccount>('/users', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      if (res.success && res.data) return res.data;
+    } catch (e) {
+      console.warn('API create user failed, using local mock:', e);
+    }
     return {
       id: `usr_${Date.now()}`,
       name: payload.name,
@@ -1706,6 +1790,12 @@ export const mockApi = {
 
   // 10. Test Centers Management (Custom Centers)
   async getTestCenters(): Promise<MockTestCenter[]> {
+    try {
+      const res = await apiFetch<MockTestCenter[]>('/test-centers');
+      if (res.success && res.data && res.data.length > 0) return res.data;
+    } catch (e) {
+      console.warn('API /test-centers failed, falling back to local:', e);
+    }
 
     const list = getLocalTestCenters();
     const students = getLocalStudents();
@@ -1725,6 +1815,16 @@ export const mockApi = {
   },
 
   async createTestCenter(data: Partial<MockTestCenter>): Promise<MockTestCenter> {
+    try {
+      const res = await apiFetch<MockTestCenter>('/test-centers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      if (res.success && res.data) return res.data;
+    } catch (e) {
+      console.warn('API create test center failed:', e);
+    }
+
     const list = getLocalTestCenters();
     const newCenter: MockTestCenter = {
       id: `tc_${Date.now()}`,
@@ -1748,6 +1848,16 @@ export const mockApi = {
   },
 
   async updateTestCenter(id: string, data: Partial<MockTestCenter>): Promise<MockTestCenter> {
+    try {
+      const res = await apiFetch<MockTestCenter>(`/test-centers/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+      if (res.success && res.data) return res.data;
+    } catch (e) {
+      console.warn('API update test center failed:', e);
+    }
+
     const list = getLocalTestCenters();
     const idx = list.findIndex((tc) => tc.id === id);
     if (idx >= 0) {
@@ -1759,6 +1869,13 @@ export const mockApi = {
   },
 
   async deleteTestCenter(id: string): Promise<boolean> {
+    try {
+      await apiFetch(`/test-centers/${id}`, { method: 'DELETE' });
+      return true;
+    } catch (e) {
+      console.warn('API delete test center failed:', e);
+    }
+
     const list = getLocalTestCenters().filter((tc) => tc.id !== id);
     saveLocalTestCenters(list);
     return true;

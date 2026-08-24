@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local database and file upload artifacts
+dev-db/
+**/dev-db/
+*.db
+*.sqlite
+uploads/
+**/uploads/

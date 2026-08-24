@@ -7,6 +7,7 @@ import {
 } from './partners.schema';
 import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
+import { registrationRateLimiter } from '../../middleware/rateLimit.middleware';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -14,6 +15,7 @@ const router = Router();
 // Public partner registration
 router.post(
   '/register',
+  registrationRateLimiter,
   validateBody(registerPartnerSchema),
   partnersController.register
 );

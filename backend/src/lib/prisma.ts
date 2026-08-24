@@ -1,4 +1,4 @@
-import { PrismaClient, Role, StudentStatus, Gender, ScholarshipCategory, AttendanceStatus, AttendanceMethod, FeeStatus, StaffStatus, PayrollStatus, TransactionType, EligibilityStatus, FinalStatus, InstitutionType, PartnerStatus } from '@prisma/client';
+import { PrismaClient, Role, StudentStatus, Gender, ScholarshipCategory, AttendanceStatus, AttendanceMethod, FeeStatus, StaffStatus, PayrollStatus, TransactionType, EligibilityStatus, FinalStatus, InstitutionType, PartnerStatus, GrievanceStatus } from '@prisma/client';
 import { logger } from './logger';
 
 // In-memory fallback store for local development when Postgres is offline
@@ -788,11 +788,17 @@ async function checkDbAvailability(): Promise<boolean> {
 
 export const prisma = new Proxy(realPrisma, {
   get(target: any, prop: string | symbol) {
+    const isProduction = process.env.NODE_ENV === 'production';
+
     if (prop === '$queryRaw' || prop === '$connect' || prop === '$disconnect') {
       return async (...args: any[]) => {
         try {
           return await target[prop](...args);
-        } catch {
+        } catch (err: any) {
+          if (isProduction) {
+            logger.error(`🚨 CRITICAL: Database operation "${String(prop)}" failed in production:`, err.message || err);
+            throw err;
+          }
           return (memoryPrisma as any)[prop]?.(...args);
         }
       };
@@ -801,44 +807,75 @@ export const prisma = new Proxy(realPrisma, {
     const targetModel = target[prop];
     const memoryModel = (memoryPrisma as any)[prop];
 
-    if (typeof targetModel === 'object' && targetModel !== null && memoryModel) {
-      return new Proxy(targetModel, {
-        get(mTarget: any, mProp: string | symbol) {
-          const realMethod = mTarget[mProp];
-          const memMethod = memoryModel[mProp];
-
-          if (typeof realMethod === 'function') {
-            return async (...args: any[]) => {
-              if (isDbAvailable === true) {
+    if (typeof targetModel === 'object' && targetModel !== null) {
+      // In production, execute against real database directly with critical alert logging on failure
+      if (isProduction) {
+        return new Proxy(targetModel, {
+          get(mTarget: any, mProp: string | symbol) {
+            const realMethod = mTarget[mProp];
+            if (typeof realMethod === 'function') {
+              return async (...args: any[]) => {
                 try {
                   return await realMethod.apply(mTarget, args);
                 } catch (err: any) {
-                  if (err.message && err.message.includes("Can't reach database server")) {
-                    isDbAvailable = false;
-                    logger.warn(`Postgres unreachable. Falling back to in-memory store for ${String(prop)}.${String(mProp)}`);
-                    return memMethod ? memMethod.apply(memoryModel, args) : null;
-                  }
+                  logger.error(
+                    `🚨 CRITICAL: Database query failed in production on ${String(prop)}.${String(mProp)}:`,
+                    err.message || err
+                  );
                   throw err;
                 }
-              } else if (isDbAvailable === false) {
-                return memMethod ? memMethod.apply(memoryModel, args) : null;
-              } else {
-                const available = await checkDbAvailability();
-                if (available) {
-                  return realMethod.apply(mTarget, args);
-                } else {
+              };
+            }
+            return realMethod;
+          },
+        });
+      }
+
+      // In non-production (local development / testing offline), support memory store fallback
+      if (memoryModel) {
+        return new Proxy(targetModel, {
+          get(mTarget: any, mProp: string | symbol) {
+            const realMethod = mTarget[mProp];
+            const memMethod = memoryModel[mProp];
+
+            if (typeof realMethod === 'function') {
+              return async (...args: any[]) => {
+                if (isDbAvailable === true) {
+                  try {
+                    return await realMethod.apply(mTarget, args);
+                  } catch (err: any) {
+                    if (err.message && (err.message.includes("Can't reach database server") || err.code === 'P1001')) {
+                      isDbAvailable = false;
+                      logger.warn(
+                        `⚠️ Postgres unreachable in development mode. Falling back to in-memory store for ${String(prop)}.${String(mProp)}`
+                      );
+                      return memMethod ? memMethod.apply(memoryModel, args) : null;
+                    }
+                    throw err;
+                  }
+                } else if (isDbAvailable === false) {
                   return memMethod ? memMethod.apply(memoryModel, args) : null;
+                } else {
+                  const available = await checkDbAvailability();
+                  if (available) {
+                    return realMethod.apply(mTarget, args);
+                  } else {
+                    logger.warn(
+                      `⚠️ Postgres unreachable on startup in development mode. Using in-memory store for ${String(prop)}.${String(mProp)}`
+                    );
+                    return memMethod ? memMethod.apply(memoryModel, args) : null;
+                  }
                 }
-              }
-            };
-          }
-          return realMethod;
-        },
-      });
+              };
+            }
+            return realMethod;
+          },
+        });
+      }
     }
 
     return targetModel;
   },
 }) as unknown as PrismaClient;
 
-export { Role, StudentStatus, Gender, ScholarshipCategory, AttendanceStatus, AttendanceMethod, FeeStatus, StaffStatus, PayrollStatus, TransactionType, EligibilityStatus, FinalStatus, InstitutionType, PartnerStatus };
+export { Role, StudentStatus, Gender, ScholarshipCategory, AttendanceStatus, AttendanceMethod, FeeStatus, StaffStatus, PayrollStatus, TransactionType, EligibilityStatus, FinalStatus, InstitutionType, PartnerStatus, GrievanceStatus };

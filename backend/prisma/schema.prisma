@@ -21,6 +21,7 @@ model User {
   email        String   @unique
   passwordHash String
   role         Role
+  status       String   @default("ACTIVE")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @default(now()) @updatedAt
 }
@@ -53,6 +54,12 @@ model Student {
   qrImageUrl         String?
   photoUrl           String?
   uploadedDocsJson   String?
+  assignedHallId     String?
+  assignedHall       String?
+  assignedRoom       String?
+  seatNo             String?
+  testScore          Int?
+  overallRank        Int?
   status             StudentStatus       @default(ACTIVE)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @default(now()) @updatedAt
@@ -301,4 +308,63 @@ model Transaction {
   relatedFeeId     String?
   relatedPayrollId String?
   createdAt        DateTime        @default(now())
+}
+
+model TestCenter {
+  id            String     @id @default(cuid())
+  name          String
+  code          String     @unique
+  campus        String?
+  address       String
+  district      String
+  province      String     @default("Khyber Pakhtunkhwa")
+  capacity      Int        @default(300)
+  reportingTime String     @default("09:00 AM")
+  testDate      String     @default("Sunday, 15 November 2026")
+  contactPerson String?
+  contactPhone  String?
+  status        String     @default("ACTIVE")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @default(now()) @updatedAt
+  examHalls     ExamHall[]
+}
+
+model ExamHall {
+  id               String      @id @default(cuid())
+  name             String
+  roomNumber       String
+  targetClass      String
+  wing             String?
+  capacity         Int         @default(60)
+  invigilatorName  String?
+  invigilatorPhone String?
+  reportingTime    String      @default("09:00 AM")
+  examDate         String      @default("Sunday, 15 November 2026")
+  testCenterId     String?
+  testCenter       TestCenter? @relation(fields: [testCenterId], references: [id], onDelete: SetNull)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @default(now()) @updatedAt
+}
+
+enum GrievanceStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
+}
+
+model GrievanceTicket {
+  id           String          @id @default(cuid())
+  ticketId     String          @unique
+  name         String
+  email        String?
+  phone        String
+  category     String
+  cnicOrRollNo String?
+  subject      String
+  message      String
+  status       GrievanceStatus @default(OPEN)
+  response     String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @default(now()) @updatedAt
 }

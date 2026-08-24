@@ -148,7 +148,74 @@ export const studentQuerySchema = z.object({
     .transform((val) => (val ? Math.max(1, Math.min(1000, parseInt(val, 10))) : 500)),
 });
 
+export const ALLOWED_FILE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'application/pdf',
+] as const;
+
+export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+
+export const uploadDocumentSchema = z
+  .object({
+    studentId: z.string().optional(),
+    applicationNo: z.string().optional(),
+    cnicOrBForm: z.string().optional(),
+    docType: z.string().min(1, 'Document type is required'),
+    fileName: z.string().optional(),
+    fileData: z.string().min(1, 'File data is required'),
+    contentType: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    let mimeType = data.contentType?.toLowerCase();
+    let byteLength = 0;
+
+    if (data.fileData.startsWith('data:')) {
+      const match = data.fileData.match(/^data:([^;]+);base64,(.*)$/s);
+      if (match) {
+        if (!mimeType) {
+          mimeType = match[1].toLowerCase();
+        }
+        const b64Data = match[2];
+        byteLength = Buffer.byteLength(b64Data, 'base64');
+      } else {
+        byteLength = Buffer.byteLength(data.fileData);
+      }
+    } else {
+      byteLength = Buffer.byteLength(data.fileData, 'base64');
+    }
+
+    if (mimeType === 'image/jpg') {
+      mimeType = 'image/jpeg';
+    }
+
+    if (!mimeType && data.fileName) {
+      const ext = data.fileName.split('.').pop()?.toLowerCase();
+      if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+      else if (ext === 'png') mimeType = 'image/png';
+      else if (ext === 'pdf') mimeType = 'application/pdf';
+    }
+
+    if (!mimeType || !ALLOWED_FILE_MIME_TYPES.includes(mimeType as any)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Invalid file type "${mimeType || 'unknown'}". Only JPEG, PNG, and PDF files are allowed.`,
+        path: ['fileData'],
+      });
+    }
+
+    if (byteLength > MAX_FILE_SIZE_BYTES) {
+      const sizeMb = (byteLength / (1024 * 1024)).toFixed(2);
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `File size (${sizeMb}MB) exceeds the maximum allowed limit of 5MB.`,
+        path: ['fileData'],
+      });
+    }
+  });
+
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;
 export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 export type StudentQueryInput = z.infer<typeof studentQuerySchema>;
 export type OfficeUseUpdateInput = z.infer<typeof officeUseUpdateSchema>;
+export type UploadDocumentInput = z.infer<typeof uploadDocumentSchema>;

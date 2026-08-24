@@ -1,5 +1,13 @@
 node_modules/
 dist/
+coverage/
+.DS_Store
 *.log
 .env*
 !.env.example
+
+# Local database & storage files
+dev-db/
+prisma/dev-db/
+*.db
+uploads/

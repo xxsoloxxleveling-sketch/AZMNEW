@@ -10,6 +10,9 @@ import {
   UpdateStudentInput,
   StudentQueryInput,
   OfficeUseUpdateInput,
+  UploadDocumentInput,
+  ALLOWED_FILE_MIME_TYPES,
+  MAX_FILE_SIZE_BYTES,
 } from './students.schema';
 import { AppError } from '../../middleware/error.middleware';
 
@@ -186,7 +189,68 @@ export class StudentsService {
       throw error;
     }
 
-    const { academicRecords, documents, photoUrl: inputPhotoUrl, ...baseData } = input;
+    const { academicRecords, documents, photoUrl: inputPhotoUrl, uploadedDocuments, ...baseData } = input;
+    const rawDob = baseData.dateOfBirth ? new Date(baseData.dateOfBirth) : new Date();
+
+    // Auto-discover pre-uploaded files in Supabase Storage under CNIC folder
+    const cnicFolder = input.cnicOrBForm.replace(/[^\w-]/g, '_');
+    const resolvedDocs: Record<string, any> = uploadedDocuments ? { ...uploadedDocuments } : {};
+    let photoUrl = inputPhotoUrl;
+
+    try {
+      // 1. Check student-photos under CNIC folder
+      const { data: photoFiles } = await (supabaseStorage as any).client?.storage?.from('student-photos')?.list(cnicFolder) || { data: [] };
+      if (photoFiles && photoFiles.length > 0) {
+        const latest = photoFiles[photoFiles.length - 1];
+        const storagePath = `${cnicFolder}/${latest.name}`;
+        const accessUrl = await supabaseStorage.getFileAccessUrl('student-photos', storagePath);
+        if (!photoUrl) {
+          photoUrl = accessUrl;
+        }
+        if (!resolvedDocs['photo']) {
+          resolvedDocs['photo'] = {
+            name: `${input.fullName}_Passport_Photo.jpg`,
+            size: 'Cloud Storage Attached',
+            publicUrl: accessUrl,
+            supabasePath: storagePath,
+            dataUrl: accessUrl,
+            uploadedAt: latest.created_at || new Date().toISOString(),
+          };
+        }
+      }
+
+      // 2. Check student-documents under CNIC folder
+      const { data: docFiles } = await (supabaseStorage as any).client?.storage?.from('student-documents')?.list(cnicFolder) || { data: [] };
+      if (docFiles && docFiles.length > 0) {
+        for (const file of docFiles) {
+          const docType = file.name.split('_')[0] || 'document';
+          const storagePath = `${cnicFolder}/${file.name}`;
+          const accessUrl = await supabaseStorage.getFileAccessUrl('student-documents', storagePath);
+          if (!resolvedDocs[docType]) {
+            resolvedDocs[docType] = {
+              name: `${input.fullName}_${file.name}`,
+              size: 'Cloud Storage Attached',
+              publicUrl: accessUrl,
+              supabasePath: storagePath,
+              dataUrl: accessUrl,
+              uploadedAt: file.created_at || new Date().toISOString(),
+            };
+          }
+        }
+      }
+    } catch (discoveryErr) {
+      logger.warn('Supabase storage pre-upload discovery note:', discoveryErr);
+    }
+
+    const checklistData = {
+      bformCnicCopy: Boolean(documents?.bformCnicCopy || resolvedDocs['bform'] || resolvedDocs['cnic']),
+      fatherCnicCopy: Boolean(documents?.fatherCnicCopy || resolvedDocs['fatherCnic']),
+      passportPhotos: Boolean(documents?.passportPhotos || resolvedDocs['photo'] || photoUrl),
+      previousResultCard: Boolean(documents?.previousResultCard || resolvedDocs['dmc']),
+      domicileCertificate: Boolean(documents?.domicileCertificate || resolvedDocs['domicile']),
+      incomeCertificate: Boolean(documents?.incomeCertificate || resolvedDocs['paymentReceipt'] || resolvedDocs['income']),
+      otherDocuments: documents?.otherDocuments || null,
+    };
 
     let student: any = null;
     let lastError: any = null;
@@ -197,13 +261,12 @@ export class StudentsService {
         const applicationNo = await this.generateApplicationNumber();
         const qrToken = `PENDING-FEE-${applicationNo}`;
 
-        // Persist Photo if provided
-        let photoUrl = inputPhotoUrl;
-        if (inputPhotoUrl && inputPhotoUrl.startsWith('data:')) {
+        // Persist inline base64 photo if provided
+        if (photoUrl && photoUrl.startsWith('data:')) {
           const uploadRes = await supabaseStorage.uploadFile(
             'student-photos',
             `${applicationNo}-photo.png`,
-            inputPhotoUrl,
+            photoUrl,
             'image/png'
           );
           if (!uploadRes.error) {
@@ -215,8 +278,9 @@ export class StudentsService {
         student = await prisma.student.create({
           data: {
             ...baseData,
+            dateOfBirth: rawDob,
             photoUrl,
-            uploadedDocsJson: input.uploadedDocuments ? JSON.stringify(input.uploadedDocuments) : null,
+            uploadedDocsJson: Object.keys(resolvedDocs).length > 0 ? JSON.stringify(resolvedDocs) : null,
             applicationNo,
             rollNumber: null, // Defer roll number until fee is approved
             qrToken,
@@ -228,13 +292,9 @@ export class StudentsService {
                   },
                 }
               : {}),
-            ...(documents
-              ? {
-                  documents: {
-                    create: documents,
-                  },
-                }
-              : {}),
+            documents: {
+              create: checklistData,
+            },
             officeUse: {
               create: {
                 eligibility: 'ELIGIBLE',
@@ -535,8 +595,54 @@ export class StudentsService {
     fileData: string;
     contentType?: string;
   }) {
+    // Validate MIME type and file size
+    let mimeType = input.contentType?.toLowerCase();
+    let byteLength = 0;
+
+    if (input.fileData.startsWith('data:')) {
+      const match = input.fileData.match(/^data:([^;]+);base64,(.*)$/s);
+      if (match) {
+        if (!mimeType) {
+          mimeType = match[1].toLowerCase();
+        }
+        byteLength = Buffer.byteLength(match[2], 'base64');
+      } else {
+        byteLength = Buffer.byteLength(input.fileData);
+      }
+    } else {
+      byteLength = Buffer.byteLength(input.fileData, 'base64');
+    }
+
+    if (mimeType === 'image/jpg') {
+      mimeType = 'image/jpeg';
+    }
+
+    if (!mimeType && input.fileName) {
+      const ext = input.fileName.split('.').pop()?.toLowerCase();
+      if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+      else if (ext === 'png') mimeType = 'image/png';
+      else if (ext === 'pdf') mimeType = 'application/pdf';
+    }
+
+    if (!mimeType || !ALLOWED_FILE_MIME_TYPES.includes(mimeType as any)) {
+      const error: AppError = new Error(
+        `Invalid file type "${mimeType || 'unknown'}". Only JPEG, PNG, and PDF files are allowed.`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (byteLength > MAX_FILE_SIZE_BYTES) {
+      const sizeMb = (byteLength / (1024 * 1024)).toFixed(2);
+      const error: AppError = new Error(
+        `File size (${sizeMb}MB) exceeds the maximum allowed limit of 5MB.`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
     const rawApp = (input.applicationNo || input.cnicOrBForm || input.studentId || 'DOC').replace(/[^\w-]/g, '_');
-    const ext = input.fileName?.split('.').pop() || (input.fileData.includes('application/pdf') ? 'pdf' : 'jpg');
+    const ext = input.fileName?.split('.').pop() || (mimeType === 'application/pdf' ? 'pdf' : mimeType === 'image/png' ? 'png' : 'jpg');
     const bucket: StorageBucket = input.docType === 'photo' ? 'student-photos' : 'student-documents';
     const pathName = `${rawApp}/${input.docType}_${Date.now()}.${ext}`;
 
@@ -567,10 +673,7 @@ export class StudentsService {
       input.contentType || (ext === 'pdf' ? 'application/pdf' : 'image/jpeg')
     );
 
-    const publicUrl =
-      supabaseStorage.getPublicUrl(bucket, pathName) ||
-      (await supabaseStorage.getSignedUrl(bucket, pathName, 60 * 60 * 24 * 365)) ||
-      `https://amteshciynijqkxapjwd.supabase.co/storage/v1/object/public/${bucket}/${pathName}`;
+    const publicUrl = await supabaseStorage.getFileAccessUrl(bucket, pathName, 60 * 60 * 24 * 30);
 
     // 3. Find student in PostgreSQL
     const student = await prisma.student.findFirst({
@@ -670,7 +773,54 @@ export class StudentsService {
       }
     }
 
-    // 3. Fallback placeholder SVG
+    // 3. Check Supabase Cloud Storage
+    if (student) {
+      if (student.uploadedDocsJson) {
+        try {
+          const docs = JSON.parse(student.uploadedDocsJson);
+          const doc = docs[docType] || docs[`${docType}Uploaded`];
+          if (doc?.supabasePath) {
+            const bucket: StorageBucket = docType === 'photo' ? 'student-photos' : 'student-documents';
+            const buf = await supabaseStorage.downloadFile(bucket, doc.supabasePath);
+            if (buf) {
+              const mime = doc.supabasePath.endsWith('.pdf')
+                ? 'application/pdf'
+                : doc.supabasePath.endsWith('.png')
+                ? 'image/png'
+                : 'image/jpeg';
+              return { buffer: buf, contentType: mime };
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Check storage directly under candidate applicationNo or CNIC
+      const bucket: StorageBucket = docType === 'photo' ? 'student-photos' : 'student-documents';
+      for (const prefix of [student.applicationNo, student.cnicOrBForm].filter(Boolean) as string[]) {
+        const cleanPrefix = prefix.replace(/[^\w-]/g, '_');
+        try {
+          const { data: files } = await (supabaseStorage as any).client?.storage?.from(bucket)?.list(cleanPrefix) || { data: [] };
+          const match = (files || []).find((f: any) => f.name.startsWith(`${docType}_`) || f.name.startsWith(docType));
+          if (match) {
+            const storagePath = `${cleanPrefix}/${match.name}`;
+            const buf = await supabaseStorage.downloadFile(bucket, storagePath);
+            if (buf) {
+              const mime = match.name.endsWith('.pdf')
+                ? 'application/pdf'
+                : match.name.endsWith('.png')
+                ? 'image/png'
+                : 'image/jpeg';
+              return { buffer: buf, contentType: mime };
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // 4. Fallback placeholder SVG (genuine last resort)
+    logger.warn(
+      `Document "${docType}" not found on disk or Supabase Storage for student "${studentIdentifier}". Returning fallback placeholder.`
+    );
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
       <rect width="400" height="400" fill="#f8fafc"/>
       <circle cx="200" cy="160" r="70" fill="#cbd5e1"/>
@@ -700,11 +850,12 @@ export class StudentsService {
     await prisma.transaction.deleteMany();
     await prisma.staff.deleteMany();
 
-    // 4. Empty Supabase Storage buckets
+    // 4. Empty Supabase Storage buckets (including sensitive student documents)
     await Promise.all([
       supabaseStorage.emptyBucket('student-photos'),
       supabaseStorage.emptyBucket('qr-codes'),
       supabaseStorage.emptyBucket('registration-pdfs'),
+      supabaseStorage.emptyBucket('student-documents'),
     ]);
 
     return {

@@ -12,6 +12,11 @@ import staffRoutes from './modules/staff/staff.routes';
 import payrollRoutes from './modules/payroll/payroll.routes';
 import transactionsRoutes from './modules/transactions/transactions.routes';
 import dashboardRoutes from './modules/dashboard/dashboard.routes';
+import usersRoutes from './modules/users/users.routes';
+import testCentersRoutes from './modules/test-centers/testCenters.routes';
+import examHallsRoutes from './modules/exam-halls/examHalls.routes';
+import grievancesRoutes from './modules/grievances/grievances.routes';
+import resultsRoutes from './modules/results/results.routes';
 
 const app: Express = express();
 
@@ -30,10 +35,11 @@ app.use(
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void
     ) => {
-      if (!origin || allowedOrigins.includes(origin) || env.NODE_ENV === 'development') {
+      // In development or test, allow local tooling; in production, enforce strict whitelist
+      if (!origin || allowedOrigins.includes(origin) || env.NODE_ENV !== 'production') {
         callback(null, true);
       } else {
-        callback(null, true); // Permissive for initial cloud verification
+        callback(new Error(`CORS policy violation: Origin "${origin}" is not permitted.`));
       }
     },
     credentials: true,
@@ -81,6 +87,11 @@ app.use('/api/staff', staffRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/test-centers', testCentersRoutes);
+app.use('/api/exam-halls', examHallsRoutes);
+app.use('/api/grievances', grievancesRoutes);
+app.use('/api/results', resultsRoutes);
 
 // Fallback 404 for unknown routes
 app.use((req: Request, res: Response, _next: NextFunction) => {

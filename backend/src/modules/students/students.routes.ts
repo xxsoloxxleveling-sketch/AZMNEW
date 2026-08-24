@@ -6,9 +6,11 @@ import {
   updateStudentSchema,
   officeUseUpdateSchema,
   studentQuerySchema,
+  uploadDocumentSchema,
 } from './students.schema';
 import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
+import { registrationRateLimiter } from '../../middleware/rateLimit.middleware';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -16,6 +18,7 @@ const router = Router();
 // Public self-registration endpoint (Candidate online registration)
 router.post(
   '/register',
+  registrationRateLimiter,
   validateBody(createStudentSchema),
   studentsController.register
 );
@@ -27,7 +30,11 @@ router.get('/:id/registration-pdf', studentsController.getRegistrationPdf);
 router.get('/:id/qr', studentsController.getQr);
 
 // Live Supabase Cloud Storage Upload for Candidate Documents
-router.post('/upload-document', studentsController.uploadDocument);
+router.post(
+  '/upload-document',
+  validateBody(uploadDocumentSchema),
+  studentsController.uploadDocument
+);
 
 // Stream / Serve Student Attached Documents & Photos Directly
 router.get(

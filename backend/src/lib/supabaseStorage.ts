@@ -27,6 +27,7 @@ class SupabaseStorageService {
 
   /**
    * Ensures that a storage bucket exists and is ready for uploads.
+   * Student photos, documents, and registration PDFs default to private for minor candidate privacy.
    */
   async ensureBucketExists(bucket: StorageBucket): Promise<void> {
     if (!this.client) return;
@@ -34,9 +35,12 @@ class SupabaseStorageService {
       const { data: buckets } = await this.client.storage.listBuckets();
       const found = (buckets || []).some((b) => b.name === bucket);
       if (!found) {
-        await this.client.storage.createBucket(bucket, { public: true });
+        const isPublic = bucket === 'qr-codes';
+        await this.client.storage.createBucket(bucket, { public: isPublic });
       }
-    } catch {}
+    } catch (err: any) {
+      logger.warn(`Notice on bucket initialization (${bucket}):`, err.message);
+    }
   }
 
   /**
@@ -53,7 +57,48 @@ class SupabaseStorageService {
   }
 
   /**
-   * Uploads a file buffer or base64 data to a specified private bucket.
+   * Generates a temporary signed URL for a private file that expires after expiresInSeconds.
+   * Default expiry is 7 days (604,800 seconds).
+   */
+  async getSignedUrl(
+    bucket: StorageBucket,
+    path: string,
+    expiresInSeconds: number = 604800
+  ): Promise<string | null> {
+    if (!this.client) {
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.client.storage
+        .from(bucket)
+        .createSignedUrl(path, expiresInSeconds);
+
+      if (error || !data?.signedUrl) {
+        return null;
+      }
+
+      return data.signedUrl;
+    } catch (err: any) {
+      return null;
+    }
+  }
+
+  /**
+   * Returns a secure access URL for a file (signed URL for private buckets, or public URL fallback).
+   */
+  async getFileAccessUrl(bucket: StorageBucket, path: string, expiresInSeconds: number = 604800): Promise<string> {
+    const signed = await this.getSignedUrl(bucket, path, expiresInSeconds);
+    if (signed) return signed;
+
+    const pub = this.getPublicUrl(bucket, path);
+    if (pub) return pub;
+
+    return `https://amteshciynijqkxapjwd.supabase.co/storage/v1/object/public/${bucket}/${path}`;
+  }
+
+  /**
+   * Uploads a file buffer or base64 data to a specified bucket.
    */
   async uploadFile(
     bucket: StorageBucket,
@@ -98,34 +143,7 @@ class SupabaseStorageService {
   }
 
   /**
-   * Generates a temporary signed URL for a private file that expires after expiresInSeconds.
-   */
-  async getSignedUrl(
-    bucket: StorageBucket,
-    path: string,
-    expiresInSeconds: number = 3600
-  ): Promise<string | null> {
-    if (!this.client) {
-      return null;
-    }
-
-    try {
-      const { data, error } = await this.client.storage
-        .from(bucket)
-        .createSignedUrl(path, expiresInSeconds);
-
-      if (error || !data?.signedUrl) {
-        return null;
-      }
-
-      return data.signedUrl;
-    } catch (err: any) {
-      return null;
-    }
-  }
-
-  /**
-   * Downloads a file buffer from a private bucket.
+   * Downloads a file buffer from a private or public bucket.
    */
   async downloadFile(
     bucket: StorageBucket,
@@ -149,7 +167,7 @@ class SupabaseStorageService {
   }
 
   /**
-   * Deletes a file from a specified bucket.
+   * Deletes specified files from a bucket.
    */
   async deleteFile(bucket: StorageBucket, paths: string[]): Promise<boolean> {
     if (!this.client) return true;
@@ -163,19 +181,40 @@ class SupabaseStorageService {
   }
 
   /**
-   * Empties all files in a specified bucket.
+   * Empties all files and subdirectories recursively in a specified bucket.
    */
   async emptyBucket(bucket: StorageBucket): Promise<boolean> {
     if (!this.client) return true;
+
     try {
-      const { data: files, error: listError } = await this.client.storage.from(bucket).list('', { limit: 1000 });
-      if (listError || !files || files.length === 0) return true;
-      const paths = files.map((f) => f.name).filter(Boolean);
-      if (paths.length > 0) {
-        await this.client.storage.from(bucket).remove(paths);
-      }
+      const deleteFolderRecursively = async (folderPath: string = ''): Promise<void> => {
+        const { data: items, error: listError } = await this.client!.storage
+          .from(bucket)
+          .list(folderPath, { limit: 1000 });
+
+        if (listError || !items || items.length === 0) return;
+
+        const filePathsToDelete: string[] = [];
+
+        for (const item of items) {
+          const itemPath = folderPath ? `${folderPath}/${item.name}` : item.name;
+          if (item.id === null) {
+            // It's a directory / folder, traverse into it
+            await deleteFolderRecursively(itemPath);
+          } else {
+            filePathsToDelete.push(itemPath);
+          }
+        }
+
+        if (filePathsToDelete.length > 0) {
+          await this.client!.storage.from(bucket).remove(filePathsToDelete);
+        }
+      };
+
+      await deleteFolderRecursively('');
       return true;
-    } catch {
+    } catch (err: any) {
+      logger.warn(`Failed to empty storage bucket "${bucket}":`, err.message);
       return false;
     }
   }
