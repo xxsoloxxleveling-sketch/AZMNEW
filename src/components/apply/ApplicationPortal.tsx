@@ -27,8 +27,21 @@ import {
   Plus,
   Camera,
   Loader2,
+  Clock,
+  CreditCard,
+  QrCode,
+  Copy,
+  Check,
+  ExternalLink,
+  FileText,
+  Smartphone,
+  Receipt,
+  MessageCircle,
+  HelpCircle,
+  X,
   Image as ImageIcon
 } from 'lucide-react';
+
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ApplicationPortalProps {
@@ -49,6 +62,22 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const [createdStudent, setCreatedStudent] = useState<any>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [photoError, setPhotoError] = useState<string>('');
+  
+  // Payment Method & Challan Modal State
+  const [paymentTab, setPaymentTab] = useState<'easypaisa' | 'bank' | 'hub'>('easypaisa');
+  const [copiedField, setCopiedField] = useState<string>('');
+  const [showFullChallan, setShowFullChallan] = useState<boolean>(false);
+
+  const copyToClipboard = (text: string, fieldName: string) => {
+    try {
+      navigator.clipboard.writeText(text);
+      setCopiedField(fieldName);
+      setTimeout(() => setCopiedField(''), 2500);
+    } catch (e) {
+      console.warn('Clipboard write failed');
+    }
+  };
+
 
   const [isPartnerSubmitting, setIsPartnerSubmitting] = useState<boolean>(false);
   const [createdPartner, setCreatedPartner] = useState<any>(null);
@@ -1459,112 +1488,451 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         </div>
       )}
 
-      {/* ================= SUCCESS CONFIRMATION RECEIPT MODAL ================= */}
+      {/* ================= SUCCESS CONFIRMATION & FEE PAYMENT HUB ================= */}
       {isSubmitted && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-2xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-2xl p-8 text-center space-y-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-3xl mx-auto space-y-6"
         >
-          <div className="w-16 h-16 rounded-3xl bg-emerald-100 border border-emerald-300 text-emerald-600 flex items-center justify-center mx-auto">
-            <CheckCircle2 className="w-10 h-10" />
-          </div>
+          {/* Main Success & Status Banner */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 sm:p-8 text-center space-y-5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 left-0 h-2 bg-gradient-to-r from-amber-400 via-emerald-500 to-[#185b9d]" />
+            
+            <div className="w-16 h-16 rounded-3xl bg-emerald-100 border border-emerald-300 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+              <CheckCircle2 className="w-10 h-10" />
+            </div>
 
-          <div className="space-y-2">
-            <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full uppercase">
-              Registration Recorded • Fee Pending Approval
-            </span>
-            <h2 className="text-2xl font-bold font-display text-slate-900">
-              Welcome to Session V (2026) Candidate Register!
-            </h2>
-            <p className="text-xs text-slate-600 max-w-md mx-auto">
-              Your application has been registered into the central ledger. Your official Roll Number and Examination Slip will be issued once your <strong>PKR 300 registration fee</strong> is verified and approved by our administration / accountant.
-            </p>
-          </div>
+            <div className="space-y-2">
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-full uppercase tracking-wider">
+                <Clock className="w-3.5 h-3.5 text-amber-700 animate-spin" style={{ animationDuration: '6s' }} />
+                Registration Logged • Fee Pending Verification
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-bold font-display text-slate-900">
+                Application Successfully Registered!
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 max-w-xl mx-auto leading-relaxed">
+                Thank you, <strong>{formData.fullName}</strong>. Your candidate registration for <strong>AZM.AIO Session V (2026)</strong> has been logged into the central database.
+              </p>
+            </div>
 
-          {/* Application Details Card */}
-          <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 max-w-md mx-auto space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-left">
-              <div className="p-3 bg-white rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Application Number</span>
-                <span className="text-sm font-extrabold font-mono text-[#185b9d] block mt-0.5">
+            {/* Candidate Metadata Summary Card */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Application ID</span>
+                <span className="text-xs sm:text-sm font-extrabold font-mono text-[#185b9d] block truncate">
                   {submittedAppId}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(submittedAppId, 'appId')}
+                  className="text-[10px] text-[#185b9d] hover:underline font-bold flex items-center gap-1"
+                >
+                  {copiedField === 'appId' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedField === 'appId' ? 'Copied!' : 'Copy ID'}</span>
+                </button>
               </div>
-              <div className="p-3 bg-white rounded-xl border border-slate-200">
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Challan Fee</span>
-                <span className="text-sm font-extrabold font-mono text-emerald-700 block mt-0.5">
+                <span className="text-xs sm:text-sm font-extrabold font-mono text-emerald-700 block">
                   PKR 300 (Fixed)
                 </span>
+                <span className="text-[10px] text-slate-500 font-medium block">Nominal test fee</span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Class / Grade</span>
+                <span className="text-xs sm:text-sm font-bold text-slate-900 block truncate">
+                  {formData.currentClass}
+                </span>
+                <span className="text-[10px] text-slate-500 block truncate">{formData.discipline || 'General'}</span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Exam Roll No</span>
+                <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md inline-block">
+                  Awaiting Fee
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium block">Unlocks on approval</span>
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              <span className="text-left font-medium">
-                Roll Number & Biometric QR will be unlocked upon fee verification approval.
+            {/* Explanatory Notice */}
+            <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-950 text-xs flex items-start gap-3 text-left">
+              <ShieldCheck className="w-5 h-5 text-[#185b9d] flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <strong className="block text-slate-900 font-bold">
+                  Next Step: Complete PKR 300 Fee Payment to Unlock Roll Number Slip
+                </strong>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  To prevent ghost registrations, your standardized <strong>Roll Number Slip with Biometric Exam QR Code</strong> will be activated once your PKR 300 fee is approved. Choose your preferred payment option below:
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Methods Tabs Box */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 sm:p-8 space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+              <div>
+                <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest block">
+                  Select Payment Method
+                </span>
+                <h3 className="text-lg font-bold font-display text-slate-900">
+                  How Would You Like to Pay PKR 300?
+                </h3>
+              </div>
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold font-mono rounded-full">
+                Amount: PKR 300
               </span>
             </div>
 
-            {createdStudent?.rollNumber && (
-              <div className="p-3 bg-white rounded-xl border border-slate-200 inline-block text-center">
-                {createdStudent.qrImageUrl && (
-                  <img
-                    src={createdStudent.qrImageUrl}
-                    alt="Biometric Examination QR"
-                    className="w-32 h-32 mx-auto rounded-lg"
-                  />
-                )}
-                <span className="text-xs font-bold font-mono text-[#185b9d] block mt-1">
-                  Roll No: {createdStudent.rollNumber}
-                </span>
+            {/* Payment Method Selector Buttons */}
+            <div className="grid grid-cols-3 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPaymentTab('easypaisa')}
+                className={`p-3.5 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                  paymentTab === 'easypaisa'
+                    ? 'bg-[#185b9d] text-white border-[#185b9d] shadow-md ring-2 ring-[#185b9d]/30'
+                    : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                }`}
+              >
+                <Smartphone className="w-5 h-5" />
+                <span className="text-xs font-bold">JazzCash / EasyPaisa</span>
+                <span className={`text-[10px] ${paymentTab === 'easypaisa' ? 'text-sky-200' : 'text-slate-500'}`}>Instant Transfer</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentTab('bank')}
+                className={`p-3.5 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                  paymentTab === 'bank'
+                    ? 'bg-[#185b9d] text-white border-[#185b9d] shadow-md ring-2 ring-[#185b9d]/30'
+                    : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                }`}
+              >
+                <CreditCard className="w-5 h-5" />
+                <span className="text-xs font-bold">Bank Transfer / IBFT</span>
+                <span className={`text-[10px] ${paymentTab === 'bank' ? 'text-sky-200' : 'text-slate-500'}`}>Online / Branch</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentTab('hub')}
+                className={`p-3.5 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                  paymentTab === 'hub'
+                    ? 'bg-[#185b9d] text-white border-[#185b9d] shadow-md ring-2 ring-[#185b9d]/30'
+                    : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                }`}
+              >
+                <Building2 className="w-5 h-5" />
+                <span className="text-xs font-bold">In-Person at Hub</span>
+                <span className={`text-[10px] ${paymentTab === 'hub' ? 'text-sky-200' : 'text-slate-500'}`}>Mansehra Centres</span>
+              </button>
+            </div>
+
+            {/* TAB 1: JazzCash / EasyPaisa Details */}
+            {paymentTab === 'easypaisa' && (
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/70 to-slate-50 border border-emerald-200/80 space-y-4 text-xs">
+                <div className="flex items-center justify-between border-b border-emerald-200 pb-3">
+                  <div>
+                    <span className="font-bold text-slate-900 block text-sm">JazzCash / EasyPaisa Direct Transfer</span>
+                    <span className="text-slate-500 text-[11px]">Send PKR 300 from any mobile wallet in Pakistan</span>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md bg-emerald-600 text-white font-bold text-[10px]">
+                    Recommended
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Number / Mobile</span>
+                      <span className="text-sm font-extrabold font-mono text-slate-900">0305-1755551</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard('03051755551', 'mobileNo')}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-bold text-[11px] flex items-center gap-1"
+                    >
+                      {copiedField === 'mobileNo' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedField === 'mobileNo' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Title</span>
+                    <span className="text-sm font-extrabold text-slate-900">AZM.AIO (Pvt.) Ltd.</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 space-y-1">
+                  <strong>Important: Payment Reference / Note</strong>
+                  <p className="text-[11px] text-amber-800">
+                    When making the transfer, enter your Application ID (<strong>{submittedAppId}</strong>) in the remarks/purpose field.
+                  </p>
+                </div>
+
+                {/* Instant WhatsApp Proof Button */}
+                <a
+                  href={`https://wa.me/923051755551?text=${encodeURIComponent(
+                    `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026) Scholarship Exam.\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Fee Amount: PKR 300\n\nPlease find attached my payment receipt/screenshot for quick verification and Roll Number activation.`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Send Fee Screenshot on WhatsApp (+92 305 1755551)</span>
+                </a>
               </div>
             )}
 
-            <div className="text-xs text-slate-600 font-medium text-left">
-              Candidate: <strong>{formData.fullName}</strong> | Class: <strong>{formData.currentClass}</strong>
+            {/* TAB 2: Bank Transfer / IBFT Details */}
+            {paymentTab === 'bank' && (
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/70 to-slate-50 border border-blue-200/80 space-y-4 text-xs">
+                <div className="flex items-center justify-between border-b border-blue-200 pb-3">
+                  <div>
+                    <span className="font-bold text-slate-900 block text-sm">Direct Bank Transfer / Online IBFT</span>
+                    <span className="text-slate-500 text-[11px]">Pay via banking app or visit any bank branch</span>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md bg-blue-700 text-white font-bold text-[10px]">
+                    Bank / ATM
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Title</span>
+                    <span className="text-xs font-bold text-slate-900">AZM.AIO (Pvt.) Ltd.</span>
+                    <span className="text-[10px] text-slate-500 block">SECP CUIN: {OFFICIAL_DATA.cuin}</span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Number</span>
+                      <span className="text-xs font-extrabold font-mono text-slate-900">0321467001</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard('0321467001', 'bankAcc')}
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-bold text-[11px] flex items-center gap-1"
+                    >
+                      {copiedField === 'bankAcc' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedField === 'bankAcc' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Bank Name</span>
+                    <span className="text-xs font-bold text-slate-900">Bank of Khyber / Meezan Bank</span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Branch</span>
+                    <span className="text-xs font-bold text-slate-900">Main City Branch, Mansehra</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowFullChallan(true)}
+                    className="px-4 py-2.5 bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5"
+                  >
+                    <Receipt className="w-4 h-4" />
+                    <span>View Official 3-Part Bank Challan</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-xl flex items-center gap-1.5"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Print Deposit Slip</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: Walk-In Cash at Hubs */}
+            {paymentTab === 'hub' && (
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-50/70 to-slate-50 border border-purple-200/80 space-y-4 text-xs">
+                <div className="flex items-center justify-between border-b border-purple-200 pb-3">
+                  <div>
+                    <span className="font-bold text-slate-900 block text-sm">Pay Cash at In-Person Facilitation Hubs</span>
+                    <span className="text-slate-500 text-[11px]">Submit PKR 300 fee directly at any of our 3 Mansehra desks</span>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md bg-purple-700 text-white font-bold text-[10px]">
+                    Cash Counter
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <strong className="text-slate-900 block font-bold">1. Jadoon Public High School & College (Head Office)</strong>
+                      <span className="text-slate-500 text-[11px]">Karakoram Highway, Gandhian, Mansehra • Mon-Sat (8:30 AM - 4:30 PM)</span>
+                    </div>
+                    <span className="font-mono text-xs font-bold text-[#185b9d]">0305-1755551</span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <strong className="text-slate-900 block font-bold">2. Dubai International Public School & College (DIPS)</strong>
+                      <span className="text-slate-500 text-[11px]">Kashmir Road, Near Shinkiari Chowk • Pervez (Principal)</span>
+                    </div>
+                    <span className="font-mono text-xs font-bold text-emerald-700">+92 300 5643177</span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <strong className="text-slate-900 block font-bold">3. Khyber Public School & College</strong>
+                      <span className="text-slate-500 text-[11px]">Abbottabad Road, College Chowk • Asfandyar (Vice Principal)</span>
+                    </div>
+                    <span className="font-mono text-xs font-bold text-emerald-700">+92 331 5014441</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Bottom Actions Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-200">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadStudentPdf}
+                  disabled={isDownloadingPdf}
+                  className="px-5 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497e] disabled:opacity-50 text-white font-bold text-xs shadow-md flex items-center gap-2 transition"
+                >
+                  {isDownloadingPdf ? (
+                    <>
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                      <span>Generating Application PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Download Registration Slip (PDF)</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowFullChallan(true)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center gap-1.5"
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>3-Part Bank Challan</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectTab('rollnumber');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 flex items-center gap-1.5"
+                >
+                  <span>Check Roll No Desk</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSubmitted(false);
+                    setCreatedStudent(null);
+                    setCurrentStage(1);
+                  }}
+                  className="px-3 py-2 text-xs text-slate-500 hover:text-slate-800"
+                >
+                  Submit Another
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-slate-100">
-            <button
-              onClick={handleDownloadStudentPdf}
-              disabled={isDownloadingPdf}
-              className="px-6 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497e] disabled:opacity-50 text-white font-bold text-xs shadow-md flex items-center gap-2 transition"
-            >
-              {isDownloadingPdf ? (
-                <>
-                  <Loader2 className="w-4 h-4 text-white animate-spin" />
-                  <span>Downloading Application Slip...</span>
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  <span>Download Registration Summary (PDF)</span>
-                </>
-              )}
-            </button>
+          {/* 3-PART BANK CHALLAN POPUP MODAL */}
+          {showFullChallan && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-200 my-8">
+                <div className="flex items-center justify-between border-b pb-4">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-[#185b9d]" />
+                    <h3 className="text-lg font-bold font-display text-slate-900">
+                      Official 3-Part Bank Deposit Challan (Session V)
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowFullChallan(false)}
+                    className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
-            <button
-              onClick={() => window.print()}
-              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center gap-2"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print Challan Receipt</span>
-            </button>
+                {/* 3 Columns Challan Slip */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+                  {['Bank Copy', 'AZM Board Copy', 'Candidate Copy'].map((copyTitle, cIdx) => (
+                    <div key={cIdx} className="p-4 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 space-y-3">
+                      <div className="text-center border-b border-slate-300 pb-2">
+                        <span className="font-bold text-slate-900 block font-display text-xs uppercase">AZM.AIO (Pvt.) Ltd.</span>
+                        <span className="text-[10px] text-slate-500 block">SECP CUIN: {OFFICIAL_DATA.cuin}</span>
+                        <span className="px-2 py-0.5 bg-blue-100 text-[#185b9d] text-[10px] font-bold rounded-md inline-block mt-1">
+                          {copyTitle}
+                        </span>
+                      </div>
 
-            <button
-              onClick={() => {
-                setIsSubmitted(false);
-                setCreatedStudent(null);
-              }}
-              className="px-4 py-2.5 text-xs text-slate-500 hover:text-slate-900"
-            >
-              Submit Another Application
-            </button>
-          </div>
+                      <div className="space-y-1.5 text-[11px]">
+                        <div><span className="text-slate-500">Challan No:</span> <strong className="text-slate-900">{submittedAppId}</strong></div>
+                        <div><span className="text-slate-500">Candidate:</span> <strong className="text-slate-900">{formData.fullName || 'Candidate'}</strong></div>
+                        <div><span className="text-slate-500">Father Name:</span> <span className="text-slate-800">{formData.fatherName}</span></div>
+                        <div><span className="text-slate-500">Class:</span> <span className="text-slate-800">{formData.currentClass}</span></div>
+                        <div><span className="text-slate-500">CNIC / B-Form:</span> <span className="text-slate-800">{formData.cnicBForm}</span></div>
+                        <div><span className="text-slate-500">Account No:</span> <strong className="text-slate-900">0321467001</strong></div>
+                        <div className="pt-2 border-t border-slate-200">
+                          <span className="text-slate-500">Amount (Fee):</span> <strong className="text-emerald-700 text-xs">PKR 300/-</strong>
+                        </div>
+                      </div>
+
+                      <div className="pt-6 border-t border-slate-300 flex justify-between text-[9px] text-slate-400">
+                        <span>Bank Officer Stamp</span>
+                        <span>Candidate Sign</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-5 py-2.5 bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Print 3-Part Challan</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowFullChallan(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </motion.div>
       )}
+
 
       {/* ================= PARTNER INSTITUTION ENROLMENT ================= */}
       {activePortalTab === 'partner' && !isPartnerSubmitted && (
