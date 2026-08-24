@@ -38,10 +38,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    mockApi.getDashboardOverview().then((res) => {
-      setData(res);
-      setIsLoading(false);
-    });
+    let isMounted = true;
+    mockApi.getDashboardOverview()
+      .then((res) => {
+        if (isMounted && res) {
+          setData(res);
+        }
+      })
+      .catch((err) => {
+        console.warn('Dashboard fetch warning:', err);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   if (isLoading || !data) {
@@ -267,15 +282,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center justify-between text-xs font-medium text-slate-600">
               <span>Gender Distribution</span>
               <span className="font-bold text-slate-800">
-                Male: {demographics.byGender.MALE || 0} | Female: {demographics.byGender.FEMALE || 0}
+                Male: {demographics?.byGender?.MALE || 0} | Female: {demographics?.byGender?.FEMALE || 0}
               </span>
             </div>
             <div className="h-3 rounded-full bg-slate-100 flex overflow-hidden">
               <div
                 style={{
                   width: `${
-                    ((demographics.byGender.MALE || 1) /
-                      ((demographics.byGender.MALE || 1) + (demographics.byGender.FEMALE || 1))) *
+                    ((demographics?.byGender?.MALE || 0) /
+                      Math.max((demographics?.byGender?.MALE || 0) + (demographics?.byGender?.FEMALE || 0), 1)) *
                     100
                   }%`,
                 }}
@@ -284,8 +299,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div
                 style={{
                   width: `${
-                    ((demographics.byGender.FEMALE || 1) /
-                      ((demographics.byGender.MALE || 1) + (demographics.byGender.FEMALE || 1))) *
+                    ((demographics?.byGender?.FEMALE || 0) /
+                      Math.max((demographics?.byGender?.MALE || 0) + (demographics?.byGender?.FEMALE || 0), 1)) *
                     100
                   }%`,
                 }}
@@ -298,7 +313,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="space-y-2 pt-2">
             <span className="text-xs font-semibold text-slate-500 block">Enrollment by Class Level</span>
             <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-              {Object.entries(demographics.byClassLevel).map(([className, count]: any, idx) => (
+              {Object.entries(demographics?.byClassLevel || {}).map(([className, count]: any, idx) => (
                 <div
                   key={idx}
                   className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs"
