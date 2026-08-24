@@ -482,8 +482,50 @@ export function isRollNumberReleased(): boolean {
   return now >= targetDate;
 }
 
+const PAID_STUDENTS_KEY = 'AZM_PAID_STUDENT_IDS_V';
+
+export function markStudentFeePaid(keys: (string | undefined | null)[]): void {
+  try {
+    const raw = localStorage.getItem(PAID_STUDENTS_KEY);
+    const paidSet = new Set<string>(raw ? JSON.parse(raw) : []);
+    keys.filter(Boolean).forEach((k) => {
+      const clean = String(k).toLowerCase().trim();
+      const digits = String(k).replace(/\D/g, '');
+      paidSet.add(clean);
+      if (digits.length >= 5) paidSet.add(digits);
+    });
+    localStorage.setItem(PAID_STUDENTS_KEY, JSON.stringify(Array.from(paidSet)));
+  } catch (e) {}
+}
+
+export function isStudentFeePaid(student: {
+  id?: string;
+  applicationNo?: string;
+  cnicOrBForm?: string;
+  rollNumber?: string | null;
+  feeStatus?: string;
+}): boolean {
+  if (student.feeStatus === 'PAID') return true;
+  try {
+    const raw = localStorage.getItem(PAID_STUDENTS_KEY);
+    if (!raw) return false;
+    const paidList: string[] = JSON.parse(raw);
+    const cleanId = student.id?.toLowerCase().trim();
+    const cleanApp = student.applicationNo?.toLowerCase().trim();
+    const cleanRoll = student.rollNumber?.toLowerCase().trim();
+    const cleanDigits = student.cnicOrBForm ? student.cnicOrBForm.replace(/\D/g, '') : '';
+    return paidList.some(
+      (p) => p === cleanId || p === cleanApp || p === cleanRoll || (cleanDigits.length >= 5 && p === cleanDigits)
+    );
+  } catch (e) {
+    return false;
+  }
+}
+
 export function updateLocalStudentPayment(studentId: string, assignedRollNo?: string): MockStudent | null {
   try {
+    markStudentFeePaid([studentId, assignedRollNo]);
+
     const list = getLocalStudents();
     const cleanQuery = studentId.toLowerCase().trim();
     const cleanDigits = studentId.replace(/\D/g, '');
@@ -497,11 +539,12 @@ export function updateLocalStudentPayment(studentId: string, assignedRollNo?: st
     );
 
     if (idx >= 0) {
-      // Only assign roll number if explicitly provided or if release date has arrived and immediate release is on
       let rollNumber = list[idx].rollNumber || null;
       if (assignedRollNo && isRollNumberReleased()) {
         rollNumber = assignedRollNo;
       }
+
+      markStudentFeePaid([list[idx].id, list[idx].applicationNo, list[idx].cnicOrBForm, list[idx].rollNumber]);
 
       list[idx] = {
         ...list[idx],
@@ -514,10 +557,35 @@ export function updateLocalStudentPayment(studentId: string, assignedRollNo?: st
       };
       localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
       return list[idx];
+    } else {
+      const newStudent: MockStudent = {
+        id: studentId,
+        studentId,
+        applicationNo: studentId.startsWith('APP-') ? studentId : `APP-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        fullName: 'Registered Candidate',
+        fatherName: 'Guardian',
+        gender: 'MALE',
+        dateOfBirth: '2008-01-01',
+        cnicOrBForm: studentId,
+        address: 'Mansehra',
+        district: 'Mansehra',
+        province: 'KP',
+        parentMobile: '0300-0000000',
+        currentClass: 'Class 10th',
+        scholarshipCategory: 'GENERAL_MERIT',
+        status: 'ACTIVE',
+        feeStatus: 'PAID',
+        rollNumber: assignedRollNo && isRollNumberReleased() ? assignedRollNo : null,
+        createdAt: new Date().toISOString(),
+      };
+      list.unshift(newStudent);
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
+      return newStudent;
     }
   } catch (err) {}
   return null;
 }
+
 
 export function releaseAllPaidRollNumbers(): number {
   try {
@@ -766,23 +834,39 @@ export const mockApi = {
     serverList.forEach((s) => {
       const k = getCanonicalStudentKey(s);
       const existing = studentMap.get(k);
-      if (existing) {
-        const isPaid = existing.feeStatus === 'PAID' || s.feeStatus === 'PAID';
-        const roll = s.rollNumber || existing.rollNumber || null;
-        studentMap.set(k, {
+      const isPaid =
+        isStudentFeePaid(s) ||
+        (existing ? isStudentFeePaid(existing) : false) ||
+        s.feeStatus === 'PAID' ||
+        existing?.feeStatus === 'PAID';
+      const roll = s.rollNumber || existing?.rollNumber || null;
 
+      if (existing) {
+        studentMap.set(k, {
           ...existing,
           ...s,
           id: s.id || existing.id,
           applicationNo: s.applicationNo || existing.applicationNo,
           uploadedDocuments: existing.uploadedDocuments || s.uploadedDocuments,
           academicRecords: s.academicRecords?.length ? s.academicRecords : existing.academicRecords,
-          feeStatus: isPaid ? 'PAID' : s.feeStatus || 'UNPAID',
+          feeStatus: isPaid ? 'PAID' : 'UNPAID',
           rollNumber: roll,
           attendancePercentage: s.attendancePercentage ?? existing.attendancePercentage ?? 100,
         });
       } else {
-        studentMap.set(k, s);
+        studentMap.set(k, {
+          ...s,
+          feeStatus: isPaid ? 'PAID' : s.feeStatus || 'UNPAID',
+          rollNumber: roll,
+          attendancePercentage: s.attendancePercentage ?? 100,
+        });
+      }
+    });
+
+    // Ensure any entry in studentMap matching paid keys is marked PAID
+    studentMap.forEach((val) => {
+      if (isStudentFeePaid(val)) {
+        val.feeStatus = 'PAID';
       }
     });
 
@@ -827,6 +911,8 @@ export const mockApi = {
       local?.fullName,
     ]);
 
+    const isPaid = (local && isStudentFeePaid(local)) || (local?.feeStatus === 'PAID');
+
     try {
       const s: any = await apiFetch<any>(`/api/students/${id}`);
       return {
@@ -837,15 +923,14 @@ export const mockApi = {
           ...(local?.uploadedDocuments || {}),
           ...(s.uploadedDocuments || {}),
         },
-        feeStatus:
-          s.feeStatus ||
-          (s.feeRecords?.length ? s.feeRecords[0].status : local?.feeStatus || 'UNPAID'),
+        feeStatus: isPaid ? 'PAID' : (s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : local?.feeStatus || 'UNPAID')),
         attendancePercentage: s.attendancePercentage ?? 100,
       };
     } catch (err) {
       if (local) {
         return {
           ...local,
+          feeStatus: isPaid ? 'PAID' : local.feeStatus || 'UNPAID',
           uploadedDocuments: {
             ...extraFiles,
             ...(local.uploadedDocuments || {}),
@@ -921,13 +1006,21 @@ export const mockApi = {
   },
 
 
-  async approveStudentPayment(studentId: string): Promise<any> {
+  async approveStudentPayment(studentId: string, studentObj?: any): Promise<any> {
+    markStudentFeePaid([
+      studentId,
+      studentObj?.id,
+      studentObj?.applicationNo,
+      studentObj?.cnicOrBForm,
+      studentObj?.rollNumber,
+      studentObj?.fullName,
+    ]);
     try {
       const res = await apiFetch<any>(`/api/students/${studentId}/approve-payment`, {
         method: 'POST',
       });
       updateLocalStudentPayment(studentId, res?.rollNumber);
-      return res;
+      return res || { success: true };
     } catch (err) {
       console.warn('Backend payment approval fallback:', err);
       const updated = updateLocalStudentPayment(studentId);
@@ -1416,178 +1509,45 @@ export const mockApi = {
       const candKey = s.applicationNo || s.id;
 
       // 1. Candidate Photo
-      const photoUrl =
-        up.photo?.dataUrl ||
-        s.photoUrl ||
-        `data:image/svg+xml;utf8,${encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="360" viewBox="0 0 300 360">
-            <rect width="300" height="360" fill="#e2e8f0"/>
-            <circle cx="150" cy="130" r="60" fill="#94a3b8"/>
-            <path d="M50 300 C50 200, 250 200, 250 300 Z" fill="#64748b"/>
-            <rect x="0" y="310" width="300" height="50" fill="#0f172a"/>
-            <text x="150" y="338" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">${s.fullName}</text>
-          </svg>`
-        )}`;
+      const photoUrl = up.photo?.dataUrl || s.photoUrl;
+      if (photoUrl) {
+        docMap.set(`${candKey}_PHOTO`, {
+          id: `doc_photo_${s.id}`,
+          studentId: s.id,
+          studentName: s.fullName,
+          rollNumber: s.rollNumber || 'PENDING',
+          applicationNo: s.applicationNo || 'APP-2026',
+          currentClass: s.currentClass || 'SSC',
+          docType: 'CANDIDATE_PHOTO',
+          title: up.photo?.name || `${s.fullName} - Passport Photograph`,
+          fileUrl: photoUrl,
+          fileSize: up.photo?.size || '142 KB',
+          fileType: 'image/jpeg',
+          uploadedAt: up.photo?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          status: 'VERIFIED',
+        });
+      }
 
-      docMap.set(`${candKey}_PHOTO`, {
-        id: `doc_photo_${s.id}`,
-        studentId: s.id,
-        studentName: s.fullName,
-        rollNumber: s.rollNumber || 'PENDING',
-        applicationNo: s.applicationNo || 'APP-2026',
-        currentClass: s.currentClass || 'SSC',
-        docType: 'CANDIDATE_PHOTO',
-        title: `${s.fullName} - Passport Photograph`,
-        fileUrl: photoUrl,
-        fileSize: up.photo?.size || '142 KB',
-        fileType: 'image/jpeg',
-        uploadedAt: up.photo?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
-        status: 'VERIFIED',
-      });
+      // 2. CNIC / B-Form Document (Only if actually uploaded)
+      if (up.bform?.dataUrl) {
+        docMap.set(`${candKey}_BFORM`, {
+          id: `doc_cnic_${s.id}`,
+          studentId: s.id,
+          studentName: s.fullName,
+          rollNumber: s.rollNumber || 'PENDING',
+          applicationNo: s.applicationNo || 'APP-2026',
+          currentClass: s.currentClass || 'SSC',
+          docType: 'CNIC_BFORM',
+          title: up.bform?.name || `${s.fullName} - Candidate B-Form / CNIC`,
+          fileUrl: up.bform.dataUrl,
+          fileSize: up.bform?.size || '480 KB',
+          fileType: up.bform.dataUrl.includes('application/pdf') || up.bform.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: up.bform?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          status: 'VERIFIED',
+        });
+      }
 
-      // 2. CNIC / B-Form Document
-      const bformUrl =
-        up.bform?.dataUrl ||
-        `data:image/svg+xml;utf8,${encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="380" viewBox="0 0 600 380">
-            <rect width="600" height="380" fill="#f8fafc" stroke="#185b9d" stroke-width="6" rx="12"/>
-            <rect x="16" y="16" width="568" height="348" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" rx="8"/>
-            <rect x="16" y="16" width="568" height="55" fill="#185b9d" rx="6"/>
-            <text x="300" y="42" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">GOVERNMENT OF PAKISTAN • NADRA</text>
-            <text x="300" y="58" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#bfdbfe" text-anchor="middle">NATIONAL REGISTRATION CERTIFICATE / CHILD REGISTRATION FORM (B-FORM)</text>
-            <text x="40" y="105" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">CANDIDATE NAME:</text>
-            <text x="170" y="105" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#0f172a">${s.fullName}</text>
-            <text x="40" y="135" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">FATHER NAME:</text>
-            <text x="170" y="135" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">${s.fatherName}</text>
-            <text x="40" y="165" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">CNIC / B-FORM NO:</text>
-            <text x="170" y="165" font-family="Courier, monospace" font-size="14" font-weight="bold" fill="#185b9d">${s.cnicOrBForm || '13503-XXXXXXX-X'}</text>
-            <text x="40" y="195" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">DATE OF BIRTH:</text>
-            <text x="170" y="195" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">${s.dateOfBirth || '2008-04-12'} (${s.gender})</text>
-            <text x="40" y="225" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">DISTRICT / REGION:</text>
-            <text x="170" y="225" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">${s.district || 'Mansehra'}, ${s.province || 'KP'}</text>
-            <circle cx="490" cy="270" r="40" fill="none" stroke="#15803d" stroke-width="2.5" stroke-dasharray="4,2"/>
-            <text x="490" y="266" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#15803d" text-anchor="middle">VERIFIED</text>
-            <text x="490" y="280" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#15803d" text-anchor="middle">NADRA B-FORM</text>
-            <line x1="40" y1="315" x2="560" y2="315" stroke="#e2e8f0" stroke-width="1.5"/>
-            <text x="40" y="340" font-family="Courier, monospace" font-size="10" fill="#64748b">DOC-AUTH: NADRA-${s.id.toUpperCase()}</text>
-            <text x="560" y="340" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#185b9d" text-anchor="end">AZM Verified Scanned Copy</text>
-          </svg>`
-        )}`;
-
-      docMap.set(`${candKey}_BFORM`, {
-        id: `doc_cnic_${s.id}`,
-        studentId: s.id,
-        studentName: s.fullName,
-        rollNumber: s.rollNumber || 'PENDING',
-        applicationNo: s.applicationNo || 'APP-2026',
-        currentClass: s.currentClass || 'SSC',
-        docType: 'CNIC_BFORM',
-        title: `${s.fullName} - Candidate B-Form / CNIC`,
-        fileUrl: bformUrl,
-        fileSize: up.bform?.size || '480 KB',
-        fileType: 'image/jpeg',
-        uploadedAt: up.bform?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
-        status: 'VERIFIED',
-      });
-
-      // 3. Academic Transcript / DMC
-      const dmcUrl =
-        up.dmc?.dataUrl ||
-        `data:image/svg+xml;utf8,${encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
-            <rect width="600" height="400" fill="#f8fafc" stroke="#0f172a" stroke-width="6" rx="12"/>
-            <rect x="16" y="16" width="568" height="368" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" rx="8"/>
-            <rect x="16" y="16" width="568" height="55" fill="#0f172a" rx="6"/>
-            <text x="300" y="42" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">BOARD OF INTERMEDIATE &amp; SECONDARY EDUCATION</text>
-            <text x="300" y="58" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#38bdf8" text-anchor="middle">DETAILED MARKS CERTIFICATE (DMC) • OFFICIAL TRANSCRIPT</text>
-            <text x="40" y="105" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">CANDIDATE:</text>
-            <text x="150" y="105" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#0f172a">${s.fullName}</text>
-            <text x="360" y="105" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">ROLL NO:</text>
-            <text x="430" y="105" font-family="Courier, monospace" font-size="13" font-weight="bold" fill="#185b9d">${s.rollNumber || 'REG-2026'}</text>
-            <text x="40" y="130" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">FATHER NAME:</text>
-            <text x="150" y="130" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">${s.fatherName}</text>
-            <text x="40" y="155" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">INSTITUTION:</text>
-            <text x="150" y="155" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#0f172a">${s.schoolName || 'High School &amp; College'}</text>
-            <rect x="40" y="175" width="520" height="24" fill="#f1f5f9"/>
-            <text x="55" y="191" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#475569">EXAMINATION LEVEL</text>
-            <text x="360" y="191" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#475569">MAX</text>
-            <text x="440" y="191" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#475569">OBT</text>
-            <text x="505" y="191" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#475569">SCORE</text>
-            <text x="55" y="218" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#0f172a">${s.currentClass} (Annual Assessment)</text>
-            <text x="360" y="218" font-family="Courier, monospace" font-size="11" font-weight="bold" fill="#0f172a">1000</text>
-            <text x="440" y="218" font-family="Courier, monospace" font-size="11" font-weight="bold" fill="#15803d">890</text>
-            <text x="505" y="218" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#15803d">89.0%</text>
-            <rect x="40" y="245" width="520" height="35" fill="#f0fdf4" stroke="#86efac" stroke-width="1" rx="6"/>
-            <text x="55" y="267" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#166534">GRADE A-1 (OUTSTANDING) • VERIFIED FOR SCHOLARSHIP SCORING</text>
-            <circle cx="490" cy="335" r="30" fill="none" stroke="#0f172a" stroke-width="2"/>
-            <text x="490" y="333" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#0f172a" text-anchor="middle">CONTROLLER</text>
-            <text x="490" y="343" font-family="Arial, sans-serif" font-size="6" fill="#0f172a" text-anchor="middle">EXAMINATIONS</text>
-            <text x="40" y="365" font-family="Courier, monospace" font-size="9" fill="#64748b">DMC-SERIAL: BISE-${s.id.toUpperCase()}-2026</text>
-          </svg>`
-        )}`;
-
-      docMap.set(`${candKey}_DMC`, {
-        id: `doc_dmc_${s.id}`,
-        studentId: s.id,
-        studentName: s.fullName,
-        rollNumber: s.rollNumber || 'PENDING',
-        applicationNo: s.applicationNo || 'APP-2026',
-        currentClass: s.currentClass || 'SSC',
-        docType: 'PREVIOUS_DMC',
-        title: `${s.fullName} - DMC Marksheet (${s.currentClass || 'Class'})`,
-        fileUrl: dmcUrl,
-        fileSize: up.dmc?.size || '820 KB',
-        fileType: 'image/jpeg',
-        uploadedAt: up.dmc?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
-        status: s.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING_REVIEW',
-      });
-
-      // 4. Payment Deposit Receipt
-      const payUrl =
-        up.paymentReceipt?.dataUrl ||
-        `data:image/svg+xml;utf8,${encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="380" viewBox="0 0 600 380">
-            <rect width="600" height="380" fill="#f8fafc" stroke="#15803d" stroke-width="6" rx="12"/>
-            <rect x="16" y="16" width="568" height="348" fill="#ffffff" stroke="#bbf7d0" stroke-width="2" rx="8"/>
-            <rect x="16" y="16" width="568" height="55" fill="#15803d" rx="6"/>
-            <text x="300" y="42" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">AZM SCHOLARSHIP EXAMINATION FEE RECEIPT</text>
-            <text x="300" y="58" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#dcfce7" text-anchor="middle">SESSION V (2026) OFFICIAL PAYMENT CLEARANCE SLIP</text>
-            <text x="40" y="105" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">CANDIDATE NAME:</text>
-            <text x="170" y="105" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#0f172a">${s.fullName}</text>
-            <text x="40" y="135" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">ROLL NUMBER:</text>
-            <text x="170" y="135" font-family="Courier, monospace" font-size="13" font-weight="bold" fill="#185b9d">${s.rollNumber || 'PENDING'}</text>
-            <text x="40" y="165" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">PAYMENT CHANNEL:</text>
-            <text x="170" y="165" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">JazzCash / Bank (03051755551 / Sumama Khan)</text>
-            <text x="40" y="195" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">TRANSACTION REF:</text>
-            <text x="170" y="195" font-family="Courier, monospace" font-size="13" font-weight="bold" fill="#0f172a">TXN-${s.id.toUpperCase()}-300</text>
-            <rect x="40" y="220" width="520" height="45" fill="#f0fdf4" stroke="#22c55e" stroke-width="2" rx="8"/>
-            <text x="60" y="248" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#166534">REGISTRATION FEE AMOUNT:</text>
-            <text x="430" y="250" font-family="Arial, sans-serif" font-size="18" font-weight="900" fill="#15803d">PKR 300.00</text>
-            <circle cx="490" cy="315" r="32" fill="none" stroke="#15803d" stroke-width="2.5"/>
-            <text x="490" y="313" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#15803d" text-anchor="middle">FEE CLEARED</text>
-            <text x="490" y="325" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#15803d" text-anchor="middle">TREASURY ✓</text>
-            <line x1="40" y1="295" x2="400" y2="295" stroke="#e2e8f0" stroke-width="1"/>
-            <text x="40" y="325" font-family="Courier, monospace" font-size="10" fill="#64748b">DATE: ${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '2026-08-20'}</text>
-          </svg>`
-        )}`;
-
-      docMap.set(`${candKey}_FEE`, {
-        id: `doc_pay_${s.id}`,
-        studentId: s.id,
-        studentName: s.fullName,
-        rollNumber: s.rollNumber || 'PENDING',
-        applicationNo: s.applicationNo || 'APP-2026',
-        currentClass: s.currentClass || 'SSC',
-        docType: 'PAYMENT_CHALLAN',
-        title: `${s.fullName} - PKR 300 Fee Deposit Receipt`,
-        fileUrl: payUrl,
-        fileSize: up.paymentReceipt?.size || '310 KB',
-        fileType: 'image/png',
-        uploadedAt: up.paymentReceipt?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
-        status: s.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING_REVIEW',
-      });
-
-      // 5. Father / Guardian CNIC
+      // 3. Father / Guardian CNIC (Only if actually uploaded)
       if (up.fatherCnic?.dataUrl) {
         docMap.set(`${candKey}_FATHER_CNIC`, {
           id: `doc_fcnic_${s.id}`,
@@ -1597,16 +1557,54 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: `${s.fullName} - Father / Guardian CNIC`,
+          title: up.fatherCnic?.name || `${s.fullName} - Father / Guardian CNIC`,
           fileUrl: up.fatherCnic.dataUrl,
-          fileSize: up.fatherCnic.size || '340 KB',
-          fileType: 'image/jpeg',
-          uploadedAt: up.fatherCnic.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          fileSize: up.fatherCnic?.size || '340 KB',
+          fileType: up.fatherCnic.dataUrl.includes('application/pdf') || up.fatherCnic.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: up.fatherCnic?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: 'VERIFIED',
         });
       }
 
-      // 6. Domicile Certificate (Optional)
+      // 4. Academic Transcript / DMC (Only if actually uploaded)
+      if (up.dmc?.dataUrl) {
+        docMap.set(`${candKey}_DMC`, {
+          id: `doc_dmc_${s.id}`,
+          studentId: s.id,
+          studentName: s.fullName,
+          rollNumber: s.rollNumber || 'PENDING',
+          applicationNo: s.applicationNo || 'APP-2026',
+          currentClass: s.currentClass || 'SSC',
+          docType: 'PREVIOUS_DMC',
+          title: up.dmc?.name || `${s.fullName} - DMC Marksheet (${s.currentClass || 'Class'})`,
+          fileUrl: up.dmc.dataUrl,
+          fileSize: up.dmc?.size || '820 KB',
+          fileType: up.dmc.dataUrl.includes('application/pdf') || up.dmc.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: up.dmc?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
+        });
+      }
+
+      // 5. Payment Deposit Receipt (Only if actually uploaded)
+      if (up.paymentReceipt?.dataUrl) {
+        docMap.set(`${candKey}_FEE`, {
+          id: `doc_pay_${s.id}`,
+          studentId: s.id,
+          studentName: s.fullName,
+          rollNumber: s.rollNumber || 'PENDING',
+          applicationNo: s.applicationNo || 'APP-2026',
+          currentClass: s.currentClass || 'SSC',
+          docType: 'PAYMENT_CHALLAN',
+          title: up.paymentReceipt?.name || `${s.fullName} - PKR 300 Fee Deposit Receipt`,
+          fileUrl: up.paymentReceipt.dataUrl,
+          fileSize: up.paymentReceipt?.size || '310 KB',
+          fileType: up.paymentReceipt.dataUrl.includes('application/pdf') || up.paymentReceipt.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
+          uploadedAt: up.paymentReceipt?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
+        });
+      }
+
+      // 6. Domicile Certificate (Optional - Only if actually uploaded)
       if (up.domicile?.dataUrl) {
         docMap.set(`${candKey}_DOMICILE`, {
           id: `doc_dom_${s.id}`,
@@ -1616,9 +1614,9 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: `${s.fullName} - Domicile Certificate (Optional)`,
+          title: up.domicile?.name || `${s.fullName} - Domicile Certificate (Optional)`,
           fileUrl: up.domicile.dataUrl,
-          fileSize: up.domicile.size || '390 KB',
+          fileSize: up.domicile?.size || '390 KB',
           fileType:
             up.domicile.dataUrl.includes('application/pdf') || up.domicile.name?.endsWith('.pdf')
               ? 'application/pdf'
@@ -1627,6 +1625,7 @@ export const mockApi = {
           status: 'VERIFIED',
         });
       }
+
 
     });
 

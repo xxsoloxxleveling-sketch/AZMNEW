@@ -168,11 +168,15 @@ export const StudentsListView: React.FC = () => {
               onClick={async () => {
                 if (confirm(`Approve PKR 300 fee payment for ${row.fullName}?`)) {
                   try {
-                    await mockApi.approveStudentPayment(row.id);
+                    setStudents((prev) =>
+                      prev.map((s) => (s.id === row.id ? { ...s, feeStatus: 'PAID' } : s))
+                    );
+                    await mockApi.approveStudentPayment(row.id, row);
                     alert(`Fee payment approved for ${row.fullName}. Status updated to PAID.`);
                     fetchStudents();
                   } catch (err: any) {
                     alert(err.message || 'Failed to approve payment');
+                    fetchStudents();
                   }
                 }
               }}

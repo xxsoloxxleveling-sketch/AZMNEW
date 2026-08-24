@@ -96,9 +96,10 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
               onClick={async () => {
                 if (confirm(`Approve PKR 300 fee payment and verify registration for ${student.fullName}?`)) {
                   try {
-                    await mockApi.approveStudentPayment(student.id);
+                    setStudent((prev: any) => ({ ...prev, feeStatus: 'PAID' }));
+                    await mockApi.approveStudentPayment(student.id, student);
                     alert(`Fee payment verified for ${student.fullName}. Candidate registration confirmed in database!`);
-                    onBack();
+                    fetchStudentData();
                   } catch (err: any) {
                     alert(err.message || 'Failed to approve payment');
                   }
