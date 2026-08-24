@@ -4,15 +4,12 @@ import { Logo } from './Logo';
 import { 
   Menu, 
   X, 
-  Sparkles,
+  Sparkles, 
   ArrowRight, 
-  Phone,
-  ChevronDown,
-  BellRing,
-  MessageCircle,
-  Globe
+  ChevronDown, 
+  MessageCircle, 
+  Globe 
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 
 interface HeaderProps {
   activeTab: PageTab;
@@ -164,10 +161,8 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 >
                   {isActive && (
-                    <motion.div
-                      layoutId="activeNavPill"
+                    <div
                       className="absolute inset-0 bg-blue-600/30 border border-[#38bdf8]/40 rounded-xl shadow-xs"
-                      transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
                   <span className="relative z-10">{language === 'ur' ? item.labelUr : item.label}</span>
@@ -190,15 +185,10 @@ export const Header: React.FC<HeaderProps> = ({
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${moreMenuOpen ? 'rotate-180 text-[#38bdf8]' : 'text-slate-400'}`} />
               </button>
 
-              <AnimatePresence>
-                {moreMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-64 p-2 bg-[#030712]/95 backdrop-blur-xl border border-blue-900/60 rounded-2xl shadow-2xl z-50 divide-y divide-slate-800/60"
-                  >
+              {moreMenuOpen && (
+                <div
+                  className="absolute right-0 mt-2 w-64 p-2 bg-[#030712]/95 backdrop-blur-xl border border-blue-900/60 rounded-2xl shadow-2xl z-50 divide-y divide-slate-800/60 animate-in fade-in zoom-in-95 duration-150"
+                >
                     <div className="space-y-1">
                       {secondaryNavItems.map((secItem) => {
                         const isSecActive = activeTab === secItem.id;
@@ -222,9 +212,8 @@ export const Header: React.FC<HeaderProps> = ({
                         );
                       })}
                     </div>
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
             </div>
           </nav>
 
@@ -284,102 +273,97 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Responsive Mobile Drawer Menu */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="lg:hidden px-4 py-3 bg-[#030712]/95 backdrop-blur-2xl border-b border-blue-900/60 shadow-2xl max-w-7xl mx-auto space-y-3"
-          >
-            {/* Primary Links */}
-            <div className="grid grid-cols-2 gap-1.5 pb-3 border-b border-slate-800/80">
-              {primaryNavItems.map((item) => (
+      {mobileMenuOpen && (
+        <div
+          className="lg:hidden px-4 py-3 bg-[#030712]/95 backdrop-blur-2xl border-b border-blue-900/60 shadow-2xl max-w-7xl mx-auto space-y-3 animate-in fade-in slide-in-from-top-2 duration-150"
+        >
+          {/* Primary Links */}
+          <div className="grid grid-cols-2 gap-1.5 pb-3 border-b border-slate-800/80">
+            {primaryNavItems.map((item) => (
+              <button
+                key={item.id}
+                id={`mobile-nav-${item.id}`}
+                onClick={() => {
+                  onSelectTab(item.id);
+                  setMobileMenuOpen(false);
+                }}
+                className={`px-3.5 py-2.5 text-xs font-semibold rounded-xl text-left transition-colors ${
+                  activeTab === item.id
+                    ? 'bg-blue-600 text-white border border-[#38bdf8]/40 shadow-xs'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                {language === 'ur' ? item.labelUr : item.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Secondary Links from "More" */}
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-1 mb-1.5">
+              More Pages
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              {secondaryNavItems.map((item) => (
                 <button
                   key={item.id}
-                  id={`mobile-nav-${item.id}`}
+                  id={`mobile-nav-sec-${item.id}`}
                   onClick={() => {
                     onSelectTab(item.id);
                     setMobileMenuOpen(false);
                   }}
-                  className={`px-3.5 py-2.5 text-xs font-semibold rounded-xl text-left transition-colors ${
+                  className={`flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg text-left transition-colors ${
                     activeTab === item.id
-                      ? 'bg-blue-600 text-white border border-[#38bdf8]/40 shadow-xs'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-slate-800 text-[#38bdf8]'
+                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
                   }`}
                 >
-                  {language === 'ur' ? item.labelUr : item.label}
+                  <span>{language === 'ur' ? item.labelUr : item.label}</span>
+                  <span className="text-[10px] text-slate-500">{item.description}</span>
                 </button>
               ))}
             </div>
+          </div>
 
-            {/* Secondary Links from "More" */}
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-1 mb-1.5">
-                More Pages
-              </div>
-              <div className="grid grid-cols-1 gap-1">
-                {secondaryNavItems.map((item) => (
-                  <button
-                    key={item.id}
-                    id={`mobile-nav-sec-${item.id}`}
-                    onClick={() => {
-                      onSelectTab(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg text-left transition-colors ${
-                      activeTab === item.id
-                        ? 'bg-slate-800 text-[#38bdf8]'
-                        : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                    }`}
-                  >
-                    <span>{language === 'ur' ? item.labelUr : item.label}</span>
-                    <span className="text-[10px] text-slate-500">{item.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* Mobile Language Switcher & WhatsApp Link */}
+          <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-800">
+            <a
+              href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Scholarship%20Desk"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-emerald-400 font-semibold py-1.5"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>WhatsApp Helpline</span>
+            </a>
 
-            {/* Mobile Language Switcher & WhatsApp Link */}
-            <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-800">
-              <a
-                href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Scholarship%20Desk"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 text-emerald-400 font-semibold py-1.5"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>WhatsApp Helpline</span>
-              </a>
-
-              {onToggleLanguage && (
-                <button
-                  onClick={onToggleLanguage}
-                  className="flex items-center gap-1 px-3 py-1 rounded-lg bg-slate-800 text-slate-200 font-bold border border-slate-700"
-                >
-                  <Globe className="w-3.5 h-3.5 text-[#38bdf8]" />
-                  <span>{language === 'en' ? 'اردو میں دیکھیں' : 'Switch to English'}</span>
-                </button>
-              )}
-            </div>
-
-            {/* Full-width Primary CTA Button */}
-            <div className="pt-1">
+            {onToggleLanguage && (
               <button
-                onClick={() => {
-                  onSelectTab('apply');
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full flex items-center justify-center gap-2 py-3 text-xs sm:text-sm font-bold bg-gradient-to-r from-[#185b9d] via-[#1d63a8] to-[#0f4477] text-white rounded-xl shadow-lg border border-[#38bdf8]/50"
+                onClick={onToggleLanguage}
+                className="flex items-center gap-1 px-3 py-1 rounded-lg bg-slate-800 text-slate-200 font-bold border border-slate-700"
               >
-                <Sparkles className="w-4 h-4 text-sky-300 animate-pulse" />
-                <span>Apply Online (Session V 2026)</span>
-                <ArrowRight className="w-4 h-4 text-sky-200" />
+                <Globe className="w-3.5 h-3.5 text-[#38bdf8]" />
+                <span>{language === 'en' ? 'اردو میں دیکھیں' : 'Switch to English'}</span>
               </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            )}
+          </div>
+
+          {/* Full-width Primary CTA Button */}
+          <div className="pt-1">
+            <button
+              onClick={() => {
+                onSelectTab('apply');
+                setMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-2 py-3 text-xs sm:text-sm font-bold bg-gradient-to-r from-[#185b9d] via-[#1d63a8] to-[#0f4477] text-white rounded-xl shadow-lg border border-[#38bdf8]/50"
+            >
+              <Sparkles className="w-4 h-4 text-sky-300 animate-pulse" />
+              <span>Apply Online (Session V 2026)</span>
+              <ArrowRight className="w-4 h-4 text-sky-200" />
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

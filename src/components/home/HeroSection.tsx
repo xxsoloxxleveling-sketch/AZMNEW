@@ -9,10 +9,8 @@ import {
   Users, 
   BookOpen, 
   Clock, 
-  ChevronRight, 
-  Calendar
+  ChevronRight
 } from 'lucide-react';
-import { motion } from 'motion/react';
 
 interface HeroSectionProps {
   onSelectTab: (tab: PageTab) => void;
@@ -21,23 +19,14 @@ interface HeroSectionProps {
   language?: 'en' | 'ur';
 }
 
-export const HeroSection: React.FC<HeroSectionProps> = ({ 
-  onSelectTab, 
-  onOpenMockExam, 
-  onOpenAlerts,
-  language = 'en'
-}) => {
-  // Live countdown timer to 30 Aug 2026 23:59:59 PST
+// Memoized isolated countdown timer component so timer ticks do NOT re-render HeroSection
+const HeroCountdown: React.FC = React.memo(() => {
   const [timeLeft, setTimeLeft] = useState({
     days: 6,
     hours: 21,
     minutes: 48,
     seconds: 15
   });
-
-  // Fast Candidate Lookup State
-  const [quickQuery, setQuickQuery] = useState('');
-  const [searchFeedback, setSearchFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -56,6 +45,47 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  return (
+    <div className="mt-6 p-3 sm:p-4 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-700/80 shadow-lg inline-flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+      <div className="flex items-center gap-2 text-xs text-slate-300">
+        <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
+        <span>Registration Closes: <strong className="text-white">30 August 2026</strong></span>
+      </div>
+
+      <div className="flex items-center gap-1.5 font-mono text-xs">
+        <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center min-w-[44px]">
+          <span className="font-bold text-amber-300 text-sm">{timeLeft.days}</span>
+          <span className="text-[10px] text-slate-400 block font-sans">Days</span>
+        </div>
+        <span className="text-slate-500 font-bold">:</span>
+        <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center min-w-[44px]">
+          <span className="font-bold text-white text-sm">{timeLeft.hours}</span>
+          <span className="text-[10px] text-slate-400 block font-sans">Hours</span>
+        </div>
+        <span className="text-slate-500 font-bold">:</span>
+        <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center min-w-[44px]">
+          <span className="font-bold text-white text-sm">{timeLeft.minutes}</span>
+          <span className="text-[10px] text-slate-400 block font-sans">Mins</span>
+        </div>
+        <span className="text-slate-500 font-bold">:</span>
+        <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center min-w-[44px]">
+          <span className="font-bold text-emerald-400 text-sm">{timeLeft.seconds}</span>
+          <span className="text-[10px] text-slate-400 block font-sans">Secs</span>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+export const HeroSection: React.FC<HeroSectionProps> = React.memo(({ 
+  onSelectTab, 
+  onOpenAlerts,
+  language = 'en'
+}) => {
+  // Fast Candidate Lookup State
+  const [quickQuery, setQuickQuery] = useState('');
+  const [searchFeedback, setSearchFeedback] = useState<string | null>(null);
 
   const handleQuickLookup = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,90 +129,39 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex-1 flex flex-col justify-center items-center">
         
         {/* Top Feature Pill Badge (Interactive Live Alert Trigger) */}
-        <motion.button
+        <button
           type="button"
           onClick={() => {
             if (onOpenAlerts) onOpenAlerts();
           }}
-          initial={{ opacity: 0, y: -15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
           className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800/95 border border-amber-400/40 hover:border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)] backdrop-blur-md mb-6 transition-all cursor-pointer group focus:outline-hidden"
         >
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
           <span className="text-xs sm:text-sm font-semibold text-amber-300 group-hover:text-amber-200">
             {language === 'ur' ? 'سیشن 5 ٹیسٹ رجسٹریشن جاری ہے • فیس 300 روپے' : 'Session V Scholarship Test Registration is Open (PKR 300 Fee)'}
-
           </span>
           <ChevronRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
-        </motion.button>
+        </button>
 
         {/* Centered Hero Title */}
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="text-4xl sm:text-6xl lg:text-7xl font-display font-extrabold tracking-tight leading-[1.15] sm:leading-[1.12]"
-        >
+        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-display font-extrabold tracking-tight leading-[1.15] sm:leading-[1.12]">
           <span className="bg-gradient-to-r from-[#60a5fa] via-[#38bdf8] to-[#93c5fd] bg-clip-text text-transparent drop-shadow-[0_0_35px_rgba(56,189,248,0.3)]">
             Self-Funded Scholarships
           </span>{' '}
           <span className="text-white">for</span>
           <div className="text-white mt-1">Deserving Students</div>
-        </motion.h1>
+        </h1>
 
         {/* Subtitle Description */}
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="mt-6 text-base sm:text-lg lg:text-xl text-slate-300/90 max-w-2xl font-normal leading-relaxed text-balance"
-        >
+        <p className="mt-6 text-base sm:text-lg lg:text-xl text-slate-300/90 max-w-2xl font-normal leading-relaxed text-balance">
           No favoritism, no hidden scoring — just a test, an optical scan, and a verified interview. Merit-based testing conducted across schools and colleges in Khyber Pakhtunkhwa.
-        </motion.p>
+        </p>
 
         {/* Prominent Live Urgency Countdown Timer */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.25 }}
-          className="mt-6 p-3 sm:p-4 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-700/80 shadow-lg inline-flex flex-col sm:flex-row items-center gap-3 sm:gap-4"
-        >
-          <div className="flex items-center gap-2 text-xs text-slate-300">
-            <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
-            <span>Registration Closes: <strong className="text-white">30 August 2026</strong></span>
-          </div>
-
-          <div className="flex items-center gap-1.5 font-mono text-xs">
-            <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center">
-              <span className="font-bold text-amber-300 text-sm">{timeLeft.days}</span>
-              <span className="text-[10px] text-slate-400 block font-sans">Days</span>
-            </div>
-            <span className="text-slate-500 font-bold">:</span>
-            <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center">
-              <span className="font-bold text-white text-sm">{timeLeft.hours}</span>
-              <span className="text-[10px] text-slate-400 block font-sans">Hours</span>
-            </div>
-            <span className="text-slate-500 font-bold">:</span>
-            <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center">
-              <span className="font-bold text-white text-sm">{timeLeft.minutes}</span>
-              <span className="text-[10px] text-slate-400 block font-sans">Mins</span>
-            </div>
-            <span className="text-slate-500 font-bold">:</span>
-            <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center">
-              <span className="font-bold text-emerald-400 text-sm">{timeLeft.seconds}</span>
-              <span className="text-[10px] text-slate-400 block font-sans">Secs</span>
-            </div>
-          </div>
-        </motion.div>
+        <HeroCountdown />
 
         {/* Primary CTA Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="mt-8 flex flex-wrap items-center justify-center gap-3.5"
-        >
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
           <button
             id="hero-register-test-btn"
             onClick={() => onSelectTab('apply')}
@@ -200,15 +179,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           >
             <span>View 100 MCQs Syllabus</span>
           </button>
-        </motion.div>
+        </div>
 
         {/* Fast Candidate Lookup Input */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="mt-8 w-full max-w-xl"
-        >
+        <div className="mt-8 w-full max-w-xl">
           <form 
             onSubmit={handleQuickLookup}
             className="p-1.5 bg-slate-900/90 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-xl hover:border-slate-500/80 transition-all flex items-center gap-2"
@@ -238,21 +212,18 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           {searchFeedback && (
             <p className="text-xs text-amber-300 mt-2 font-medium">{searchFeedback}</p>
           )}
-        </motion.div>
+        </div>
 
       </div>
 
       {/* 3 Key Metrics Cards on Dark Glass Floor */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 w-full">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {keyStats.map((stat, idx) => {
+          {keyStats.map((stat) => {
             const Icon = stat.icon;
             return (
-              <motion.div
+              <div
                 key={stat.label}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.45 + idx * 0.08 }}
                 className="p-5 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-800/90 shadow-md hover:border-slate-700 hover:bg-slate-900/95 transition-all text-left"
               >
                 <div className="flex items-center justify-between mb-2">
@@ -272,7 +243,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <div className="text-[11px] text-slate-500 truncate mt-0.5">
                   {stat.sub}
                 </div>
-              </motion.div>
+              </div>
             );
           })}
         </div>
@@ -280,4 +251,4 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
     </section>
   );
-};
+});

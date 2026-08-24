@@ -12,7 +12,7 @@ const DEFAULT_GLOBE_CONFIG: Omit<COBEOptions, 'width' | 'height'> = {
   theta: 0.25,
   dark: 1,
   diffuse: 1.4,
-  mapSamples: 9000, // Optimized for 60fps performance across all devices
+  mapSamples: 3500, // Highly optimized for fast rendering and low TBT
   mapBrightness: 3.5,
   baseColor: [0.12, 0.28, 0.55], // Deep oceanic blue dots
   markerColor: [0.22, 0.85, 0.98], // Cyan marker highlight
@@ -74,8 +74,6 @@ export const Globe: React.FC<GlobeProps> = ({ className = '', config }) => {
       glowColor: (config?.glowColor ?? DEFAULT_GLOBE_CONFIG.glowColor) as [number, number, number],
     };
 
-    globe = createGlobe(canvasRef.current, initialConfig);
-
     const animate = () => {
       if (isVisible && globe) {
         if (pointerInteracting.current === null) {
@@ -91,13 +89,14 @@ export const Globe: React.FC<GlobeProps> = ({ className = '', config }) => {
       animationFrameId = requestAnimationFrame(animate);
     };
 
-    // Defer animation slightly to yield main thread during initial paint
+    // Defer WebGL globe instantiation until after initial render paint
     const initTimer = setTimeout(() => {
-      animate();
       if (canvasRef.current) {
+        globe = createGlobe(canvasRef.current, initialConfig);
+        animate();
         canvasRef.current.style.opacity = '1';
       }
-    }, 100);
+    }, 600);
 
     return () => {
       clearTimeout(initTimer);

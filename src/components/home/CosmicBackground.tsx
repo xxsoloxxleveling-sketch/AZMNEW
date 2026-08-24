@@ -107,7 +107,7 @@ export const CosmicBackground: React.FC = React.memo(() => {
     // Defer start to not block FCP
     const startTimer = setTimeout(() => {
       render();
-    }, 150);
+    }, 600);
 
     return () => {
       clearTimeout(startTimer);

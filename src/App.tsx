@@ -1,10 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { PageTab } from './types';
 import { Header } from './components/common/Header';
-import { Footer } from './components/common/Footer';
 import { HeroSection } from './components/home/HeroSection';
-import { AlertsSection } from './components/home/AlertsSection';
-import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 
 import { AuthProvider, useAuth } from './lib/authContext';
@@ -12,6 +9,12 @@ import { AdminTab } from './components/admin/layout/AdminSidebar';
 import type { MockStudent } from './lib/mockApi';
 
 // Lazy Loaded Below-The-Fold Public Components
+const Footer = lazy(() =>
+  import('./components/common/Footer').then((m) => ({ default: m.Footer }))
+);
+const AlertsSection = lazy(() =>
+  import('./components/home/AlertsSection').then((m) => ({ default: m.AlertsSection }))
+);
 const WhatsAppButton = lazy(() =>
   import('./components/common/WhatsAppButton').then((m) => ({ default: m.WhatsAppButton }))
 );
@@ -439,181 +442,118 @@ function AppContent() {
       />
 
       <main className="flex-1">
-        <AnimatePresence mode="wait">
-          {activeTab === 'home' && (
-            <motion.div
-              key="home"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <HeroSection
-                onSelectTab={handleSelectTab}
-                onOpenMockExam={() => setIsMockModalOpen(true)}
-                onOpenAlerts={() => setIsAlertModalOpen(true)}
-                language={language}
-              />
+        {activeTab === 'home' && (
+          <div key="home" className="animate-in fade-in duration-200">
+            <HeroSection
+              onSelectTab={handleSelectTab}
+              onOpenMockExam={() => setIsMockModalOpen(true)}
+              onOpenAlerts={() => setIsAlertModalOpen(true)}
+              language={language}
+            />
+            <Suspense fallback={<div className="h-24" />}>
               <AlertsSection
                 onSelectTab={handleSelectTab}
                 onOpenAlertModal={() => setIsAlertModalOpen(true)}
               />
-              <Suspense fallback={<div className="h-24" />}>
-                <PartnerMarquee />
-                <WorkflowBento onSelectTab={handleSelectTab} />
-                <StudentTestimonials onSelectTab={handleSelectTab} />
-                <FeeCalculator onSelectTab={handleSelectTab} />
-                <LeadershipSection />
-                <FaqSection onSelectTab={handleSelectTab} />
-              </Suspense>
-            </motion.div>
-          )}
+              <PartnerMarquee />
+              <WorkflowBento onSelectTab={handleSelectTab} />
+              <StudentTestimonials onSelectTab={handleSelectTab} />
+              <FeeCalculator onSelectTab={handleSelectTab} />
+              <LeadershipSection />
+              <FaqSection onSelectTab={handleSelectTab} />
+            </Suspense>
+          </div>
+        )}
 
-          {activeTab === 'about' && (
-            <motion.div
-              key="about"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <AboutView onSelectTab={handleSelectTab} />
-              </Suspense>
-            </motion.div>
-          )}
+        {activeTab === 'about' && (
+          <div key="about" className="animate-in fade-in duration-200">
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <AboutView onSelectTab={handleSelectTab} />
+            </Suspense>
+          </div>
+        )}
 
-          {activeTab === 'scholarship' && (
-            <motion.div
-              key="scholarship"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <ScholarshipView
-                  onSelectTab={handleSelectTab}
-                  onOpenMockExam={() => setIsMockModalOpen(true)}
-                />
-              </Suspense>
-            </motion.div>
-          )}
+        {activeTab === 'scholarship' && (
+          <div key="scholarship" className="animate-in fade-in duration-200">
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <ScholarshipView
+                onSelectTab={handleSelectTab}
+                onOpenMockExam={() => setIsMockModalOpen(true)}
+              />
+            </Suspense>
+          </div>
+        )}
 
-          {activeTab === 'apply' && (
-            <motion.div
-              key="apply"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <ApplicationPortal
-                  initialClass={prefillClass}
-                  onSelectTab={handleSelectTab}
-                />
-              </Suspense>
-            </motion.div>
-          )}
+        {activeTab === 'apply' && (
+          <div key="apply" className="animate-in fade-in duration-200">
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <ApplicationPortal
+                initialClass={prefillClass}
+                onSelectTab={handleSelectTab}
+              />
+            </Suspense>
+          </div>
+        )}
 
-          {activeTab === 'apply-test' && (
-            <motion.div
-              key="apply-test"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              {/* Sandbox Header Banner for Team Testing */}
-              <div className="bg-amber-400 text-slate-950 px-4 py-2.5 text-xs font-black text-center border-b border-amber-500 shadow-xs flex items-center justify-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-slate-950 text-amber-300 font-mono text-[10px] uppercase tracking-wider">
-                  Internal Test Sandbox
-                </span>
-                <span>
-                  You are viewing the test duplicate application form (URL: <code className="bg-amber-300/80 px-1 py-0.5 rounded text-[11px]">#apply-test</code>). Candidate submissions save directly to the testing registry.
-                </span>
-              </div>
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <ApplicationPortal
-                  initialClass={prefillClass}
-                  onSelectTab={handleSelectTab}
-                />
-              </Suspense>
-            </motion.div>
-          )}
+        {activeTab === 'apply-test' && (
+          <div key="apply-test" className="animate-in fade-in duration-200">
+            {/* Sandbox Header Banner for Team Testing */}
+            <div className="bg-amber-400 text-slate-950 px-4 py-2.5 text-xs font-black text-center border-b border-amber-500 shadow-xs flex items-center justify-center gap-2">
+              <span className="px-2 py-0.5 rounded-md bg-slate-950 text-amber-300 font-mono text-[10px] uppercase tracking-wider">
+                Internal Test Sandbox
+              </span>
+              <span>
+                You are viewing the test duplicate application form (URL: <code className="bg-amber-300/80 px-1 py-0.5 rounded text-[11px]">#apply-test</code>). Candidate submissions save directly to the testing registry.
+              </span>
+            </div>
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <ApplicationPortal
+                initialClass={prefillClass}
+                onSelectTab={handleSelectTab}
+              />
+            </Suspense>
+          </div>
+        )}
 
+        {activeTab === 'roll-number' && (
+          <div key="roll-number" className="animate-in fade-in duration-200">
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <RollNumberSlipView onSelectTab={handleSelectTab} />
+            </Suspense>
+          </div>
+        )}
 
-          {activeTab === 'roll-number' && (
-            <motion.div
-              key="roll-number"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <RollNumberSlipView onSelectTab={handleSelectTab} />
-              </Suspense>
-            </motion.div>
-          )}
+        {activeTab === 'results' && (
+          <div key="results" className="animate-in fade-in duration-200">
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <ResultsDeskView onSelectTab={handleSelectTab} />
+            </Suspense>
+          </div>
+        )}
 
-          {activeTab === 'results' && (
-            <motion.div
-              key="results"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <ResultsDeskView onSelectTab={handleSelectTab} />
-              </Suspense>
-            </motion.div>
-          )}
+        {activeTab === 'partners' && (
+          <div key="partners" className="animate-in fade-in duration-200">
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <PartnerDirectoryView onSelectTab={handleSelectTab} />
+            </Suspense>
+          </div>
+        )}
 
-          {activeTab === 'partners' && (
-            <motion.div
-              key="partners"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <PartnerDirectoryView onSelectTab={handleSelectTab} />
-              </Suspense>
-            </motion.div>
-          )}
+        {activeTab === 'gallery' && (
+          <div key="gallery" className="animate-in fade-in duration-200">
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <GalleryView onSelectTab={handleSelectTab} />
+            </Suspense>
+          </div>
+        )}
 
-          {activeTab === 'gallery' && (
-            <motion.div
-              key="gallery"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <GalleryView onSelectTab={handleSelectTab} />
-              </Suspense>
-            </motion.div>
-          )}
-
-          {activeTab === 'contact' && (
-            <motion.div
-              key="contact"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Suspense fallback={<ViewLoadingFallback />}>
-                <ContactView onSelectTab={handleSelectTab} />
-              </Suspense>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {activeTab === 'contact' && (
+          <div key="contact" className="animate-in fade-in duration-200">
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <ContactView onSelectTab={handleSelectTab} />
+            </Suspense>
+          </div>
+        )}
       </main>
 
       <Suspense fallback={null}>
@@ -630,7 +570,9 @@ function AppContent() {
         <WhatsAppButton />
       </Suspense>
 
-      <Footer onSelectTab={handleSelectTab} language={language} />
+      <Suspense fallback={<div className="h-32" />}>
+        <Footer onSelectTab={handleSelectTab} language={language} />
+      </Suspense>
     </div>
   );
 }
