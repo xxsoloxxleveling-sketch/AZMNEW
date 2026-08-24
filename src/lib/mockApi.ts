@@ -801,18 +801,21 @@ export const mockApi = {
       };
     } catch (err) {
       console.warn('Live dashboard fetch error:', err);
-      // Clean fallback with real 0 counts (no fake mock numbers)
+      const localStudents = getLocalStudents();
+      const paidStudents = localStudents.filter((s) => s.feeStatus === 'PAID');
+      const paidPct = localStudents.length > 0 ? Math.round((paidStudents.length / localStudents.length) * 100) : 0;
+
       return {
         stats: {
-          totalStudents: 0,
+          totalStudents: localStudents.length,
           attendancePercentage: 0,
-          feeCollectionPercentage: 0,
+          feeCollectionPercentage: paidPct,
           activeStaffCount: 0,
-          totalBilled: 0,
-          totalCollected: 0,
-          feeIncome: 0,
+          totalBilled: localStudents.length * 300,
+          totalCollected: paidStudents.length * 300,
+          feeIncome: paidStudents.length * 300,
           salaryExpenses: 0,
-          netCashFlow: 0,
+          netCashFlow: paidStudents.length * 300,
         },
         attendanceTrends: [
           { day: 'Mon', rate: 0 },
@@ -822,16 +825,29 @@ export const mockApi = {
           { day: 'Fri', rate: 0 },
           { day: 'Today', rate: 0 },
         ],
-        feeDefaulters: [],
+        feeDefaulters: localStudents
+          .filter((s) => s.feeStatus !== 'PAID')
+          .slice(0, 5)
+          .map((s) => ({
+            id: s.id,
+            studentName: s.fullName,
+            rollNumber: s.rollNumber || 'Pending Fee',
+            currentClass: s.currentClass || 'SSC',
+            amountDue: 300,
+            status: 'UNPAID',
+          })),
         recentActivity: [
           {
             id: 'act_1',
-            text: 'System metrics aggregated with live database.',
-            time: 'Just now',
+            text: `Enrolled students ledger: ${localStudents.length} candidate(s) active.`,
+            time: 'Live',
           },
         ],
         demographics: {
-          byGender: { MALE: 0, FEMALE: 0 },
+          byGender: {
+            MALE: localStudents.filter((s) => s.gender === 'male' || s.gender === 'MALE').length,
+            FEMALE: localStudents.filter((s) => s.gender === 'female' || s.gender === 'FEMALE').length,
+          },
           byClassLevel: {},
           byScholarshipCategory: {},
         },

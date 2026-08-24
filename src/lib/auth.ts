@@ -1,14 +1,32 @@
 /**
  * Token and user session management helper.
- * Centralized so swapping between localStorage, sessionStorage, or httpOnly cookies in Phase 7
- * requires changing only this file rather than updating multiple components.
+ * Completely Cookie-Free: Uses pure JWT Bearer tokens in Authorization headers.
  */
 
 const TOKEN_KEY = 'jps_access_token';
 const USER_KEY = 'jps_current_user';
 
+export function wipeAllCookies(): void {
+  try {
+    if (typeof document !== 'undefined' && document.cookie) {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i];
+        const eqPos = cookie.indexOf('=');
+        const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+      }
+    }
+  } catch (e) {}
+}
+
+// Purge any cookies immediately on load
+wipeAllCookies();
+
 export const authStorage = {
   setToken(token: string): void {
+    wipeAllCookies();
     try {
       localStorage.setItem(TOKEN_KEY, token);
     } catch {
@@ -25,6 +43,7 @@ export const authStorage = {
   },
 
   clearToken(): void {
+    wipeAllCookies();
     try {
       localStorage.removeItem(TOKEN_KEY);
     } catch {
@@ -33,6 +52,7 @@ export const authStorage = {
   },
 
   setUser(user: any): void {
+    wipeAllCookies();
     try {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch {
@@ -50,6 +70,7 @@ export const authStorage = {
   },
 
   clearUser(): void {
+    wipeAllCookies();
     try {
       localStorage.removeItem(USER_KEY);
     } catch {
@@ -58,6 +79,7 @@ export const authStorage = {
   },
 
   clearAll(): void {
+    wipeAllCookies();
     this.clearToken();
     this.clearUser();
   },
