@@ -442,10 +442,61 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           domicileCertificate: !!formData.documents?.domicileUploaded,
           incomeCertificate: !!formData.documents?.incomeCertUploaded,
         },
+        uploadedDocuments: {
+          photo: formData.photoUrl
+            ? {
+                name: 'Candidate_Passport_Photo.jpg',
+                size: '180 KB',
+                dataUrl: formData.photoUrl,
+                uploadedAt: new Date().toISOString(),
+              }
+            : undefined,
+          bform: uploadedDocs.bformUploaded
+            ? {
+                name: uploadedDocs.bformUploaded.name,
+                size: uploadedDocs.bformUploaded.size,
+                dataUrl: uploadedDocs.bformUploaded.dataUrl,
+                uploadedAt: new Date().toISOString(),
+              }
+            : undefined,
+          fatherCnic: uploadedDocs.fatherCnicUploaded
+            ? {
+                name: uploadedDocs.fatherCnicUploaded.name,
+                size: uploadedDocs.fatherCnicUploaded.size,
+                dataUrl: uploadedDocs.fatherCnicUploaded.dataUrl,
+                uploadedAt: new Date().toISOString(),
+              }
+            : undefined,
+          dmc: uploadedDocs.dmcUploaded
+            ? {
+                name: uploadedDocs.dmcUploaded.name,
+                size: uploadedDocs.dmcUploaded.size,
+                dataUrl: uploadedDocs.dmcUploaded.dataUrl,
+                uploadedAt: new Date().toISOString(),
+              }
+            : undefined,
+          domicile: uploadedDocs.domicileUploaded
+            ? {
+                name: uploadedDocs.domicileUploaded.name,
+                size: uploadedDocs.domicileUploaded.size,
+                dataUrl: uploadedDocs.domicileUploaded.dataUrl,
+                uploadedAt: new Date().toISOString(),
+              }
+            : undefined,
+          paymentReceipt: uploadedDocs.incomeCertUploaded
+            ? {
+                name: uploadedDocs.incomeCertUploaded.name,
+                size: uploadedDocs.incomeCertUploaded.size,
+                dataUrl: uploadedDocs.incomeCertUploaded.dataUrl,
+                uploadedAt: new Date().toISOString(),
+              }
+            : undefined,
+        },
       };
 
 
       const student = await mockApi.createStudent(backendPayload);
+
       setCreatedStudent(student);
       setSubmittedAppId(student.applicationNo || student.id);
       setIsSubmitted(true);
