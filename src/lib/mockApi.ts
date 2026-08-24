@@ -318,6 +318,7 @@ const UPLOADED_FILES_STORAGE_KEY = 'AZM_STUDENT_UPLOADED_FILES_V';
 
 export function saveUploadedFilesForCandidate(keys: (string | undefined | null)[], files: any): void {
   try {
+    if (!files || typeof files !== 'object' || Object.keys(files).length === 0) return;
     const raw = localStorage.getItem(UPLOADED_FILES_STORAGE_KEY);
     const map = raw ? JSON.parse(raw) : {};
     keys.filter(Boolean).forEach((k) => {
@@ -337,13 +338,20 @@ export function getUploadedFilesForCandidate(keys: (string | undefined | null)[]
     const raw = localStorage.getItem(UPLOADED_FILES_STORAGE_KEY);
     if (!raw) return {};
     const map = JSON.parse(raw);
+    const merged: Record<string, any> = {};
+
     for (const k of keys) {
       if (!k) continue;
       const clean = String(k).toLowerCase().trim();
       const digits = String(k).replace(/\D/g, '');
-      if (map[clean] && Object.keys(map[clean]).length > 0) return map[clean];
-      if (digits.length >= 5 && map[digits] && Object.keys(map[digits]).length > 0) return map[digits];
+      if (map[clean] && typeof map[clean] === 'object') {
+        Object.assign(merged, map[clean]);
+      }
+      if (digits.length >= 5 && map[digits] && typeof map[digits] === 'object') {
+        Object.assign(merged, map[digits]);
+      }
     }
+    return merged;
   } catch (e) {}
   return {};
 }
@@ -411,7 +419,14 @@ export function saveLocalStudent(student: MockStudent): void {
 
     const idx = list.findIndex((s) => getCanonicalStudentKey(s) === cleanKey);
     if (idx >= 0) {
-      list[idx] = { ...list[idx], ...student };
+      list[idx] = {
+        ...list[idx],
+        ...student,
+        uploadedDocuments: {
+          ...(list[idx].uploadedDocuments || {}),
+          ...(student.uploadedDocuments || {}),
+        },
+      };
     } else {
       list.unshift(student);
     }
@@ -424,10 +439,11 @@ export function saveLocalStudent(student: MockStudent): void {
     const finalArray = Array.from(dedupedMap.values());
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(finalArray));
 
-    if (student.uploadedDocuments) {
+    const allDocs = student.uploadedDocuments || (idx >= 0 ? list[idx].uploadedDocuments : undefined);
+    if (allDocs) {
       saveUploadedFilesForCandidate(
         [student.id, student.applicationNo, student.rollNumber, student.cnicOrBForm, student.fullName],
-        student.uploadedDocuments
+        allDocs
       );
     }
   } catch (err) {}
@@ -976,13 +992,45 @@ export const mockApi = {
 
 
   async createStudent(studentData: any): Promise<MockStudent> {
+    if (studentData.uploadedDocuments) {
+      saveUploadedFilesForCandidate(
+        [studentData.cnicOrBForm, studentData.fullName, studentData.id, studentData.applicationNo],
+        studentData.uploadedDocuments
+      );
+    }
+
     try {
       const created = await apiFetch<MockStudent>('/api/students/register', {
         method: 'POST',
         body: JSON.stringify(studentData),
       });
-      saveLocalStudent(created);
-      return created;
+
+      const merged: MockStudent = {
+        ...studentData,
+        ...created,
+        uploadedDocuments: {
+          ...(studentData.uploadedDocuments || {}),
+          ...(created.uploadedDocuments || {}),
+        },
+      };
+
+      saveLocalStudent(merged);
+
+      if (merged.uploadedDocuments) {
+        saveUploadedFilesForCandidate(
+          [
+            merged.id,
+            merged.applicationNo,
+            merged.rollNumber,
+            merged.cnicOrBForm,
+            merged.fullName,
+            studentData.cnicOrBForm,
+          ],
+          merged.uploadedDocuments
+        );
+      }
+
+      return merged;
     } catch (err: any) {
       const msg = (err.message || '').toLowerCase();
       const isRecoverableError =
@@ -1037,6 +1085,12 @@ export const mockApi = {
         uploadedDocuments: studentData.uploadedDocuments || {},
       };
       saveLocalStudent(fallbackStudent);
+      if (studentData.uploadedDocuments) {
+        saveUploadedFilesForCandidate(
+          [fallbackStudent.id, fallbackStudent.applicationNo, fallbackStudent.cnicOrBForm, fallbackStudent.fullName],
+          studentData.uploadedDocuments
+        );
+      }
       return fallbackStudent;
     }
   },
@@ -1698,7 +1752,8 @@ export const mockApi = {
       }
 
       // 2. CNIC / B-Form Document (Only if actually uploaded)
-      if (up.bform?.dataUrl) {
+      const bformFile = up.bform || up.bformUploaded || up.cnic || up.candidateCnic;
+      if (bformFile?.dataUrl) {
         docMap.set(`${candKey}_BFORM`, {
           id: `doc_cnic_${s.id}`,
           studentId: s.id,
@@ -1707,17 +1762,18 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: up.bform?.name || `${s.fullName} - Candidate B-Form / CNIC`,
-          fileUrl: up.bform.dataUrl,
-          fileSize: up.bform?.size || '480 KB',
-          fileType: up.bform.dataUrl.includes('application/pdf') || up.bform.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-          uploadedAt: up.bform?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          title: bformFile.name || `${s.fullName} - Candidate B-Form / CNIC`,
+          fileUrl: bformFile.dataUrl,
+          fileSize: bformFile.size || '480 KB',
+          fileType: bformFile.dataUrl.includes('application/pdf') || bformFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: bformFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: 'VERIFIED',
         });
       }
 
       // 3. Father / Guardian CNIC (Only if actually uploaded)
-      if (up.fatherCnic?.dataUrl) {
+      const fatherCnicFile = up.fatherCnic || up.fatherCnicUploaded || up.fcnic;
+      if (fatherCnicFile?.dataUrl) {
         docMap.set(`${candKey}_FATHER_CNIC`, {
           id: `doc_fcnic_${s.id}`,
           studentId: s.id,
@@ -1726,17 +1782,18 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: up.fatherCnic?.name || `${s.fullName} - Father / Guardian CNIC`,
-          fileUrl: up.fatherCnic.dataUrl,
-          fileSize: up.fatherCnic?.size || '340 KB',
-          fileType: up.fatherCnic.dataUrl.includes('application/pdf') || up.fatherCnic.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-          uploadedAt: up.fatherCnic?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          title: fatherCnicFile.name || `${s.fullName} - Father / Guardian CNIC`,
+          fileUrl: fatherCnicFile.dataUrl,
+          fileSize: fatherCnicFile.size || '340 KB',
+          fileType: fatherCnicFile.dataUrl.includes('application/pdf') || fatherCnicFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: fatherCnicFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: 'VERIFIED',
         });
       }
 
       // 4. Academic Transcript / DMC (Only if actually uploaded)
-      if (up.dmc?.dataUrl) {
+      const dmcFile = up.dmc || up.dmcUploaded || up.resultCard || up.previousResult;
+      if (dmcFile?.dataUrl) {
         docMap.set(`${candKey}_DMC`, {
           id: `doc_dmc_${s.id}`,
           studentId: s.id,
@@ -1745,17 +1802,18 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'PREVIOUS_DMC',
-          title: up.dmc?.name || `${s.fullName} - DMC Marksheet (${s.currentClass || 'Class'})`,
-          fileUrl: up.dmc.dataUrl,
-          fileSize: up.dmc?.size || '820 KB',
-          fileType: up.dmc.dataUrl.includes('application/pdf') || up.dmc.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-          uploadedAt: up.dmc?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          title: dmcFile.name || `${s.fullName} - DMC Marksheet (${s.currentClass || 'Class'})`,
+          fileUrl: dmcFile.dataUrl,
+          fileSize: dmcFile.size || '820 KB',
+          fileType: dmcFile.dataUrl.includes('application/pdf') || dmcFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          uploadedAt: dmcFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
         });
       }
 
       // 5. Payment Deposit Receipt (Only if actually uploaded)
-      if (up.paymentReceipt?.dataUrl) {
+      const feeFile = up.paymentReceipt || up.incomeCertUploaded || up.receipt || up.challan;
+      if (feeFile?.dataUrl) {
         docMap.set(`${candKey}_FEE`, {
           id: `doc_pay_${s.id}`,
           studentId: s.id,
@@ -1764,17 +1822,18 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'PAYMENT_CHALLAN',
-          title: up.paymentReceipt?.name || `${s.fullName} - PKR 300 Fee Deposit Receipt`,
-          fileUrl: up.paymentReceipt.dataUrl,
-          fileSize: up.paymentReceipt?.size || '310 KB',
-          fileType: up.paymentReceipt.dataUrl.includes('application/pdf') || up.paymentReceipt.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
-          uploadedAt: up.paymentReceipt?.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          title: feeFile.name || `${s.fullName} - PKR 300 Fee Deposit Receipt`,
+          fileUrl: feeFile.dataUrl,
+          fileSize: feeFile.size || '310 KB',
+          fileType: feeFile.dataUrl.includes('application/pdf') || feeFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
+          uploadedAt: feeFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
         });
       }
 
       // 6. Domicile Certificate (Optional - Only if actually uploaded)
-      if (up.domicile?.dataUrl) {
+      const domicileFile = up.domicile || up.domicileUploaded;
+      if (domicileFile?.dataUrl) {
         docMap.set(`${candKey}_DOMICILE`, {
           id: `doc_dom_${s.id}`,
           studentId: s.id,
@@ -1783,14 +1842,14 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: up.domicile?.name || `${s.fullName} - Domicile Certificate (Optional)`,
-          fileUrl: up.domicile.dataUrl,
-          fileSize: up.domicile?.size || '390 KB',
+          title: domicileFile.name || `${s.fullName} - Domicile Certificate (Optional)`,
+          fileUrl: domicileFile.dataUrl,
+          fileSize: domicileFile.size || '390 KB',
           fileType:
-            up.domicile.dataUrl.includes('application/pdf') || up.domicile.name?.endsWith('.pdf')
+            domicileFile.dataUrl.includes('application/pdf') || domicileFile.name?.endsWith('.pdf')
               ? 'application/pdf'
               : 'image/jpeg',
-          uploadedAt: up.domicile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
+          uploadedAt: domicileFile.uploadedAt || s.createdAt || '2026-08-20T00:00:00Z',
           status: 'VERIFIED',
         });
       }

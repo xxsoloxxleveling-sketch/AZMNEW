@@ -71,7 +71,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
 
 
   const loadDocuments = async () => {
-    const docs = await mockApi.getStudentDocuments(student.id);
+    const docs = await mockApi.getStudentDocuments(student.id || student.applicationNo || student.cnicOrBForm);
     setDocuments(docs);
   };
 

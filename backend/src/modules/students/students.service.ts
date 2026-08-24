@@ -241,6 +241,7 @@ export class StudentsService {
 
     return {
       ...student,
+      uploadedDocuments: input.uploadedDocuments || undefined,
       feeChallan: feeRecord,
     };
   }

@@ -124,6 +124,7 @@ export const createStudentSchema = z.object({
   // Related data (Parts G, H, L)
   academicRecords: z.array(academicRecordSchema).optional(),
   documents: documentChecklistSchema.optional(),
+  uploadedDocuments: z.record(z.any()).optional(),
   registrationCentre: z.string().optional().nullable(),
   photoUrl: z.string().optional().nullable(),
 });
