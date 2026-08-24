@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import {
   UserPlus,
   QrCode,
@@ -9,6 +8,10 @@ import {
   Trash2,
   AlertTriangle,
   RefreshCw,
+  Zap,
+  CheckCircle2,
+  Clock,
+  Loader2,
 } from 'lucide-react';
 import { DataTable, Column } from '../shared/DataTable';
 import { StatusBadge } from '../shared/StatusBadge';
@@ -28,16 +31,23 @@ export const StudentsListView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [rollStatus, setRollStatus] = useState<{ readyCount: number; issuedCount: number; totalPaidCount: number; scheduledDate?: string } | null>(null);
+  const [showBatchRollModal, setShowBatchRollModal] = useState(false);
+  const [isIssuingBatch, setIsIssuingBatch] = useState(false);
 
   const fetchStudents = async (showFullLoading = true) => {
     if (showFullLoading) setIsLoading(true);
     setIsRefreshing(true);
     try {
-      const data = await mockApi.getStudents({
-        classLevel: classFilter,
-        status: statusFilter,
-      });
+      const [data, statusData] = await Promise.all([
+        mockApi.getStudents({
+          classLevel: classFilter,
+          status: statusFilter,
+        }),
+        mockApi.getRollNumberStatus().catch(() => null),
+      ]);
       setStudents(data);
+      if (statusData) setRollStatus(statusData);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -253,6 +263,23 @@ export const StudentsListView: React.FC = () => {
               <RefreshCw className={`w-3.5 h-3.5 text-[#185b9d] ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>{isRefreshing ? 'Syncing...' : 'Sync Live'}</span>
             </button>
+
+            {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
+              <button
+                onClick={() => setShowBatchRollModal(true)}
+                className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                title="Batch assign roll numbers and QR codes to paid candidates"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Issue Roll Numbers</span>
+                {rollStatus && rollStatus.readyCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white text-emerald-800 ml-0.5">
+                    {rollStatus.readyCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             <button
               onClick={() => setIsWalkInOpen(true)}
               className="px-4 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-md transition flex items-center gap-2"
@@ -336,6 +363,106 @@ export const StudentsListView: React.FC = () => {
               >
                 <Trash2 className="w-4 h-4" />
                 <span>{isDeleting ? 'Deleting...' : 'Delete Candidate'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Super Admin / Admin Batch Roll Number Issuance Modal */}
+      {showBatchRollModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 space-y-6 border border-slate-200 shadow-2xl">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center flex-shrink-0">
+                <Zap className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  Batch Roll Number Issuance
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Automated sequential roll number and biometric QR code generation.
+                </p>
+              </div>
+            </div>
+
+            {/* Issuance Statistics */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
+                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Ready to Roll</span>
+                <span className="text-2xl font-black text-emerald-900 block mt-0.5">
+                  {rollStatus?.readyCount || 0}
+                </span>
+                <span className="text-[10px] text-emerald-700 block">Fee Paid, No Roll No</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-center">
+                <span className="text-[10px] font-bold text-[#185b9d] uppercase tracking-wider block">Already Issued</span>
+                <span className="text-2xl font-black text-blue-900 block mt-0.5">
+                  {rollStatus?.issuedCount || 0}
+                </span>
+                <span className="text-[10px] text-blue-700 block">Roll Number Active</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Total Verified</span>
+                <span className="text-2xl font-black text-slate-900 block mt-0.5">
+                  {rollStatus?.totalPaidCount || 0}
+                </span>
+                <span className="text-[10px] text-slate-500 block">Fee Status PAID</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs text-slate-700">
+              <div className="flex items-center gap-2 font-bold text-slate-900">
+                <Clock className="w-4 h-4 text-[#185b9d]" />
+                <span>Scheduled Release Schedule:</span>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Official slips are published on <strong>{rollStatus?.scheduledDate || 'Sunday, 25 October 2026'}</strong>. Issuing roll numbers now will assign AZMVS-2026-XXXX sequence numbers and create biometric QR matrices in Supabase Storage.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowBatchRollModal(false)}
+                disabled={isIssuingBatch}
+                className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isIssuingBatch || (rollStatus?.readyCount === 0)}
+                onClick={async () => {
+                  setIsIssuingBatch(true);
+                  try {
+                    const res = await mockApi.issueRollNumbers();
+                    alert(res.message || `Successfully issued roll numbers to ${res.count} candidate(s)!`);
+                    setShowBatchRollModal(false);
+                    await fetchStudents();
+                  } catch (err: any) {
+                    alert(err.message || 'Failed to issue roll numbers.');
+                  } finally {
+                    setIsIssuingBatch(false);
+                  }
+                }}
+                className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                {isIssuingBatch ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing Batch Issuance...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    <span>
+                      {rollStatus && rollStatus.readyCount > 0
+                        ? `Issue Roll Numbers to ${rollStatus.readyCount} Candidate(s)`
+                        : 'No Pending Candidates'}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>

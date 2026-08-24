@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   GraduationCap,
   CalendarCheck,
@@ -16,11 +16,13 @@ import {
   Sparkles,
   Banknote,
   RefreshCw,
+  WifiOff,
 } from 'lucide-react';
 import { StatCard } from '../shared/StatCard';
 import { StatusBadge } from '../shared/StatusBadge';
 import { mockApi } from '../../../lib/mockApi';
 import { AdminTab } from '../layout/AdminSidebar';
+import { useAuth } from '../../../lib/authContext';
 
 interface DashboardViewProps {
   onNavigate: (tab: AdminTab) => void;
@@ -35,48 +37,86 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenMarkAttendance,
   onOpenGenerateFee,
 }) => {
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadDashboard = (showLoading = true) => {
+  const loadDashboard = useCallback(async (showLoading = true) => {
+    if (authLoading) return;
     if (showLoading) setIsLoading(true);
     setIsRefreshing(true);
-    mockApi.getDashboardOverview()
-      .then((res) => {
-        if (res) {
-          setData(res);
-        }
-      })
-      .catch((err) => {
-        console.warn('Dashboard fetch warning:', err);
-      })
-      .finally(() => {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      });
-  };
+    setErrorMessage(null);
+
+    try {
+      const res = await mockApi.getDashboardOverview();
+      if (res) {
+        setData(res);
+        setErrorMessage(null);
+      }
+    } catch (err: any) {
+      console.warn('Dashboard fetch warning:', err);
+      setErrorMessage(err?.message || 'Unable to connect to live database services.');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [authLoading]);
 
   useEffect(() => {
-    loadDashboard(true);
+    if (!authLoading) {
+      loadDashboard(true);
+    }
 
-    const handleFocus = () => loadDashboard(false);
+    const handleFocus = () => {
+      if (!authLoading) loadDashboard(false);
+    };
     window.addEventListener('focus', handleFocus);
-    const interval = setInterval(() => loadDashboard(false), 12000);
+    const interval = setInterval(() => {
+      if (!authLoading) loadDashboard(false);
+    }, 15000);
 
     return () => {
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);
     };
-  }, []);
+  }, [authLoading, loadDashboard]);
 
-  if (isLoading || !data) {
+  // 1. Auth Hydration or Initial Data Loading State
+  if (authLoading || (isLoading && !data && !errorMessage)) {
     return (
       <div className="py-32 flex flex-col items-center justify-center space-y-3">
         <Loader2 className="w-8 h-8 text-[#185b9d] animate-spin" />
         <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Loading Overview Dashboard...
+          {authLoading ? 'Verifying authentication credentials...' : 'Loading Overview Dashboard...'}
         </span>
+      </div>
+    );
+  }
+
+  // 2. Clear Error State (Never silently fall back to fake zero cache)
+  if (errorMessage && !data) {
+    return (
+      <div className="py-24 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto space-y-4">
+        <div className="w-14 h-14 rounded-3xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shadow-xs">
+          <WifiOff className="w-7 h-7" />
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="text-base font-bold text-slate-900">
+            Unable to Load Dashboard Data
+          </h3>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            {errorMessage}. Live metrics could not be retrieved from the central database.
+          </p>
+        </div>
+        <button
+          onClick={() => loadDashboard(true)}
+          className="px-5 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white text-xs font-bold transition flex items-center gap-2 shadow-md cursor-pointer"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Retry Live Connection</span>
+        </button>
       </div>
     );
   }

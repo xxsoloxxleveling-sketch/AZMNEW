@@ -29,6 +29,7 @@ import {
 import { StatusBadge } from '../shared/StatusBadge';
 import { StudentDossierModal } from '../../common/StudentDossierModal';
 import { useAuth } from '../../../lib/authContext';
+import { API_BASE_URL } from '../../../lib/apiClient';
 
 interface StudentDetailViewProps {
   student: MockStudent;
@@ -89,7 +90,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
   };
 
   const handleUpdateStatus = async (docId: string, status: 'VERIFIED' | 'REJECTED') => {
-    await mockApi.updateDocumentStatus(docId, status);
+    await mockApi.updateDocumentStatus(docId, status, undefined, student.id);
     loadDocuments();
     if (selectedDoc && selectedDoc.id === docId) {
       setSelectedDoc((prev) => (prev ? { ...prev, status } : null));
@@ -218,7 +219,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
             src={
               student.uploadedDocuments?.photo?.dataUrl ||
               (student.photoUrl && !student.photoUrl.includes('supabase.co/storage') ? student.photoUrl : null) ||
-              `https://azmnew.onrender.com/api/students/${student.applicationNo || student.id}/document/photo`
+              `${API_BASE_URL}/api/students/${student.applicationNo || student.id}/document/photo`
             }
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src = `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -243,7 +244,11 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
                     : 'bg-amber-100 text-amber-800'
                 }`}
               >
-                {student.feeStatus === 'PAID' ? 'Fee Verified (PKR 300 Paid)' : 'Pending Fee Verification'}
+                {student.feeStatus === 'PAID'
+                  ? student.rollNumber
+                    ? 'Fee Verified & Roll No Issued'
+                    : 'Payment Confirmed — Roll Number Pending Release'
+                  : 'Pending Fee Verification'}
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium">
@@ -252,7 +257,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 pt-1 text-xs text-slate-600 font-mono">
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg">App: {student.applicationNo || student.id}</span>
               <span className="bg-blue-50 text-[#185b9d] font-bold px-2.5 py-1 rounded-lg">
-                Roll: {student.rollNumber || 'PENDING FEE'}
+                Roll: {student.rollNumber || (student.feeStatus === 'PAID' ? 'PENDING BATCH RELEASE' : 'PENDING FEE')}
               </span>
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg">CNIC: {student.cnicOrBForm || 'N/A'}</span>
             </div>

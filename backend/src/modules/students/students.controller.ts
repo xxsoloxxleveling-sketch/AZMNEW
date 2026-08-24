@@ -80,11 +80,36 @@ export class StudentsController {
 
   async approvePayment(req: Request, res: Response, next: NextFunction) {
     try {
-      const student = await studentsService.approveStudentPayment(req.params.id);
+      const student = await studentsService.approvePayment(req.params.id);
       res.status(200).json({
         success: true,
-        message: 'Student registration payment approved. Roll number and QR code generated.',
+        message: 'Student registration payment approved successfully. Roll number is pending batch release.',
         data: student,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getRollNumberStatus(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const status = await studentsService.getRollNumberStatus();
+      res.status(200).json({
+        success: true,
+        data: status,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async issueRollNumbers(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await studentsService.issueRollNumbers(req.body);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
       });
     } catch (error) {
       next(error);

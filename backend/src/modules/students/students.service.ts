@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { prisma } from '../../lib/prisma';
+import { prisma, TransactionType } from '../../lib/prisma';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
 import { supabaseStorage, StorageBucket } from '../../lib/supabaseStorage';
@@ -297,8 +297,8 @@ export class StudentsService {
             },
             officeUse: {
               create: {
-                eligibility: 'ELIGIBLE',
-                finalStatus: 'SHORTLISTED',
+                eligibility: null,
+                finalStatus: null,
                 testRollNo: null,
                 testCentre: 'Main Campus Examination Center, Mansehra',
                 testReportingTime: '09:00 AM',
@@ -367,59 +367,181 @@ export class StudentsService {
       throw error;
     }
 
-    let rollNumber = student.rollNumber;
-    let qrToken = student.qrToken;
-    let qrImageUrl = student.qrImageUrl;
-
-    // If roll number not assigned yet, generate it now
-    if (!rollNumber) {
-      rollNumber = await this.generateRollNumber();
-      qrToken = qrService.generateSignedQrToken(rollNumber);
-      const qrPayload = `https://jadoon.edu.pk/attend?token=${qrToken}`;
-      qrImageUrl = await qrService.generateQrDataUrl(qrPayload);
-
-      await supabaseStorage.uploadFile('qr-codes', `${rollNumber}-qr.png`, qrImageUrl, 'image/png');
-    }
-
     // Mark student's registration fee records as PAID
+    const paidAt = new Date();
     await prisma.feeRecord.updateMany({
       where: { studentId: student.id },
       data: {
         status: 'PAID',
         amountPaid: 300,
-        paidAt: new Date(),
+        paidAt,
       },
     });
 
-    // Update Student with assigned Roll Number & active QR code
-    const updatedStudent = await prisma.student.update({
+    // Create FEE_INCOME transaction record if none exists for this student
+    const existingFee = student.feeRecords[0];
+    if (existingFee) {
+      const existingTx = await prisma.transaction.findFirst({
+        where: { relatedFeeId: existingFee.id },
+      });
+      if (!existingTx) {
+        await prisma.transaction.create({
+          data: {
+            type: TransactionType.FEE_INCOME,
+            amount: 300,
+            description: `Registration Fee Collection (${student.fullName} - ${student.applicationNo})`,
+            relatedFeeId: existingFee.id,
+          },
+        });
+      }
+    }
+
+    const updatedStudent = await prisma.student.findUnique({
       where: { id: studentId },
-      data: {
-        rollNumber,
-        qrToken,
-        qrImageUrl,
-        officeUse: {
-          upsert: {
-            create: {
-              testRollNo: rollNumber,
-              eligibility: 'ELIGIBLE',
-              finalStatus: 'SHORTLISTED',
-              testCentre: 'Jadoon Public School & College Exam Centre',
-              testReportingTime: '09:00 AM',
-            },
-            update: {
-              testRollNo: rollNumber,
+      include: {
+        academicRecords: true,
+        documents: true,
+        officeUse: true,
+        feeRecords: true,
+      },
+    });
+
+    return this.formatStudentWithDocuments(updatedStudent!);
+  }
+
+  async approvePayment(studentId: string) {
+    return this.approveStudentPayment(studentId);
+  }
+
+  /**
+   * Retrieves summary counts for roll number issuance.
+   */
+  async getRollNumberStatus() {
+    const [readyCount, issuedCount, totalPaidCount, setting] = await Promise.all([
+      prisma.student.count({
+        where: {
+          rollNumber: null,
+          feeRecords: {
+            some: {
+              status: 'PAID',
             },
           },
         },
+      }),
+      prisma.student.count({
+        where: {
+          rollNumber: { not: null },
+        },
+      }),
+      prisma.student.count({
+        where: {
+          feeRecords: {
+            some: {
+              status: 'PAID',
+            },
+          },
+        },
+      }),
+      prisma.systemSetting.findUnique({
+        where: { key: 'rollNumberScheduleDate' },
+      }),
+    ]);
+
+    return {
+      readyCount,
+      issuedCount,
+      totalPaidCount,
+      scheduledDate: setting?.value || 'Sunday, 25 October 2026',
+    };
+  }
+
+  /**
+   * Batch issues sequential roll numbers and biometric QR codes for all students with fee status PAID but rollNumber null.
+   */
+  async issueRollNumbers(input?: { scheduledDate?: string }) {
+    if (input?.scheduledDate) {
+      await prisma.systemSetting.upsert({
+        where: { key: 'rollNumberScheduleDate' },
+        update: { value: input.scheduledDate },
+        create: { key: 'rollNumberScheduleDate', value: input.scheduledDate },
+      });
+    }
+
+    const eligibleStudents = await prisma.student.findMany({
+      where: {
+        rollNumber: null,
+        feeRecords: {
+          some: {
+            status: 'PAID',
+          },
+        },
       },
+      orderBy: { createdAt: 'asc' },
       include: {
         feeRecords: true,
         officeUse: true,
       },
     });
 
-    return updatedStudent;
+    if (eligibleStudents.length === 0) {
+      return {
+        message: 'No eligible candidates pending roll number issuance.',
+        count: 0,
+        students: [],
+      };
+    }
+
+    const updatedStudents = [];
+
+    for (const student of eligibleStudents) {
+      const rollNumber = await this.generateRollNumber();
+      const qrToken = qrService.generateSignedQrToken(rollNumber);
+      const qrPayload = `https://jadoon.edu.pk/attend?token=${qrToken}`;
+      const qrImageUrl = await qrService.generateQrDataUrl(qrPayload);
+
+      try {
+        await supabaseStorage.uploadFile('qr-codes', `${rollNumber}-qr.png`, qrImageUrl, 'image/png');
+      } catch (storageErr) {
+        console.warn(`Storage upload note for roll ${rollNumber}:`, storageErr);
+      }
+
+      const updated = await prisma.student.update({
+        where: { id: student.id },
+        data: {
+          rollNumber,
+          qrToken,
+          qrImageUrl,
+          officeUse: {
+            upsert: {
+              create: {
+                testRollNo: rollNumber,
+                eligibility: null,
+                finalStatus: null,
+                testCentre: 'Main Campus Examination Center, Mansehra',
+                testReportingTime: '09:00 AM',
+              },
+              update: {
+                testRollNo: rollNumber,
+              },
+            },
+          },
+        },
+        include: {
+          academicRecords: true,
+          documents: true,
+          officeUse: true,
+          feeRecords: true,
+        },
+      });
+
+      updatedStudents.push(this.formatStudentWithDocuments(updated));
+    }
+
+    return {
+      message: `Successfully issued official roll numbers and biometric QR codes to ${updatedStudents.length} candidate(s).`,
+      count: updatedStudents.length,
+      students: updatedStudents,
+    };
   }
 
   /**

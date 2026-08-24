@@ -12,12 +12,16 @@ export const UserManagementTab: React.FC = () => {
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<Role>('TEACHER');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await mockApi.getUsers();
       setUsers(data);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load user accounts.');
     } finally {
       setIsLoading(false);
     }
@@ -114,6 +118,18 @@ export const UserManagementTab: React.FC = () => {
           <span>Create User</span>
         </button>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between text-xs text-rose-800">
+          <span>Failed to load live user accounts: {error}</span>
+          <button
+            onClick={fetchUsers}
+            className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold cursor-pointer transition"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <DataTable
         columns={columns}

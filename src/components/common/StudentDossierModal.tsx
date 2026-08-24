@@ -35,7 +35,7 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
   if (!isOpen || !student) return null;
 
   const appNo = student.applicationNo || student.studentId || student.id;
-  const rollNo = student.rollNumber || 'PENDING ASSIGNMENT';
+  const rollNo = student.rollNumber || (student.feeStatus === 'PAID' ? 'PENDING BATCH RELEASE' : 'PENDING FEE');
 
   const academicRecords = (student as any).academicRecords || [
     {

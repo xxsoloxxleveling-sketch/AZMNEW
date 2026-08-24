@@ -22,7 +22,8 @@ import {
  * 1. Create a `.env` file with `VITE_API_BASE_URL=https://your-api-domain.com/api`
  * 2. Set `USE_MOCK_FALLBACK = false` when your backend endpoints are fully deployed.
  */
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+import { API_BASE_URL } from '../lib/apiClient';
+export { API_BASE_URL };
 export const USE_MOCK_FALLBACK = true;
 
 /**
@@ -79,8 +80,8 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
         };
       }
 
-      // Check if Super Admin scheduled release date is in the future
-      if (!mockApi.isRollNumberReleased()) {
+      // Check if roll number is not yet batch-issued OR if scheduled release date is in the future
+      if (!student.rollNumber || !mockApi.isRollNumberReleased()) {
         const releaseConfig = mockApi.getRollNumberReleaseConfig();
         const dateFormatted = new Date(releaseConfig.releaseDateTime).toLocaleString('en-US', {
           weekday: 'long',
@@ -90,20 +91,17 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
           hour: '2-digit',
           minute: '2-digit',
         });
+        const msg = !student.rollNumber
+          ? `Registration fee payment of PKR 300 is confirmed! Official Roll Numbers and examination hall seating plans are scheduled for batch release on ${dateFormatted}. Please return on the release date to download your slip.`
+          : releaseConfig.announcementMessage;
+
         return {
           success: false,
-          error: `SCHEDULED_RELEASE:::${student.fullName}:::${student.applicationNo}:::${dateFormatted}:::${releaseConfig.announcementMessage}`,
+          error: `SCHEDULED_RELEASE:::${student.fullName}:::${student.applicationNo}:::${dateFormatted}:::${msg}`,
         };
       }
 
-      // Ensure roll number follows AZMVS format
-
-      const year = new Date().getFullYear();
-      let rollNo = student.rollNumber;
-      if (!rollNo || rollNo.startsWith('JPS-')) {
-        const seq = (student.applicationNo || student.id || '0101').split('-').pop();
-        rollNo = `AZMVS-${year}-${seq}`;
-      }
+      const rollNo = student.rollNumber;
 
       const slip: RollNumberSlip = {
         rollNo: rollNo,
@@ -113,13 +111,13 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
         cnicBForm: student.cnicOrBForm,
         classLevel: student.currentClass || 'SSC-II (Class 10th)',
         candidatePhoto: student.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
-        testCenter: student.officeUse?.testCentre || 'AZM Examination Center - Main Exam Hall, Mansehra',
+        testCenter: student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra',
         centerAddress: 'Main College Road, Mansehra / Abbottabad Regional Center, KP',
         examDate: student.officeUse?.testDate || 'Sunday, 15 November 2026',
         reportingTime: student.officeUse?.testReportingTime || '09:00 AM',
         examStartTime: '10:00 AM - 12:00 PM (120 Mins)',
-        roomNo: 'HALL-01',
-        seatIndex: `SEAT-${rollNo.split('-').pop() || '0101'}`,
+        roomNo: student.assignedRoom || 'HALL-01',
+        seatIndex: student.seatNo || `SEAT-${rollNo.split('-').pop() || '0101'}`,
         securityHash: `AZMVS-SHA256-${rollNo}`,
         qrPayload: student.qrToken || `VERIFIED-${rollNo}`,
         barcode: `||| |||| || ||||| ${rollNo}`,
@@ -158,7 +156,7 @@ export async function searchCandidateResult(query: string): Promise<ApiResponse<
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/results/search?query=${encodeURIComponent(clean)}`);
+    const response = await fetch(`${API_BASE_URL}/api/results/search?query=${encodeURIComponent(clean)}`);
     const data = await response.json();
     if (response.ok && data.success) {
       return { success: true, data: data.data };
@@ -189,7 +187,7 @@ export async function fetchPublicMeritList(params?: {
     if (params?.district && params.district !== 'all') queryParams.append('district', params.district);
     if (params?.search) queryParams.append('search', params.search);
 
-    const response = await fetch(`${API_BASE_URL}/results/merit-list?${queryParams.toString()}`);
+    const response = await fetch(`${API_BASE_URL}/api/results/merit-list?${queryParams.toString()}`);
     if (response.ok) {
       const data = await response.json();
       return { success: true, data: data.data || (Array.isArray(data) ? data : []) };
@@ -341,7 +339,7 @@ export async function submitGrievanceTicket(
   payload: Omit<GrievanceTicket, 'ticketId' | 'timestamp' | 'status'>
 ): Promise<ApiResponse<{ ticketId: string }>> {
   try {
-    const response = await fetch(`${API_BASE_URL}/grievances`, {
+    const response = await fetch(`${API_BASE_URL}/api/grievances`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

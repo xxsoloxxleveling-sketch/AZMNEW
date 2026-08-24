@@ -173,12 +173,16 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
 
   const loadData = async () => {
     setIsLoading(true);
-    const [stData, tcData] = await Promise.all([
-      mockApi.getStudents(),
-      mockApi.getTestCenters(),
+    const [stData, tcData, hallsData] = await Promise.all([
+      mockApi.getStudents().catch(() => []),
+      mockApi.getTestCenters().catch(() => []),
+      mockApi.getExamHalls().catch(() => []),
     ]);
     setStudents(stData);
     setTestCenters(tcData);
+    if (hallsData && hallsData.length > 0) {
+      setHalls(hallsData);
+    }
 
     const map: Record<string, 'PRESENT' | 'ABSENT' | 'NOT_MARKED'> = {};
     stData.forEach((s) => {

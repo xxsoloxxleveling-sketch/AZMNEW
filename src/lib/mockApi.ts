@@ -1,7 +1,6 @@
 import { setToken, setRefreshToken, setUser, getUser, getToken } from './auth';
-import { apiFetch, apiDownloadPdf } from './apiClient';
-
-export const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'https://azmnew.onrender.com';
+import { apiFetch, apiDownloadPdf, API_BASE_URL } from './apiClient';
+export { API_BASE_URL };
 
 export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'TEACHER' | 'ACCOUNTANT';
 
@@ -751,113 +750,58 @@ export const mockApi = {
 
   // 2. Dashboard Overview Aggregation
   async getDashboardOverview() {
-    try {
-      const live = await apiFetch<any>('/api/dashboard/overview');
+    const live = await apiFetch<any>('/api/dashboard/overview');
 
-      // Fetch fee defaulters from live fees
-      const feesRes: any = await apiFetch<any>('/api/fees?status=UNPAID').catch(() => []);
-      const feesList = Array.isArray(feesRes) ? feesRes : Array.isArray(feesRes?.feeRecords) ? feesRes.feeRecords : [];
+    // Fetch fee defaulters from live fees
+    const feesRes: any = await apiFetch<any>('/api/fees?status=UNPAID').catch(() => []);
+    const feesList = Array.isArray(feesRes) ? feesRes : Array.isArray(feesRes?.feeRecords) ? feesRes.feeRecords : [];
 
-      return {
-        stats: {
-          totalStudents: live.stats?.totalStudents || 0,
-          attendancePercentage: live.attendanceToday?.attendancePercentage || 0,
-          feeCollectionPercentage: live.feeCollection?.collectionPercentage || 0,
-          activeStaffCount: live.stats?.activeStaffCount || 0,
-          totalBilled: live.feeCollection?.totalBilled || 0,
-          totalCollected: live.feeCollection?.totalCollected || 0,
-          feeIncome: live.financialFlow?.feeIncome || 0,
-          salaryExpenses: live.financialFlow?.salaryExpenses || 0,
-          netCashFlow: live.financialFlow?.netCashFlow || 0,
+    return {
+      stats: {
+        totalStudents: live.stats?.totalStudents || 0,
+        attendancePercentage: live.attendanceToday?.attendancePercentage || 0,
+        feeCollectionPercentage: live.feeCollection?.collectionPercentage || 0,
+        activeStaffCount: live.stats?.activeStaffCount || 0,
+        totalBilled: live.feeCollection?.totalBilled || 0,
+        totalCollected: live.feeCollection?.totalCollected || 0,
+        feeIncome: live.financialFlow?.feeIncome || 0,
+        salaryExpenses: live.financialFlow?.salaryExpenses || 0,
+        netCashFlow: live.financialFlow?.netCashFlow || 0,
+      },
+      attendanceTrends: [
+        { day: 'Mon', rate: live.attendanceToday?.attendancePercentage || 0 },
+        { day: 'Tue', rate: live.attendanceToday?.attendancePercentage || 0 },
+        { day: 'Wed', rate: live.attendanceToday?.attendancePercentage || 0 },
+        { day: 'Thu', rate: live.attendanceToday?.attendancePercentage || 0 },
+        { day: 'Fri', rate: live.attendanceToday?.attendancePercentage || 0 },
+        { day: 'Today', rate: live.attendanceToday?.attendancePercentage || 0 },
+      ],
+      feeDefaulters: (feesList || []).slice(0, 5).map((f: any) => ({
+        id: f.id,
+        studentName: f.student?.fullName || f.studentName || 'Candidate',
+        rollNumber: f.student?.rollNumber || f.rollNumber || 'Pending Approval',
+        currentClass: f.student?.currentClass || f.currentClass || 'SSC',
+        amountDue: Number(f.amountDue) || 300,
+        status: f.status || 'UNPAID',
+      })),
+      recentActivity: [
+        {
+          id: 'act_1',
+          text: `System connected to live PostgreSQL cluster. Total enrolled students: ${live.stats?.totalStudents || 0}`,
+          time: 'Live',
         },
-        attendanceTrends: [
-          { day: 'Mon', rate: live.attendanceToday?.attendancePercentage || 0 },
-          { day: 'Tue', rate: live.attendanceToday?.attendancePercentage || 0 },
-          { day: 'Wed', rate: live.attendanceToday?.attendancePercentage || 0 },
-          { day: 'Thu', rate: live.attendanceToday?.attendancePercentage || 0 },
-          { day: 'Fri', rate: live.attendanceToday?.attendancePercentage || 0 },
-          { day: 'Today', rate: live.attendanceToday?.attendancePercentage || 0 },
-        ],
-        feeDefaulters: (feesList || []).slice(0, 5).map((f: any) => ({
-          id: f.id,
-          studentName: f.student?.fullName || f.studentName || 'Candidate',
-          rollNumber: f.student?.rollNumber || f.rollNumber || 'Pending Approval',
-          currentClass: f.student?.currentClass || f.currentClass || 'SSC',
-          amountDue: Number(f.amountDue) || 300,
-          status: f.status || 'UNPAID',
-        })),
-        recentActivity: [
-          {
-            id: 'act_1',
-            text: `System connected to live PostgreSQL cluster. Total enrolled students: ${live.stats?.totalStudents || 0}`,
-            time: 'Live',
-          },
-          {
-            id: 'act_2',
-            text: `Attendance ledger synced: ${live.attendanceToday?.markedCount || 0} active check-ins recorded.`,
-            time: 'Today',
-          },
-        ],
-        demographics: {
-          byGender: live.studentDemographics?.byGender || { MALE: 0, FEMALE: 0 },
-          byClassLevel: live.studentDemographics?.byClassLevel || {},
-          byScholarshipCategory: live.studentDemographics?.byScholarshipCategory || {},
+        {
+          id: 'act_2',
+          text: `Attendance ledger synced: ${live.attendanceToday?.markedCount || 0} active check-ins recorded.`,
+          time: 'Today',
         },
-      };
-    } catch (err) {
-      console.warn('Live dashboard fetch error:', err);
-      const localStudents = getLocalStudents();
-      const paidStudents = localStudents.filter((s) => s.feeStatus === 'PAID');
-      const paidPct = localStudents.length > 0 ? Math.round((paidStudents.length / localStudents.length) * 100) : 0;
-
-      return {
-        stats: {
-          totalStudents: localStudents.length,
-          attendancePercentage: 0,
-          feeCollectionPercentage: paidPct,
-          activeStaffCount: 0,
-          totalBilled: localStudents.length * 300,
-          totalCollected: paidStudents.length * 300,
-          feeIncome: paidStudents.length * 300,
-          salaryExpenses: 0,
-          netCashFlow: paidStudents.length * 300,
-        },
-        attendanceTrends: [
-          { day: 'Mon', rate: 0 },
-          { day: 'Tue', rate: 0 },
-          { day: 'Wed', rate: 0 },
-          { day: 'Thu', rate: 0 },
-          { day: 'Fri', rate: 0 },
-          { day: 'Today', rate: 0 },
-        ],
-        feeDefaulters: localStudents
-          .filter((s) => s.feeStatus !== 'PAID')
-          .slice(0, 5)
-          .map((s) => ({
-            id: s.id,
-            studentName: s.fullName,
-            rollNumber: s.rollNumber || 'Pending Fee',
-            currentClass: s.currentClass || 'SSC',
-            amountDue: 300,
-            status: 'UNPAID',
-          })),
-        recentActivity: [
-          {
-            id: 'act_1',
-            text: `Enrolled students ledger: ${localStudents.length} candidate(s) active.`,
-            time: 'Live',
-          },
-        ],
-        demographics: {
-          byGender: {
-            MALE: localStudents.filter((s) => s.gender === 'male' || s.gender === 'MALE').length,
-            FEMALE: localStudents.filter((s) => s.gender === 'female' || s.gender === 'FEMALE').length,
-          },
-          byClassLevel: {},
-          byScholarshipCategory: {},
-        },
-      };
-    }
+      ],
+      demographics: {
+        byGender: live.studentDemographics?.byGender || { MALE: 0, FEMALE: 0 },
+        byClassLevel: live.studentDemographics?.byClassLevel || {},
+        byScholarshipCategory: live.studentDemographics?.byScholarshipCategory || {},
+      },
+    };
   },
 
   // 3. Students Management
@@ -901,15 +845,11 @@ export const mockApi = {
       studentMap.set(k, s);
     });
 
-    // 2. Merge server list
+    // 2. Merge server list with real feeStatus from PostgreSQL
     serverList.forEach((s) => {
       const k = getCanonicalStudentKey(s);
       const existing = studentMap.get(k);
-      const isPaid =
-        isStudentFeePaid(s) ||
-        (existing ? isStudentFeePaid(existing) : false) ||
-        s.feeStatus === 'PAID' ||
-        existing?.feeStatus === 'PAID';
+      const realFeeStatus = s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : existing?.feeStatus || 'UNPAID');
       const roll = s.rollNumber || existing?.rollNumber || null;
 
       if (existing) {
@@ -920,24 +860,17 @@ export const mockApi = {
           applicationNo: s.applicationNo || existing.applicationNo,
           uploadedDocuments: existing.uploadedDocuments || s.uploadedDocuments,
           academicRecords: s.academicRecords?.length ? s.academicRecords : existing.academicRecords,
-          feeStatus: isPaid ? 'PAID' : 'UNPAID',
+          feeStatus: realFeeStatus,
           rollNumber: roll,
           attendancePercentage: s.attendancePercentage ?? existing.attendancePercentage ?? 100,
         });
       } else {
         studentMap.set(k, {
           ...s,
-          feeStatus: isPaid ? 'PAID' : s.feeStatus || 'UNPAID',
+          feeStatus: realFeeStatus,
           rollNumber: roll,
           attendancePercentage: s.attendancePercentage ?? 100,
         });
-      }
-    });
-
-    // Ensure any entry in studentMap matching paid keys is marked PAID
-    studentMap.forEach((val) => {
-      if (isStudentFeePaid(val)) {
-        val.feeStatus = 'PAID';
       }
     });
 
@@ -1195,24 +1128,51 @@ export const mockApi = {
   },
 
   async approveStudentPayment(studentId: string, studentObj?: any): Promise<any> {
-    markStudentFeePaid([
-      studentId,
-      studentObj?.id,
-      studentObj?.applicationNo,
-      studentObj?.cnicOrBForm,
-      studentObj?.rollNumber,
-      studentObj?.fullName,
-    ]);
     try {
       const res = await apiFetch<any>(`/api/students/${studentId}/approve-payment`, {
         method: 'POST',
       });
-      updateLocalStudentPayment(studentId, res?.rollNumber);
+      updateLocalStudentPayment(studentId);
       return res || { success: true };
     } catch (err) {
-      console.warn('Backend payment approval fallback:', err);
-      const updated = updateLocalStudentPayment(studentId);
-      return updated || { success: true };
+      console.warn('Backend payment approval error:', err);
+      throw err;
+    }
+  },
+
+  async getRollNumberStatus(): Promise<{ readyCount: number; issuedCount: number; totalPaidCount: number; scheduledDate?: string }> {
+    try {
+      const res = await apiFetch<any>('/api/students/roll-number-status');
+      return res?.data || res;
+    } catch (err) {
+      const local = getLocalStudents();
+      const paid = local.filter((s) => s.feeStatus === 'PAID');
+      const ready = paid.filter((s) => !s.rollNumber);
+      const issued = local.filter((s) => !!s.rollNumber);
+      return {
+        readyCount: ready.length,
+        issuedCount: issued.length,
+        totalPaidCount: paid.length,
+        scheduledDate: 'Sunday, 25 October 2026',
+      };
+    }
+  },
+
+  async issueRollNumbers(scheduledDate?: string): Promise<{ count: number; message: string }> {
+    try {
+      const res = await apiFetch<any>('/api/students/issue-roll-numbers', {
+        method: 'POST',
+        body: JSON.stringify({ scheduledDate }),
+      });
+      releaseAllPaidRollNumbers();
+      return res?.data || res;
+    } catch (err) {
+      console.warn('Backend batch roll number issuance error:', err);
+      const count = releaseAllPaidRollNumbers();
+      return {
+        count,
+        message: `Issued roll numbers for ${count} eligible candidate(s).`,
+      };
     }
   },
 
@@ -1254,51 +1214,28 @@ export const mockApi = {
   },
 
   async getExamHalls(): Promise<any[]> {
-    try {
-      const res = await apiFetch<any[]>('/exam-halls');
-      if (res.success && res.data && res.data.length > 0) return res.data;
-    } catch (e) {
-      console.warn('API /exam-halls failed, falling back to local:', e);
-    }
-    return [];
+    const res = await apiFetch<any[]>('/api/exam-halls');
+    return Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
   },
 
   async createExamHall(data: any): Promise<any> {
-    try {
-      const res = await apiFetch<any>('/exam-halls', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-      if (res.success && res.data) return res.data;
-    } catch (e) {
-      console.warn('API create exam hall failed:', e);
-    }
-    return {
-      id: `hall_${Date.now()}`,
-      ...data,
-    };
+    const res = await apiFetch<any>('/api/exam-halls', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return (res && (res.data || res)) || data;
   },
 
   async updateExamHall(id: string, data: any): Promise<any> {
-    try {
-      const res = await apiFetch<any>(`/exam-halls/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      });
-      if (res.success && res.data) return res.data;
-    } catch (e) {
-      console.warn('API update exam hall failed:', e);
-    }
-    return { id, ...data };
+    const res = await apiFetch<any>(`/api/exam-halls/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return (res && (res.data || res)) || { id, ...data };
   },
 
   async deleteExamHall(id: string): Promise<boolean> {
-    try {
-      await apiFetch(`/exam-halls/${id}`, { method: 'DELETE' });
-      return true;
-    } catch (e) {
-      console.warn('API delete exam hall failed:', e);
-    }
+    await apiFetch(`/api/exam-halls/${id}`, { method: 'DELETE' });
     return true;
   },
 
@@ -1313,14 +1250,10 @@ export const mockApi = {
       seatNo?: string;
     }
   ): Promise<MockStudent | null> {
-    try {
-      await apiFetch<any>(`/exam-halls/students/${studentId}/allocation`, {
-        method: 'PATCH',
-        body: JSON.stringify(allocation),
-      });
-    } catch (e) {
-      console.warn('Live API allocation error, applying locally:', e);
-    }
+    await apiFetch<any>(`/api/exam-halls/students/${studentId}/allocation`, {
+      method: 'PATCH',
+      body: JSON.stringify(allocation),
+    });
 
     const list = getLocalStudents();
     const cleanId = studentId.toLowerCase().trim();
@@ -1354,19 +1287,15 @@ export const mockApi = {
     hallInfo: { hallName: string; roomNumber: string; testCenterName?: string; testCenterId?: string },
     studentIds: string[]
   ): Promise<number> {
-    try {
-      await apiFetch<any>(`/exam-halls/${hallId}/batch-assign`, {
-        method: 'POST',
-        body: JSON.stringify({
-          studentIds,
-          hallName: hallInfo.hallName,
-          roomNumber: hallInfo.roomNumber,
-          testCenterName: hallInfo.testCenterName,
-        }),
-      });
-    } catch (e) {
-      console.warn('Live batch assign error, applying locally:', e);
-    }
+    await apiFetch<any>(`/api/exam-halls/${hallId}/batch-assign`, {
+      method: 'POST',
+      body: JSON.stringify({
+        studentIds,
+        hallName: hallInfo.hallName,
+        roomNumber: hallInfo.roomNumber,
+        testCenterName: hallInfo.testCenterName,
+      }),
+    });
 
     const all = await this.getStudents();
     let updatedCount = 0;
@@ -1404,13 +1333,9 @@ export const mockApi = {
   },
 
   async unassignStudentFromHall(studentId: string): Promise<boolean> {
-    try {
-      await apiFetch<any>(`/exam-halls/students/${studentId}/allocation`, {
-        method: 'DELETE',
-      });
-    } catch (e) {
-      console.warn('Live unassign error, updating locally:', e);
-    }
+    await apiFetch<any>(`/api/exam-halls/students/${studentId}/allocation`, {
+      method: 'DELETE',
+    });
 
     const list = getLocalStudents();
     const cleanId = studentId.toLowerCase().trim();
@@ -1726,158 +1651,84 @@ export const mockApi = {
 
   // 10. User Management (Super Admin)
   async getUsers(): Promise<MockUserAccount[]> {
-    try {
-      const res = await apiFetch<MockUserAccount[]>('/users');
-      if (res.success && res.data) return res.data;
-    } catch (e) {
-      console.warn('API /users failed, falling back to local list:', e);
-    }
-    return [
-      {
-        id: 'usr_001',
-        name: 'Prof. Dr. M. Jadoon',
-        email: 'superadmin@jadoon.edu.pk',
-        role: 'SUPER_ADMIN',
-        status: 'ACTIVE',
-        createdAt: '2025-01-01T00:00:00Z',
-      },
-      {
-        id: 'usr_002',
-        name: 'Muhammad Rashid (Admin)',
-        email: 'admin@jadoon.edu.pk',
-        role: 'ADMIN',
-        status: 'ACTIVE',
-        createdAt: '2025-02-15T00:00:00Z',
-      },
-      {
-        id: 'usr_003',
-        name: 'Asad Ali (Examiner/Teacher)',
-        email: 'teacher@jadoon.edu.pk',
-        role: 'TEACHER',
-        status: 'ACTIVE',
-        createdAt: '2025-03-01T00:00:00Z',
-      },
-      {
-        id: 'usr_004',
-        name: 'Kashif Finance',
-        email: 'accountant@jadoon.edu.pk',
-        role: 'ACCOUNTANT',
-        status: 'ACTIVE',
-        createdAt: '2025-04-10T00:00:00Z',
-      },
-    ];
+    const res = await apiFetch<any>('/api/users');
+    const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+    return list.map((u: any) => ({
+      id: u.id,
+      name: u.name || u.email.split('@')[0],
+      email: u.email,
+      role: u.role,
+      status: u.status || 'ACTIVE',
+      createdAt: u.createdAt || new Date().toISOString(),
+    }));
   },
 
   async createUser(payload: { name: string; email: string; role: Role; password?: string }): Promise<MockUserAccount> {
-    try {
-      const res = await apiFetch<MockUserAccount>('/users', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      if (res.success && res.data) return res.data;
-    } catch (e) {
-      console.warn('API create user failed, using local mock:', e);
-    }
+    const res = await apiFetch<any>('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const u = res?.data || res;
     return {
-      id: `usr_${Date.now()}`,
-      name: payload.name,
-      email: payload.email,
-      role: payload.role,
-      status: 'ACTIVE',
-      createdAt: new Date().toISOString(),
+      id: u.id || `usr_${Date.now()}`,
+      name: u.name || payload.name,
+      email: u.email || payload.email,
+      role: u.role || payload.role,
+      status: u.status || 'ACTIVE',
+      createdAt: u.createdAt || new Date().toISOString(),
     };
   },
 
   // 10. Test Centers Management (Custom Centers)
   async getTestCenters(): Promise<MockTestCenter[]> {
-    try {
-      const res = await apiFetch<MockTestCenter[]>('/test-centers');
-      if (res.success && res.data && res.data.length > 0) return res.data;
-    } catch (e) {
-      console.warn('API /test-centers failed, falling back to local:', e);
-    }
+    const res = await apiFetch<any>('/api/test-centers');
+    const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+    const students = await this.getStudents().catch(() => []);
 
-    const list = getLocalTestCenters();
-    const students = getLocalStudents();
-
-    // Compute live assigned candidates count for each center
-    return list.map((tc) => {
+    return list.map((tc: any) => {
       const assigned = students.filter(
         (s) =>
           s.officeUse?.testCentre?.toLowerCase().includes(tc.name.toLowerCase()) ||
           s.officeUse?.testCentre?.toLowerCase().includes(tc.district.toLowerCase())
       ).length;
       return {
-        ...tc,
+        id: tc.id,
+        name: tc.name,
+        code: tc.code,
+        campus: tc.campus,
+        address: tc.address,
+        district: tc.district,
+        province: tc.province,
+        capacity: Number(tc.capacity) || 300,
+        reportingTime: tc.reportingTime || '09:00 AM',
+        testDate: tc.testDate || 'Sunday, 15 November 2026',
+        contactPerson: tc.contactPerson || '',
+        contactPhone: tc.contactPhone || '',
+        status: tc.status || 'ACTIVE',
+        createdAt: tc.createdAt || new Date().toISOString(),
         assignedCount: assigned,
       };
     });
   },
 
   async createTestCenter(data: Partial<MockTestCenter>): Promise<MockTestCenter> {
-    try {
-      const res = await apiFetch<MockTestCenter>('/test-centers', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-      if (res.success && res.data) return res.data;
-    } catch (e) {
-      console.warn('API create test center failed:', e);
-    }
-
-    const list = getLocalTestCenters();
-    const newCenter: MockTestCenter = {
-      id: `tc_${Date.now()}`,
-      name: data.name || 'New Examination Center',
-      code: data.code || `TC-${Math.floor(100 + Math.random() * 900)}`,
-      campus: data.campus || 'Main Campus',
-      address: data.address || 'Khyber Pakhtunkhwa',
-      district: data.district || 'Mansehra',
-      province: data.province || 'Khyber Pakhtunkhwa',
-      capacity: Number(data.capacity) || 300,
-      reportingTime: data.reportingTime || '09:00 AM',
-      testDate: data.testDate || 'Sunday, 15 November 2026',
-      contactPerson: data.contactPerson || 'Center Superintendent',
-      contactPhone: data.contactPhone || '0305-1755551',
-      status: data.status || 'ACTIVE',
-      createdAt: new Date().toISOString(),
-    };
-    list.unshift(newCenter);
-    saveLocalTestCenters(list);
-    return newCenter;
+    const res = await apiFetch<any>('/api/test-centers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return (res && (res.data || res)) || data;
   },
 
   async updateTestCenter(id: string, data: Partial<MockTestCenter>): Promise<MockTestCenter> {
-    try {
-      const res = await apiFetch<MockTestCenter>(`/test-centers/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      });
-      if (res.success && res.data) return res.data;
-    } catch (e) {
-      console.warn('API update test center failed:', e);
-    }
-
-    const list = getLocalTestCenters();
-    const idx = list.findIndex((tc) => tc.id === id);
-    if (idx >= 0) {
-      list[idx] = { ...list[idx], ...data };
-      saveLocalTestCenters(list);
-      return list[idx];
-    }
-    throw new Error('Test Center not found');
+    const res = await apiFetch<any>(`/api/test-centers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return (res && (res.data || res)) || { id, ...data };
   },
 
   async deleteTestCenter(id: string): Promise<boolean> {
-    try {
-      await apiFetch(`/test-centers/${id}`, { method: 'DELETE' });
-      return true;
-    } catch (e) {
-      console.warn('API delete test center failed:', e);
-    }
-
-    const list = getLocalTestCenters().filter((tc) => tc.id !== id);
-    saveLocalTestCenters(list);
+    await apiFetch(`/api/test-centers/${id}`, { method: 'DELETE' });
     return true;
   },
 
@@ -1952,7 +1803,7 @@ export const mockApi = {
           fileSize: photoFile?.size || 'Candidate Photo',
           fileType: 'image/jpeg',
           uploadedAt: photoFile?.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'VERIFIED',
+          status: 'PENDING_REVIEW',
         });
       }
 
@@ -1973,7 +1824,7 @@ export const mockApi = {
           fileSize: bformFile.size || 'Candidate Attachment',
           fileType: bformUrl.includes('application/pdf') || bformFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
           uploadedAt: bformFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'VERIFIED',
+          status: 'PENDING_REVIEW',
         });
       }
 
@@ -1994,7 +1845,7 @@ export const mockApi = {
           fileSize: fatherCnicFile.size || 'Candidate Attachment',
           fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
           uploadedAt: fatherCnicFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'VERIFIED',
+          status: 'PENDING_REVIEW',
         });
       }
 
@@ -2015,7 +1866,7 @@ export const mockApi = {
           fileSize: dmcFile.size || 'Candidate Attachment',
           fileType: dmcUrl.includes('application/pdf') || dmcFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
           uploadedAt: dmcFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
+          status: 'PENDING_REVIEW',
         });
       }
 
@@ -2036,7 +1887,7 @@ export const mockApi = {
           fileSize: feeFile.size || 'Candidate Attachment',
           fileType: feeUrl.includes('application/pdf') || feeFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
           uploadedAt: feeFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: isStudentFeePaid(s) ? 'VERIFIED' : 'PENDING_REVIEW',
+          status: 'PENDING_REVIEW',
         });
       }
 
@@ -2060,7 +1911,7 @@ export const mockApi = {
               ? 'application/pdf'
               : 'image/jpeg',
           uploadedAt: domicileFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'VERIFIED',
+          status: 'PENDING_REVIEW',
         });
       }
 
@@ -2080,7 +1931,8 @@ export const mockApi = {
   async updateDocumentStatus(
     docId: string,
     status: 'VERIFIED' | 'PENDING_REVIEW' | 'REJECTED',
-    rejectionReason?: string
+    rejectionReason?: string,
+    studentId?: string
   ): Promise<boolean> {
     try {
       let savedDocs: MockStudentDocument[] = [];
@@ -2099,6 +1951,24 @@ export const mockApi = {
         } as any);
       }
       localStorage.setItem(DOCUMENTS_STORAGE_KEY, JSON.stringify(savedDocs));
+
+      // Persist to backend OfficeUseRecord if studentId provided
+      if (studentId) {
+        try {
+          await apiFetch(`/api/students/${studentId}/office-use`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              documentVerifiedBy: status === 'VERIFIED' ? 'Admin Reviewer' : undefined,
+              documentVerifiedAt: status === 'VERIFIED' ? new Date().toISOString() : undefined,
+              eligibility: status === 'VERIFIED' ? 'ELIGIBLE' : status === 'REJECTED' ? 'NOT_ELIGIBLE' : undefined,
+              eligibilityRemarks: rejectionReason,
+            }),
+          });
+        } catch (e) {
+          console.warn('Backend office-use document verification sync notice:', e);
+        }
+      }
+
       return true;
     } catch (e) {
       return false;

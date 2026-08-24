@@ -286,11 +286,15 @@ export const RollNumberScheduleTab: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 if (confirm('Assign and generate official Roll Numbers (AZMVS-2026-XXXX) for ALL registered candidates who have completed PKR 300 fee payment?')) {
-                  const count = mockApi.releaseAllPaidRollNumbers();
-                  alert(`Successfully assigned and activated Roll Numbers for ${count} candidates with paid registration fees.`);
-                  setIsLiveNow(isRollNumberReleased());
+                  try {
+                    const res = await mockApi.issueRollNumbers(config.releaseDateTime);
+                    alert(res.message || `Successfully assigned and activated Roll Numbers for ${res.count} candidate(s).`);
+                    setIsLiveNow(isRollNumberReleased());
+                  } catch (err: any) {
+                    alert(err.message || 'Failed to issue roll numbers.');
+                  }
                 }
               }}
               className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"

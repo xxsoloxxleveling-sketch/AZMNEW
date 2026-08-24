@@ -52,6 +52,19 @@ router.post(
   studentsController.purgeAll
 );
 
+// Roll Number Batch Issuance & Status (SUPER_ADMIN, ADMIN)
+router.get(
+  '/roll-number-status',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.getRollNumberStatus
+);
+
+router.post(
+  '/issue-roll-numbers',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.issueRollNumbers
+);
+
 // Student Roster Query Endpoints (Authenticated)
 router.get(
   '/',
