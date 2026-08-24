@@ -684,16 +684,30 @@ PATCH  /api/students/:id/office-use        (admin fills Part L: eligibility,
 ### 10.4 Phase 2.5 — Registration Form (insert between Phase 2 and Phase 3 in section 9)
 
 ```
-Extend the students module to capture every field from Parts A-F of the 
+Extend the students module to capture every field from Parts A-I of the 
 printed registration form (BACKEND_PLAN.md section 10.1), plus the 
 AcademicRecord, DocumentChecklist, and OfficeUseRecord related tables for 
-Parts G, H, and L. Build the PDF export endpoint per section 10.2 using 
-Puppeteer, with an HTML template that visually matches the uploaded form 
-images. Also build the PartnerInstitution model and its matching 
-registration + PDF export endpoints. Test: register a student with full 
-data, download the PDF, and confirm it visually matches the printed form 
-layout with all fields correctly populated. Stop here before continuing 
-to Phase 3.
+Parts G, H, and L. Make sure Part I (referral source: how did you hear 
+about the program) is included in the schema and the create endpoint — 
+don't drop it.
+
+Build the PDF export endpoint per section 10.2 using Puppeteer, with an 
+HTML template that visually matches the uploaded printed form images, 
+including both page 1 (Parts A-F) and page 2 (Parts G-L). Render Parts J 
+and K as their own distinct declaration blocks on page 2 with separate 
+Applicant and Parent/Guardian statements and signature lines — matching 
+the original two-page layout, not merged into the single Part F 
+declaration on page 1.
+
+Also build the PartnerInstitution model and its matching registration + 
+PDF export endpoints, matching the second uploaded form image. 
+
+Add PATCH /api/students/:id/office-use for admin to fill Part L.
+
+Test: register a student with full data, download the PDF, and confirm 
+it visually matches the printed form layout across both pages with all 
+fields correctly populated. Do the same for a partner institution 
+registration. Stop here before continuing to Phase 3.
 ```
 
 ---
@@ -711,3 +725,108 @@ prompt above — they're what keeps a multi-session build from turning messy:
 - Before finishing, list every file you created or changed, and confirm the 
   test/verification step passed.
 ```
+
+---
+
+## 12. Full Run Sheet — Paste One Block At A Time
+
+Start every fresh session with this kickoff block first:
+
+```
+I'm giving you BACKEND_PLAN.md as the source of truth for this project. 
+Read it fully before doing anything. We will work in phases — I'll give 
+you one phase prompt at a time. Rules for every phase:
+
+- Follow the folder structure and module pattern in BACKEND_PLAN.md exactly. 
+  Do not create files outside this structure.
+- Only build what the current phase's prompt asks for. Do not start the 
+  next module early.
+- Before finishing, list every file you created or changed, and confirm 
+  the test/verification step for this phase passed.
+- Stop and wait for me after each phase. Do not continue automatically.
+
+Confirm you've read the plan and are ready for Phase 0.
+```
+
+Then paste phases one at a time, in order, waiting for confirmed completion
+of each before moving to the next:
+
+**Phase 0 — Scaffold**
+```
+Set up the backend project using the structure and stack in BACKEND_PLAN.md 
+section 2 and 3. Create the folder structure exactly as specified, initialize 
+Prisma, set up .env.example, and get the Express app running with a 
+health-check route (GET /api/health). Do not build any feature modules yet. 
+Confirm the server starts and connects to Postgres before stopping. Show me 
+the folder tree and confirm the health check responds.
+```
+
+**Phase 1 — Auth & RBAC**
+```
+Build the auth module (login, JWT issue/refresh, auth middleware, role 
+middleware) per BACKEND_PLAN.md section 6. Seed one SUPER_ADMIN user via a 
+Prisma seed script. Test login with curl/Postman and confirm a protected 
+test route rejects requests without a valid token, and accepts requests 
+with one. Show me the curl commands and their responses. Stop here.
+```
+
+**Phase 2 — Core Students & Signed QR Tokens**
+```
+Build the base students module: CRUD endpoints, applicationNo/rollNumber 
+generation, and the QR generation flow (signed qrToken + QR image 
+generation, per section 5). Test by creating a student via API and 
+confirming a valid QR image is returned/stored. Stop here.
+```
+
+**Phase 2.5 — Full Registration Form (Parts A–L) + Partner Registration + PDF Export**
+
+Use the prompt in section 10.4 above.
+
+**Phase 3 — QR Attendance & Scanning Engine**
+```
+Build the attendance module per BACKEND_PLAN.md section 5. Implement both 
+QR_SCAN and MANUAL marking through the single POST /api/attendance/scan 
+endpoint. Enforce the one-record-per-student-per-day constraint at the 
+database level. Test: scan the same student's QR token twice in one day 
+and confirm the second attempt is rejected with a clear error message. 
+Stop here.
+```
+
+**Phase 4 — Fee Challans & Income Transactions**
+```
+Build the fees module: challan generation, mark-paid endpoint, and the 
+fee collection overview aggregation. Test generating a challan and marking 
+it paid, and confirm it creates a corresponding Transaction record 
+(type FEE_INCOME). Stop here.
+```
+
+**Phase 5 — Staff, Payroll & Expense Transactions**
+```
+Build staff and payroll modules. Running payroll for a month should create 
+PayrollRecord entries for all active staff. Marking payroll as paid should 
+create a Transaction record (type SALARY_EXPENSE). Test the full cycle 
+end to end. Stop here.
+```
+
+**Phase 6 — Dashboard Overview Aggregations**
+```
+Build GET /api/dashboard/overview returning: total students, today's 
+attendance %, fee collection %, active staff count, financial flow (fee 
+income vs salary expenses this month), and student demographics (by class 
+level and gender). Read-only aggregation queries, no new tables. Test 
+against seeded data and confirm the numbers are accurate. Stop here.
+```
+
+**Phase 7 — Frontend Live Data Integration**
+```
+Only start this after Phases 0-6 are confirmed working. Connect the 
+existing Jadoon PS admin dashboard UI, the public student registration 
+form, the admin walk-in registration flow, and the partner registration 
+page to these live endpoints — replacing all mock/0 values with real API 
+data. Wire up the "Scan QR" flow to POST /api/attendance/scan and the 
+PDF download buttons to the registration-pdf endpoints.
+```
+
+If the agent ever tries to build multiple phases in one go, or skips ahead
+before showing proof the current phase works, stop it and say: "go back to
+just [phase name], show me it working first."

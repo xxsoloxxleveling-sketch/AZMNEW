@@ -9,7 +9,8 @@ export const LeadershipSection: React.FC = () => {
       name: OFFICIAL_DATA.founder.name,
       role: OFFICIAL_DATA.founder.role,
       organization: OFFICIAL_DATA.founder.organization,
-      photo: '/pictures/Sumama Khan.jpeg',
+      photo: '/pictures/sumama_khan.jpeg',
+
       badge: 'Founder & DG',
       badgeColor: 'bg-blue-50 text-[#185b9d] border-blue-200/80',
       ringColor: 'ring-[#185b9d]/20 group-hover:ring-[#185b9d]/40',

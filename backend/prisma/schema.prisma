@@ -1,0 +1,302 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+  ACCOUNTANT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  GRADUATED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum ScholarshipCategory {
+  GENERAL_MERIT
+  FINANCIALLY_NEEDY
+  ORPHAN
+  PERSON_WITH_DISABILITY
+}
+
+model Student {
+  id                 String              @id @default(cuid())
+  applicationNo      String              @unique
+  studentId          String?             @unique
+  registrationCentre String?
+  rollNumber         String?             @unique
+  qrToken            String              @unique
+  qrImageUrl         String?
+  photoUrl           String?
+  status             StudentStatus       @default(ACTIVE)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @default(now()) @updatedAt
+
+  // Part A: Personal Information
+  fullName           String
+  fatherName         String
+  gender             Gender
+  dateOfBirth        DateTime
+  age                Int?
+  cnicOrBForm        String              @unique
+  nationality        String              @default("Pakistani")
+  religion           String?
+
+  // Part B: Contact Information
+  address            String
+  district           String
+  province           String
+  studentMobile      String?
+  parentMobile       String
+  whatsapp           String?
+  email              String?
+
+  // Part C: Educational Information
+  currentClass       String
+  hsscGroup          String?
+  bsDepartment       String?
+  bsSemester         String?
+  schoolName         String
+  boardOrUniversity  String
+  currentRollNo      String?
+
+  // Part D: Scholarship Category
+  scholarshipCategory ScholarshipCategory
+
+  // Part E: Emergency & Family Information
+  guardianOccupation   String?
+  guardianMonthlyIncome Decimal?
+  emergencyContact     String
+  emergencyRelation    String
+
+  // Part F: Declaration
+  applicantSignedAt  DateTime?
+  parentSignedAt     DateTime?
+
+  // Part I: Referral Source
+  referralSource     String?
+
+  // Relations
+  academicRecords    AcademicRecord[]
+  documents          DocumentChecklist?
+  officeUse          OfficeUseRecord?
+  attendance         Attendance[]
+  feeRecords         FeeRecord[]
+}
+
+model AcademicRecord {
+  id            String   @id @default(cuid())
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  examLevel     String
+  boardOrUni    String?
+  yearOfPassing String?
+  totalMarks    Int?
+  obtainedMarks Int?
+  percentage    Decimal?
+}
+
+model DocumentChecklist {
+  id                  String  @id @default(cuid())
+  studentId           String  @unique
+  student             Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  bformCnicCopy       Boolean @default(false)
+  fatherCnicCopy      Boolean @default(false)
+  passportPhotos      Boolean @default(false)
+  previousResultCard  Boolean @default(false)
+  domicileCertificate Boolean @default(false)
+  incomeCertificate   Boolean @default(false)
+  otherDocuments      String?
+}
+
+enum EligibilityStatus {
+  ELIGIBLE
+  NOT_ELIGIBLE
+}
+
+enum FinalStatus {
+  SHORTLISTED
+  NOT_SHORTLISTED
+  REJECTED
+}
+
+model OfficeUseRecord {
+  id                 String             @id @default(cuid())
+  studentId          String             @unique
+  student            Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  documentVerifiedBy String?
+  documentVerifiedAt DateTime?
+  eligibility        EligibilityStatus?
+  eligibilityRemarks String?
+  testRollNo         String?
+  testCentre         String?
+  testReportingTime  String?
+  testDate           DateTime?
+  interviewDate      DateTime?
+  interviewTime      String?
+  panelNo            String?
+  finalStatus        FinalStatus?
+  officeRemarks      String?
+  authorizedBy       String?
+}
+
+enum InstitutionType {
+  SCHOOL
+  COLLEGE
+  ACADEMY
+  UNIVERSITY
+}
+
+enum PartnerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model PartnerInstitution {
+  id                 String          @id @default(cuid())
+  partnerCode        String?         @unique
+  applicationDate    DateTime        @default(now())
+  institutionName    String
+  institutionType    InstitutionType
+  campus             String?
+  address            String
+  district           String
+  province           String
+  contactName        String
+  contactDesignation String
+  contactMobile      String
+  contactWhatsapp    String?
+  contactEmail       String?
+  website            String?
+  classesOffered     String[]
+  studentStrength    Int?
+  expectedApplicants Int?
+  agreedToTerms      Boolean         @default(false)
+  signedAt           DateTime?
+  status             PartnerStatus   @default(PENDING)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @default(now()) @updatedAt
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
+
+enum AttendanceMethod {
+  QR_SCAN
+  MANUAL
+}
+
+model Attendance {
+  id             String           @id @default(cuid())
+  studentId      String
+  student        Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date           DateTime         @default(now())
+  status         AttendanceStatus
+  markedByUserId String
+  method         AttendanceMethod
+  createdAt      DateTime         @default(now())
+
+  @@unique([studentId, date])
+}
+
+enum FeeStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+model FeeRecord {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  month         String
+  amountDue     Decimal
+  amountPaid    Decimal   @default(0)
+  status        FeeStatus @default(UNPAID)
+  challanNumber String    @unique
+  dueDate       DateTime
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+}
+
+enum StaffStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Staff {
+  id        String          @id @default(cuid())
+  fullName  String
+  role      String
+  cnic      String          @unique
+  phone     String
+  joinDate  DateTime
+  salary    Decimal
+  status    StaffStatus     @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @default(now()) @updatedAt
+  payroll   PayrollRecord[]
+}
+
+enum PayrollStatus {
+  PENDING
+  PAID
+}
+
+model PayrollRecord {
+  id        String        @id @default(cuid())
+  staffId   String
+  staff     Staff         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  month     String
+  amount    Decimal
+  status    PayrollStatus @default(PENDING)
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @default(now()) @updatedAt
+}
+
+enum TransactionType {
+  FEE_INCOME
+  SALARY_EXPENSE
+  OTHER_INCOME
+  OTHER_EXPENSE
+}
+
+model Transaction {
+  id               String          @id @default(cuid())
+  type             TransactionType
+  amount           Decimal
+  description      String
+  relatedFeeId     String?
+  relatedPayrollId String?
+  createdAt        DateTime        @default(now())
+}
