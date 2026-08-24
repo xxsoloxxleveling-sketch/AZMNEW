@@ -1437,7 +1437,7 @@ export const mockApi = {
         applicationNo: s.applicationNo || 'APP-2026',
         currentClass: s.currentClass || 'SSC',
         docType: 'CANDIDATE_PHOTO',
-        title: up.photo?.name || 'Candidate Passport Photograph',
+        title: `${s.fullName} - Passport Photograph`,
         fileUrl: photoUrl,
         fileSize: up.photo?.size || '142 KB',
         fileType: 'image/jpeg',
@@ -1482,7 +1482,7 @@ export const mockApi = {
         applicationNo: s.applicationNo || 'APP-2026',
         currentClass: s.currentClass || 'SSC',
         docType: 'CNIC_BFORM',
-        title: up.bform?.name || `CNIC / B-Form (${s.cnicOrBForm || 'Candidate Document'})`,
+        title: `${s.fullName} - Candidate B-Form / CNIC`,
         fileUrl: bformUrl,
         fileSize: up.bform?.size || '480 KB',
         fileType: 'image/jpeg',
@@ -1534,7 +1534,7 @@ export const mockApi = {
         applicationNo: s.applicationNo || 'APP-2026',
         currentClass: s.currentClass || 'SSC',
         docType: 'PREVIOUS_DMC',
-        title: up.dmc?.name || `Previous Academic DMC Transcript (${s.currentClass || 'Enrolled Class'})`,
+        title: `${s.fullName} - DMC Marksheet (${s.currentClass || 'Class'})`,
         fileUrl: dmcUrl,
         fileSize: up.dmc?.size || '820 KB',
         fileType: 'image/jpeg',
@@ -1579,7 +1579,7 @@ export const mockApi = {
         applicationNo: s.applicationNo || 'APP-2026',
         currentClass: s.currentClass || 'SSC',
         docType: 'PAYMENT_CHALLAN',
-        title: up.paymentReceipt?.name || `PKR 300 Fee Deposit Receipt / JazzCash Slip`,
+        title: `${s.fullName} - PKR 300 Fee Deposit Receipt`,
         fileUrl: payUrl,
         fileSize: up.paymentReceipt?.size || '310 KB',
         fileType: 'image/png',
@@ -1597,7 +1597,7 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: up.fatherCnic.name || 'Father / Guardian CNIC Front & Back',
+          title: `${s.fullName} - Father / Guardian CNIC`,
           fileUrl: up.fatherCnic.dataUrl,
           fileSize: up.fatherCnic.size || '340 KB',
           fileType: 'image/jpeg',
@@ -1606,7 +1606,7 @@ export const mockApi = {
         });
       }
 
-      // 6. Domicile Certificate
+      // 6. Domicile Certificate (Optional)
       if (up.domicile?.dataUrl) {
         docMap.set(`${candKey}_DOMICILE`, {
           id: `doc_dom_${s.id}`,
@@ -1616,7 +1616,7 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
-          title: up.domicile.name || 'Domicile Certificate (KP / Hazara)',
+          title: `${s.fullName} - Domicile Certificate (Optional)`,
           fileUrl: up.domicile.dataUrl,
           fileSize: up.domicile.size || '390 KB',
           fileType:
@@ -1627,6 +1627,7 @@ export const mockApi = {
           status: 'VERIFIED',
         });
       }
+
     });
 
     const generatedDocs = Array.from(docMap.values());

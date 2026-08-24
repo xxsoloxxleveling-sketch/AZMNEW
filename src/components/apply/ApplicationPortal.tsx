@@ -381,17 +381,49 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     }
   };
 
-  // Real Document Attachment Handler with Auto-Optimization
+  // Helper to format standardized and clear document filenames
+  const getFormattedDocName = (docKey: string, originalFileName?: string): string => {
+    const cleanName = (formData.fullName || 'Candidate')
+      .trim()
+      .replace(/[^a-zA-Z0-9]/g, '_')
+      .replace(/_+/g, '_');
+    const ext = originalFileName ? originalFileName.split('.').pop() || 'jpg' : 'jpg';
+
+    switch (docKey) {
+      case 'bformUploaded':
+      case 'bform':
+        return `${cleanName}_Candidate_BForm_CNIC.${ext}`;
+      case 'fatherCnicUploaded':
+      case 'fatherCnic':
+        return `${cleanName}_Father_CNIC.${ext}`;
+      case 'dmcUploaded':
+      case 'dmc':
+        return `${cleanName}_DMC_Marksheet.${ext}`;
+      case 'domicileUploaded':
+      case 'domicile':
+        return `${cleanName}_Domicile_Certificate.${ext}`;
+      case 'incomeCertUploaded':
+      case 'paymentReceipt':
+        return `${cleanName}_Fee_Payment_Receipt.${ext}`;
+      case 'photo':
+        return `${cleanName}_Passport_Photo.jpg`;
+      default:
+        return `${cleanName}_${docKey}.${ext}`;
+    }
+  };
+
+  // Real Document Attachment Handler with Auto-Optimization & Clear Standard Naming
   const handleDocumentUpload = async (docKey: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
+      const standardDocName = getFormattedDocName(docKey, file.name);
       const { dataUrl, sizeFormatted } = await compressImageFile(file, 1200, 0.75);
       setUploadedDocs((prev) => ({
         ...prev,
         [docKey]: {
-          name: file.name,
+          name: standardDocName,
           size: sizeFormatted,
           dataUrl,
         },
@@ -420,7 +452,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
       saveUploadedFilesForCandidate([formData.cnicBForm, formData.fullName], {
         [targetField]: {
-          name: file.name,
+          name: standardDocName,
           size: sizeFormatted,
           dataUrl,
           uploadedAt: new Date().toISOString(),
@@ -430,6 +462,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       console.warn('Document compression fallback:', err);
     }
   };
+
 
 
 
@@ -785,8 +818,9 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         if (!formData.documents?.bformUploaded) errs.push('Candidate B-Form / CNIC scanned copy is required.');
         if (!formData.documents?.fatherCnicUploaded) errs.push('Father / Guardian CNIC scanned copy is required.');
         if (!formData.documents?.dmcUploaded) errs.push('Previous Examination DMC / Result Card is required.');
-        if (!formData.documents?.domicileUploaded) errs.push('District Domicile Certificate (KP / Hazara) is required.');
+        // Domicile certificate is completely optional
         break;
+
 
       case 8:
         if (!formData.declarationAccepted) errs.push('Please accept the legal terms and evaluation protocol undertaking.');
@@ -1593,8 +1627,9 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                       { key: 'bformUploaded' as const, title: 'Candidate B-Form / CNIC Scanned Copy', req: true },
                       { key: 'fatherCnicUploaded' as const, title: 'Father / Guardian CNIC Front & Back', req: true },
                       { key: 'dmcUploaded' as const, title: 'Last Examination DMC / Result Card', req: true },
-                      { key: 'domicileUploaded' as const, title: 'Domicile Certificate (KP / Hazara)', req: true },
+                      { key: 'domicileUploaded' as const, title: 'Domicile Certificate (Optional)', req: false },
                       { key: 'incomeCertUploaded' as const, title: 'Income / Need Proof Certificate (Optional)', req: false },
+
                     ].map((doc) => {
                       const isUploaded = formData.documents[doc.key];
                       const fileInfo = uploadedDocs[doc.key];
