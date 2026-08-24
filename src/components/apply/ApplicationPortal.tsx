@@ -174,22 +174,90 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     setFormData(prev => ({ ...prev, cnicBForm: formatted }));
   };
 
-  // LocalStorage Auto-save & load
+  // Sync initialClass prop if user navigates from homepage category selection
+  useEffect(() => {
+    if (initialClass) {
+      setFormData(prev => ({ ...prev, currentClass: initialClass }));
+    }
+  }, [initialClass]);
+
+  // LocalStorage Draft loader
   useEffect(() => {
     try {
       const saved = localStorage.getItem('AZM_STUDENT_APP_V');
       if (saved) {
         const parsed = JSON.parse(saved);
-        setFormData(prev => ({ ...prev, ...parsed }));
+        if (parsed && parsed.status === 'draft') {
+          setFormData(prev => ({
+            ...prev,
+            ...parsed,
+            currentClass: initialClass || parsed.currentClass || prev.currentClass,
+          }));
+        }
       }
     } catch (e) {
       console.warn('LocalStorage not available');
     }
   }, []);
 
+  const handleResetForm = () => {
+    try {
+      localStorage.removeItem('AZM_STUDENT_APP_V');
+    } catch (e) {}
+    setUploadedDocs({});
+    clearSignature();
+    setIsSubmitted(false);
+    setCreatedStudent(null);
+    setSubmittedAppId('');
+    setFormData({
+      id: `APP-V-${Math.floor(10000 + Math.random() * 90000)}`,
+      submissionDate: new Date().toISOString().split('T')[0],
+      status: 'draft',
+      fullName: '',
+      fatherName: '',
+      gender: 'male',
+      dob: '',
+      age: '',
+      cnicBForm: '',
+      photoUrl: '',
+      permanentAddress: '',
+      district: 'Mansehra',
+      province: 'Khyber Pakhtunkhwa',
+      parentMobile: '',
+      mobile: '',
+      whatsapp: '',
+      email: '',
+      currentClass: initialClass || 'Class 10th (SSC-II)',
+      discipline: 'Science (Biology/Pre-Medical)',
+      schoolName: '',
+      boardUniversity: 'BISE Abbottabad',
+      currentRollNo: '',
+      appliedCategory: 'Category B - Director General Merit Scholarship',
+      isSpecialNeed: false,
+      specialNeedDetails: '',
+      guardianOccupation: '',
+      monthlyHouseholdIncome: 0,
+      dependentsCount: 1,
+      emergencyContact: '',
+      academicRecords: [],
+      documents: {
+        bformUploaded: false,
+        fatherCnicUploaded: false,
+        dmcUploaded: false,
+        domicileUploaded: false,
+        incomeCertUploaded: false,
+      },
+      declarationAccepted: false,
+      signatureDataUrl: '',
+    });
+    setCurrentStage(1);
+    setStageErrors({});
+    setSubmitError('');
+  };
+
   const saveDraft = () => {
     try {
-      localStorage.setItem('AZM_STUDENT_APP_V', JSON.stringify(formData));
+      localStorage.setItem('AZM_STUDENT_APP_V', JSON.stringify({ ...formData, status: 'draft' }));
       setSaveStatus('Draft auto-saved locally!');
       setTimeout(() => setSaveStatus(''), 3000);
     } catch (e) {
@@ -954,7 +1022,22 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
             <div className="mb-8">
               <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
                 <span>Stage {currentStage} of 8: {stagesList[currentStage - 1].title}</span>
-                <span className="text-[#185b9d] font-mono">{Math.round((currentStage / 8) * 100)}% Completed</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[#185b9d] font-mono">{Math.round((currentStage / 8) * 100)}% Completed</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Reset all fields and start a fresh application?')) {
+                        handleResetForm();
+                      }
+                    }}
+                    className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-2.5 py-1 rounded-lg border border-slate-200 hover:border-rose-200 flex items-center gap-1 transition"
+                    title="Clear cached fields and start a new application"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Start Fresh / Clear</span>
+                  </button>
+                </div>
               </div>
               <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                 <motion.div
@@ -2445,14 +2528,10 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsSubmitted(false);
-                    setCreatedStudent(null);
-                    setCurrentStage(1);
-                  }}
-                  className="px-3 py-2 text-xs text-slate-500 hover:text-slate-800"
+                  onClick={handleResetForm}
+                  className="px-3 py-2 text-xs text-slate-500 hover:text-slate-800 font-semibold"
                 >
-                  Submit Another
+                  Submit Another Application
                 </button>
               </div>
             </div>
