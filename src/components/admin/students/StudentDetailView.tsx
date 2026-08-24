@@ -91,6 +91,26 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
         </button>
 
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+          {student.feeStatus !== 'PAID' && (
+            <button
+              onClick={async () => {
+                if (confirm(`Approve PKR 300 fee payment and verify registration for ${student.fullName}?`)) {
+                  try {
+                    await mockApi.approveStudentPayment(student.id);
+                    alert(`Fee payment verified for ${student.fullName}. Candidate registration confirmed in database!`);
+                    onBack();
+                  } catch (err: any) {
+                    alert(err.message || 'Failed to approve payment');
+                  }
+                }
+              }}
+              className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Check className="w-4 h-4" />
+              <span>Approve Fee (PKR 300)</span>
+            </button>
+          )}
+
           <button
             onClick={() => setIsDossierOpen(true)}
             className="px-3.5 py-2 text-xs font-bold bg-blue-50 border border-blue-200 text-[#185b9d] hover:bg-blue-100 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -98,6 +118,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
             <FileText className="w-4 h-4" />
             <span>Full Profile Dossier</span>
           </button>
+
 
           <button
             onClick={() => printStudentDossier(student)}

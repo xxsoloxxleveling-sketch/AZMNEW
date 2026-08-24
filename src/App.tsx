@@ -57,6 +57,12 @@ const ScholarshipView = lazy(() =>
 const ApplicationPortal = lazy(() =>
   import('./components/apply/ApplicationPortal').then((m) => ({ default: m.ApplicationPortal }))
 );
+const ApplicationClosedNotice = lazy(() =>
+  import('./components/apply/ApplicationClosedNotice').then((m) => ({
+    default: m.ApplicationClosedNotice,
+  }))
+);
+
 const RollNumberSlipView = lazy(() =>
   import('./components/rollnumber/RollNumberSlipView').then((m) => ({
     default: m.RollNumberSlipView,
@@ -132,6 +138,17 @@ function AppContent() {
         setCurrentRoute('admin');
         setAdminTab(hash as AdminTab);
       } else if (
+        hash === 'apply-test' ||
+        hash === 'test-apply' ||
+        hash === 'test' ||
+        hash === 'apply-sandbox' ||
+        hash === 'apply-preview' ||
+        window.location.search.includes('test=true') ||
+        window.location.search.includes('apply=test')
+      ) {
+        setCurrentRoute('public');
+        setActiveTab('apply-test');
+      } else if (
         ['about', 'scholarship', 'apply', 'roll-number', 'results', 'partners', 'gallery', 'contact'].includes(
           hash
         )
@@ -139,6 +156,7 @@ function AppContent() {
         setCurrentRoute('public');
         setActiveTab(hash as PageTab);
       }
+
     };
 
     handleHash();
@@ -439,6 +457,29 @@ function AppContent() {
               transition={{ duration: 0.2 }}
             >
               <Suspense fallback={<ViewLoadingFallback />}>
+                <ApplicationClosedNotice onSelectTab={handleSelectTab} />
+              </Suspense>
+            </motion.div>
+          )}
+
+          {activeTab === 'apply-test' && (
+            <motion.div
+              key="apply-test"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Sandbox Header Banner for Team Testing */}
+              <div className="bg-amber-400 text-slate-950 px-4 py-2.5 text-xs font-black text-center border-b border-amber-500 shadow-xs flex items-center justify-center gap-2">
+                <span className="px-2 py-0.5 rounded-md bg-slate-950 text-amber-300 font-mono text-[10px] uppercase tracking-wider">
+                  Internal Test Sandbox
+                </span>
+                <span>
+                  You are viewing the test duplicate application form (URL: <code className="bg-amber-300/80 px-1 py-0.5 rounded text-[11px]">#apply-test</code>). Candidate submissions save directly to the testing registry.
+                </span>
+              </div>
+              <Suspense fallback={<ViewLoadingFallback />}>
                 <ApplicationPortal
                   initialClass={prefillClass}
                   onSelectTab={handleSelectTab}
@@ -446,6 +487,7 @@ function AppContent() {
               </Suspense>
             </motion.div>
           )}
+
 
           {activeTab === 'roll-number' && (
             <motion.div

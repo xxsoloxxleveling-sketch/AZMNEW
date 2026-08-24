@@ -3,11 +3,13 @@ export type PageTab =
   | 'about'
   | 'scholarship'
   | 'apply'
+  | 'apply-test'
   | 'roll-number'
   | 'results'
   | 'partners'
   | 'gallery'
   | 'contact';
+
 
 export interface MonthlyAssistanceRate {
   classLevel: string;
