@@ -110,9 +110,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     permanentAddress: '',
     district: 'Mansehra',
     province: 'Khyber Pakhtunkhwa',
+    parentMobile: '',
     mobile: '',
     whatsapp: '',
     email: '',
+
     currentClass: initialClass || 'Class 10th (SSC-II)',
     discipline: 'Science (Biology/Pre-Medical)',
     schoolName: '',
@@ -387,7 +389,8 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     try {
       const emailVal = formData.email?.trim();
       const studentMobileVal = formData.mobile?.trim() || '0300-0000000';
-      const parentMobileVal = formData.emergencyContact?.trim() || studentMobileVal;
+      const parentMobileVal = formData.parentMobile?.trim() || formData.emergencyContact?.trim() || studentMobileVal;
+
 
       const backendPayload = {
         fullName: formData.fullName.trim(),
@@ -583,9 +586,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       case 2:
         if (!formData.permanentAddress?.trim()) errs.push('Permanent Residential Address is required.');
         if (!formData.district?.trim()) errs.push('District is required.');
-        if (!formData.mobile?.trim()) errs.push('Active Student / Parent Mobile Number is required.');
+        if (!formData.parentMobile?.trim()) errs.push('Father / Guardian Mobile Number is required.');
+        if (!formData.mobile?.trim()) errs.push('Candidate / Active Mobile Number is required.');
         if (!formData.whatsapp?.trim()) errs.push('Active WhatsApp Number is required for examination alerts.');
         break;
+
 
       case 3:
         if (!formData.currentClass?.trim()) errs.push('Target Applied Grade / Class is required.');
@@ -999,6 +1004,20 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Father / Guardian Mobile Number *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="0300-1234567"
+                        value={formData.parentMobile}
+                        onChange={(e) => setFormData({ ...formData, parentMobile: e.target.value })}
+                        className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
                         Candidate Mobile Number (SMS Alerts) *
                       </label>
                       <input
@@ -1024,9 +1043,23 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Email Address (Optional)
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="student@example.com"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
+
 
               {/* STAGE 3: EDUCATION INFO */}
               {currentStage === 3 && (

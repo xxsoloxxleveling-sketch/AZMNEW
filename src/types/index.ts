@@ -67,9 +67,11 @@ export interface StudentApplicationData {
   permanentAddress: string;
   district: string;
   province: string;
+  parentMobile: string;
   mobile: string;
   whatsapp: string;
   email: string;
+
   // Stage 3: Education
   currentClass: string;
   discipline?: string;
