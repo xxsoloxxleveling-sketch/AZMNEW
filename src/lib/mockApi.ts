@@ -1019,6 +1019,9 @@ export const mockApi = {
 
 
   async createStudent(studentData: any): Promise<MockStudent> {
+    const rawUploaded = studentData.uploadedDocuments || {};
+
+    // 1. Save uploaded documents in browser local vault
     if (studentData.uploadedDocuments) {
       saveUploadedFilesForCandidate(
         [studentData.cnicOrBForm, studentData.fullName, studentData.id, studentData.applicationNo],
@@ -1026,24 +1029,28 @@ export const mockApi = {
       );
     }
 
+    // 2. Strip multi-megabyte base64 blobs from network payload so it registers in milliseconds
+    const { uploadedDocuments, ...cleanData } = studentData;
+    const networkPayload: any = {
+      ...cleanData,
+      photoUrl: cleanData.photoUrl && cleanData.photoUrl.length < 300000 ? cleanData.photoUrl : undefined,
+    };
+
     try {
       const created = await apiFetch<MockStudent>('/api/students/register', {
         method: 'POST',
-        body: JSON.stringify(studentData),
+        body: JSON.stringify(networkPayload),
       });
 
       const merged: MockStudent = {
-        ...studentData,
+        ...cleanData,
         ...created,
-        uploadedDocuments: {
-          ...(studentData.uploadedDocuments || {}),
-          ...(created.uploadedDocuments || {}),
-        },
+        uploadedDocuments: rawUploaded,
       };
 
       saveLocalStudent(merged);
 
-      if (merged.uploadedDocuments) {
+      if (Object.keys(rawUploaded).length > 0) {
         saveUploadedFilesForCandidate(
           [
             merged.id,
@@ -1053,7 +1060,7 @@ export const mockApi = {
             merged.fullName,
             studentData.cnicOrBForm,
           ],
-          merged.uploadedDocuments
+          rawUploaded
         );
       }
 
