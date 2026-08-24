@@ -1,6 +1,8 @@
 import React from 'react';
 import { Wrench, Clock, Phone, ArrowLeft, Search, MessageCircle, ShieldAlert, Sparkles } from 'lucide-react';
 import { PageTab } from '../../types';
+import { CandidateSlipRetrievalCard } from './CandidateSlipRetrievalCard';
+
 
 interface ApplicationClosedNoticeProps {
   onSelectTab: (tab: PageTab) => void;
@@ -91,6 +93,11 @@ export const ApplicationClosedNotice: React.FC<ApplicationClosedNoticeProps> = (
             </div>
           </div>
 
+          {/* Candidate Profile Slip & Fee Voucher Self-Service Re-Download Tool */}
+          <div className="pt-2">
+            <CandidateSlipRetrievalCard />
+          </div>
+
           {/* Internal Testing Notice */}
           <div className="pt-6 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
             <span>AZM Educational Network • Admissions Directorate</span>
@@ -106,3 +113,4 @@ export const ApplicationClosedNotice: React.FC<ApplicationClosedNoticeProps> = (
     </div>
   );
 };
+

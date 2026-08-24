@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StudentApplicationData, PartnerSchoolData, PageTab } from '../../types';
 import { MONTHLY_ASSISTANCE_RATES, BENEFICIARY_CATEGORIES, OFFICIAL_DATA } from '../../data/scholarshipData';
-import { mockApi, saveUploadedFilesForCandidate } from '../../lib/mockApi';
+import { mockApi, saveUploadedFilesForCandidate, printStudentDossier } from '../../lib/mockApi';
+import { CandidateSlipRetrievalCard } from './CandidateSlipRetrievalCard';
 import { 
+
   User, 
   Phone, 
   GraduationCap, 
@@ -50,8 +52,9 @@ interface ApplicationPortalProps {
 }
 
 export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialClass, onSelectTab }) => {
-  const [activePortalTab, setActivePortalTab] = useState<'student' | 'partner'>('student');
+  const [activePortalTab, setActivePortalTab] = useState<'student' | 'partner' | 'retrieve'>('student');
   const [currentStage, setCurrentStage] = useState<number>(1);
+
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [submittedAppId, setSubmittedAppId] = useState<string>('');
   const [saveStatus, setSaveStatus] = useState<string>('');
@@ -859,38 +862,57 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           Choose whether you are submitting an individual student scholarship application or enrolling as an affiliated partner institution.
         </p>
 
-        {/* Dual Switcher Pill */}
-        <div className="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300 max-w-md w-full">
+        {/* Triple Switcher Pill */}
+        <div className="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300 max-w-2xl w-full flex-wrap gap-1">
           <button
             id="tab-apply-student"
             onClick={() => setActivePortalTab('student')}
-            className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 focus:outline-hidden ${
+            className={`flex-1 min-w-[130px] py-2.5 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-hidden cursor-pointer ${
               activePortalTab === 'student'
                 ? 'bg-[#185b9d] text-white shadow-md'
                 : 'text-slate-700 hover:text-slate-900'
             }`}
           >
             <User className="w-4 h-4" />
-            <span>Apply as Student (8-Stage)</span>
+            <span>Apply as Student</span>
           </button>
 
           <button
             id="tab-apply-partner"
             onClick={() => setActivePortalTab('partner')}
-            className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 focus:outline-hidden ${
+            className={`flex-1 min-w-[130px] py-2.5 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-hidden cursor-pointer ${
               activePortalTab === 'partner'
                 ? 'bg-[#185b9d] text-white shadow-md'
                 : 'text-slate-700 hover:text-slate-900'
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span>Partner School Enrolment</span>
+            <span>Partner School</span>
+          </button>
+
+          <button
+            id="tab-apply-retrieve"
+            onClick={() => setActivePortalTab('retrieve')}
+            className={`flex-1 min-w-[150px] py-2.5 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-hidden cursor-pointer ${
+              activePortalTab === 'retrieve'
+                ? 'bg-[#185b9d] text-white shadow-md'
+                : 'text-slate-700 hover:text-slate-900'
+            }`}
+          >
+            <Download className="w-4 h-4" />
+            <span>Re-Download Slip &amp; Voucher</span>
           </button>
         </div>
       </div>
 
+      {/* ================= RETRIEVE REGISTRATION SLIP TAB ================= */}
+      {activePortalTab === 'retrieve' && (
+        <CandidateSlipRetrievalCard onBackToApply={() => setActivePortalTab('student')} />
+      )}
+
       {/* ================= STUDENT APPLICATION WIZARD ================= */}
       {activePortalTab === 'student' && !isSubmitted && (
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Main Wizard Form Body (8 cols) */}
           <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200/90 shadow-lg p-6 sm:p-8">
@@ -2035,6 +2057,42 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               </div>
             </div>
 
+            {/* Prominent Pre-Payment Profile Slip Download Box */}
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-50 via-sky-50 to-indigo-50 border-2 border-blue-300 flex flex-col sm:flex-row items-center justify-between gap-4 text-left">
+              <div className="space-y-1">
+                <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-[#185b9d] text-[10px] font-extrabold uppercase tracking-wider">
+                  Important: Save Your Application Slip
+                </span>
+                <h4 className="text-sm font-black text-slate-900">
+                  Download Your Official Registration Profile Slip
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  You can download and print your complete application form now, even before making the PKR 300 fee payment.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleDownloadStudentPdf}
+                  disabled={isDownloadingPdf}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  {isDownloadingPdf ? (
+                    <>
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                      <span>Generating PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Download Registration Slip (PDF)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
             {/* Explanatory Notice */}
             <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-950 text-xs flex items-start gap-3 text-left">
               <ShieldCheck className="w-5 h-5 text-[#185b9d] flex-shrink-0 mt-0.5" />
@@ -2048,6 +2106,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               </div>
             </div>
           </div>
+
 
           {/* Payment Methods Tabs Box */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 sm:p-8 space-y-6">
