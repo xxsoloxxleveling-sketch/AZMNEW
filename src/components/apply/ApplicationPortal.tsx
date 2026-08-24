@@ -54,6 +54,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const [createdPartner, setCreatedPartner] = useState<any>(null);
   const [isDownloadingPartnerPdf, setIsDownloadingPartnerPdf] = useState<boolean>(false);
 
+  // Real Uploaded Document Files State
+  const [uploadedDocs, setUploadedDocs] = useState<{
+    [key: string]: { name: string; size: string; dataUrl?: string };
+  }>({});
+
   // Signature canvas ref
   const sigCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -260,6 +265,53 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       }));
     };
     reader.readAsDataURL(file);
+  };
+
+  // Real Document Attachment Handler
+  const handleDocumentUpload = (docKey: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const sizeFormatted =
+      file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${(file.size / 1024).toFixed(0)} KB`;
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const dataUrl = uploadEvent.target?.result as string;
+      setUploadedDocs((prev) => ({
+        ...prev,
+        [docKey]: {
+          name: file.name,
+          size: sizeFormatted,
+          dataUrl,
+        },
+      }));
+      setFormData((prev) => ({
+        ...prev,
+        documents: {
+          ...prev.documents,
+          [docKey]: true,
+        },
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveDocument = (docKey: string) => {
+    setUploadedDocs((prev) => {
+      const next = { ...prev };
+      delete next[docKey];
+      return next;
+    });
+    setFormData((prev) => ({
+      ...prev,
+      documents: {
+        ...prev.documents,
+        [docKey]: false,
+      },
+    }));
   };
 
   // Complete Application Submit to Live Database
@@ -1121,51 +1173,82 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                       { key: 'incomeCertUploaded' as const, title: 'Income / Need Proof Certificate (Optional)', req: false },
                     ].map((doc) => {
                       const isUploaded = formData.documents[doc.key];
+                      const fileInfo = uploadedDocs[doc.key];
+
                       return (
                         <div
                           key={doc.key}
-                          className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
+                          className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
                             isUploaded
-                              ? 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-300/30'
-                              : 'bg-white border-slate-200 hover:border-slate-300'
+                              ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-300/30'
+                              : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
                           }`}
                         >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <FileCheck className={`w-4 h-4 ${isUploaded ? 'text-emerald-600' : 'text-slate-400'}`} />
-                              <span className="text-xs font-bold text-slate-800">{doc.title}</span>
-                            </div>
-                            <span className={`text-[10px] font-semibold flex items-center gap-1 ${
-                              isUploaded ? 'text-emerald-700' : 'text-slate-400'
-                            }`}>
-                              {isUploaded ? (
-                                <>
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Attached
-                                </>
-                              ) : (
-                                <span>Pending Attachment</span>
+                          <div className="space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <FileCheck className={`w-4 h-4 flex-shrink-0 ${isUploaded ? 'text-emerald-600' : 'text-slate-400'}`} />
+                                <span className="text-xs font-bold text-slate-800 leading-snug">{doc.title}</span>
+                              </div>
+                              {doc.req && (
+                                <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-100 flex-shrink-0">
+                                  Required
+                                </span>
                               )}
-                            </span>
+                            </div>
+
+                            {isUploaded && fileInfo ? (
+                              <div className="p-2 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs">
+                                <div className="min-w-0 pr-2">
+                                  <span className="font-semibold text-slate-800 truncate block text-[11px]">
+                                    {fileInfo.name}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    {fileInfo.size}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex-shrink-0">
+                                  Attached ✓
+                                </span>
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-slate-400">PDF, JPG, PNG, or Word document</p>
+                            )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormData(prev => ({
-                                ...prev,
-                                documents: {
-                                  ...prev.documents,
-                                  [doc.key]: !isUploaded
-                                }
-                              }));
-                            }}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-colors border ${
-                              isUploaded
-                                ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
-                                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                            }`}
-                          >
-                            {isUploaded ? 'Attached ✓' : '+ Attach File'}
-                          </button>
+
+                          <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                            {isUploaded ? (
+                              <>
+                                <label className="flex-1 cursor-pointer py-1.5 text-center text-xs font-bold text-[#185b9d] bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition">
+                                  Change File
+                                  <input
+                                    type="file"
+                                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                    onChange={(e) => handleDocumentUpload(doc.key, e)}
+                                    className="hidden"
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDocument(doc.key)}
+                                  className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition"
+                                >
+                                  Remove
+                                </button>
+                              </>
+                            ) : (
+                              <label className="w-full cursor-pointer py-2 text-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-[#185b9d] hover:text-white rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5">
+                                <UploadCloud className="w-3.5 h-3.5" />
+                                <span>+ Choose Document File</span>
+                                <input
+                                  type="file"
+                                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                  onChange={(e) => handleDocumentUpload(doc.key, e)}
+                                  className="hidden"
+                                />
+                              </label>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1388,48 +1471,57 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           </div>
 
           <div className="space-y-2">
-            <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full uppercase">
-              Application Successfully Registered
+            <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full uppercase">
+              Registration Recorded • Fee Pending Approval
             </span>
             <h2 className="text-2xl font-bold font-display text-slate-900">
               Welcome to Session V (2026) Candidate Register!
             </h2>
             <p className="text-xs text-slate-600 max-w-md mx-auto">
-              Your application has been registered into the central database with an official sequential roll number and cryptographically signed biometric QR code.
+              Your application has been registered into the central ledger. Your official Roll Number and Examination Slip will be issued once your <strong>PKR 300 registration fee</strong> is verified and approved by our administration / accountant.
             </p>
           </div>
 
-          {/* QR Code & Credentials Card */}
+          {/* Application Details Card */}
           <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 max-w-md mx-auto space-y-4">
             <div className="grid grid-cols-2 gap-3 text-left">
               <div className="p-3 bg-white rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Application No</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Application Number</span>
                 <span className="text-sm font-extrabold font-mono text-[#185b9d] block mt-0.5">
                   {submittedAppId}
                 </span>
               </div>
               <div className="p-3 bg-white rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Assigned Roll No</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Challan Fee</span>
                 <span className="text-sm font-extrabold font-mono text-emerald-700 block mt-0.5">
-                  {createdStudent?.rollNumber || 'JPS-2026'}
+                  PKR 300 (Fixed)
                 </span>
               </div>
             </div>
 
-            {createdStudent?.qrImageUrl && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <span className="text-left font-medium">
+                Roll Number & Biometric QR will be unlocked upon fee verification approval.
+              </span>
+            </div>
+
+            {createdStudent?.rollNumber && (
               <div className="p-3 bg-white rounded-xl border border-slate-200 inline-block text-center">
-                <img
-                  src={createdStudent.qrImageUrl}
-                  alt="Biometric Examination QR"
-                  className="w-32 h-32 mx-auto rounded-lg"
-                />
-                <span className="text-[10px] font-mono text-slate-400 block mt-1">
-                  Signed Biometric Examination QR
+                {createdStudent.qrImageUrl && (
+                  <img
+                    src={createdStudent.qrImageUrl}
+                    alt="Biometric Examination QR"
+                    className="w-32 h-32 mx-auto rounded-lg"
+                  />
+                )}
+                <span className="text-xs font-bold font-mono text-[#185b9d] block mt-1">
+                  Roll No: {createdStudent.rollNumber}
                 </span>
               </div>
             )}
 
-            <div className="text-xs text-slate-600 font-medium">
+            <div className="text-xs text-slate-600 font-medium text-left">
               Candidate: <strong>{formData.fullName}</strong> | Class: <strong>{formData.currentClass}</strong>
             </div>
           </div>
@@ -1438,17 +1530,17 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
             <button
               onClick={handleDownloadStudentPdf}
               disabled={isDownloadingPdf}
-              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-md flex items-center gap-2 transition"
+              className="px-6 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497e] disabled:opacity-50 text-white font-bold text-xs shadow-md flex items-center gap-2 transition"
             >
               {isDownloadingPdf ? (
                 <>
                   <Loader2 className="w-4 h-4 text-white animate-spin" />
-                  <span>Generating Official PDF Slip...</span>
+                  <span>Downloading Application Slip...</span>
                 </>
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  <span>Download Official PDF Slip (2-Page)</span>
+                  <span>Download Registration Summary (PDF)</span>
                 </>
               )}
             </button>
@@ -1458,7 +1550,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center gap-2"
             >
               <Printer className="w-4 h-4" />
-              <span>Print Confirmation</span>
+              <span>Print Challan Receipt</span>
             </button>
 
             <button

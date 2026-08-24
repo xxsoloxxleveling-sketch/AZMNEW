@@ -66,6 +66,13 @@ router.delete(
   studentsController.delete
 );
 
+// Approve registration payment & assign official roll number
+router.post(
+  '/:id/approve-payment',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT),
+  studentsController.approvePayment
+);
+
 // Part L: Office Use Record Update
 router.patch(
   '/:id/office-use',

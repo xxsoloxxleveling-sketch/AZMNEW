@@ -1,4 +1,6 @@
 import { prisma, FeeStatus, TransactionType } from '../../lib/prisma';
+import { qrService } from '../attendance/qr.service';
+import { supabaseStorage } from '../../lib/supabaseStorage';
 import { GenerateChallanInput, MarkPaidInput, FeeQueryInput } from './fees.schema';
 import { AppError } from '../../middleware/error.middleware';
 
@@ -191,7 +193,48 @@ export class FeesService {
       },
     });
 
-    // 2. Create the corresponding FEE_INCOME Transaction record
+    // 2. If student does not have a Roll Number yet, assign sequential Roll Number and generate Biometric QR Code
+    if (newStatus === FeeStatus.PAID && updatedFee.student && !updatedFee.student.rollNumber) {
+      const year = new Date().getFullYear();
+      const prefix = `JPS-${year}-`;
+      const totalInYear = await prisma.student.count({
+        where: { rollNumber: { startsWith: prefix } },
+      });
+      const rollNumber = `${prefix}${(totalInYear + 1).toString().padStart(4, '0')}`;
+
+      const qrToken = qrService.generateSignedQrToken(rollNumber);
+      const qrPayload = `https://jadoon.edu.pk/attend?token=${qrToken}`;
+      const qrImageUrl = await qrService.generateQrDataUrl(qrPayload);
+
+      await supabaseStorage.uploadFile('qr-codes', `${rollNumber}-qr.png`, qrImageUrl, 'image/png');
+
+      await prisma.student.update({
+        where: { id: updatedFee.studentId },
+        data: {
+          rollNumber,
+          qrToken,
+          qrImageUrl,
+          officeUse: {
+            upsert: {
+              create: {
+                testRollNo: rollNumber,
+                eligibility: 'ELIGIBLE',
+                finalStatus: 'SHORTLISTED',
+                testCentre: 'Jadoon Public School & College Exam Centre',
+                testReportingTime: '09:00 AM',
+              },
+              update: {
+                testRollNo: rollNumber,
+              },
+            },
+          },
+        },
+      });
+
+      updatedFee.student.rollNumber = rollNumber;
+    }
+
+    // 3. Create the corresponding FEE_INCOME Transaction record
     const studentInfo = updatedFee.student
       ? `${updatedFee.student.fullName} (${updatedFee.student.rollNumber || updatedFee.student.id})`
       : 'Student';

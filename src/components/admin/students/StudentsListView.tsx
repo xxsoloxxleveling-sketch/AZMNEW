@@ -58,8 +58,10 @@ export const StudentsListView: React.FC = () => {
       sortable: true,
       render: (row) => (
         <div>
-          <span className="font-bold text-[#185b9d] block">{row.rollNumber}</span>
-          <span className="text-[11px] text-slate-400">{row.applicationNo}</span>
+          <span className={`font-bold block ${row.rollNumber ? 'text-[#185b9d]' : 'text-amber-600 text-xs'}`}>
+            {row.rollNumber || 'Pending Fee Approval'}
+          </span>
+          <span className="text-[11px] text-slate-400 font-mono">{row.applicationNo}</span>
         </div>
       ),
     },
@@ -134,6 +136,24 @@ export const StudentsListView: React.FC = () => {
       className: 'text-right',
       render: (row) => (
         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {!row.rollNumber && (
+            <button
+              onClick={async () => {
+                if (confirm(`Approve PKR 300 fee payment and issue Roll Number for ${row.fullName}?`)) {
+                  try {
+                    await mockApi.approveStudentPayment(row.id);
+                    alert(`Payment approved for ${row.fullName}. Roll Number and Biometric QR Code assigned!`);
+                    fetchStudents();
+                  } catch (err: any) {
+                    alert(err.message || 'Failed to approve payment');
+                  }
+                }
+              }}
+              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition"
+            >
+              Approve Fee
+            </button>
+          )}
           <button
             onClick={() => setSelectedStudent(row)}
             title="View Full Profile"

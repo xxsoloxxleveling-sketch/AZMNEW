@@ -52,7 +52,7 @@ export const StaffListView: React.FC = () => {
       accessor: 'salary',
       sortable: true,
       render: (row) => (
-        <span className="font-bold text-slate-900">PKR {row.salary.toLocaleString()}</span>
+        <span className="font-bold text-slate-900">PKR {(Number(row.salary) || 0).toLocaleString()}</span>
       ),
     },
     {

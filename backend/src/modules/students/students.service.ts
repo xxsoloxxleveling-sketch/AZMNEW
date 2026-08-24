@@ -52,6 +52,10 @@ export class StudentsService {
   /**
    * Creates a student record with all registration form fields (Parts A-I),
    * auto-generates Roll Number, Application Number, signed QR Token, and QR Image.
+  /**
+   * Creates a student record with all registration form fields (Parts A-I),
+   * auto-generates Application Number and a fixed PKR 300 Registration Fee Challan.
+   * Roll Number and Biometric QR Code will be issued upon Admin/Accountant fee approval.
    */
   async createStudent(input: CreateStudentInput) {
     const existing = await prisma.student.findUnique({
@@ -66,28 +70,20 @@ export class StudentsService {
       throw error;
     }
 
-    const rollNumber = await this.generateRollNumber();
     const applicationNo = await this.generateApplicationNumber();
-
-    // Generate signed QR Token & QR Image
-    const qrToken = qrService.generateSignedQrToken(rollNumber);
-    const qrPayload = `https://jadoon.edu.pk/attend?token=${qrToken}`;
-    const qrImageUrl = await qrService.generateQrDataUrl(qrPayload);
-
-    // Persist QR Code to Supabase Storage
-    await supabaseStorage.uploadFile('qr-codes', `${rollNumber}-qr.png`, qrImageUrl, 'image/png');
+    const qrToken = `PENDING-FEE-${applicationNo}`;
 
     // Persist Photo if provided
     let photoUrl = input.photoUrl;
     if (input.photoUrl && input.photoUrl.startsWith('data:')) {
       const uploadRes = await supabaseStorage.uploadFile(
         'student-photos',
-        `${rollNumber}-photo.png`,
+        `${applicationNo}-photo.png`,
         input.photoUrl,
         'image/png'
       );
       if (!uploadRes.error) {
-        const signed = await supabaseStorage.getSignedUrl('student-photos', `${rollNumber}-photo.png`, 86400 * 7);
+        const signed = await supabaseStorage.getSignedUrl('student-photos', `${applicationNo}-photo.png`, 86400 * 7);
         if (signed) photoUrl = signed;
       }
     }
@@ -98,10 +94,10 @@ export class StudentsService {
       data: {
         ...baseData,
         photoUrl,
-        rollNumber,
         applicationNo,
+        rollNumber: null, // Defer roll number until fee is approved
         qrToken,
-        qrImageUrl,
+        qrImageUrl: null,
         ...(academicRecords && academicRecords.length > 0
           ? {
               academicRecords: {
@@ -120,7 +116,7 @@ export class StudentsService {
           create: {
             eligibility: 'ELIGIBLE',
             finalStatus: 'SHORTLISTED',
-            testRollNo: rollNumber,
+            testRollNo: null,
             testCentre: 'Jadoon Public School & College Exam Centre',
             testReportingTime: '09:00 AM',
           },
@@ -133,7 +129,99 @@ export class StudentsService {
       },
     });
 
-    return student;
+    // Auto-generate Fixed PKR 300 Registration Fee Challan
+    const year = new Date().getFullYear();
+    const totalChallans = await prisma.feeRecord.count();
+    const challanNumber = `CHL-${year}-${(totalChallans + 1).toString().padStart(4, '0')}`;
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 15);
+
+    const feeRecord = await prisma.feeRecord.create({
+      data: {
+        studentId: student.id,
+        month: 'Session V (2026) Registration',
+        amountDue: 300,
+        amountPaid: 0,
+        status: 'UNPAID',
+        challanNumber,
+        dueDate,
+      },
+    });
+
+    return {
+      ...student,
+      feeChallan: feeRecord,
+    };
+  }
+
+  /**
+   * Approves student payment, assigns sequential Roll Number, and generates biometric QR Code.
+   */
+  async approveStudentPayment(studentId: string) {
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: { feeRecords: true },
+    });
+
+    if (!student) {
+      const error: AppError = new Error(`Student with ID '${studentId}' not found.`);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    let rollNumber = student.rollNumber;
+    let qrToken = student.qrToken;
+    let qrImageUrl = student.qrImageUrl;
+
+    // If roll number not assigned yet, generate it now
+    if (!rollNumber) {
+      rollNumber = await this.generateRollNumber();
+      qrToken = qrService.generateSignedQrToken(rollNumber);
+      const qrPayload = `https://jadoon.edu.pk/attend?token=${qrToken}`;
+      qrImageUrl = await qrService.generateQrDataUrl(qrPayload);
+
+      await supabaseStorage.uploadFile('qr-codes', `${rollNumber}-qr.png`, qrImageUrl, 'image/png');
+    }
+
+    // Mark student's registration fee records as PAID
+    await prisma.feeRecord.updateMany({
+      where: { studentId: student.id },
+      data: {
+        status: 'PAID',
+        amountPaid: 300,
+        paidAt: new Date(),
+      },
+    });
+
+    // Update Student with assigned Roll Number & active QR code
+    const updatedStudent = await prisma.student.update({
+      where: { id: studentId },
+      data: {
+        rollNumber,
+        qrToken,
+        qrImageUrl,
+        officeUse: {
+          upsert: {
+            create: {
+              testRollNo: rollNumber,
+              eligibility: 'ELIGIBLE',
+              finalStatus: 'SHORTLISTED',
+              testCentre: 'Jadoon Public School & College Exam Centre',
+              testReportingTime: '09:00 AM',
+            },
+            update: {
+              testRollNo: rollNumber,
+            },
+          },
+        },
+      },
+      include: {
+        feeRecords: true,
+        officeUse: true,
+      },
+    });
+
+    return updatedStudent;
   }
 
   /**

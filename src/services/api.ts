@@ -38,26 +38,67 @@ export interface ApiResponse<T> {
 // -------------------------------------------------------------
 // 1. Roll Number Slips API
 // -------------------------------------------------------------
+// 1. Roll Number Slips API
+// -------------------------------------------------------------
 export async function searchRollNumberSlip(query: string): Promise<ApiResponse<RollNumberSlip>> {
-  const clean = query.trim();
+  const clean = query.trim().toLowerCase();
   if (!clean) {
-    return { success: false, error: 'Please provide a valid Roll Number or CNIC / B-Form.' };
+    return { success: false, error: 'Please provide a valid Roll Number, CNIC / B-Form, or Application ID.' };
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/roll-slips/search?query=${encodeURIComponent(clean)}`);
-    if (response.ok) {
-      const data = await response.json();
-      return { success: true, data };
+    const { mockApi } = await import('../lib/mockApi');
+    const students = await mockApi.getStudents();
+
+    // Match by rollNumber, applicationNo, or cnicOrBForm
+    const student = students.find((s: any) => {
+      const matchRoll = s.rollNumber && s.rollNumber.toLowerCase() === clean;
+      const matchApp = s.applicationNo && s.applicationNo.toLowerCase() === clean;
+      const matchCnic = s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === clean.replace(/\D/g, '');
+      return matchRoll || matchApp || matchCnic;
+    });
+
+    if (student) {
+      // Check if fee is paid and roll number issued
+      if (!student.rollNumber || student.feeStatus !== 'PAID') {
+        return {
+          success: false,
+          error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Roll Number Slip and Biometric QR will be issued once payment is approved by administration.`
+        };
+      }
+
+      // Fee is approved & roll number is active
+      const slip: RollNumberSlip = {
+        rollNumber: student.rollNumber,
+        candidateName: student.fullName,
+        fatherName: student.fatherName,
+        cnicBForm: student.cnicOrBForm,
+        appliedClass: student.currentClass,
+        testCenter: student.officeUse?.testCentre || 'Jadoon Public School & College Main Exam Hall',
+        reportingTime: student.officeUse?.testReportingTime || '09:00 AM',
+        testDate: student.officeUse?.testDate || 'Sunday, 15 November 2026',
+        centerAddress: 'Mansehra / Abbottabad Regional Examination Center, KP',
+        seatNumber: `HALL-${student.rollNumber.split('-').pop() || 'A01'}`,
+        instructions: [
+          'Bring your original CNIC / B-Form along with this printed entry slip to the examination centre.',
+          'Entry gate closes strictly 15 minutes before the reporting time (08:45 AM).',
+          'Biometric verification will be carried out at the entry desk using your QR code.'
+        ],
+        qrDataUrl: student.qrImageUrl || `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(student.rollNumber)}`
+      };
+
+      return {
+        success: true,
+        data: slip
+      };
     }
   } catch (err) {
-    // Backend not reached or offline
+    console.error('searchRollNumberSlip error:', err);
   }
 
-  // Production-ready search simulation / fallback
   return {
     success: false,
-    error: `No issued roll number slip found for "${clean}". Please verify your CNIC / Roll Number or contact the helpline if recently registered.`
+    error: `No issued roll number slip found for "${query}". If you recently applied, please ensure your PKR 300 deposit challan has been approved by the accountant desk.`
   };
 }
 

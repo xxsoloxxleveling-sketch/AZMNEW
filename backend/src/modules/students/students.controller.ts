@@ -78,6 +78,19 @@ export class StudentsController {
     }
   }
 
+  async approvePayment(req: Request, res: Response, next: NextFunction) {
+    try {
+      const student = await studentsService.approveStudentPayment(req.params.id);
+      res.status(200).json({
+        success: true,
+        message: 'Student registration payment approved. Roll number and QR code generated.',
+        data: student,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async updateOfficeUse(req: Request, res: Response, next: NextFunction) {
     try {
       const officeRecord = await studentsService.updateOfficeUse(req.params.id, req.body);

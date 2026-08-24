@@ -24,7 +24,7 @@ export const FeesListView: React.FC = () => {
   const [selectedChallanToPay, setSelectedChallanToPay] = useState<MockFeeChallan | null>(null);
 
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [monthFilter, setMonthFilter] = useState('2026-08');
+  const [monthFilter, setMonthFilter] = useState('ALL');
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -44,8 +44,8 @@ export const FeesListView: React.FC = () => {
     fetchData();
   }, [statusFilter, monthFilter]);
 
-  const totalBilled = fees.reduce((sum, f) => sum + f.amountDue, 0);
-  const totalCollected = fees.reduce((sum, f) => sum + f.amountPaid, 0);
+  const totalBilled = fees.reduce((sum, f) => sum + (Number(f.amountDue) || 0), 0);
+  const totalCollected = fees.reduce((sum, f) => sum + (Number(f.amountPaid) || 0), 0);
   const totalPending = totalBilled - totalCollected;
   const collectionRate = totalBilled > 0 ? parseFloat(((totalCollected / totalBilled) * 100).toFixed(1)) : 0;
 
@@ -70,7 +70,7 @@ export const FeesListView: React.FC = () => {
       ),
     },
     {
-      header: 'Month',
+      header: 'Fee Type / Month',
       accessor: 'month',
       sortable: true,
       render: (row) => <span className="font-semibold text-slate-700">{row.month}</span>,
@@ -79,7 +79,7 @@ export const FeesListView: React.FC = () => {
       header: 'Amount Due',
       accessor: 'amountDue',
       sortable: true,
-      render: (row) => <span className="font-bold text-slate-900">PKR {row.amountDue.toLocaleString()}</span>,
+      render: (row) => <span className="font-bold text-slate-900">PKR {(Number(row.amountDue) || 0).toLocaleString()}</span>,
     },
     {
       header: 'Amount Paid',
@@ -87,7 +87,7 @@ export const FeesListView: React.FC = () => {
       sortable: true,
       render: (row) => (
         <span className={`font-bold ${row.amountPaid > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
-          PKR {row.amountPaid.toLocaleString()}
+          PKR {(Number(row.amountPaid) || 0).toLocaleString()}
         </span>
       ),
     },
@@ -112,11 +112,11 @@ export const FeesListView: React.FC = () => {
               onClick={() => setSelectedChallanToPay(row)}
               className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition"
             >
-              Mark Paid
+              Approve Payment
             </button>
           ) : (
             <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-              <CheckCircle className="w-3.5 h-3.5" /> Paid
+              <CheckCircle className="w-3.5 h-3.5" /> Approved
             </span>
           )}
         </div>
@@ -187,9 +187,10 @@ export const FeesListView: React.FC = () => {
               onChange={(e) => setMonthFilter(e.target.value)}
               className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d]"
             >
+              <option value="ALL">All Fee Cycles</option>
+              <option value="Session V (2026) Registration">Session V Registration (PKR 300)</option>
               <option value="2026-08">August 2026</option>
               <option value="2026-09">September 2026</option>
-              <option value="ALL">All Months</option>
             </select>
 
             <select
