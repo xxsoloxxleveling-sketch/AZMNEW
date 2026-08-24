@@ -622,13 +622,71 @@ export const mockApi = {
   async scanAttendance(payload: {
     qrToken?: string;
     studentId?: string;
+    rollNumber?: string;
     status?: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
   }): Promise<{ attendance: MockAttendance; student: MockStudent }> {
-    return apiFetch<{ attendance: MockAttendance; student: MockStudent }>('/api/attendance/scan', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    let cleanToken = (payload.qrToken || payload.studentId || payload.rollNumber || '').trim();
+
+    // If QR contains a URL, extract the token or identifier query param
+    if (cleanToken.includes('http://') || cleanToken.includes('https://')) {
+      try {
+        const url = new URL(cleanToken);
+        cleanToken =
+          url.searchParams.get('token') ||
+          url.searchParams.get('roll') ||
+          url.searchParams.get('rollNumber') ||
+          cleanToken.split('/').pop() ||
+          cleanToken;
+      } catch (e) {}
+    }
+
+    try {
+      return await apiFetch<{ attendance: MockAttendance; student: MockStudent }>('/api/attendance/scan', {
+        method: 'POST',
+        body: JSON.stringify({ ...payload, qrToken: cleanToken }),
+      });
+    } catch (err) {
+      console.warn('Backend attendance scan fallback, looking up student locally:', err);
+
+      const allStudents = await this.getStudents();
+      const cleanUpper = cleanToken.toUpperCase();
+      const cleanDigits = cleanToken.replace(/\D/g, '');
+
+      const matchedStudent = allStudents.find((s) => {
+        const rollMatch = s.rollNumber && (s.rollNumber.toUpperCase() === cleanUpper || cleanUpper.includes(s.rollNumber.toUpperCase()));
+        const appMatch = s.applicationNo && (s.applicationNo.toUpperCase() === cleanUpper || cleanUpper.includes(s.applicationNo.toUpperCase()));
+        const idMatch = s.id && (s.id.toUpperCase() === cleanUpper || cleanUpper.includes(s.id.toUpperCase()));
+        const cnicMatch = cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits;
+        const qrMatch = s.qrToken && (s.qrToken === cleanToken || cleanToken.includes(s.qrToken));
+        return rollMatch || appMatch || idMatch || cnicMatch || qrMatch;
+      });
+
+      if (!matchedStudent) {
+        throw new Error(
+          `No registered student record found for QR code / identifier "${cleanToken}". Please verify that this candidate is registered.`
+        );
+      }
+
+      const attendanceRecord: MockAttendance = {
+        id: `att_${Date.now()}`,
+        studentId: matchedStudent.id,
+        studentName: matchedStudent.fullName,
+        rollNumber: matchedStudent.rollNumber || 'PENDING',
+        currentClass: matchedStudent.currentClass,
+        date: new Date().toISOString().split('T')[0],
+        status: payload.status || 'PRESENT',
+        method: 'QR_SCAN',
+        markedByName: currentUser?.name || 'Chief Examiner',
+        createdAt: new Date().toISOString(),
+      };
+
+      return {
+        attendance: attendanceRecord,
+        student: matchedStudent,
+      };
+    }
   },
+
 
   async getTodayAttendance(): Promise<any> {
     try {
