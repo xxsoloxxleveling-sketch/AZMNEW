@@ -19,7 +19,8 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
             <School className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-xs font-bold text-slate-100">JPS Examiner Scanner</h1>
+            <h1 className="text-xs font-bold text-slate-100">AZM Examiner Scanner</h1>
+
             <p className="text-[10px] text-slate-400 font-medium">Faculty Portal (/scan)</p>
           </div>
         </div>

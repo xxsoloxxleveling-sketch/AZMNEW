@@ -16,7 +16,8 @@ export class StudentsService {
    */
   async generateRollNumber(): Promise<string> {
     const year = new Date().getFullYear();
-    const prefix = `JPS-${year}-`;
+    const prefix = `AZMVS-${year}-`;
+
 
     const totalInYear = await prisma.student.count({
       where: {

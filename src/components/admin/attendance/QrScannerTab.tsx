@@ -86,21 +86,22 @@ export const QrScannerTab: React.FC<QrScannerTabProps> = ({ onAttendanceMarked }
           </span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             <button
-              onClick={() => handleScanToken('qr_JPS-2026-0001_signed_mock_token_991823')}
+              onClick={() => handleScanToken('qr_AZMVS-2026-0001_signed_token_991823')}
               disabled={isScanning}
               className="p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white text-left font-semibold text-slate-800 transition flex items-center justify-between"
             >
-              <span>Scan JPS-2026-0001 (Hamza Tariq)</span>
+              <span>Scan AZMVS-2026-0001 (Hamza Tariq)</span>
               <Zap className="w-3.5 h-3.5 text-amber-500" />
             </button>
             <button
-              onClick={() => handleScanToken('qr_JPS-2026-0003_signed_mock_token_776123')}
+              onClick={() => handleScanToken('qr_AZMVS-2026-0003_signed_token_776123')}
               disabled={isScanning}
               className="p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white text-left font-semibold text-slate-800 transition flex items-center justify-between"
             >
-              <span>Scan JPS-2026-0003 (Bilal Ahmed)</span>
+              <span>Scan AZMVS-2026-0003 (Bilal Ahmed)</span>
               <Zap className="w-3.5 h-3.5 text-amber-500" />
             </button>
+
           </div>
         </div>
 

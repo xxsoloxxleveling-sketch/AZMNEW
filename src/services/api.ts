@@ -42,7 +42,9 @@ export interface ApiResponse<T> {
 // -------------------------------------------------------------
 export async function searchRollNumberSlip(query: string): Promise<ApiResponse<RollNumberSlip>> {
   const clean = query.trim().toLowerCase();
-  if (!clean) {
+  const cleanDigits = query.replace(/\D/g, '');
+
+  if (!clean && cleanDigits.length < 5) {
     return { success: false, error: 'Please provide a valid Roll Number, CNIC / B-Form, or Application ID.' };
   }
 
@@ -50,41 +52,58 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
     const { mockApi } = await import('../lib/mockApi');
     const students = await mockApi.getStudents();
 
-    // Match by rollNumber, applicationNo, or cnicOrBForm
+    // Match by rollNumber, applicationNo, CNIC, or ID
     const student = students.find((s: any) => {
-      const matchRoll = s.rollNumber && s.rollNumber.toLowerCase() === clean;
-      const matchApp = s.applicationNo && s.applicationNo.toLowerCase() === clean;
-      const matchCnic = s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === clean.replace(/\D/g, '');
-      return matchRoll || matchApp || matchCnic;
+      const matchRoll = s.rollNumber && (s.rollNumber.toLowerCase() === clean || s.rollNumber.toLowerCase().includes(clean));
+      const matchApp = s.applicationNo && (s.applicationNo.toLowerCase() === clean || s.applicationNo.toLowerCase().includes(clean));
+      const matchId = s.id && s.id.toLowerCase() === clean;
+      const sDigits = s.cnicOrBForm ? s.cnicOrBForm.replace(/\D/g, '') : '';
+      const matchCnic = cleanDigits.length >= 5 && sDigits && (sDigits === cleanDigits || sDigits.includes(cleanDigits));
+      const matchName = s.fullName && s.fullName.toLowerCase() === clean;
+
+      return matchRoll || matchApp || matchId || matchCnic || matchName;
     });
 
     if (student) {
-      // Check if fee is paid and roll number issued
-      if (!student.rollNumber || student.feeStatus !== 'PAID') {
+      // Check if fee is paid or roll number issued
+      const isFeePaid =
+        student.feeStatus === 'PAID' ||
+        (student.feeRecords && student.feeRecords.some((f: any) => f.status === 'PAID')) ||
+        (student.feeChallan && student.feeChallan.status === 'PAID') ||
+        Boolean(student.rollNumber && (student.rollNumber.startsWith('AZMVS') || student.rollNumber.startsWith('JPS')));
+
+      if (!isFeePaid) {
         return {
           success: false,
-          error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Roll Number Slip and Biometric QR will be issued once payment is approved by administration.`
+          error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Please deposit PKR 300 via JazzCash (03051755551) or Faysal Bank (3126701000006213) and send receipt to WhatsApp 0305-1755551 to activate your Roll Number Slip.`
         };
       }
 
-      // Fee is approved & roll number is active
+      // Ensure roll number follows AZMVS format
+      const year = new Date().getFullYear();
+      let rollNo = student.rollNumber;
+      if (!rollNo || rollNo.startsWith('JPS-')) {
+        const seq = (student.applicationNo || student.id || '0101').split('-').pop();
+        rollNo = `AZMVS-${year}-${seq}`;
+      }
+
       const slip: RollNumberSlip = {
-        rollNumber: student.rollNumber,
+        rollNumber: rollNo,
         candidateName: student.fullName,
         fatherName: student.fatherName,
         cnicBForm: student.cnicOrBForm,
         appliedClass: student.currentClass,
-        testCenter: student.officeUse?.testCentre || 'Jadoon Public School & College Main Exam Hall',
+        testCenter: student.officeUse?.testCentre || 'AZM Examination Center - Main Exam Hall, Mansehra',
         reportingTime: student.officeUse?.testReportingTime || '09:00 AM',
         testDate: student.officeUse?.testDate || 'Sunday, 15 November 2026',
-        centerAddress: 'Mansehra / Abbottabad Regional Examination Center, KP',
-        seatNumber: `HALL-${student.rollNumber.split('-').pop() || 'A01'}`,
+        centerAddress: 'Main College Road, Mansehra / Abbottabad Regional Center, KP',
+        seatNumber: `HALL-${rollNo.split('-').pop() || 'A01'}`,
         instructions: [
           'Bring your original CNIC / B-Form along with this printed entry slip to the examination centre.',
           'Entry gate closes strictly 15 minutes before the reporting time (08:45 AM).',
           'Biometric verification will be carried out at the entry desk using your QR code.'
         ],
-        qrDataUrl: student.qrImageUrl || `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(student.rollNumber)}`
+        qrDataUrl: student.qrImageUrl || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(rollNo)}`
       };
 
       return {
@@ -98,9 +117,10 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
 
   return {
     success: false,
-    error: `No issued roll number slip found for "${query}". If you recently applied, please ensure your PKR 300 deposit challan has been approved by the accountant desk.`
+    error: `No registered candidate or issued slip found for "${query}". Please check your CNIC / Application ID, or verify that your registration was submitted.`
   };
 }
+
 
 // -------------------------------------------------------------
 // 2. Results & Merit API

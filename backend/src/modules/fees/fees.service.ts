@@ -196,11 +196,12 @@ export class FeesService {
     // 2. If student does not have a Roll Number yet, assign sequential Roll Number and generate Biometric QR Code
     if (newStatus === FeeStatus.PAID && updatedFee.student && !updatedFee.student.rollNumber) {
       const year = new Date().getFullYear();
-      const prefix = `JPS-${year}-`;
+      const prefix = `AZMVS-${year}-`;
       const totalInYear = await prisma.student.count({
         where: { rollNumber: { startsWith: prefix } },
       });
       const rollNumber = `${prefix}${(totalInYear + 1).toString().padStart(4, '0')}`;
+
 
       const qrToken = qrService.generateSignedQrToken(rollNumber);
       const qrPayload = `https://jadoon.edu.pk/attend?token=${qrToken}`;
