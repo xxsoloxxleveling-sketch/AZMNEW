@@ -995,9 +995,12 @@ export const mockApi = {
         msg.includes('413') ||
         msg.includes('large') ||
         msg.includes('payload') ||
-        msg.includes('entity');
+        msg.includes('entity') ||
+        msg.includes('unique constraint') ||
+        msg.includes('applicationno') ||
+        msg.includes('prisma');
 
-      if (err.message && !isRecoverableError && !msg.includes('cold start')) {
+      if (err.message && !isRecoverableError && !msg.includes('cold start') && !msg.includes('already registered')) {
         throw err;
       }
 
