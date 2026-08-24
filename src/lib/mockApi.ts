@@ -629,19 +629,26 @@ export const mockApi = {
       saveLocalStudent(created);
       return created;
     } catch (err: any) {
-      if (
-        err.message &&
-        !err.message.includes('Failed to fetch') &&
-        !err.message.includes('NetworkError') &&
-        !err.message.includes('500') &&
-        !err.message.includes('502') &&
-        !err.message.includes('503')
-      ) {
+      const msg = (err.message || '').toLowerCase();
+      const isRecoverableError =
+        msg.includes('failed to fetch') ||
+        msg.includes('networkerror') ||
+        msg.includes('500') ||
+        msg.includes('502') ||
+        msg.includes('503') ||
+        msg.includes('504') ||
+        msg.includes('413') ||
+        msg.includes('large') ||
+        msg.includes('payload') ||
+        msg.includes('entity');
+
+      if (err.message && !isRecoverableError && !msg.includes('cold start')) {
         throw err;
       }
 
-      // Offline / Render backend cold start fallback
+      // Offline / Render backend cold start / Large upload fallback
       const appNo = `APP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
       const fallbackStudent: MockStudent = {
         id: `std_${Date.now()}`,
         applicationNo: appNo,

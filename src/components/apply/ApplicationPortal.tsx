@@ -287,45 +287,96 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   };
 
   // Photo Upload Handler with Max 200KB Validation
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageFile = (
+    file: File,
+    maxWidth = 1200,
+    quality = 0.75
+  ): Promise<{ dataUrl: string; sizeFormatted: string }> => {
+    return new Promise((resolve) => {
+      // If it's a PDF or non-image, read it directly
+      if (!file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target?.result as string;
+          const sizeFormatted =
+            file.size > 1024 * 1024
+              ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+              : `${(file.size / 1024).toFixed(0)} KB`;
+          resolve({ dataUrl, sizeFormatted });
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+          if (width > maxWidth || height > maxWidth) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxWidth) / height);
+              height = maxWidth;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+            const approxBytes = Math.round((compressedDataUrl.length * 3) / 4);
+            const sizeFormatted =
+              approxBytes > 1024 * 1024
+                ? `${(approxBytes / (1024 * 1024)).toFixed(1)} MB`
+                : `${Math.round(approxBytes / 1024)} KB`;
+            resolve({ dataUrl: compressedDataUrl, sizeFormatted });
+          } else {
+            resolve({
+              dataUrl: e.target?.result as string,
+              sizeFormatted: `${Math.round(file.size / 1024)} KB`,
+            });
+          }
+        };
+        img.onerror = () => {
+          resolve({
+            dataUrl: e.target?.result as string,
+            sizeFormatted: `${Math.round(file.size / 1024)} KB`,
+          });
+        };
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhotoError('');
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Strict 200 KB validation
-    const maxSizeBytes = 200 * 1024;
-    if (file.size > maxSizeBytes) {
-      setPhotoError(
-        `File size (${(file.size / 1024).toFixed(0)} KB) exceeds the maximum 200 KB limit. Please compress or select a smaller photo.`
-      );
-      e.target.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const dataUrl = uploadEvent.target?.result as string;
+    try {
+      const { dataUrl } = await compressImageFile(file, 600, 0.8);
       setFormData((prev) => ({
         ...prev,
         photoUrl: dataUrl,
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('Photo compression fallback:', err);
+    }
   };
 
-  // Real Document Attachment Handler
-  const handleDocumentUpload = (docKey: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  // Real Document Attachment Handler with Auto-Optimization
+  const handleDocumentUpload = async (docKey: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const sizeFormatted =
-      file.size > 1024 * 1024
-        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-        : `${(file.size / 1024).toFixed(0)} KB`;
-
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const dataUrl = uploadEvent.target?.result as string;
+    try {
+      const { dataUrl, sizeFormatted } = await compressImageFile(file, 1200, 0.75);
       setUploadedDocs((prev) => ({
         ...prev,
         [docKey]: {
@@ -341,9 +392,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           [docKey]: true,
         },
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('Document compression fallback:', err);
+    }
   };
+
 
   const handleRemoveDocument = (docKey: string) => {
     setUploadedDocs((prev) => {
