@@ -8,15 +8,21 @@ export const validateBody = (schema: ZodSchema) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
+        const fieldErrors = error.flatten().fieldErrors;
+        const messages = Object.entries(fieldErrors)
+          .map(([field, errs]) => `${field}: ${(errs as string[]).join(', ')}`)
+          .join('; ');
+
         return res.status(400).json({
           success: false,
           error: {
-            message: 'Validation failed',
-            details: error.flatten().fieldErrors,
+            message: `Validation failed: ${messages || 'Invalid form data'}`,
+            details: fieldErrors,
           },
         });
       }
       next(error);
     }
+
   };
 };

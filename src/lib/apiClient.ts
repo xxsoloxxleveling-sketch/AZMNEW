@@ -53,16 +53,26 @@ export async function apiFetch<T = any>(
   }));
 
   if (!response.ok || !data.success) {
-    const errorMsg =
+    let errorMsg =
       data.error?.message ||
       data.message ||
       `Request failed with status ${response.status}`;
+
+    if (data.error?.details && typeof data.error.details === 'object') {
+      const detailsList = Object.entries(data.error.details)
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`);
+      if (detailsList.length > 0 && !errorMsg.includes(':')) {
+        errorMsg = `${errorMsg} (${detailsList.join('; ')})`;
+      }
+    }
+
     const err: any = new Error(errorMsg);
     err.status = response.status;
     err.code = data.error?.code;
     err.details = data.error?.details;
     throw err;
   }
+
 
   return (data.data !== undefined ? data.data : (data as any)) as T;
 }

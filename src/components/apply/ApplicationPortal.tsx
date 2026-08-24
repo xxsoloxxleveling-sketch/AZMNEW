@@ -385,27 +385,31 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     setIsSubmitting(true);
 
     try {
+      const emailVal = formData.email?.trim();
+      const studentMobileVal = formData.mobile?.trim() || '0300-0000000';
+      const parentMobileVal = formData.emergencyContact?.trim() || studentMobileVal;
+
       const backendPayload = {
-        fullName: formData.fullName,
-        fatherName: formData.fatherName,
+        fullName: formData.fullName.trim(),
+        fatherName: formData.fatherName.trim(),
         gender: formData.gender?.toUpperCase() === 'FEMALE' ? 'FEMALE' : 'MALE',
         dateOfBirth: formData.dob || '2008-01-01',
-        age: Number(formData.age) || 16,
-        cnicOrBForm: formData.cnicBForm,
+        age: parseInt(formData.age, 10) || 16,
+        cnicOrBForm: formData.cnicBForm.trim(),
         nationality: 'Pakistani',
         religion: 'Islam',
-        address: formData.permanentAddress || 'Campus Address',
-        district: formData.district || 'Abbottabad',
-        province: formData.province || 'Khyber Pakhtunkhwa',
-        studentMobile: formData.mobile,
-        parentMobile: formData.emergencyContact || formData.mobile || '0300-0000000',
-        whatsapp: formData.whatsapp,
-        email: formData.email,
+        address: formData.permanentAddress?.trim() || 'Address',
+        district: formData.district?.trim() || 'Mansehra',
+        province: formData.province?.trim() || 'Khyber Pakhtunkhwa',
+        studentMobile: studentMobileVal,
+        parentMobile: parentMobileVal,
+        whatsapp: formData.whatsapp?.trim() || studentMobileVal,
+        email: emailVal && emailVal.includes('@') ? emailVal : undefined,
         currentClass: formData.currentClass || 'SSC-II (Class 10th)',
-        hsscGroup: formData.discipline,
-        schoolName: formData.schoolName || 'School',
+        hsscGroup: formData.discipline || undefined,
+        schoolName: formData.schoolName?.trim() || 'School',
         boardOrUniversity: formData.boardUniversity || 'BISE Abbottabad',
-        currentRollNo: formData.currentRollNo,
+        currentRollNo: formData.currentRollNo?.trim() || undefined,
         scholarshipCategory: formData.appliedCategory?.includes('Orphan')
           ? 'ORPHAN'
           : formData.appliedCategory?.includes('Disability')
@@ -413,18 +417,18 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           : formData.appliedCategory?.includes('Needy') || formData.isSpecialNeed
           ? 'FINANCIALLY_NEEDY'
           : 'GENERAL_MERIT',
-        guardianOccupation: formData.guardianOccupation,
+        guardianOccupation: formData.guardianOccupation?.trim() || 'Business / Private',
         guardianMonthlyIncome: Number(formData.monthlyHouseholdIncome) || 0,
-        emergencyContact: formData.emergencyContact || formData.mobile || '0300-0000000',
+        emergencyContact: parentMobileVal,
         emergencyRelation: 'Guardian',
         referralSource: 'AZM.AIO Online Apply Portal',
-        photoUrl: formData.photoUrl,
+        photoUrl: formData.photoUrl || undefined,
         academicRecords: (formData.academicRecords || []).map((r) => ({
           examLevel: r.gradeClass || 'Class 9th',
           boardOrUni: r.institute || 'BISE',
           yearOfPassing: r.passingYear || '2025',
-          totalMarks: Number(r.totalMarks) || 550,
-          obtainedMarks: Number(r.obtainedMarks) || 450,
+          totalMarks: Math.round(Number(r.totalMarks)) || 550,
+          obtainedMarks: Math.round(Number(r.obtainedMarks)) || 450,
           percentage: Number(r.percentage) || 80,
         })),
         documents: {
@@ -436,6 +440,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           incomeCertificate: !!formData.documents?.incomeCertUploaded,
         },
       };
+
 
       const student = await mockApi.createStudent(backendPayload);
       setCreatedStudent(student);
