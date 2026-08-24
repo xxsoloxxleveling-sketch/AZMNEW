@@ -182,7 +182,7 @@ export const ResultsDeskView: React.FC<ResultsDeskViewProps> = ({ onSelectTab })
           </p>
           <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <a
-              href="https://wa.me/923440197194?text=Hello%20AZM.AIO%20Helpline%2C%20I%20have%20an%20inquiry%20regarding%20my%20Result%20Card."
+              href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Helpline%2C%20I%20have%20an%20inquiry%20regarding%20my%20Result%20Card."
               target="_blank"
               rel="noreferrer"
               className="px-4 py-2 bg-[#25D366] text-white rounded-xl text-xs font-bold hover:bg-[#20bd5a] transition-colors"

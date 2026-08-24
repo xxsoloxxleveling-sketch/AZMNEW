@@ -236,7 +236,7 @@ export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
     reportingTime: '09:00 AM',
     testDate: 'Sunday, 15 November 2026',
     contactPerson: 'Prof. Dr. Sumama Khan',
-    contactPhone: '0344-0197194',
+    contactPhone: '0305-1755551',
     status: 'ACTIVE',
     createdAt: '2025-01-10T00:00:00Z',
   },
@@ -252,7 +252,7 @@ export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
     reportingTime: '09:00 AM',
     testDate: 'Sunday, 15 November 2026',
     contactPerson: 'Admissions & Testing Coordinator',
-    contactPhone: '0344-0197194',
+    contactPhone: '0305-1755551',
     status: 'ACTIVE',
     createdAt: '2025-01-12T00:00:00Z',
   },
@@ -268,7 +268,7 @@ export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
     reportingTime: '09:00 AM',
     testDate: 'Sunday, 15 November 2026',
     contactPerson: 'Controller of Examination',
-    contactPhone: '0344-0197194',
+    contactPhone: '0305-1755551',
     status: 'ACTIVE',
     createdAt: '2025-01-15T00:00:00Z',
   },
@@ -284,7 +284,7 @@ export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
     reportingTime: '09:00 AM',
     testDate: 'Sunday, 15 November 2026',
     contactPerson: 'Regional Coordinator',
-    contactPhone: '0344-0197194',
+    contactPhone: '0305-1755551',
     status: 'ACTIVE',
     createdAt: '2025-01-20T00:00:00Z',
   },
@@ -1306,7 +1306,7 @@ export const mockApi = {
       reportingTime: data.reportingTime || '09:00 AM',
       testDate: data.testDate || 'Sunday, 15 November 2026',
       contactPerson: data.contactPerson || 'Center Superintendent',
-      contactPhone: data.contactPhone || '0344-0197194',
+      contactPhone: data.contactPhone || '0305-1755551',
       status: data.status || 'ACTIVE',
       createdAt: new Date().toISOString(),
     };
@@ -1523,7 +1523,7 @@ export const mockApi = {
             <text x="40" y="135" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">ROLL NUMBER:</text>
             <text x="170" y="135" font-family="Courier, monospace" font-size="13" font-weight="bold" fill="#185b9d">${s.rollNumber || 'PENDING'}</text>
             <text x="40" y="165" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">PAYMENT CHANNEL:</text>
-            <text x="170" y="165" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">JazzCash / Bank (03440197194 / Sumama Khan)</text>
+            <text x="170" y="165" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">JazzCash / Bank (03051755551 / Sumama Khan)</text>
             <text x="40" y="195" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#64748b">TRANSACTION REF:</text>
             <text x="170" y="195" font-family="Courier, monospace" font-size="13" font-weight="bold" fill="#0f172a">TXN-${s.id.toUpperCase()}-300</text>
             <rect x="40" y="220" width="520" height="45" fill="#f0fdf4" stroke="#22c55e" stroke-width="2" rx="8"/>
@@ -1752,7 +1752,7 @@ export function printStudentSlip(student: any) {
       <div class="pay-methods">
         <div class="pay-card">
           <strong style="color: #15803d;">📱 JazzCash:</strong><br/>
-          Account: <strong style="font-family: monospace; color: #0f172a;">03440197194</strong><br/>
+          Account: <strong style="font-family: monospace; color: #0f172a;">03051755551</strong><br/>
           Title: <strong>Sumama Khan</strong>
         </div>
         <div class="pay-card">
@@ -1762,7 +1762,7 @@ export function printStudentSlip(student: any) {
         </div>
       </div>
       <p style="font-size: 10px; color: #166534; margin-top: 8px; font-weight: 600;">
-        Send payment screenshot with your Application ID (${appNo}) to WhatsApp <strong>0344-0197194</strong> for clearance.
+        Send payment screenshot with your Application ID (${appNo}) to WhatsApp <strong>0305-1755551</strong> for clearance.
       </p>
     </div>
 
@@ -1771,7 +1771,7 @@ export function printStudentSlip(student: any) {
       <ul>
         <li>Retain this official confirmation slip for your records.</li>
         <li>Your Roll Number Slip with test center assignment will be issued once payment is verified.</li>
-        <li>Helpline / Support: <strong>0344-0197194</strong> / <strong>info@azmaio.com</strong>.</li>
+        <li>Helpline / Support: <strong>0305-1755551</strong> / <strong>info@azmaio.com</strong>.</li>
       </ul>
     </div>
 
@@ -1935,7 +1935,7 @@ export function printStudentDossier(student: any) {
     </div>
     <div class="grid-3">
       <div class="item"><div class="label">Candidate Mobile / WhatsApp</div><div class="val" style="font-family: monospace;">${student.whatsapp || student.mobile || '0300-XXXXXXX'}</div></div>
-      <div class="item"><div class="label">Father / Guardian Mobile</div><div class="val" style="font-family: monospace; color: #185b9d;">${student.parentMobile || student.emergencyContact || '0344-0197194'}</div></div>
+      <div class="item"><div class="label">Father / Guardian Mobile</div><div class="val" style="font-family: monospace; color: #185b9d;">${student.parentMobile || student.emergencyContact || '0305-1755551'}</div></div>
       <div class="item"><div class="label">Email Address</div><div class="val">${student.email || 'student@azmaio.com'}</div></div>
     </div>
     <div class="item" style="margin-bottom: 10px;">

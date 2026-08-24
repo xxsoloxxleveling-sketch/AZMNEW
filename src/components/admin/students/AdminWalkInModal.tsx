@@ -37,7 +37,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
     scholarshipCategory: 'GENERAL_MERIT' as any,
     guardianOccupation: 'Business',
     guardianMonthlyIncome: 80000,
-    emergencyContact: '0344-0197194',
+    emergencyContact: '0305-1755551',
     emergencyRelation: 'Father',
     testCenter: '',
   });

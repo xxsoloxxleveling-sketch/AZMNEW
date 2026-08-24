@@ -2154,15 +2154,15 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
                 {/* Instant WhatsApp Proof Button */}
                 <a
-                  href={`https://wa.me/923440197194?text=${encodeURIComponent(
-                    `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026) Scholarship Exam.\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Fee Amount: PKR 300\n• Paid Via: JazzCash / Mobile Transfer (To: Sumama Khan)\n\nPlease find attached my payment receipt/screenshot for quick verification and Roll Number activation.`
+                  href={`https://wa.me/923051755551?text=${encodeURIComponent(
+                    `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026) Scholarship Exam.\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Fee Amount: PKR 300\n• Paid Via: JazzCash / Mobile Transfer (To: Sumama Khan - 0344-0197194)\n\nPlease find attached my payment receipt/screenshot for quick verification and Roll Number activation.`
                   )}`}
                   target="_blank"
                   rel="noreferrer"
                   className="w-full py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  <span>Send Fee Screenshot on WhatsApp (+92 344 0197194)</span>
+                  <span>Send Fee Screenshot on WhatsApp (+92 305 1755551)</span>
                 </a>
               </div>
             )}

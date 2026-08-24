@@ -206,7 +206,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 Your admission is secured in the examination database.
               </span>
               <a
-                href="https://wa.me/923440197194?text=Hello%20AZM.AIO%20Helpline%2C%20inquiring%20about%20my%20Roll%20Number%20Slip%20release."
+                href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Helpline%2C%20inquiring%20about%20my%20Roll%20Number%20Slip%20release."
                 target="_blank"
                 rel="noreferrer"
                 className="px-3.5 py-2 bg-[#25D366] text-white rounded-xl text-xs font-bold hover:bg-[#20bd5a] transition flex items-center gap-1.5"
@@ -255,7 +255,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
           </p>
           <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <a
-              href="https://wa.me/923440197194?text=Hello%20AZM.AIO%20Helpline%2C%20I%20cannot%20find%20my%20Roll%20Number%20Slip."
+              href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Helpline%2C%20I%20cannot%20find%20my%20Roll%20Number%20Slip."
               target="_blank"
               rel="noreferrer"
               className="px-4 py-2 bg-[#25D366] text-white rounded-xl text-xs font-bold hover:bg-[#20bd5a] transition-colors"

@@ -121,7 +121,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
               <li className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
                 <strong className="text-white block font-medium">1. Jadoon Public High School & College</strong>
                 <span className="text-slate-400 text-[11px] block">Gandhian, Karakoram Highway (Head Office)</span>
-                <span className="text-emerald-400 text-[11px] font-mono font-semibold">0344-0197194</span>
+                <span className="text-emerald-400 text-[11px] font-mono font-semibold">0305-1755551</span>
               </li>
               <li className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
                 <strong className="text-white block font-medium">2. Dubai International School & College</strong>
@@ -147,8 +147,8 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
                 <Phone className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-[11px] text-slate-400">Direct Candidate Phone</p>
-                  <a href="tel:03440197194" className="text-sm font-mono font-bold text-emerald-300 hover:underline">
-                    0344-0197194
+                  <a href="tel:03051755551" className="text-sm font-mono font-bold text-emerald-300 hover:underline">
+                    0305-1755551
                   </a>
                   <p className="text-[10px] text-slate-400 mt-0.5">9:00 AM – 5:00 PM PST (Mon – Sat)</p>
                 </div>

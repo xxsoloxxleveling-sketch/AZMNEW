@@ -35,7 +35,7 @@ export const TestCentersTab: React.FC = () => {
     reportingTime: '09:00 AM',
     testDate: 'Sunday, 15 November 2026',
     contactPerson: '',
-    contactPhone: '0344-0197194',
+    contactPhone: '0305-1755551',
     status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE',
   });
 
@@ -63,7 +63,7 @@ export const TestCentersTab: React.FC = () => {
       reportingTime: '09:00 AM',
       testDate: 'Sunday, 15 November 2026',
       contactPerson: '',
-      contactPhone: '0344-0197194',
+      contactPhone: '0305-1755551',
       status: 'ACTIVE',
     });
     setIsModalOpen(true);
