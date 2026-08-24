@@ -368,17 +368,35 @@ export function getLocalStudents(): MockStudent[] {
     if (!raw) return [];
     const list: MockStudent[] = JSON.parse(raw);
     if (!Array.isArray(list)) return [];
+
+    // Strict filter: Purge any fake / dummy "Registered Candidate" or "John Doe" entries
+    const cleanList = list.filter((s) => {
+      if (!s || !s.fullName) return false;
+      const name = s.fullName.trim().toLowerCase();
+      const father = (s.fatherName || '').trim().toLowerCase();
+      if (name === 'registered candidate' || name === 'john doe' || father === 'guardian') {
+        return false;
+      }
+      return true;
+    });
+
     // Strict deduplication on read
     const map = new Map<string, MockStudent>();
-    list.forEach((s) => {
+    cleanList.forEach((s) => {
       const key = getCanonicalStudentKey(s);
       map.set(key, s);
     });
-    return Array.from(map.values());
+
+    const finalClean = Array.from(map.values());
+    if (finalClean.length !== list.length) {
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(finalClean));
+    }
+    return finalClean;
   } catch (err) {
     return [];
   }
 }
+
 
 export function saveLocalStudent(student: MockStudent): void {
   try {
@@ -522,9 +540,17 @@ export function isStudentFeePaid(student: {
   }
 }
 
-export function updateLocalStudentPayment(studentId: string, assignedRollNo?: string): MockStudent | null {
+export function updateLocalStudentPayment(studentId: string, assignedRollNo?: string, studentObj?: any): MockStudent | null {
   try {
-    markStudentFeePaid([studentId, assignedRollNo]);
+    markStudentFeePaid([
+      studentId,
+      assignedRollNo,
+      studentObj?.id,
+      studentObj?.applicationNo,
+      studentObj?.cnicOrBForm,
+      studentObj?.rollNumber,
+      studentObj?.fullName,
+    ]);
 
     const list = getLocalStudents();
     const cleanQuery = studentId.toLowerCase().trim();
@@ -535,7 +561,10 @@ export function updateLocalStudentPayment(studentId: string, assignedRollNo?: st
         s.id.toLowerCase() === cleanQuery ||
         (s.applicationNo && s.applicationNo.toLowerCase() === cleanQuery) ||
         (s.rollNumber && s.rollNumber.toLowerCase() === cleanQuery) ||
-        (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits)
+        (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits) ||
+        (studentObj?.id && s.id.toLowerCase() === String(studentObj.id).toLowerCase()) ||
+        (studentObj?.applicationNo && s.applicationNo && s.applicationNo.toLowerCase() === String(studentObj.applicationNo).toLowerCase()) ||
+        (studentObj?.cnicOrBForm && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === String(studentObj.cnicOrBForm).replace(/\D/g, ''))
     );
 
     if (idx >= 0) {
@@ -548,6 +577,7 @@ export function updateLocalStudentPayment(studentId: string, assignedRollNo?: st
 
       list[idx] = {
         ...list[idx],
+        ...(studentObj || {}),
         feeStatus: 'PAID',
         rollNumber,
         qrToken: rollNumber ? `VERIFIED-${rollNumber}` : `FEE-PAID-${list[idx].applicationNo || list[idx].id}`,
@@ -557,34 +587,24 @@ export function updateLocalStudentPayment(studentId: string, assignedRollNo?: st
       };
       localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
       return list[idx];
-    } else {
-      const newStudent: MockStudent = {
-        id: studentId,
-        studentId,
-        applicationNo: studentId.startsWith('APP-') ? studentId : `APP-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-        fullName: 'Registered Candidate',
-        fatherName: 'Guardian',
-        gender: 'MALE',
-        dateOfBirth: '2008-01-01',
-        cnicOrBForm: studentId,
-        address: 'Mansehra',
-        district: 'Mansehra',
-        province: 'KP',
-        parentMobile: '0300-0000000',
-        currentClass: 'Class 10th',
-        scholarshipCategory: 'GENERAL_MERIT',
-        status: 'ACTIVE',
+    } else if (studentObj && studentObj.fullName && !studentObj.fullName.toLowerCase().includes('registered candidate')) {
+      let rollNumber = studentObj.rollNumber || null;
+      if (assignedRollNo && isRollNumberReleased()) {
+        rollNumber = assignedRollNo;
+      }
+      const realStudent: MockStudent = {
+        ...studentObj,
         feeStatus: 'PAID',
-        rollNumber: assignedRollNo && isRollNumberReleased() ? assignedRollNo : null,
-        createdAt: new Date().toISOString(),
+        rollNumber,
       };
-      list.unshift(newStudent);
+      list.unshift(realStudent);
       localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
-      return newStudent;
+      return realStudent;
     }
   } catch (err) {}
   return null;
 }
+
 
 
 export function releaseAllPaidRollNumbers(): number {
@@ -870,7 +890,14 @@ export const mockApi = {
       }
     });
 
-    let result = Array.from(studentMap.values());
+    let result = Array.from(studentMap.values()).filter(
+      (s) =>
+        s &&
+        s.fullName &&
+        s.fullName.trim().toLowerCase() !== 'registered candidate' &&
+        s.fullName.trim().toLowerCase() !== 'john doe' &&
+        (s.fatherName || '').trim().toLowerCase() !== 'guardian'
+    );
 
     if (filters?.search) {
       const q = filters.search.toLowerCase().trim();
