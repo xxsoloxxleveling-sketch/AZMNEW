@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StudentApplicationData, PartnerSchoolData, PageTab } from '../../types';
 import { MONTHLY_ASSISTANCE_RATES, BENEFICIARY_CATEGORIES, OFFICIAL_DATA } from '../../data/scholarshipData';
-import { mockApi } from '../../lib/mockApi';
+import { mockApi, saveUploadedFilesForCandidate } from '../../lib/mockApi';
 import { 
   User, 
   Phone, 
@@ -360,11 +360,19 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     if (!file) return;
 
     try {
-      const { dataUrl } = await compressImageFile(file, 600, 0.8);
+      const { dataUrl, sizeFormatted } = await compressImageFile(file, 600, 0.8);
       setFormData((prev) => ({
         ...prev,
         photoUrl: dataUrl,
       }));
+      saveUploadedFilesForCandidate([formData.cnicBForm, formData.fullName], {
+        photo: {
+          name: file.name || 'Candidate_Passport_Photo.jpg',
+          size: sizeFormatted,
+          dataUrl,
+          uploadedAt: new Date().toISOString(),
+        },
+      });
     } catch (err) {
       console.warn('Photo compression fallback:', err);
     }
@@ -392,10 +400,34 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           [docKey]: true,
         },
       }));
+
+      // Map docKey to candidate documents model
+      const targetField =
+        docKey === 'bformUploaded'
+          ? 'bform'
+          : docKey === 'fatherCnicUploaded'
+          ? 'fatherCnic'
+          : docKey === 'dmcUploaded'
+          ? 'dmc'
+          : docKey === 'domicileUploaded'
+          ? 'domicile'
+          : docKey === 'incomeCertUploaded'
+          ? 'paymentReceipt'
+          : docKey;
+
+      saveUploadedFilesForCandidate([formData.cnicBForm, formData.fullName], {
+        [targetField]: {
+          name: file.name,
+          size: sizeFormatted,
+          dataUrl,
+          uploadedAt: new Date().toISOString(),
+        },
+      });
     } catch (err) {
       console.warn('Document compression fallback:', err);
     }
   };
+
 
 
   const handleRemoveDocument = (docKey: string) => {
@@ -550,7 +582,13 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
       const student = await mockApi.createStudent(backendPayload);
 
+      saveUploadedFilesForCandidate(
+        [formData.cnicBForm, formData.fullName, student.id, student.applicationNo],
+        backendPayload.uploadedDocuments
+      );
+
       setCreatedStudent(student);
+
       setSubmittedAppId(student.applicationNo || student.id);
       setIsSubmitted(true);
 

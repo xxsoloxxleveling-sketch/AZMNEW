@@ -308,6 +308,40 @@ export function saveLocalTestCenters(list: MockTestCenter[]): void {
 }
 
 
+const UPLOADED_FILES_STORAGE_KEY = 'AZM_STUDENT_UPLOADED_FILES_V';
+
+export function saveUploadedFilesForCandidate(keys: (string | undefined | null)[], files: any): void {
+  try {
+    const raw = localStorage.getItem(UPLOADED_FILES_STORAGE_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    keys.filter(Boolean).forEach((k) => {
+      const clean = String(k).toLowerCase().trim();
+      const digits = String(k).replace(/\D/g, '');
+      map[clean] = { ...(map[clean] || {}), ...files };
+      if (digits.length >= 5) {
+        map[digits] = { ...(map[digits] || {}), ...files };
+      }
+    });
+    localStorage.setItem(UPLOADED_FILES_STORAGE_KEY, JSON.stringify(map));
+  } catch (e) {}
+}
+
+export function getUploadedFilesForCandidate(keys: (string | undefined | null)[]): any {
+  try {
+    const raw = localStorage.getItem(UPLOADED_FILES_STORAGE_KEY);
+    if (!raw) return {};
+    const map = JSON.parse(raw);
+    for (const k of keys) {
+      if (!k) continue;
+      const clean = String(k).toLowerCase().trim();
+      const digits = String(k).replace(/\D/g, '');
+      if (map[clean] && Object.keys(map[clean]).length > 0) return map[clean];
+      if (digits.length >= 5 && map[digits] && Object.keys(map[digits]).length > 0) return map[digits];
+    }
+  } catch (e) {}
+  return {};
+}
+
 export function getLocalStudents(): MockStudent[] {
   try {
     const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
@@ -333,8 +367,16 @@ export function saveLocalStudent(student: MockStudent): void {
       list.unshift(student);
     }
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
+
+    if (student.uploadedDocuments) {
+      saveUploadedFilesForCandidate(
+        [student.id, student.applicationNo, student.rollNumber, student.cnicOrBForm, student.fullName],
+        student.uploadedDocuments
+      );
+    }
   } catch (err) {}
 }
+
 
 export function updateLocalStudentPayment(studentId: string, assignedRollNo?: string): MockStudent | null {
   try {
@@ -606,19 +648,48 @@ export const mockApi = {
   },
 
   async getStudentById(id: string): Promise<MockStudent> {
+    const local = getLocalStudents().find(
+      (s) =>
+        s.id === id ||
+        s.applicationNo === id ||
+        (s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === id.replace(/\D/g, ''))
+    );
+    const extraFiles = getUploadedFilesForCandidate([
+      id,
+      local?.applicationNo,
+      local?.cnicOrBForm,
+      local?.fullName,
+    ]);
+
     try {
       const s: any = await apiFetch<any>(`/api/students/${id}`);
       return {
+        ...(local || {}),
         ...s,
-        feeStatus: s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : 'UNPAID'),
+        uploadedDocuments: {
+          ...extraFiles,
+          ...(local?.uploadedDocuments || {}),
+          ...(s.uploadedDocuments || {}),
+        },
+        feeStatus:
+          s.feeStatus ||
+          (s.feeRecords?.length ? s.feeRecords[0].status : local?.feeStatus || 'UNPAID'),
         attendancePercentage: s.attendancePercentage ?? 100,
       };
     } catch (err) {
-      const local = getLocalStudents().find((s) => s.id === id || s.applicationNo === id);
-      if (local) return local;
+      if (local) {
+        return {
+          ...local,
+          uploadedDocuments: {
+            ...extraFiles,
+            ...(local.uploadedDocuments || {}),
+          },
+        };
+      }
       throw err;
     }
   },
+
 
   async createStudent(studentData: any): Promise<MockStudent> {
     try {
@@ -1111,11 +1182,42 @@ export const mockApi = {
     const generatedDocs: MockStudentDocument[] = [];
 
     students.forEach((s) => {
-      if (studentId && s.id !== studentId && s.applicationNo !== studentId && s.rollNumber !== studentId) {
-        return;
-      }
+      const cleanTarget = studentId ? studentId.toLowerCase().trim() : '';
+      const cleanDigits = studentId ? studentId.replace(/\D/g, '') : '';
+      const matches =
+        !studentId ||
+        s.id?.toLowerCase() === cleanTarget ||
+        s.applicationNo?.toLowerCase() === cleanTarget ||
+        s.rollNumber?.toLowerCase() === cleanTarget ||
+        (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits);
 
-      const up = s.uploadedDocuments || {};
+      if (!matches) return;
+
+
+      const localCandidate = getLocalStudents().find(
+        (l) =>
+          l.id === s.id ||
+          l.applicationNo === s.applicationNo ||
+          (l.cnicOrBForm && l.cnicOrBForm.replace(/\D/g, '') === s.cnicOrBForm?.replace(/\D/g, ''))
+      );
+
+      const localFiles = getUploadedFilesForCandidate([
+        s.id,
+        s.applicationNo,
+        s.rollNumber,
+        s.cnicOrBForm,
+        s.fullName,
+        localCandidate?.id,
+        localCandidate?.applicationNo,
+        localCandidate?.cnicOrBForm,
+      ]);
+
+      const up = {
+        ...localFiles,
+        ...(localCandidate?.uploadedDocuments || {}),
+        ...(s.uploadedDocuments || {}),
+      };
+
 
       // 1. Candidate Photo
       const photoUrl =
