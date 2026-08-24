@@ -22,9 +22,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Initial sync with mockApi / storage
     mockApi.getCurrentUser().then((u) => {
       setUser(u);
-      persistUser(u);
+      if (u) {
+        persistUser(u);
+      }
       setIsLoading(false);
     });
+
   }, []);
 
   const login = async (email: string, pass: string): Promise<LoginResponse> => {

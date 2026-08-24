@@ -89,9 +89,10 @@ const ViewLoadingFallback = () => (
 type AppRoute = 'public' | 'login' | 'register' | 'partner-registration' | 'scan' | 'admin';
 
 function AppContent() {
-  const { user, role } = useAuth();
+  const { user, role, isAuthenticated } = useAuth();
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('public');
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
+
 
   // Public tab states
   const [activeTab, setActiveTab] = useState<PageTab>('home');
@@ -209,12 +210,45 @@ function AppContent() {
 
   // Route 4: Standalone Teacher QR Scanner (/scan)
   if (currentRoute === 'scan') {
+    if (!isAuthenticated) {
+      return (
+        <Suspense fallback={<ViewLoadingFallback />}>
+          <LoginPage
+            onLoginSuccess={(tab) => {
+              if (tab === 'scan') {
+                navigateTo('scan');
+              } else {
+                navigateTo('admin', tab as AdminTab);
+              }
+            }}
+            onNavigateHome={() => navigateTo('public')}
+          />
+        </Suspense>
+      );
+    }
     return <TeacherScanView onBackToDashboard={() => navigateTo('admin', 'dashboard')} />;
   }
 
-  // Route 5: Admin Management Panel
+  // Route 5: Admin Management Panel (Protected)
   if (currentRoute === 'admin') {
+    if (!isAuthenticated) {
+      return (
+        <Suspense fallback={<ViewLoadingFallback />}>
+          <LoginPage
+            onLoginSuccess={(tab) => {
+              if (tab === 'scan') {
+                navigateTo('scan');
+              } else {
+                navigateTo('admin', tab as AdminTab);
+              }
+            }}
+            onNavigateHome={() => navigateTo('public')}
+          />
+        </Suspense>
+      );
+    }
     const getTabMeta = () => {
+
       switch (adminTab) {
         case 'dashboard':
           return { title: 'Executive Overview Dashboard', subtitle: 'Academic Session 2026-2027 Analytics' };

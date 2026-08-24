@@ -173,13 +173,8 @@ export interface MockUserAccount {
   createdAt: string;
 }
 
-let currentUser: CurrentUser = getUser<CurrentUser>() || {
-  id: 'usr_001',
-  name: 'Prof. Dr. M. Jadoon',
-  email: 'superadmin@jadoon.edu.pk',
-  role: 'SUPER_ADMIN',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-};
+let currentUser: CurrentUser | null = getUser<CurrentUser>() || null;
+
 
 // -------------------------------------------------------------
 // LIVE API SERVICES CONNECTED TO EXPRESS BACKEND (PHASE 7)
@@ -222,7 +217,7 @@ export const mockApi = {
     };
   },
 
-  async getCurrentUser(): Promise<CurrentUser> {
+  async getCurrentUser(): Promise<CurrentUser | null> {
     const token = getToken();
     if (!token) return currentUser;
 
@@ -245,20 +240,25 @@ export const mockApi = {
 
   async switchRole(role: Role): Promise<CurrentUser> {
     currentUser = {
-      ...currentUser,
+      ...(currentUser || {
+        id: 'usr_001',
+        email: 'admin@azm.org.pk',
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+      }),
       role,
       name:
         role === 'SUPER_ADMIN'
-          ? 'Prof. Dr. M. Jadoon (Super Admin)'
+          ? 'AZM Super Administrator'
           : role === 'ADMIN'
-          ? 'Muhammad Rashid (Admin)'
+          ? 'Examination Officer (Admin)'
           : role === 'ACCOUNTANT'
-          ? 'Kashif Finance'
-          : 'Asad Ali (Examiner/Teacher)',
+          ? 'Finance & Accounts Officer'
+          : 'Invigilator / Examiner',
     };
     setUser(currentUser);
     return currentUser;
   },
+
 
   // 2. Dashboard Overview Aggregation
   async getDashboardOverview() {

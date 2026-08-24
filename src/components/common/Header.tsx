@@ -116,22 +116,10 @@ export const Header: React.FC<HeaderProps> = ({
                 0305-1755551
               </a>
             </div>
-
-            {/* Admin / Faculty Portal Link */}
-            <button
-              onClick={() => {
-                window.location.hash = 'login';
-                window.dispatchEvent(new HashChangeEvent('hashchange'));
-              }}
-              className="flex items-center gap-1 text-slate-300 hover:text-white font-medium transition-colors bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/80"
-              title="Admin & Faculty Management Portal"
-            >
-              <Sparkles className="w-3 h-3 text-amber-400" />
-              <span>Admin Portal</span>
-            </button>
           </div>
         </div>
       </div>
+
 
       {/* 2. Main Navigation Bar with clean floating glass on scroll */}
       <div 

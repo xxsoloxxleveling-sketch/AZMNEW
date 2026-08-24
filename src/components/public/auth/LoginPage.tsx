@@ -24,9 +24,9 @@ interface LoginPageProps {
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigateHome }) => {
   const { login } = useAuth();
 
-  // Form states
-  const [email, setEmail] = useState('superadmin@jadoon.edu.pk');
-  const [password, setPassword] = useState('AdminPassword123!');
+  // Form states - Empty by default for live authentication
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -38,6 +38,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
 
   // Field validation rules
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 
   const emailError = React.useMemo(() => {
     if (!touched.email && !email) return null;
@@ -98,14 +99,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
     }
   };
 
-  const handleQuickFill = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setTouched({ email: true, password: true });
-    setServerError(null);
-  };
-
   return (
+
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between items-center p-4 sm:p-6 relative overflow-hidden font-sans select-none">
       {/* Subtle Background Accent Pattern */}
       <div className="absolute inset-0 bg-[radial-gradient(#185b9d_1px,transparent_1px)] [background-size:24px_24px] opacity-[0.03] pointer-events-none" />
@@ -276,68 +271,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
               </div>
             )}
 
-            {/* Quick Demo Role Fill Section */}
-            <div className="pt-4 border-t border-slate-100 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Quick Demo Accounts
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium">Click to populate</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleQuickFill('superadmin@jadoon.edu.pk', 'AdminPassword123!')
-                  }
-                  className="p-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-200 text-slate-700 font-semibold text-left transition flex items-center gap-1.5 truncate"
-                >
-                  <span>👑</span>
-                  <div className="min-w-0">
-                    <span className="block truncate text-slate-800 font-bold">Super Admin</span>
-                    <span className="text-[10px] text-slate-400 block truncate">/dashboard</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleQuickFill('teacher@jadoon.edu.pk', 'TeacherPassword123!')
-                  }
-                  className="p-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/50 hover:border-emerald-200 text-slate-700 font-semibold text-left transition flex items-center gap-1.5 truncate"
-                >
-                  <span>📱</span>
-                  <div className="min-w-0">
-                    <span className="block truncate text-slate-800 font-bold">Teacher</span>
-                    <span className="text-[10px] text-slate-400 block truncate">/scan</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleQuickFill('accountant@jadoon.edu.pk', 'Accountant123!')
-                  }
-                  className="p-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-amber-50/50 hover:border-amber-200 text-slate-700 font-semibold text-left transition flex items-center gap-1.5 truncate"
-                >
-                  <span>💳</span>
-                  <div className="min-w-0">
-                    <span className="block truncate text-slate-800 font-bold">Accountant</span>
-                    <span className="text-[10px] text-slate-400 block truncate">/dashboard</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('admin@jadoon.edu.pk', 'Admin123!')}
-                  className="p-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-200 text-slate-700 font-semibold text-left transition flex items-center gap-1.5 truncate"
-                >
-                  <span>🛡️</span>
-                  <div className="min-w-0">
-                    <span className="block truncate text-slate-800 font-bold">Admin</span>
-                    <span className="text-[10px] text-slate-400 block truncate">/dashboard</span>
-                  </div>
-                </button>
+            {/* Security Notice */}
+            <div className="pt-2 border-t border-slate-100 text-center">
+              <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Restricted Faculty & Staff Administrative Login</span>
               </div>
             </div>
           </div>
@@ -346,19 +284,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
         {/* Security / No Public Sign-up Notice */}
         <div className="mt-4 text-center space-y-1 text-slate-400 text-xs">
           <p className="flex items-center justify-center gap-1.5 text-slate-500">
-            <Lock className="w-3.5 h-3.5" />
-            <span>Protected system for authorized faculty & staff.</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-[#185b9d]" />
+            <span>Encrypted Session • Session V (2026) Management</span>
           </p>
           <p className="text-[11px]">
-            New accounts are provisioned exclusively by Super Admin via Settings.
+            Faculty credentials are encrypted and assigned exclusively by the Administrator.
           </p>
         </div>
       </div>
 
       {/* Footer Branding */}
       <div className="w-full max-w-md text-center py-2 text-[11px] text-slate-400">
-        Jadoon Public School & College Management System • 2026
+        AZM.AIO • Official Examination & Administrative Management Portal • 2026
       </div>
+
 
       {/* Forgot Password Modal */}
       {forgotPasswordModal && (
