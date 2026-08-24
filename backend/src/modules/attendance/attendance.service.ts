@@ -122,7 +122,7 @@ export class AttendanceService {
   /**
    * Retrieves today's attendance summary and records list.
    */
-  async getTodayAttendance(query: TodayAttendanceQueryInput) {
+  async getTodayAttendance(query: TodayAttendanceQueryInput = {}) {
     const now = new Date();
     const startOfDay = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)
@@ -138,8 +138,9 @@ export class AttendanceService {
       },
     };
 
-    if (query.status) where.status = query.status;
-    if (query.method) where.method = query.method;
+    if (query?.status) where.status = query.status;
+    if (query?.method) where.method = query.method;
+    if (query?.classLevel) where.student = { currentClass: query.classLevel };
 
     const [records, totalActiveStudents] = await Promise.all([
       prisma.attendance.findMany({

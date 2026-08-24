@@ -26,13 +26,26 @@ router.get('/:id/registration-pdf', studentsController.getRegistrationPdf);
 // QR image retrieval
 router.get('/:id/qr', studentsController.getQr);
 
-// Emergency / Admin Data Purge & Fresh Start Endpoint
-router.post('/purge-all-system-data', studentsController.purgeAll);
-
 // Live Supabase Cloud Storage Upload for Candidate Documents
 router.post('/upload-document', studentsController.uploadDocument);
 
-// Public / Client Query Roster Endpoints
+// Stream / Serve Student Attached Documents & Photos Directly
+router.get(
+  '/:id/document/:docType',
+  studentsController.serveDocument
+);
+
+// Protected routes (Admin / Teachers / Super Admin)
+router.use(authenticate);
+
+// Emergency / Admin Data Purge & Fresh Start Endpoint (SUPER_ADMIN ONLY)
+router.post(
+  '/purge-all-system-data',
+  authorizeRoles(Role.SUPER_ADMIN),
+  studentsController.purgeAll
+);
+
+// Student Roster Query Endpoints (Authenticated)
 router.get(
   '/',
   validateQuery(studentQuerySchema),
@@ -43,15 +56,6 @@ router.get(
   '/:id',
   studentsController.getById
 );
-
-// Stream / Serve Student Attached Documents & Photos Directly
-router.get(
-  '/:id/document/:docType',
-  studentsController.serveDocument
-);
-
-// Protected routes for modifications (Admin / Teachers)
-router.use(authenticate);
 
 // Admin Walk-in Registration
 router.post(
