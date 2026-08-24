@@ -27,7 +27,10 @@ import { StaffListView } from './components/admin/staff/StaffListView';
 import { PayrollListView } from './components/admin/payroll/PayrollListView';
 import { TransactionsListView } from './components/admin/transactions/TransactionsListView';
 import { SettingsView } from './components/admin/settings/SettingsView';
+import { ExamHallsView } from './components/admin/halls/ExamHallsView';
+import { DocumentVaultView } from './components/admin/storage/DocumentVaultView';
 import { AdminWalkInModal } from './components/admin/students/AdminWalkInModal';
+
 import { GenerateChallanModal } from './components/admin/fees/GenerateChallanModal';
 import { mockApi, MockStudent } from './lib/mockApi';
 
@@ -254,6 +257,10 @@ function AppContent() {
           return { title: 'Executive Overview Dashboard', subtitle: 'Academic Session 2026-2027 Analytics' };
         case 'students':
           return { title: 'Student Management & Admissions', subtitle: 'Candidate profiles, biometric QR tokens, and transcripts' };
+        case 'halls':
+          return { title: 'Class-Wise Examination Halls & Attendance', subtitle: 'Live room allocations, capacity limits, and real-time attendance matrix' };
+        case 'storage':
+          return { title: 'Candidate Document Storage Vault', subtitle: 'Digital repository of photos, CNIC/B-Forms, DMCs, and payment receipts' };
         case 'attendance':
           return { title: 'Attendance & QR Verification Hub', subtitle: 'Biometric scanning & daily roll registry' };
         case 'fees':
@@ -313,12 +320,15 @@ function AppContent() {
           />
         )}
         {adminTab === 'students' && <StudentsListView />}
+        {adminTab === 'halls' && <ExamHallsView onOpenQrScanner={() => navigateTo('scan')} />}
+        {adminTab === 'storage' && <DocumentVaultView />}
         {adminTab === 'attendance' && <AttendanceHubView />}
         {adminTab === 'fees' && <FeesListView />}
         {adminTab === 'staff' && <StaffListView />}
         {adminTab === 'payroll' && <PayrollListView />}
         {adminTab === 'transactions' && <TransactionsListView />}
         {adminTab === 'settings' && <SettingsView />}
+
 
         {/* Global Action Modals */}
         <AdminWalkInModal

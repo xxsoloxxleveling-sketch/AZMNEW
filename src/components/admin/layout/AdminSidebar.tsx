@@ -15,6 +15,8 @@ import {
   Shield,
   UserCheck,
   School,
+  Building2,
+  FolderArchive,
 } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { Role } from '../../../lib/mockApi';
@@ -22,6 +24,8 @@ import { Role } from '../../../lib/mockApi';
 export type AdminTab =
   | 'dashboard'
   | 'students'
+  | 'halls'
+  | 'storage'
   | 'attendance'
   | 'fees'
   | 'staff'
@@ -61,6 +65,18 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
+      id: 'halls' as AdminTab,
+      label: 'Exam Halls & Seating',
+      icon: Building2,
+      roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
+    },
+    {
+      id: 'storage' as AdminTab,
+      label: 'Document Storage Vault',
+      icon: FolderArchive,
+      roles: ['SUPER_ADMIN', 'ADMIN'],
+    },
+    {
       id: 'attendance' as AdminTab,
       label: 'Attendance & QR',
       icon: CalendarCheck,
@@ -97,6 +113,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
   ];
+
 
   const filteredNavItems = navItems.filter((item) => item.roles.includes(role));
 

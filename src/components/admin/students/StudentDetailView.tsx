@@ -14,8 +14,9 @@ import {
   Building,
   Printer,
 } from 'lucide-react';
-import { MockStudent, mockApi } from '../../../lib/mockApi';
+import { MockStudent, mockApi, printStudentDossier } from '../../../lib/mockApi';
 import { StatusBadge } from '../shared/StatusBadge';
+import { StudentDossierModal } from '../../common/StudentDossierModal';
 
 interface StudentDetailViewProps {
   student: MockStudent;
@@ -24,6 +25,14 @@ interface StudentDetailViewProps {
 
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, onBack }) => {
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDossierOpen, setIsDossierOpen] = useState(false);
+  const [selectedLightboxImage, setSelectedLightboxImage] = useState<string | null>(null);
+  const [docStatuses, setDocStatuses] = useState<Record<string, 'VERIFIED' | 'PENDING' | 'REJECTED'>>({
+    photo: 'VERIFIED',
+    cnic: 'VERIFIED',
+    dmc: student.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING',
+    payment: student.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING',
+  });
 
   const handleDownloadPdf = async () => {
     setIsDownloading(true);
@@ -34,37 +43,53 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
     }
   };
 
+  const toggleDocStatus = (docKey: string, status: 'VERIFIED' | 'REJECTED') => {
+    setDocStatuses((prev) => ({
+      ...prev,
+      [docKey]: prev[docKey] === status ? 'PENDING' : status,
+    }));
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Action Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 px-3.5 py-2 rounded-xl transition"
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 px-3.5 py-2 rounded-xl transition cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Students List</span>
         </button>
 
-        <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
           <button
-            onClick={() => window.print()}
-            className="px-3.5 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition flex items-center gap-1.5 shadow-xs"
+            onClick={() => setIsDossierOpen(true)}
+            className="px-3.5 py-2 text-xs font-bold bg-blue-50 border border-blue-200 text-[#185b9d] hover:bg-blue-100 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Full Profile Dossier</span>
+          </button>
+
+          <button
+            onClick={() => printStudentDossier(student)}
+            className="px-3.5 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Printer className="w-4 h-4 text-slate-500" />
-            <span>Print View</span>
+            <span>Print Dossier (A4)</span>
           </button>
 
           <button
             onClick={handleDownloadPdf}
             disabled={isDownloading}
-            className="px-4 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-md transition flex items-center gap-2 disabled:opacity-60"
+            className="px-4 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-md transition flex items-center gap-2 disabled:opacity-60 cursor-pointer"
           >
             <Download className="w-4 h-4" />
             <span>{isDownloading ? 'Generating PDF...' : 'Download Registration PDF'}</span>
           </button>
         </div>
       </div>
+
 
       {/* Header Profile Card with Biometric QR */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
@@ -252,73 +277,216 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
           </div>
         </div>
 
-        {/* Part H: Document Checklist & Part L: Office Use Record */}
+        {/* Part H: Submitted Candidate Documents & Storage Section */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-slate-100 text-slate-900 font-bold text-sm">
-            <ShieldCheck className="w-4 h-4 text-[#185b9d]" />
-            <h3>Part H: Documents & Part L: Office Verification</h3>
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+              <ShieldCheck className="w-4 h-4 text-[#185b9d]" />
+              <h3>Submitted Candidate Documents & Storage</h3>
+            </div>
+            <span className="text-[11px] text-slate-500 font-medium">Uploaded from student side</span>
           </div>
 
           <div className="space-y-3">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-              Verified Physical Credentials
+              Application Attachments & Scans
             </span>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100">
-                {student.documents?.bformCnicCopy ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-slate-400 shrink-0" />
-                )}
-                <span>Student CNIC / B-Form</span>
-              </div>
-              <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100">
-                {student.documents?.fatherCnicCopy ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-slate-400 shrink-0" />
-                )}
-                <span>Father / Guardian CNIC</span>
-              </div>
-              <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100">
-                {student.documents?.previousResultCard ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-slate-400 shrink-0" />
-                )}
-                <span>Previous Result Transcript</span>
-              </div>
-              <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100">
-                {student.documents?.domicileCertificate ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-slate-400 shrink-0" />
-                )}
-                <span>Domicile Certificate</span>
-              </div>
-            </div>
 
-            {/* Part L Box */}
-            <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200/80 space-y-2 mt-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-[#185b9d]">Part L: Official Review & Allocation</span>
-                <StatusBadge status={student.officeUse?.finalStatus || 'SHORTLISTED'} size="sm" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* 1. Candidate Photo */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={
+                      student.photoUrl ||
+                      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80'
+                    }
+                    alt="Photo"
+                    onClick={() =>
+                      setSelectedLightboxImage(
+                        student.photoUrl ||
+                          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=600'
+                      )
+                    }
+                    className="w-12 h-14 rounded-lg object-cover border border-slate-300 shadow-2xs cursor-pointer hover:opacity-80 transition"
+                  />
+                  <div>
+                    <div className="font-bold text-xs text-slate-900">Candidate Photograph</div>
+                    <div className="text-[10px] text-slate-500">JPG • 142 KB</div>
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold bg-emerald-100 text-emerald-800">
+                      {docStatuses.photo} ✓
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() =>
+                    setSelectedLightboxImage(
+                      student.photoUrl ||
+                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=600'
+                    )
+                  }
+                  className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer"
+                >
+                  Inspect
+                </button>
               </div>
-              <p className="text-xs text-slate-600">
-                Verified By: <strong>{student.officeUse?.documentVerifiedBy || 'Senior Registrar'}</strong>
-              </p>
-              <p className="text-xs text-slate-600">
-                Test Centre: <strong>{student.officeUse?.testCentre || 'Main Campus Examination Hall'}</strong>
-              </p>
-              {student.officeUse?.officeRemarks && (
-                <p className="text-xs text-slate-700 bg-white p-2.5 rounded-lg border border-blue-100">
-                  <em>"{student.officeUse.officeRemarks}"</em>
-                </p>
-              )}
+
+              {/* 2. CNIC / B-Form Document */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    onClick={() =>
+                      setSelectedLightboxImage(
+                        student.photoUrl ||
+                          'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600'
+                      )
+                    }
+                    className="w-12 h-14 rounded-lg bg-blue-100 text-[#185b9d] flex items-center justify-center font-bold text-xs border border-blue-200 cursor-pointer"
+                  >
+                    CNIC
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-slate-900">Student CNIC / B-Form</div>
+                    <div className="text-[10px] font-mono text-slate-500">{student.cnicOrBForm || 'N/A'}</div>
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold bg-emerald-100 text-emerald-800">
+                      {docStatuses.cnic} ✓
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() =>
+                    setSelectedLightboxImage(
+                      student.photoUrl ||
+                        'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600'
+                    )
+                  }
+                  className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer"
+                >
+                  Inspect
+                </button>
+              </div>
+
+              {/* 3. Previous Academic DMC */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    onClick={() =>
+                      setSelectedLightboxImage(
+                        'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600'
+                      )
+                    }
+                    className="w-12 h-14 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs border border-emerald-200 cursor-pointer"
+                  >
+                    DMC
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-slate-900">Previous Academic DMC</div>
+                    <div className="text-[10px] text-slate-500">{student.currentClass} Transcript</div>
+                    <span
+                      className={`inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold ${
+                        docStatuses.dmc === 'VERIFIED'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {docStatuses.dmc}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() =>
+                    setSelectedLightboxImage(
+                      'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600'
+                    )
+                  }
+                  className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer"
+                >
+                  Inspect
+                </button>
+              </div>
+
+              {/* 4. Payment Deposit Receipt */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    onClick={() =>
+                      setSelectedLightboxImage(
+                        'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600'
+                      )
+                    }
+                    className="w-12 h-14 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-xs border border-amber-200 cursor-pointer"
+                  >
+                    FEE
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-slate-900">PKR 300 Paid Slip</div>
+                    <div className="text-[10px] text-slate-500">JazzCash / Bank Receipt</div>
+                    <span
+                      className={`inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold ${
+                        docStatuses.payment === 'VERIFIED'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {docStatuses.payment}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() =>
+                    setSelectedLightboxImage(
+                      'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600'
+                    )
+                  }
+                  className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer"
+                >
+                  Inspect
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Lightbox Preview Modal */}
+      {selectedLightboxImage && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-100">Candidate Attachment Inspection</h3>
+              <button
+                onClick={() => setSelectedLightboxImage(null)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 bg-slate-100 flex items-center justify-center min-h-[300px]">
+              <img
+                src={selectedLightboxImage}
+                alt="Inspection"
+                className="max-h-[500px] w-auto max-w-full object-contain rounded-xl shadow-md border border-slate-300 bg-white"
+              />
+            </div>
+            <div className="px-6 py-4 bg-white border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setSelectedLightboxImage(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-800 font-bold text-xs hover:bg-slate-200 cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full Candidate Application Dossier Modal */}
+      <StudentDossierModal
+        isOpen={isDossierOpen}
+        onClose={() => setIsDossierOpen(false)}
+        student={student}
+      />
     </div>
   );
 };
+

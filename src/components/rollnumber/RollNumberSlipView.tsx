@@ -4,6 +4,7 @@ import { OFFICIAL_DATA } from '../../data/scholarshipData';
 import { searchRollNumberSlip } from '../../services/api';
 import { RollNumberSlip, PageTab } from '../../types';
 import { Logo } from '../common/Logo';
+import { StudentDossierModal } from '../common/StudentDossierModal';
 import { 
   Search, 
   Printer, 
@@ -29,7 +30,9 @@ interface RollNumberSlipViewProps {
 export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelectTab }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSlip, setSelectedSlip] = useState<RollNumberSlip | null>(null);
+  const [isDossierOpen, setIsDossierOpen] = useState<boolean>(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+
   const [hasSearched, setHasSearched] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -224,17 +227,25 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
       {selectedSlip && (
         <div className="space-y-4">
           {/* Action Bar Above Slip */}
-          <div className="flex items-center justify-between no-print px-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 no-print px-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>Cryptographically Verified Entry Pass</span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setIsDossierOpen(true)}
+                className="px-4 py-2 bg-blue-50 text-[#185b9d] border border-blue-200 hover:bg-blue-100 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 text-[#185b9d]" />
+                <span>Full Profile Dossier</span>
+              </button>
+
               <button
                 onClick={printDocument}
                 id="btn-print-slip"
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden"
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Direct Print (A4)</span>
@@ -243,13 +254,15 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
               <button
                 onClick={downloadSlipAlert}
                 id="btn-download-slip"
-                className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497e] text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden"
+                className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497e] text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Download Official PDF</span>
               </button>
             </div>
           </div>
+
+
 
           {/* Document Canvas Container */}
           <div className="printable-document bg-white rounded-3xl border-2 border-slate-300 shadow-xl p-6 sm:p-10 relative overflow-hidden bg-guilloche">
@@ -424,7 +437,33 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
           </div>
         </div>
       )}
+
+      {/* Full Candidate Application Dossier Modal */}
+      <StudentDossierModal
+        isOpen={isDossierOpen}
+        onClose={() => setIsDossierOpen(false)}
+        student={
+          selectedSlip
+            ? ({
+                ...selectedSlip,
+                fullName: selectedSlip.candidateName,
+                schoolName: selectedSlip.institution,
+                cnicOrBForm: selectedSlip.cnicBForm,
+                feeStatus: 'PAID',
+                rollNumber: selectedSlip.rollNo,
+                currentClass: selectedSlip.classLevel,
+                photoUrl: selectedSlip.candidatePhoto,
+                officeUse: {
+                  testCentre: selectedSlip.testCenter,
+                  testDate: selectedSlip.examDate,
+                  testReportingTime: selectedSlip.reportingTime,
+                },
+              } as any)
+            : null
+        }
+      />
     </div>
   );
 };
+
 

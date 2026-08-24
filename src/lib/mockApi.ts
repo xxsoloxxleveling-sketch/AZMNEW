@@ -173,9 +173,131 @@ export interface MockUserAccount {
   createdAt: string;
 }
 
+export interface MockTestCenter {
+  id: string;
+  name: string;
+  code: string;
+  campus: string;
+  address: string;
+  district: string;
+  province: string;
+  capacity: number;
+  assignedCount?: number;
+  reportingTime: string;
+  testDate: string;
+  contactPerson: string;
+  contactPhone: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+}
+
+export interface MockStudentDocument {
+  id: string;
+  studentId: string;
+  studentName: string;
+  rollNumber: string;
+  applicationNo: string;
+  currentClass: string;
+  docType: 'CANDIDATE_PHOTO' | 'CNIC_BFORM' | 'PREVIOUS_DMC' | 'PAYMENT_CHALLAN' | 'DOMICILE' | 'GUARDIAN_CNIC';
+  title: string;
+  fileUrl: string;
+  fileSize: string;
+  fileType: string;
+  uploadedAt: string;
+  status: 'VERIFIED' | 'PENDING_REVIEW' | 'REJECTED';
+  rejectionReason?: string;
+}
+
 let currentUser: CurrentUser | null = getUser<CurrentUser>() || null;
 
 const STUDENTS_STORAGE_KEY = 'AZM_REGISTERED_STUDENTS_V';
+const TEST_CENTERS_STORAGE_KEY = 'AZM_TEST_CENTERS_V';
+const DOCUMENTS_STORAGE_KEY = 'AZM_STUDENT_DOCS_V';
+
+export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
+  {
+    id: 'tc-1',
+    name: 'AZM Central Examination Center - Mansehra',
+    code: 'TC-MHR-01',
+    campus: 'Main College Road Campus',
+    address: 'Near College Chowk, Karakoram Highway, Mansehra',
+    district: 'Mansehra',
+    province: 'Khyber Pakhtunkhwa',
+    capacity: 450,
+    reportingTime: '09:00 AM',
+    testDate: 'Sunday, 15 November 2026',
+    contactPerson: 'Prof. Dr. Sumama Khan',
+    contactPhone: '0305-1755551',
+    status: 'ACTIVE',
+    createdAt: '2025-01-10T00:00:00Z',
+  },
+  {
+    id: 'tc-2',
+    name: 'Govt Post Graduate College No. 1 - Abbottabad',
+    code: 'TC-ATD-02',
+    campus: 'Main College Campus',
+    address: 'College Road, Near Mandian, Abbottabad',
+    district: 'Abbottabad',
+    province: 'Khyber Pakhtunkhwa',
+    capacity: 350,
+    reportingTime: '09:00 AM',
+    testDate: 'Sunday, 15 November 2026',
+    contactPerson: 'Admissions & Testing Coordinator',
+    contactPhone: '0305-1755551',
+    status: 'ACTIVE',
+    createdAt: '2025-01-12T00:00:00Z',
+  },
+  {
+    id: 'tc-3',
+    name: 'Hazara Public School & College Center - Haripur',
+    code: 'TC-HRP-03',
+    campus: 'Central Hall',
+    address: 'Main G.T Road, Haripur, Khyber Pakhtunkhwa',
+    district: 'Haripur',
+    province: 'Khyber Pakhtunkhwa',
+    capacity: 300,
+    reportingTime: '09:00 AM',
+    testDate: 'Sunday, 15 November 2026',
+    contactPerson: 'Controller of Examination',
+    contactPhone: '0305-1755551',
+    status: 'ACTIVE',
+    createdAt: '2025-01-15T00:00:00Z',
+  },
+  {
+    id: 'tc-4',
+    name: 'Khyber Public School & College Regional Hub - Battagram',
+    code: 'TC-BTG-04',
+    campus: 'City Campus',
+    address: 'Karakoram Highway, Battagram',
+    district: 'Battagram',
+    province: 'Khyber Pakhtunkhwa',
+    capacity: 220,
+    reportingTime: '09:00 AM',
+    testDate: 'Sunday, 15 November 2026',
+    contactPerson: 'Regional Coordinator',
+    contactPhone: '0305-1755551',
+    status: 'ACTIVE',
+    createdAt: '2025-01-20T00:00:00Z',
+  },
+];
+
+export function getLocalTestCenters(): MockTestCenter[] {
+  try {
+    const raw = localStorage.getItem(TEST_CENTERS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (err) {}
+  return DEFAULT_TEST_CENTERS;
+}
+
+export function saveLocalTestCenters(list: MockTestCenter[]): void {
+  try {
+    localStorage.setItem(TEST_CENTERS_STORAGE_KEY, JSON.stringify(list));
+  } catch (err) {}
+}
+
 
 export function getLocalStudents(): MockStudent[] {
   try {
@@ -896,7 +1018,190 @@ export const mockApi = {
       createdAt: new Date().toISOString(),
     };
   },
+
+  // 10. Test Centers Management (Custom Centers)
+  async getTestCenters(): Promise<MockTestCenter[]> {
+
+    const list = getLocalTestCenters();
+    const students = getLocalStudents();
+
+    // Compute live assigned candidates count for each center
+    return list.map((tc) => {
+      const assigned = students.filter(
+        (s) =>
+          s.officeUse?.testCentre?.toLowerCase().includes(tc.name.toLowerCase()) ||
+          s.officeUse?.testCentre?.toLowerCase().includes(tc.district.toLowerCase())
+      ).length;
+      return {
+        ...tc,
+        assignedCount: assigned,
+      };
+    });
+  },
+
+  async createTestCenter(data: Partial<MockTestCenter>): Promise<MockTestCenter> {
+    const list = getLocalTestCenters();
+    const newCenter: MockTestCenter = {
+      id: `tc_${Date.now()}`,
+      name: data.name || 'New Examination Center',
+      code: data.code || `TC-${Math.floor(100 + Math.random() * 900)}`,
+      campus: data.campus || 'Main Campus',
+      address: data.address || 'Khyber Pakhtunkhwa',
+      district: data.district || 'Mansehra',
+      province: data.province || 'Khyber Pakhtunkhwa',
+      capacity: Number(data.capacity) || 300,
+      reportingTime: data.reportingTime || '09:00 AM',
+      testDate: data.testDate || 'Sunday, 15 November 2026',
+      contactPerson: data.contactPerson || 'Center Superintendent',
+      contactPhone: data.contactPhone || '0305-1755551',
+      status: data.status || 'ACTIVE',
+      createdAt: new Date().toISOString(),
+    };
+    list.unshift(newCenter);
+    saveLocalTestCenters(list);
+    return newCenter;
+  },
+
+  async updateTestCenter(id: string, data: Partial<MockTestCenter>): Promise<MockTestCenter> {
+    const list = getLocalTestCenters();
+    const idx = list.findIndex((tc) => tc.id === id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...data };
+      saveLocalTestCenters(list);
+      return list[idx];
+    }
+    throw new Error('Test Center not found');
+  },
+
+  async deleteTestCenter(id: string): Promise<boolean> {
+    const list = getLocalTestCenters().filter((tc) => tc.id !== id);
+    saveLocalTestCenters(list);
+    return true;
+  },
+
+  // 11. Document Storage Vault & Student Document Inspector
+  async getStudentDocuments(studentId?: string): Promise<MockStudentDocument[]> {
+    let savedDocs: MockStudentDocument[] = [];
+    try {
+      const raw = localStorage.getItem(DOCUMENTS_STORAGE_KEY);
+      if (raw) savedDocs = JSON.parse(raw);
+    } catch (e) {}
+
+    const students = await this.getStudents();
+    const generatedDocs: MockStudentDocument[] = [];
+
+    students.forEach((s) => {
+      if (studentId && s.id !== studentId && s.applicationNo !== studentId && s.rollNumber !== studentId) {
+        return;
+      }
+
+      // 1. Photo
+      if (s.photoUrl) {
+        generatedDocs.push({
+          id: `doc_photo_${s.id}`,
+          studentId: s.id,
+          studentName: s.fullName,
+          rollNumber: s.rollNumber || 'PENDING',
+          applicationNo: s.applicationNo || 'APP-2026',
+          currentClass: s.currentClass || 'SSC',
+          docType: 'CANDIDATE_PHOTO',
+          title: 'Candidate Passport Photograph',
+          fileUrl: s.photoUrl,
+          fileSize: '142 KB',
+          fileType: 'image/jpeg',
+          uploadedAt: s.createdAt || '2026-08-20T00:00:00Z',
+          status: 'VERIFIED',
+        });
+      }
+
+      // 2. CNIC / B-Form Document
+      generatedDocs.push({
+        id: `doc_cnic_${s.id}`,
+        studentId: s.id,
+        studentName: s.fullName,
+        rollNumber: s.rollNumber || 'PENDING',
+        applicationNo: s.applicationNo || 'APP-2026',
+        currentClass: s.currentClass || 'SSC',
+        docType: 'CNIC_BFORM',
+        title: `CNIC / B-Form (${s.cnicOrBForm || 'Candidate Document'})`,
+        fileUrl: s.photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
+        fileSize: '480 KB',
+        fileType: 'image/jpeg',
+        uploadedAt: s.createdAt || '2026-08-20T00:00:00Z',
+        status: 'VERIFIED',
+      });
+
+      // 3. Academic Transcript / DMC
+      generatedDocs.push({
+        id: `doc_dmc_${s.id}`,
+        studentId: s.id,
+        studentName: s.fullName,
+        rollNumber: s.rollNumber || 'PENDING',
+        applicationNo: s.applicationNo || 'APP-2026',
+        currentClass: s.currentClass || 'SSC',
+        docType: 'PREVIOUS_DMC',
+        title: `Previous Academic DMC Transcript (${s.currentClass || 'Enrolled Class'})`,
+        fileUrl: 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&auto=format&fit=crop&q=80',
+        fileSize: '820 KB',
+        fileType: 'application/pdf',
+        uploadedAt: s.createdAt || '2026-08-20T00:00:00Z',
+        status: s.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING_REVIEW',
+      });
+
+      // 4. Payment Deposit Receipt
+      generatedDocs.push({
+        id: `doc_pay_${s.id}`,
+        studentId: s.id,
+        studentName: s.fullName,
+        rollNumber: s.rollNumber || 'PENDING',
+        applicationNo: s.applicationNo || 'APP-2026',
+        currentClass: s.currentClass || 'SSC',
+        docType: 'PAYMENT_CHALLAN',
+        title: `PKR 300 Fee Deposit Receipt / JazzCash Slip`,
+        fileUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80',
+        fileSize: '310 KB',
+        fileType: 'image/png',
+        uploadedAt: s.createdAt || '2026-08-20T00:00:00Z',
+        status: s.feeStatus === 'PAID' ? 'VERIFIED' : 'PENDING_REVIEW',
+      });
+    });
+
+    // Merge status updates
+    return generatedDocs.map((doc) => {
+      const overridden = savedDocs.find((saved) => saved.id === doc.id);
+      return overridden ? { ...doc, ...overridden } : doc;
+    });
+  },
+
+  async updateDocumentStatus(
+    docId: string,
+    status: 'VERIFIED' | 'PENDING_REVIEW' | 'REJECTED',
+    rejectionReason?: string
+  ): Promise<boolean> {
+    try {
+      let savedDocs: MockStudentDocument[] = [];
+      const raw = localStorage.getItem(DOCUMENTS_STORAGE_KEY);
+      if (raw) savedDocs = JSON.parse(raw);
+
+      const idx = savedDocs.findIndex((d) => d.id === docId);
+      if (idx >= 0) {
+        savedDocs[idx].status = status;
+        if (rejectionReason) savedDocs[idx].rejectionReason = rejectionReason;
+      } else {
+        savedDocs.push({
+          id: docId,
+          status,
+          rejectionReason,
+        } as any);
+      }
+      localStorage.setItem(DOCUMENTS_STORAGE_KEY, JSON.stringify(savedDocs));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
 };
+
 
 /**
  * High-definition browser printable registration slip generator
@@ -1058,4 +1363,223 @@ export function printStudentSlip(student: any) {
   printWindow.document.write(html);
   printWindow.document.close();
 }
+
+/**
+ * High-definition browser printable complete student application profile dossier
+ */
+export function printStudentDossier(student: any) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Please allow popups to open and print your full student dossier.');
+    return;
+  }
+
+  const appNo = student.applicationNo || student.studentId || student.id || `APP-2026-0101`;
+  const rollNo = student.rollNumber || `AZMVS-2026-0101`;
+  const dateStr = student.createdAt ? new Date(student.createdAt).toLocaleDateString() : new Date().toLocaleDateString();
+
+  // Parse or synthesize full multi-class academic records
+  const academic = student.academicRecords || [
+    {
+      examLevel: 'Class 6th (Middle Wing)',
+      year: '2022',
+      institute: student.schoolName || 'Govt / Private High School',
+      board: 'BISE / School Assessment',
+      totalMarks: 600,
+      obtainedMarks: Math.round((Number(student.lastClassPercentage) || 88) * 6),
+      percentage: Number(student.lastClassPercentage) || 88,
+      grade: 'A-1',
+    },
+    {
+      examLevel: 'Class 7th (Middle Wing)',
+      year: '2023',
+      institute: student.schoolName || 'Govt / Private High School',
+      board: 'BISE / School Assessment',
+      totalMarks: 700,
+      obtainedMarks: Math.round((Number(student.lastClassPercentage) || 88) * 7),
+      percentage: Number(student.lastClassPercentage) || 88,
+      grade: 'A-1',
+    },
+    {
+      examLevel: 'Class 8th (Middle Standard)',
+      year: '2024',
+      institute: student.schoolName || 'Govt / Private High School',
+      board: 'BISE Board Assessment',
+      totalMarks: 800,
+      obtainedMarks: Math.round((Number(student.lastClassPercentage) || 89) * 8),
+      percentage: Number(student.lastClassPercentage) || 89,
+      grade: 'A-1',
+    },
+    {
+      examLevel: 'Class 9th (SSC-I Matric)',
+      year: '2025',
+      institute: student.schoolName || 'High School & College',
+      board: student.boardOrUniversity || 'BISE Abbottabad',
+      totalMarks: 550,
+      obtainedMarks: Math.round((Number(student.lastClassPercentage) || 91) * 5.5),
+      percentage: Number(student.lastClassPercentage) || 91,
+      grade: 'A-1',
+    },
+    {
+      examLevel: student.currentClass || 'Class 10th (SSC-II)',
+      year: '2026',
+      institute: student.schoolName || 'School & College',
+      board: student.boardOrUniversity || 'BISE Abbottabad',
+      totalMarks: 1100,
+      obtainedMarks: Math.round((Number(student.lastClassPercentage) || 92) * 11),
+      percentage: Number(student.lastClassPercentage) || 92,
+      grade: 'A-1',
+    },
+  ];
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>AZM Student Profile Dossier - ${rollNo} (${student.fullName})</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; }
+    body { background: #f1f5f9; padding: 24px; }
+    .dossier-card { max-width: 860px; margin: 0 auto; background: #fff; border: 2px solid #0f172a; border-radius: 16px; padding: 32px; box-shadow: 0 12px 30px rgba(0,0,0,0.08); }
+    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px; }
+    .header h1 { font-size: 20px; font-weight: 900; color: #185b9d; letter-spacing: -0.5px; }
+    .header p { font-size: 11px; font-weight: 600; color: #64748b; margin-top: 2px; }
+    .sec-title { font-size: 13px; font-weight: 800; text-transform: uppercase; color: #185b9d; background: #f0f7ff; border-left: 4px solid #185b9d; padding: 6px 12px; border-radius: 4px; margin: 16px 0 10px 0; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+    .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+    .item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; }
+    .label { font-size: 9px; text-transform: uppercase; font-weight: 700; color: #64748b; margin-bottom: 2px; }
+    .val { font-size: 12px; font-weight: 700; color: #0f172a; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }
+    th { background: #0f172a; color: #fff; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+    td { padding: 8px; border: 1px solid #e2e8f0; }
+    tr:nth-child(even) { background: #f8fafc; }
+    .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 30px; padding-top: 16px; border-top: 2px solid #0f172a; font-size: 10px; color: #64748b; }
+    .btn-bar { text-align: center; margin-top: 24px; }
+    .btn { background: #185b9d; color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .dossier-card { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+      .btn-bar { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dossier-card">
+    <div class="header">
+      <div>
+        <h1>AZM ACADEMIC INITIATIVE ORGANIZATION</h1>
+        <p>Session V (2026) Official Student Application Profile & Academic Dossier</p>
+      </div>
+      <div style="text-align: right;">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(rollNo)}" alt="QR" style="width: 70px; height: 70px; border-radius: 6px; border: 1px solid #cbd5e1; padding: 2px;" />
+        <div style="font-size: 9px; font-family: monospace; font-weight: bold; margin-top: 2px;">${rollNo}</div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 18px; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+      <div style="width: 90px; height: 100px; border-radius: 8px; border: 2px solid #0f172a; overflow: hidden; background: #fff; flex-shrink: 0;">
+        <img src="${student.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300'}" alt="Photo" style="width: 100%; height: 100%; object-fit: cover;" />
+      </div>
+      <div style="flex: 1;">
+        <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${student.fullName || 'Candidate Name'}</div>
+        <div style="font-size: 12px; color: #475569; margin-top: 2px;">Father / Guardian: <strong>${student.fatherName || 'Father Name'}</strong></div>
+        <div style="font-size: 12px; color: #475569; margin-top: 2px;">Candidate CNIC / B-Form: <strong style="font-family: monospace; color: #185b9d;">${student.cnicOrBForm || 'N/A'}</strong></div>
+        <div style="display: flex; gap: 10px; margin-top: 6px; font-size: 11px;">
+          <span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 6px; font-weight: bold;">Class: ${student.currentClass || 'SSC'}</span>
+          <span style="background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 6px; font-weight: bold;">Fee: ${student.feeStatus === 'PAID' ? 'PAID (PKR 300)' : 'PENDING VERIFICATION'}</span>
+          <span style="background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 6px; font-weight: bold;">App Ref: ${appNo}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-title">Part A & B: Personal Details & Contact Coordinates</div>
+    <div class="grid-3">
+      <div class="item"><div class="label">Date of Birth / Age</div><div class="val">${student.dateOfBirth || '2008-04-12'} (${student.age || '16'} yrs)</div></div>
+      <div class="item"><div class="label">Gender</div><div class="val">${student.gender || 'Male'}</div></div>
+      <div class="item"><div class="label">Domicile District & Province</div><div class="val">${student.district || 'Mansehra'}, ${student.province || 'KP'}</div></div>
+    </div>
+    <div class="grid-3">
+      <div class="item"><div class="label">Candidate Mobile / WhatsApp</div><div class="val" style="font-family: monospace;">${student.whatsapp || student.mobile || '0300-XXXXXXX'}</div></div>
+      <div class="item"><div class="label">Father / Guardian Mobile</div><div class="val" style="font-family: monospace; color: #185b9d;">${student.parentMobile || student.emergencyContact || '0305-1755551'}</div></div>
+      <div class="item"><div class="label">Email Address</div><div class="val">${student.email || 'student@azmaio.com'}</div></div>
+    </div>
+    <div class="item" style="margin-bottom: 10px;">
+      <div class="label">Residential Postal Address</div>
+      <div class="val">${student.address || 'Main City, Mansehra, Khyber Pakhtunkhwa'}</div>
+    </div>
+
+    <div class="sec-title">Part C: Complete Multi-Class Academic History & Scores</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Class / Grade Level</th>
+          <th>Passing Year</th>
+          <th>School / College Institution</th>
+          <th>Board / Assessment</th>
+          <th>Max Marks</th>
+          <th>Obt. Marks</th>
+          <th>Percentage</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${academic.map((rec: any) => `
+          <tr>
+            <td><strong>${rec.examLevel}</strong></td>
+            <td>${rec.year}</td>
+            <td>${rec.institute}</td>
+            <td>${rec.board}</td>
+            <td>${rec.totalMarks}</td>
+            <td><strong>${rec.obtainedMarks}</strong></td>
+            <td><strong style="color: #15803d;">${rec.percentage}%</strong></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+
+    <div class="sec-title">Part D & E: Scholarship Stream & Examination Center Allocation</div>
+    <div class="grid-2">
+      <div class="item"><div class="label">Scholarship Stream</div><div class="val" style="color: #185b9d;">${student.scholarshipCategory || 'Category B: Academic Merit Waiver'}</div></div>
+      <div class="item"><div class="label">Enrolled Institution</div><div class="val">${student.schoolName || 'Partner School'}</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="item"><div class="label">Assigned Examination Center</div><div class="val">${student.officeUse?.testCentre || 'AZM Examination Center - Mansehra Main Campus'}</div></div>
+      <div class="item"><div class="label">Test Reporting Date & Time</div><div class="val">${student.officeUse?.testDate || 'Sunday, 15 November 2026'} @ ${student.officeUse?.testReportingTime || '09:00 AM'}</div></div>
+    </div>
+
+    <div class="footer">
+      <div>
+        <div>Security Authentication Hash: <strong>SHA256-${rollNo}</strong></div>
+        <div>System Verified: ${dateStr} | AZM.AIO Testing Service</div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-weight: bold; border-top: 1px solid #0f172a; padding-top: 4px; display: inline-block; min-width: 160px; text-align: center;">
+          Director General (Examinations)
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-bar">
+      <button class="btn" onclick="window.print()">🖨️ Print Full Candidate Dossier</button>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    };
+  </script>
+</body>
+</html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
 

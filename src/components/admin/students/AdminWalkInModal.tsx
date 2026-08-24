@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { X, UserPlus, Loader2, CheckCircle } from 'lucide-react';
-import { mockApi, MockStudent } from '../../../lib/mockApi';
+import React, { useState, useEffect } from 'react';
+import { X, UserPlus, Loader2, CheckCircle, MapPin } from 'lucide-react';
+import { mockApi, MockStudent, MockTestCenter } from '../../../lib/mockApi';
 
 interface AdminWalkInModalProps {
   isOpen: boolean;
@@ -14,6 +14,8 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
   onSuccess,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [testCenters, setTestCenters] = useState<MockTestCenter[]>([]);
+
   const [formData, setFormData] = useState({
     fullName: '',
     fatherName: '',
@@ -25,19 +27,30 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
     studentMobile: '',
     whatsapp: '',
     email: '',
-    address: 'Mandian, Abbottabad',
-    district: 'Abbottabad',
+    address: 'Main City, Mansehra',
+    district: 'Mansehra',
     province: 'Khyber Pakhtunkhwa',
-    currentClass: 'SSC-I (Class 9th)',
+    currentClass: 'Class 6th',
     hsscGroup: '',
-    schoolName: 'Jadoon Public School & College',
+    schoolName: 'Govt / Private High School',
     boardOrUniversity: 'BISE Abbottabad',
     scholarshipCategory: 'GENERAL_MERIT' as any,
     guardianOccupation: 'Business',
     guardianMonthlyIncome: 80000,
-    emergencyContact: '0300-1234567',
+    emergencyContact: '0305-1755551',
     emergencyRelation: 'Father',
+    testCenter: '',
   });
+
+  useEffect(() => {
+    mockApi.getTestCenters().then((list) => {
+      setTestCenters(list);
+      if (list.length > 0 && !formData.testCenter) {
+        setFormData((prev) => ({ ...prev, testCenter: list[0].name }));
+      }
+    });
+  }, []);
+
 
   if (!isOpen) return null;
 
@@ -256,8 +269,33 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
                   className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]"
                 />
               </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Examination Test Center Allocation *
+                </label>
+
+                <select
+                  name="testCenter"
+                  value={formData.testCenter}
+                  onChange={handleChange}
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]"
+                >
+                  {testCenters.map((tc) => (
+                    <option key={tc.id} value={tc.name}>
+                      {tc.name} ({tc.district} — Limit: {tc.capacity})
+                    </option>
+                  ))}
+                  {testCenters.length === 0 && (
+                    <option value="AZM Central Examination Center - Mansehra">
+                      AZM Central Examination Center - Mansehra
+                    </option>
+                  )}
+                </select>
+              </div>
             </div>
           </div>
+
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <button
