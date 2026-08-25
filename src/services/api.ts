@@ -50,9 +50,15 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
   }
 
   try {
-    const res: any = await apiFetch<any>(`/api/students/search-slip?query=${encodeURIComponent(clean)}`);
-    if (res && typeof res.success === 'boolean') {
-      return res;
+    const url = `${API_BASE_URL}/api/students/search-slip?query=${encodeURIComponent(clean)}`;
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    const json: any = await response.json();
+    if (json && typeof json.success === 'boolean') {
+      return json;
     }
   } catch (err: any) {
     console.warn('Live search-slip endpoint error:', err);
