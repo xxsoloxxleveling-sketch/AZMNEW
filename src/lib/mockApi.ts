@@ -1404,8 +1404,8 @@ export function printStudentSlip(student: any) {
       </p>
       <div class="pay-methods">
         <div class="pay-card">
-          <strong style="color: #15803d;">📱 JazzCash:</strong><br/>
-          Account: <strong style="font-family: monospace; color: #0f172a;">03051755551</strong><br/>
+          <strong style="color: #15803d;">📱 EasyPaisa / JazzCash:</strong><br/>
+          Account: <strong style="font-family: monospace; color: #0f172a;">03440197194</strong><br/>
           Title: <strong>Sumama Khan</strong>
         </div>
         <div class="pay-card">

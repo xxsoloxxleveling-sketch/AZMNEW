@@ -87,11 +87,11 @@ export const OFFICIAL_DATA = {
 
   paymentAccounts: {
     jazzcash: {
-      accountName: 'JazzCash / EasyPaisa',
-      accountTitle: 'Sumama Khan / AZM.AIO (Pvt.) Ltd.',
-      accountNumber: '03051755551',
-      formattedNumber: '0305-1755551',
-      type: 'Mobile Wallet'
+      accountName: 'EasyPaisa / JazzCash',
+      accountTitle: 'Sumama Khan',
+      accountNumber: '03440197194',
+      formattedNumber: '0344-0197194',
+      type: 'Mobile Wallet (EasyPaisa & JazzCash)'
     },
     faysalBank: {
       bankName: 'Faysal Bank',

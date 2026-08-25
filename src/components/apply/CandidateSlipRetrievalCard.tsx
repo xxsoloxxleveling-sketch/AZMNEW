@@ -236,7 +236,7 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
               >
                 <Receipt className="w-5 h-5 text-emerald-600" />
                 <span>{showVoucher ? 'Hide Fee Voucher' : 'View Fee Voucher (PKR 300)'}</span>
-                <span className="text-[10px] text-emerald-700 font-normal">JazzCash &amp; Bank Details</span>
+                <span className="text-[10px] text-emerald-700 font-normal">EasyPaisa, JazzCash &amp; Bank Details</span>
               </button>
             </div>
           </div>
@@ -256,7 +256,7 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                    JazzCash / EasyPaisa
+                    EasyPaisa / JazzCash
                   </span>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-extrabold font-mono text-slate-900">0344-0197194</span>

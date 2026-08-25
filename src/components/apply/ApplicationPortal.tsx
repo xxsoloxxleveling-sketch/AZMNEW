@@ -2273,7 +2273,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                 }`}
               >
                 <Smartphone className="w-5 h-5" />
-                <span className="text-xs font-bold">JazzCash / EasyPaisa</span>
+                <span className="text-xs font-bold">EasyPaisa / JazzCash</span>
                 <span className={`text-[10px] ${paymentTab === 'easypaisa' ? 'text-sky-200' : 'text-slate-500'}`}>Instant Transfer</span>
               </button>
 
@@ -2306,12 +2306,12 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               </button>
             </div>
 
-            {/* TAB 1: JazzCash / EasyPaisa Details */}
+            {/* TAB 1: EasyPaisa / JazzCash Details */}
             {paymentTab === 'easypaisa' && (
               <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/70 to-slate-50 border border-emerald-200/80 space-y-4 text-xs">
                 <div className="flex items-center justify-between border-b border-emerald-200 pb-3">
                   <div>
-                    <span className="font-bold text-slate-900 block text-sm">JazzCash / EasyPaisa Mobile Transfer</span>
+                    <span className="font-bold text-slate-900 block text-sm">EasyPaisa / JazzCash Mobile Transfer</span>
                     <span className="text-slate-500 text-[11px]">Send PKR 300 from any mobile wallet in Pakistan</span>
                   </div>
                   <span className="px-2.5 py-0.5 rounded-md bg-emerald-600 text-white font-bold text-[10px]">
@@ -2322,7 +2322,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="p-3.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
                     <div>
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">JazzCash / Mobile Number</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">EasyPaisa / JazzCash Number</span>
                       <span className="text-base font-extrabold font-mono text-slate-900">0344-0197194</span>
                     </div>
                     <button
@@ -2351,7 +2351,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                 {/* Instant WhatsApp Proof Button */}
                 <a
                   href={`https://wa.me/923051755551?text=${encodeURIComponent(
-                    `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026) Scholarship Exam.\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Fee Amount: PKR 300\n• Paid Via: JazzCash / Mobile Transfer (To: Sumama Khan - 0344-0197194)\n\nPlease find attached my payment receipt/screenshot for quick verification and Roll Number activation.`
+                    `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026) Scholarship Exam.\n• Application ID: ${submittedAppId}\n• Candidate: ${formData.fullName}\n• Class: ${formData.currentClass}\n• Fee Amount: PKR 300\n• Paid Via: EasyPaisa / JazzCash (To: Sumama Khan - 0344-0197194)\n\nPlease find attached my payment receipt/screenshot for quick verification and Roll Number activation.`
                   )}`}
                   target="_blank"
                   rel="noreferrer"
@@ -2596,7 +2596,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         <div><span className="text-slate-500">Account Title:</span> <strong className="text-slate-900">Sumama Khan</strong></div>
                         <div><span className="text-slate-500">Faysal Bank:</span> <strong className="text-slate-900 font-mono">3126701000006213</strong></div>
                         <div><span className="text-slate-500">Bank Alfalah:</span> <strong className="text-slate-900 font-mono">83861010161490</strong></div>
-                        <div><span className="text-slate-500">JazzCash:</span> <span className="text-slate-800 font-mono">0344-0197194</span></div>
+                        <div><span className="text-slate-500">EasyPaisa / JazzCash:</span> <span className="text-slate-800 font-mono">0344-0197194</span></div>
                         <div className="pt-2 border-t border-slate-200">
                           <span className="text-slate-500">Amount (Fee):</span> <strong className="text-emerald-700 text-xs font-bold">PKR 300/- (Fixed)</strong>
                         </div>
