@@ -897,9 +897,112 @@ export class StudentsService {
   /**
    * Generates Registration PDF buffer for downloading.
    */
+  /**
+   * Resolves student photo to a reliable base64 data URI for seamless embedding into PDFs.
+   */
+  async resolveStudentPhotoBase64(student: any): Promise<string> {
+    const defaultPlaceholder = `data:image/svg+xml;utf8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
+        <rect width="120" height="150" fill="#f8fafc"/>
+        <circle cx="60" cy="50" r="25" fill="#94a3b8"/>
+        <path d="M20 125 C20 90, 100 90, 100 125 Z" fill="#64748b"/>
+        <text x="60" y="142" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#475569" text-anchor="middle">PHOTO</text>
+      </svg>`
+    )}`;
+
+    if (!student) return defaultPlaceholder;
+
+    // 1. Check direct base64 in uploadedDocuments
+    const uploadedDocs = typeof student.uploadedDocsJson === 'string'
+      ? (() => { try { return JSON.parse(student.uploadedDocsJson); } catch { return {}; } })()
+      : student.uploadedDocuments || {};
+
+    const rawPhoto = uploadedDocs?.photo?.dataUrl || student.photoUrl;
+
+    if (rawPhoto && typeof rawPhoto === 'string' && rawPhoto.startsWith('data:image/')) {
+      return rawPhoto;
+    }
+
+    // 2. If supabasePath is specified in uploadedDocuments
+    if (uploadedDocs?.photo?.supabasePath) {
+      try {
+        const buffer = await supabaseStorage.downloadFile('student-photos', uploadedDocs.photo.supabasePath);
+        if (buffer && buffer.length > 0) {
+          return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+        }
+      } catch (err) {
+        logger.warn('Failed to download student photo via supabasePath:', err);
+      }
+    }
+
+    // 3. If rawPhoto contains Supabase Storage URL
+    if (rawPhoto && typeof rawPhoto === 'string' && rawPhoto.includes('student-photos/')) {
+      try {
+        const urlWithoutQuery = rawPhoto.split('?')[0];
+        const parts = urlWithoutQuery.split('student-photos/');
+        const pathInBucket = parts[1];
+        if (pathInBucket) {
+          const buffer = await supabaseStorage.downloadFile('student-photos', decodeURIComponent(pathInBucket));
+          if (buffer && buffer.length > 0) {
+            return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+          }
+        }
+      } catch (err) {
+        logger.warn('Failed to download student photo via bucket path parsing:', err);
+      }
+    }
+
+    // 4. If rawPhoto is any external HTTPS URL, fetch server-side
+    if (rawPhoto && typeof rawPhoto === 'string' && (rawPhoto.startsWith('http://') || rawPhoto.startsWith('https://'))) {
+      try {
+        const buffer = await new Promise<Buffer | null>((resolve) => {
+          const client = rawPhoto.startsWith('https') ? require('https') : require('http');
+          client.get(rawPhoto, (res: any) => {
+            if (res.statusCode !== 200) {
+              return resolve(null);
+            }
+            const chunks: Buffer[] = [];
+            res.on('data', (c: Buffer) => chunks.push(c));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+          }).on('error', () => resolve(null));
+        });
+
+        if (buffer && buffer.length > 0) {
+          return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+        }
+      } catch (fetchErr) {
+        logger.warn('Failed to fetch photo from external URL server-side:', fetchErr);
+      }
+    }
+
+    // 5. Try discovering in Supabase storage by CNIC folder
+    if (student.cnicOrBForm) {
+      try {
+        const cnicFolder = student.cnicOrBForm.replace(/[^\w-]/g, '_');
+        const { data: photoFiles } = await (supabaseStorage as any).client?.storage?.from('student-photos')?.list(cnicFolder) || { data: [] };
+        if (photoFiles && photoFiles.length > 0) {
+          const latest = photoFiles[photoFiles.length - 1];
+          const storagePath = `${cnicFolder}/${latest.name}`;
+          const buffer = await supabaseStorage.downloadFile('student-photos', storagePath);
+          if (buffer && buffer.length > 0) {
+            return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+          }
+        }
+      } catch (discErr) {
+        logger.warn('Storage discovery fallback error:', discErr);
+      }
+    }
+
+    return defaultPlaceholder;
+  }
+
+  /**
+   * Generates Registration PDF buffer for downloading.
+   */
   async getRegistrationPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
     const student = await this.getStudentById(id);
-    const html = pdfService.generateStudentRegistrationHtml(student);
+    const photoBase64 = await this.resolveStudentPhotoBase64(student);
+    const html = pdfService.generateStudentRegistrationHtml(student, photoBase64);
     const buffer = await pdfService.generatePdfFromHtml(html);
     const filename = `AZM-Registration-${student.applicationNo || student.id}.pdf`;
 
@@ -938,7 +1041,8 @@ export class StudentsService {
       logger.warn('QRCode generation fallback for PDF:', qrErr);
     }
 
-    const html = pdfService.generateRollSlipHtml(student, qrDataUrl);
+    const photoBase64 = await this.resolveStudentPhotoBase64(student);
+    const html = pdfService.generateRollSlipHtml(student, qrDataUrl, photoBase64);
     const buffer = await pdfService.generatePdfFromHtml(html);
     const filename = `RollNoSlip-${student.rollNumber}.pdf`;
 

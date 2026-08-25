@@ -95,6 +95,15 @@ export class PdfService {
 
       try {
         const page = await browser.newPage();
+
+        page.on('console', (msg) => {
+          logger.debug(`Puppeteer [${msg.type()}]: ${msg.text()}`);
+        });
+
+        page.on('requestfailed', (req) => {
+          logger.warn(`Puppeteer request failed: ${req.url()} (${req.failure()?.errorText || 'Unknown Error'})`);
+        });
+
         await page.setContent(html, {
           waitUntil: 'domcontentloaded',
           timeout: 30000,
@@ -144,7 +153,7 @@ export class PdfService {
   /**
    * Generates filled HTML template for the 2-page Student Registration Form
    */
-  generateStudentRegistrationHtml(student: any): string {
+  generateStudentRegistrationHtml(student: any, photoBase64?: string): string {
     const cnicBoxes = this.formatCnicBoxes(student.cnicOrBForm);
     const dobStr = student.dateOfBirth
       ? new Date(student.dateOfBirth).toISOString().split('T')[0]
@@ -164,8 +173,9 @@ export class PdfService {
     const qrImg = student.qrImageUrl
       ? `<img src="${student.qrImageUrl}" class="qr-code-img" alt="QR" />`
       : '';
-    const photoImg = student.photoUrl
-      ? `<img src="${student.photoUrl}" class="photo-img" alt="Photo" />`
+    const resolvedPhoto = photoBase64 || (student.photoUrl && student.photoUrl.startsWith('data:') ? student.photoUrl : null);
+    const photoImg = resolvedPhoto
+      ? `<img src="${resolvedPhoto}" class="photo-img" alt="Photo" />`
       : `<div class="photo-placeholder">Affix 1 Recent<br/>Passport Size<br/>Photograph<br/>(Attested)</div>`;
 
     return `
@@ -657,7 +667,7 @@ export class PdfService {
   /**
    * Generates filled HTML template for the official Single-Page A4 Roll Number Slip Exam Entry Pass
    */
-  generateRollSlipHtml(student: any, qrDataUrl?: string): string {
+  generateRollSlipHtml(student: any, qrDataUrl?: string, photoBase64?: string): string {
     const rollNo = student.rollNumber || 'PENDING';
     const appNo = student.applicationNo || student.id || 'APP-2026';
     const candName = (student.fullName || '').toUpperCase();
@@ -680,10 +690,20 @@ export class PdfService {
     const reportingTime = student.officeUse?.testReportingTime || '09:00 AM (Strict)';
     const examTiming = '10:00 AM - 12:00 PM (120 Mins / 100 MCQs)';
 
+    const defaultPhoto = `data:image/svg+xml;utf8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
+        <rect width="120" height="150" fill="#f8fafc"/>
+        <circle cx="60" cy="50" r="25" fill="#94a3b8"/>
+        <path d="M20 125 C20 90, 100 90, 100 125 Z" fill="#64748b"/>
+        <text x="60" y="142" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#475569" text-anchor="middle">PHOTO</text>
+      </svg>`
+    )}`;
+
     const photoSrc =
-      student.uploadedDocuments?.photo?.dataUrl ||
-      student.photoUrl ||
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
+      photoBase64 ||
+      (student.photoUrl && student.photoUrl.startsWith('data:') ? student.photoUrl : null) ||
+      (student.uploadedDocuments?.photo?.dataUrl && student.uploadedDocuments.photo.dataUrl.startsWith('data:') ? student.uploadedDocuments.photo.dataUrl : null) ||
+      defaultPhoto;
 
     const qrImgTag = qrDataUrl
       ? `<img src="${qrDataUrl}" class="qr-img" alt="QR" />`
