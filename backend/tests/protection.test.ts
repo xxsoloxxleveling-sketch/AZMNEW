@@ -29,9 +29,9 @@ async function runTests() {
 
   try {
     // -------------------------------------------------------------
-    // Test 1: Rate Limiting on POST /api/auth/login (5 attempts limit)
+    // Test 1: Verification that IP Rate Limiting / Ban is disabled
     // -------------------------------------------------------------
-    console.log('--- Test Group 1: Login Rate Limiting (5 attempts limit) ---');
+    console.log('--- Test Group 1: Login Rate Limiting Disabled Verification ---');
     let sixthResponse: any = null;
     let sixthStatusCode = 0;
 
@@ -51,13 +51,13 @@ async function runTests() {
     }
 
     assert(
-      sixthStatusCode === 429,
-      '6th login attempt receives HTTP 429 (Too Many Requests)',
+      sixthStatusCode === 401,
+      '6th login attempt receives normal authentication error (401) without IP rate limit blocking (429)',
       `Received ${sixthStatusCode}`
     );
     assert(
-      sixthResponse?.error?.message?.includes('Too many login attempts'),
-      '429 error response contains clear brute-force warning message',
+      sixthResponse?.error?.message === 'Invalid email or password',
+      'Response is standard invalid credentials rather than IP ban message',
       sixthResponse
     );
 

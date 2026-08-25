@@ -19,6 +19,7 @@ import grievancesRoutes from './modules/grievances/grievances.routes';
 import resultsRoutes from './modules/results/results.routes';
 
 const app: Express = express();
+app.set('trust proxy', 1);
 
 // Middlewares
 const allowedOrigins = [
