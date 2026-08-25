@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import https from 'https';
+import http from 'http';
 import { prisma, TransactionType } from '../../lib/prisma';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
@@ -900,6 +902,9 @@ export class StudentsService {
   /**
    * Resolves student photo to a reliable base64 data URI for seamless embedding into PDFs.
    */
+  /**
+   * Resolves student photo to a reliable base64 data URI for seamless embedding into PDFs.
+   */
   async resolveStudentPhotoBase64(student: any): Promise<string> {
     const defaultPlaceholder = `data:image/svg+xml;utf8,${encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
@@ -912,70 +917,82 @@ export class StudentsService {
 
     if (!student) return defaultPlaceholder;
 
-    // 1. Check direct base64 in uploadedDocuments
     const uploadedDocs = typeof student.uploadedDocsJson === 'string'
       ? (() => { try { return JSON.parse(student.uploadedDocsJson); } catch { return {}; } })()
       : student.uploadedDocuments || {};
 
-    const rawPhoto = uploadedDocs?.photo?.dataUrl || student.photoUrl;
+    const candidates: string[] = [
+      uploadedDocs?.photo?.dataUrl,
+      uploadedDocs?.photo?.publicUrl,
+      uploadedDocs?.photo?.url,
+      student.photoUrl,
+    ].filter((u): u is string => typeof u === 'string' && u.trim().length > 0);
 
-    if (rawPhoto && typeof rawPhoto === 'string' && rawPhoto.startsWith('data:image/')) {
-      return rawPhoto;
+    for (const raw of candidates) {
+      if (raw.startsWith('data:image/')) {
+        return raw;
+      }
+
+      // Check if it is a Supabase storage path or signed URL
+      if (raw.includes('student-photos/')) {
+        try {
+          const urlWithoutQuery = raw.split('?')[0];
+          const parts = urlWithoutQuery.split('student-photos/');
+          const pathInBucket = parts[1];
+          if (pathInBucket) {
+            const buffer = await supabaseStorage.downloadFile('student-photos', decodeURIComponent(pathInBucket));
+            if (buffer && buffer.length > 0) {
+              const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+              const mime = isPng ? 'image/png' : 'image/jpeg';
+              return `data:${mime};base64,${buffer.toString('base64')}`;
+            }
+          }
+        } catch (storageErr) {
+          logger.warn('Supabase storage photo download note:', storageErr);
+        }
+      }
+
+      // If it is an HTTP or HTTPS URL, fetch server-side
+      if (raw.startsWith('http://') || raw.startsWith('https://')) {
+        try {
+          const client = raw.startsWith('https') ? https : http;
+          const buffer = await new Promise<Buffer | null>((resolve) => {
+            client.get(raw, (res: any) => {
+              if (res.statusCode !== 200) {
+                return resolve(null);
+              }
+              const chunks: Buffer[] = [];
+              res.on('data', (c: Buffer) => chunks.push(c));
+              res.on('end', () => resolve(Buffer.concat(chunks)));
+            }).on('error', () => resolve(null));
+          });
+
+          if (buffer && buffer.length > 0) {
+            const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+            const mime = isPng ? 'image/png' : 'image/jpeg';
+            return `data:${mime};base64,${buffer.toString('base64')}`;
+          }
+        } catch (fetchErr) {
+          logger.warn('Failed to fetch photo from external URL server-side:', fetchErr);
+        }
+      }
     }
 
-    // 2. If supabasePath is specified in uploadedDocuments
+    // Direct supabasePath in uploadedDocuments
     if (uploadedDocs?.photo?.supabasePath) {
       try {
         const buffer = await supabaseStorage.downloadFile('student-photos', uploadedDocs.photo.supabasePath);
         if (buffer && buffer.length > 0) {
-          return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+          const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+          const mime = isPng ? 'image/png' : 'image/jpeg';
+          return `data:${mime};base64,${buffer.toString('base64')}`;
         }
       } catch (err) {
         logger.warn('Failed to download student photo via supabasePath:', err);
       }
     }
 
-    // 3. If rawPhoto contains Supabase Storage URL
-    if (rawPhoto && typeof rawPhoto === 'string' && rawPhoto.includes('student-photos/')) {
-      try {
-        const urlWithoutQuery = rawPhoto.split('?')[0];
-        const parts = urlWithoutQuery.split('student-photos/');
-        const pathInBucket = parts[1];
-        if (pathInBucket) {
-          const buffer = await supabaseStorage.downloadFile('student-photos', decodeURIComponent(pathInBucket));
-          if (buffer && buffer.length > 0) {
-            return `data:image/jpeg;base64,${buffer.toString('base64')}`;
-          }
-        }
-      } catch (err) {
-        logger.warn('Failed to download student photo via bucket path parsing:', err);
-      }
-    }
-
-    // 4. If rawPhoto is any external HTTPS URL, fetch server-side
-    if (rawPhoto && typeof rawPhoto === 'string' && (rawPhoto.startsWith('http://') || rawPhoto.startsWith('https://'))) {
-      try {
-        const buffer = await new Promise<Buffer | null>((resolve) => {
-          const client = rawPhoto.startsWith('https') ? require('https') : require('http');
-          client.get(rawPhoto, (res: any) => {
-            if (res.statusCode !== 200) {
-              return resolve(null);
-            }
-            const chunks: Buffer[] = [];
-            res.on('data', (c: Buffer) => chunks.push(c));
-            res.on('end', () => resolve(Buffer.concat(chunks)));
-          }).on('error', () => resolve(null));
-        });
-
-        if (buffer && buffer.length > 0) {
-          return `data:image/jpeg;base64,${buffer.toString('base64')}`;
-        }
-      } catch (fetchErr) {
-        logger.warn('Failed to fetch photo from external URL server-side:', fetchErr);
-      }
-    }
-
-    // 5. Try discovering in Supabase storage by CNIC folder
+    // Discovery in Supabase storage by CNIC folder
     if (student.cnicOrBForm) {
       try {
         const cnicFolder = student.cnicOrBForm.replace(/[^\w-]/g, '_');
@@ -985,7 +1002,9 @@ export class StudentsService {
           const storagePath = `${cnicFolder}/${latest.name}`;
           const buffer = await supabaseStorage.downloadFile('student-photos', storagePath);
           if (buffer && buffer.length > 0) {
-            return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+            const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+            const mime = isPng ? 'image/png' : 'image/jpeg';
+            return `data:${mime};base64,${buffer.toString('base64')}`;
           }
         }
       } catch (discErr) {
