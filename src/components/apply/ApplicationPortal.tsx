@@ -2117,7 +2117,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               {/* Trust Badge */}
               <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Zero registration fee. 100% merit-based verification.</span>
+                <span>100% merit-based verification.</span>
               </div>
             </div>
           </div>

@@ -166,7 +166,7 @@ export const FeeCalculator: React.FC<FeeCalculatorProps> = ({ onSelectTab }) => 
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <p className="text-[10px] text-center text-slate-400 mt-2">
-                  Takes less than 3 minutes • 100% Free Registration
+                  Takes less than 3 minutes • 100% Merit-Based Evaluation
                 </p>
               </div>
             </div>

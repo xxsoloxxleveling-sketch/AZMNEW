@@ -68,8 +68,8 @@ export const ContactView: React.FC<ContactViewProps> = ({ onSelectTab }) => {
       a: 'Yes! Both Government and Private school/college students across Khyber Pakhtunkhwa are eligible to compete on 100% merit.'
     },
     {
-      q: 'Is there any examination fee or registration fee?',
-      a: 'Zero. The entire registration, examination, question bank distribution, and grant disbursal process is 100% free of cost.'
+      q: 'What is the registration and examination fee?',
+      a: 'A nominal standardized testing fee of PKR 300 is charged per candidate to cover printed test material, customized OMR bubble sheet processing, and official result certification. Candidate selection is 100% merit-based.'
     },
     {
       q: 'What is the syllabus for the 100 MCQs test?',
