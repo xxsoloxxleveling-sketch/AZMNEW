@@ -42,8 +42,21 @@ router.get(
   studentsController.serveDocument
 );
 
+// Public Roll Number Release Schedule Config Endpoint
+router.get(
+  '/release-config',
+  studentsController.getReleaseConfig
+);
+
 // Protected routes (Admin / Teachers / Super Admin)
 router.use(authenticate);
+
+// Update Roll Number Release Schedule Config (SUPER_ADMIN, ADMIN)
+router.post(
+  '/release-config',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.saveReleaseConfig
+);
 
 // Emergency / Admin Data Purge & Fresh Start Endpoint (SUPER_ADMIN ONLY)
 router.post(
@@ -59,6 +72,7 @@ router.get(
   studentsController.getRollNumberStatus
 );
 
+// Batch issue roll numbers
 router.post(
   '/issue-roll-numbers',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),

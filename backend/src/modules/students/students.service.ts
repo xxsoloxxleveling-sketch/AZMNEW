@@ -456,6 +456,54 @@ export class StudentsService {
   }
 
   /**
+   * Retrieves official Roll Number release schedule config.
+   */
+  async getReleaseConfig() {
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: 'rollNumberReleaseConfig' },
+    });
+
+    if (setting?.value) {
+      try {
+        return JSON.parse(setting.value);
+      } catch (e) {}
+    }
+
+    return {
+      isScheduled: false,
+      releaseDateTime: '2026-10-15T09:00:00',
+      announcementTitle: 'Roll Number Slips Official Release Schedule',
+      announcementMessage:
+        'Official Roll Number Slips, Assigned Test Centers, and Examination Hall seatings are live.',
+      emergencyNotice:
+        'Your registration and fee verification are permanently confirmed in the examination registry.',
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Updates and persists official Roll Number release schedule config.
+   */
+  async saveReleaseConfig(config: any) {
+    const payload = {
+      isScheduled: Boolean(config.isScheduled),
+      releaseDateTime: config.releaseDateTime || '2026-10-15T09:00:00',
+      announcementTitle: config.announcementTitle || 'Roll Number Slips Official Release Schedule',
+      announcementMessage: config.announcementMessage || '',
+      emergencyNotice: config.emergencyNotice || '',
+      updatedAt: new Date().toISOString(),
+    };
+
+    await prisma.systemSetting.upsert({
+      where: { key: 'rollNumberReleaseConfig' },
+      update: { value: JSON.stringify(payload) },
+      create: { key: 'rollNumberReleaseConfig', value: JSON.stringify(payload) },
+    });
+
+    return payload;
+  }
+
+  /**
    * Batch issues sequential roll numbers and biometric QR codes for all students with fee status PAID but rollNumber null.
    */
   async issueRollNumbers(input?: { scheduledDate?: string }) {

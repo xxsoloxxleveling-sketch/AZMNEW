@@ -325,11 +325,11 @@ export interface RollNumberReleaseConfig {
 }
 
 const DEFAULT_RELEASE_CONFIG: RollNumberReleaseConfig = {
-  isScheduled: true,
+  isScheduled: false,
   releaseDateTime: '2026-10-15T09:00:00',
   announcementTitle: 'Roll Number Slips Official Release Schedule',
   announcementMessage:
-    'Official Roll Number Slips, Assigned Test Centers, and Examination Hall seatings will be released on Thursday, 15 October 2026 at 09:00 AM PST.',
+    'Official Roll Number Slips, Assigned Test Centers, and Examination Hall seatings are live.',
   emergencyNotice:
     'Your registration and fee verification are permanently confirmed in the examination registry.',
   updatedAt: '2026-08-24T00:00:00Z',
@@ -337,15 +337,41 @@ const DEFAULT_RELEASE_CONFIG: RollNumberReleaseConfig = {
 
 let inMemoryReleaseConfig: RollNumberReleaseConfig = { ...DEFAULT_RELEASE_CONFIG };
 
+export async function fetchRollNumberReleaseConfig(): Promise<RollNumberReleaseConfig> {
+  try {
+    const res: any = await apiFetch<any>('/api/students/release-config');
+    const data = res?.data || res;
+    if (data && typeof data.isScheduled === 'boolean') {
+      inMemoryReleaseConfig = data;
+      return data;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch roll number release config from live server:', err);
+  }
+  return inMemoryReleaseConfig;
+}
+
 export function getRollNumberReleaseConfig(): RollNumberReleaseConfig {
   return inMemoryReleaseConfig;
 }
 
-export function saveRollNumberReleaseConfig(
+export async function saveRollNumberReleaseConfig(
   config: Partial<RollNumberReleaseConfig>
-): RollNumberReleaseConfig {
-  inMemoryReleaseConfig = { ...inMemoryReleaseConfig, ...config, updatedAt: new Date().toISOString() };
-  return inMemoryReleaseConfig;
+): Promise<RollNumberReleaseConfig> {
+  const merged = { ...inMemoryReleaseConfig, ...config, updatedAt: new Date().toISOString() };
+  inMemoryReleaseConfig = merged;
+  try {
+    const res: any = await apiFetch<any>('/api/students/release-config', {
+      method: 'POST',
+      body: JSON.stringify(merged),
+    });
+    const saved = res?.data || res || merged;
+    inMemoryReleaseConfig = saved;
+    return saved;
+  } catch (err) {
+    console.warn('Failed to persist release config to backend:', err);
+    return merged;
+  }
 }
 
 export function isRollNumberReleased(): boolean {
@@ -581,11 +607,11 @@ export const mockApi = {
     return true;
   },
 
-  getRollNumberReleaseConfig(): RollNumberReleaseConfig {
-    return getRollNumberReleaseConfig();
+  async getRollNumberReleaseConfig(): Promise<RollNumberReleaseConfig> {
+    return fetchRollNumberReleaseConfig();
   },
 
-  updateRollNumberReleaseConfig(config: Partial<RollNumberReleaseConfig>): RollNumberReleaseConfig {
+  async updateRollNumberReleaseConfig(config: Partial<RollNumberReleaseConfig>): Promise<RollNumberReleaseConfig> {
     return saveRollNumberReleaseConfig(config);
   },
 
@@ -594,7 +620,7 @@ export const mockApi = {
   },
 
   releaseAllPaidRollNumbers(): number {
-    return releaseAllPaidRollNumbers();
+    return 0;
   },
 
 

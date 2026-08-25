@@ -7,58 +7,94 @@ import {
   Lock,
   Globe,
   Zap,
+  Loader2,
 } from 'lucide-react';
 import {
+  mockApi,
   RollNumberReleaseConfig,
   getRollNumberReleaseConfig,
   saveRollNumberReleaseConfig,
+  fetchRollNumberReleaseConfig,
   isRollNumberReleased,
 } from '../../../lib/mockApi';
 
 export const RollNumberScheduleTab: React.FC = () => {
   const [config, setConfig] = useState<RollNumberReleaseConfig>(getRollNumberReleaseConfig());
   const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isLiveNow, setIsLiveNow] = useState(isRollNumberReleased());
 
   useEffect(() => {
-    const current = getRollNumberReleaseConfig();
-    setConfig(current);
-    setIsLiveNow(isRollNumberReleased());
+    let isMounted = true;
+    (async () => {
+      const current = await fetchRollNumberReleaseConfig();
+      if (isMounted) {
+        setConfig(current);
+        setIsLiveNow(!current.isScheduled || (current.releaseDateTime && Date.now() >= new Date(current.releaseDateTime).getTime()));
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = saveRollNumberReleaseConfig(config);
-    setConfig(updated);
-    setIsLiveNow(isRollNumberReleased());
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    setIsSaving(true);
+    try {
+      const updated = await saveRollNumberReleaseConfig(config);
+      setConfig(updated);
+      setIsLiveNow(!updated.isScheduled || (updated.releaseDateTime && Date.now() >= new Date(updated.releaseDateTime).getTime()));
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to save schedule configuration.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handlePublishImmediately = () => {
+  const handlePublishImmediately = async () => {
     if (
       confirm(
         'Are you sure you want to PUBLISH all Roll Number Slips immediately to the public? Candidates will be able to search and print their slips right now.'
       )
     ) {
-      const updated = saveRollNumberReleaseConfig({
-        isScheduled: false,
-      });
-      setConfig(updated);
-      setIsLiveNow(true);
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+      setIsSaving(true);
+      try {
+        const updated = await saveRollNumberReleaseConfig({
+          ...config,
+          isScheduled: false,
+        });
+        setConfig(updated);
+        setIsLiveNow(true);
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+      } catch (err: any) {
+        alert(err?.message || 'Failed to publish immediately.');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
-  const handleScheduleForDate = () => {
-    const updated = saveRollNumberReleaseConfig({
-      isScheduled: true,
-    });
-    setConfig(updated);
-    setIsLiveNow(isRollNumberReleased());
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+  const handleScheduleForDate = async () => {
+    setIsSaving(true);
+    try {
+      const updated = await saveRollNumberReleaseConfig({
+        ...config,
+        isScheduled: true,
+      });
+      setConfig(updated);
+      setIsLiveNow(!updated.isScheduled || (updated.releaseDateTime && Date.now() >= new Date(updated.releaseDateTime).getTime()));
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to set scheduled date.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -286,21 +322,25 @@ export const RollNumberScheduleTab: React.FC = () => {
 
             <button
               type="button"
+              disabled={isGenerating || isSaving}
               onClick={async () => {
                 if (confirm('Assign and generate official Roll Numbers (AZMVS-2026-XXXX) for ALL registered candidates who have completed PKR 300 fee payment?')) {
+                  setIsGenerating(true);
                   try {
                     const res = await mockApi.issueRollNumbers(config.releaseDateTime);
                     alert(res.message || `Successfully assigned and activated Roll Numbers for ${res.count} candidate(s).`);
                     setIsLiveNow(isRollNumberReleased());
                   } catch (err: any) {
-                    alert(err.message || 'Failed to issue roll numbers.');
+                    alert(err?.message || 'Failed to issue roll numbers.');
+                  } finally {
+                    setIsGenerating(false);
                   }
                 }
               }}
-              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <Zap className="w-4 h-4" />
-              <span>Generate Roll Numbers for Paid Students</span>
+              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              <span>{isGenerating ? 'Generating Roll Numbers...' : 'Generate Roll Numbers for Paid Students'}</span>
             </button>
           </div>
         </div>

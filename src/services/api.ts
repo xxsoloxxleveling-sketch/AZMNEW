@@ -50,8 +50,11 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
   }
 
   try {
-    const { mockApi } = await import('../lib/mockApi');
-    const students = await mockApi.getStudents();
+    const { mockApi, fetchRollNumberReleaseConfig } = await import('../lib/mockApi');
+    const [students, releaseConfig] = await Promise.all([
+      mockApi.getStudents(),
+      fetchRollNumberReleaseConfig().catch(() => mockApi.getRollNumberReleaseConfig()),
+    ]);
 
     // Match by rollNumber, applicationNo, CNIC, or ID
     const student = students.find((s: any) => {
@@ -80,20 +83,26 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
         };
       }
 
-      // Check if roll number is not yet batch-issued OR if scheduled release date is in the future
-      if (!student.rollNumber || !mockApi.isRollNumberReleased()) {
-        const releaseConfig = mockApi.getRollNumberReleaseConfig();
-        const dateFormatted = new Date(releaseConfig.releaseDateTime).toLocaleString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
+      // Check if roll number is released (Immediate mode = released; Scheduled mode = released if releaseDateTime is reached)
+      const isReleased =
+        !releaseConfig.isScheduled ||
+        !releaseConfig.releaseDateTime ||
+        Date.now() >= new Date(releaseConfig.releaseDateTime).getTime();
+
+      if (!student.rollNumber || !isReleased) {
+        const dateFormatted = releaseConfig.releaseDateTime
+          ? new Date(releaseConfig.releaseDateTime).toLocaleString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : 'Official Release Schedule';
         const msg = !student.rollNumber
           ? `Registration fee payment of PKR 300 is confirmed! Official Roll Numbers and examination hall seating plans are scheduled for batch release on ${dateFormatted}. Please return on the release date to download your slip.`
-          : releaseConfig.announcementMessage;
+          : releaseConfig.announcementMessage || 'Official Roll Number Slips are scheduled for release.';
 
         return {
           success: false,

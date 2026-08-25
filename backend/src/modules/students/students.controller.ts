@@ -209,6 +209,31 @@ export class StudentsController {
     }
   }
 
+  async getReleaseConfig(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const config = await studentsService.getReleaseConfig();
+      res.status(200).json({
+        success: true,
+        data: config,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async saveReleaseConfig(req: Request, res: Response, next: NextFunction) {
+    try {
+      const config = await studentsService.saveReleaseConfig(req.body);
+      res.status(200).json({
+        success: true,
+        message: 'Roll number release schedule updated successfully.',
+        data: config,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async purgeAll(_req: Request, res: Response, next: NextFunction) {
     try {
       const result = await studentsService.purgeAllData();
