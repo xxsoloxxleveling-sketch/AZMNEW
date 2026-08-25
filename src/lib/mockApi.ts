@@ -721,6 +721,13 @@ export const mockApi = {
     }
   },
 
+  async downloadRollSlipPdf(studentId: string, rollNumber?: string): Promise<void> {
+    await apiDownloadPdf(
+      `/api/students/${studentId}/roll-slip-pdf`,
+      `RollNoSlip-${rollNumber || studentId}.pdf`
+    );
+  },
+
 
   // 4. Partner Institutions
   async getPartners(): Promise<MockPartner[]> {

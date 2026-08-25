@@ -101,6 +101,13 @@ router.get(
   studentsController.getById
 );
 
+// Candidate Roll Number Slip PDF export (SUPER_ADMIN, ADMIN)
+router.get(
+  '/:id/roll-slip-pdf',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.getRollSlipPdf
+);
+
 // Admin Walk-in Registration
 router.post(
   '/admin-register',

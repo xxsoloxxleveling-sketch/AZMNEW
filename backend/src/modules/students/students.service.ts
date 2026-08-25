@@ -907,6 +907,45 @@ export class StudentsService {
   }
 
   /**
+   * Generates Roll Number Slip Exam Entry Pass PDF buffer for downloading.
+   */
+  async getRollSlipPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
+    const student = await this.getStudentById(id);
+    if (!student) {
+      const err: AppError = new Error('Candidate record not found in database.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (!student.rollNumber) {
+      const err: AppError = new Error(
+        'Roll number has not been issued yet for this candidate. Candidate must have a verified fee payment and issued roll number before downloading the exam entry pass.'
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    let qrDataUrl = '';
+    try {
+      const QRCode = await import('qrcode');
+      const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${student.rollNumber}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`;
+      qrDataUrl = await QRCode.toDataURL(qrPayload, {
+        width: 300,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+    } catch (qrErr) {
+      logger.warn('QRCode generation fallback for PDF:', qrErr);
+    }
+
+    const html = pdfService.generateRollSlipHtml(student, qrDataUrl);
+    const buffer = await pdfService.generatePdfFromHtml(html);
+    const filename = `RollNoSlip-${student.rollNumber}.pdf`;
+
+    return { buffer, filename };
+  }
+
+  /**
    * Uploads an attached candidate document directly to Supabase Cloud Storage + server disk backup.
    */
   async uploadStudentDocument(input: {

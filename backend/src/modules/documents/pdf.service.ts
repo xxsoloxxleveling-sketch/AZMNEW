@@ -653,6 +653,257 @@ export class PdfService {
 </html>
     `;
   }
+
+  /**
+   * Generates filled HTML template for the official Single-Page A4 Roll Number Slip Exam Entry Pass
+   */
+  generateRollSlipHtml(student: any, qrDataUrl?: string): string {
+    const rollNo = student.rollNumber || 'PENDING';
+    const appNo = student.applicationNo || student.id || 'APP-2026';
+    const candName = (student.fullName || '').toUpperCase();
+    const fatherName = (student.fatherName || '').toUpperCase();
+    const cnic = student.cnicOrBForm || 'N/A';
+    const classLevel = student.currentClass || 'SSC-II (Class 10th)';
+    const testCenter = student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra';
+    const centerAddress = 'Main College Road, Mansehra / Abbottabad Regional Center, KP';
+    const roomNo = student.assignedRoom || 'Hall 301-E';
+    const seatNo = student.seatNo || `Seat #${rollNo.split('-').pop() || '01'}`;
+
+    const examDate = student.officeUse?.testDate
+      ? new Date(student.officeUse.testDate).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : 'Sunday, 15 November 2026';
+    const reportingTime = student.officeUse?.testReportingTime || '09:00 AM (Strict)';
+    const examTiming = '10:00 AM - 12:00 PM (120 Mins / 100 MCQs)';
+
+    const photoSrc =
+      student.uploadedDocuments?.photo?.dataUrl ||
+      student.photoUrl ||
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
+
+    const qrImgTag = qrDataUrl
+      ? `<img src="${qrDataUrl}" class="qr-img" alt="QR" />`
+      : `<div style="font-size: 8px; color: #64748b; text-align: center; padding-top: 25px;">QR PASS</div>`;
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AZM Roll Number Slip - ${rollNo}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: #fff; padding: 0; color: #0f172a; }
+    .slip-page { width: 100%; min-height: 275mm; padding: 6mm 8mm; position: relative; border: 2.5px solid #1e3a8a; border-radius: 8px; }
+    
+    /* Header */
+    .header-table { width: 100%; border-collapse: collapse; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
+    .header-left { width: 68%; vertical-align: top; }
+    .header-right { width: 32%; text-align: right; vertical-align: top; }
+    
+    .org-title { font-size: 18px; font-weight: 900; color: #1e3a8a; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px; }
+    .doc-badge { display: inline-block; background: #1e3a8a; color: #ffffff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+    .session-title { font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase; }
+    .motto-text { font-size: 9px; color: #475569; font-style: italic; margin-top: 2px; }
+
+    /* Candidate Particulars & Photo Grid */
+    .info-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+    .photo-col { width: 110px; vertical-align: top; text-align: center; }
+    .details-col { padding: 0 14px; vertical-align: top; }
+    .badge-col { width: 130px; vertical-align: top; text-align: right; }
+
+    .photo-frame { width: 100px; height: 118px; border: 2px solid #0f172a; border-radius: 6px; overflow: hidden; background: #f8fafc; margin: 0 auto 4px auto; position: relative; }
+    .photo-frame img { width: 100%; height: 100%; object-fit: cover; }
+    .photo-verified-tag { background: #059669; color: #fff; font-size: 8px; font-weight: 800; padding: 2px 4px; border-radius: 3px; display: inline-block; }
+    
+    .barcode-text { font-family: 'Courier New', monospace; font-size: 8.5px; font-weight: 700; color: #334155; letter-spacing: 1px; margin-top: 2px; }
+    .app-no-text { font-size: 9px; font-weight: 700; color: #1e3a8a; }
+
+    .cand-grid { width: 100%; border-collapse: collapse; }
+    .cand-grid td { padding: 4px 6px; font-size: 10.5px; }
+    .cand-label { width: 32%; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 9.5px; }
+    .cand-value { width: 68%; font-weight: 700; color: #0f172a; border-bottom: 1px solid #cbd5e1; font-size: 11px; }
+
+    /* Roll No & QR Box */
+    .roll-box { background: #0f172a; color: #ffffff; padding: 6px 10px; border-radius: 6px; text-align: center; margin-bottom: 8px; }
+    .roll-box-label { font-size: 8.5px; font-weight: 800; color: #fde047; text-transform: uppercase; letter-spacing: 0.5px; }
+    .roll-box-number { font-size: 13px; font-weight: 900; font-family: 'Courier New', monospace; letter-spacing: 0.5px; margin: 2px 0; }
+    .roll-box-seat { font-size: 9.5px; font-weight: 700; color: #34d399; }
+
+    .qr-frame { width: 100px; height: 100px; border: 1.5px solid #94a3b8; border-radius: 6px; padding: 3px; background: #fff; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
+    .qr-img { width: 100%; height: 100%; object-fit: contain; }
+    .qr-caption { font-size: 7.5px; font-weight: 700; color: #475569; text-align: center; margin-top: 2px; text-transform: uppercase; }
+
+    /* Schedule Bar */
+    .schedule-bar { background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; display: table; width: 100%; }
+    .sched-item { display: table-cell; width: 33.33%; text-align: center; vertical-align: middle; border-right: 1px solid #cbd5e1; }
+    .sched-item:last-child { border-right: none; }
+    .sched-label { font-size: 8.5px; font-weight: 800; color: #475569; text-transform: uppercase; margin-bottom: 2px; }
+    .sched-value { font-size: 10.5px; font-weight: 800; color: #0f172a; }
+    .sched-value.highlight { color: #dc2626; }
+
+    /* Center Box */
+    .center-box { background: #f8fafc; border: 1.5px solid #93c5fd; border-radius: 6px; padding: 7px 12px; margin-bottom: 12px; }
+    .center-title { font-size: 9px; font-weight: 800; color: #1e3a8a; text-transform: uppercase; margin-bottom: 2px; }
+    .center-name { font-size: 11px; font-weight: 800; color: #0f172a; }
+    .center-addr { font-size: 9.5px; color: #475569; margin-top: 1px; }
+
+    /* Instructions */
+    .section-title { font-size: 10.5px; font-weight: 800; color: #1e3a8a; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1.5px solid #1e3a8a; padding-bottom: 2px; margin-bottom: 6px; }
+    .rules-list { list-style-type: decimal; padding-left: 16px; margin-bottom: 14px; }
+    .rules-list li { font-size: 9px; color: #334155; line-height: 1.45; margin-bottom: 3.5px; text-align: justify; }
+    .rules-list li strong { color: #0f172a; font-weight: 700; }
+
+    /* Signatures & Seal */
+    .auth-table { width: 100%; border-collapse: collapse; margin-top: 10px; border-top: 1px dashed #cbd5e1; padding-top: 8px; }
+    .auth-table td { width: 33.33%; vertical-align: bottom; text-align: center; padding-top: 25px; }
+    .sig-line-text { border-top: 1px solid #475569; display: inline-block; width: 85%; font-size: 8.5px; font-weight: 700; color: #334155; padding-top: 3px; text-transform: uppercase; }
+
+    .security-ribbon { margin-top: 8px; padding-top: 4px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 8px; color: #64748b; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+  <div class="slip-page">
+    <!-- Header -->
+    <table class="header-table">
+      <tr>
+        <td class="header-left">
+          <div class="org-title">AZM SCHOLARSHIP PROGRAM</div>
+          <div class="session-title">Session V (2026) 100 MCQs Scholarship Examination</div>
+          <div class="motto-text">Official Examination Entry Pass & Roll Number Slip</div>
+        </td>
+        <td class="header-right">
+          <div class="doc-badge">Official Entry Pass</div>
+          <div style="font-size: 9px; font-weight: 700; color: #059669; margin-top: 2px;">✓ Verified Candidate</div>
+          <div style="font-size: 8px; color: #64748b;">Issued: ${new Date().toLocaleDateString('en-GB')}</div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Main Particulars Grid -->
+    <table class="info-table">
+      <tr>
+        <!-- Col 1: Photo & Barcode -->
+        <td class="photo-col">
+          <div class="photo-frame">
+            <img src="${photoSrc}" alt="Candidate Photo" />
+          </div>
+          <div class="photo-verified-tag">✓ BIOMETRIC MATCHED</div>
+          <div class="barcode-text">||| |||| || |||||</div>
+          <div class="app-no-text">${appNo}</div>
+        </td>
+
+        <!-- Col 2: Candidate Particulars -->
+        <td class="details-col">
+          <table class="cand-grid">
+            <tr>
+              <td class="cand-label">Candidate Name:</td>
+              <td class="cand-value">${candName}</td>
+            </tr>
+            <tr>
+              <td class="cand-label">Father's Name:</td>
+              <td class="cand-value">${fatherName}</td>
+            </tr>
+            <tr>
+              <td class="cand-label">CNIC / B-Form:</td>
+              <td class="cand-value" style="font-family: monospace; font-size: 11.5px; color: #1e3a8a;">${cnic}</td>
+            </tr>
+            <tr>
+              <td class="cand-label">Class Level:</td>
+              <td class="cand-value" style="color: #065f46;">${classLevel}</td>
+            </tr>
+            <tr>
+              <td class="cand-label">Discipline / Group:</td>
+              <td class="cand-value">${student.hsscGroup || 'General Science / Merit'}</td>
+            </tr>
+            <tr>
+              <td class="cand-label">Institution:</td>
+              <td class="cand-value">${student.schoolName || 'Enrolled Candidate'}</td>
+            </tr>
+          </table>
+        </td>
+
+        <!-- Col 3: Roll Number & Biometric QR -->
+        <td class="badge-col">
+          <div class="roll-box">
+            <div class="roll-box-label">Official Roll No</div>
+            <div class="roll-box-number">${rollNo}</div>
+            <div class="roll-box-seat">${roomNo} | ${seatNo}</div>
+          </div>
+          <div class="qr-frame">
+            ${qrImgTag}
+          </div>
+          <div class="qr-caption">Scan to Verify Identity</div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Center Allocation Box -->
+    <div class="center-box">
+      <div class="center-title">Assigned Examination Centre & Room Allocation:</div>
+      <div class="center-name">${testCenter} &mdash; <span style="color: #1e3a8a;">${roomNo} (${seatNo})</span></div>
+      <div class="center-addr">${centerAddress}</div>
+    </div>
+
+    <!-- Schedule Bar -->
+    <div class="schedule-bar">
+      <div class="sched-item">
+        <div class="sched-label">Examination Date</div>
+        <div class="sched-value">${examDate}</div>
+      </div>
+      <div class="sched-item">
+        <div class="sched-label">Reporting Time</div>
+        <div class="sched-value highlight">${reportingTime}</div>
+      </div>
+      <div class="sched-item">
+        <div class="sched-label">Test Duration & Format</div>
+        <div class="sched-value">${examTiming}</div>
+      </div>
+    </div>
+
+    <!-- Instructions & Rules -->
+    <div class="section-title">Important Candidate Instructions & Examination SOPs</div>
+    <ol class="rules-list">
+      <li><strong>Original Credentials Required:</strong> Candidate MUST bring this printed Roll Number Slip along with their original CNIC or NADRA B-Form to the examination center. No candidate will be admitted without original credentials.</li>
+      <li><strong>Strict Reporting Deadlines:</strong> Candidates must report to their allocated hall at least 45 minutes before the commencement of the exam (${reportingTime}). Entrance gates will strictly close 15 minutes before the test.</li>
+      <li><strong>Prohibited Items:</strong> Mobile phones, smartwatches, digital calculators, bluetooth devices, books, and bags are strictly forbidden inside the hall. Violation will result in immediate disqualification.</li>
+      <li><strong>Stationery & Optical Sheets:</strong> Bring a transparent clipboard, 2B lead pencils, blue/black ballpoint pens, and an eraser for OMR bubble sheet marking.</li>
+      <li><strong>Biometric Check:</strong> Real-time QR biometric verification and photo authentication will be conducted at the venue gate prior to desk entry.</li>
+    </ol>
+
+    <!-- Signatures & Official Seal -->
+    <table class="auth-table">
+      <tr>
+        <td>
+          <div class="sig-line-text">Candidate Signature</div>
+        </td>
+        <td>
+          <div class="sig-line-text">Center Superintendent</div>
+        </td>
+        <td>
+          <div class="sig-line-text">Controller of Examinations (AZM)</div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Security Hash Footer -->
+    <div class="security-ribbon">
+      <span>Security Hash: AZMVS-SHA256-${rollNo}-${appNo}</span>
+      <span>Official Portal: https://azmaio.com</span>
+      <span>Registry Verification ID: ${student.id}</span>
+    </div>
+  </div>
+
+</body>
+</html>
+    `;
+  }
 }
 
 export const pdfService = new PdfService();
+

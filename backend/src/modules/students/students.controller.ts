@@ -182,6 +182,19 @@ export class StudentsController {
     }
   }
 
+  async getRollSlipPdf(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { buffer, filename } = await studentsService.getRollSlipPdf(req.params.id);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async uploadDocument(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await studentsService.uploadStudentDocument(req.body);

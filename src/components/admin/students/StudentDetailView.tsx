@@ -18,6 +18,8 @@ import {
   Building2,
   Save,
   CheckCircle2,
+  Ticket,
+  Loader2,
 } from 'lucide-react';
 import {
   MockStudent,
@@ -39,6 +41,7 @@ interface StudentDetailViewProps {
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, onBack }) => {
   const { role } = useAuth();
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadingSlip, setIsDownloadingSlip] = useState(false);
   const [isDossierOpen, setIsDossierOpen] = useState(false);
   const [documents, setDocuments] = useState<MockStudentDocument[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<MockStudentDocument | null>(null);
@@ -86,6 +89,21 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
       await mockApi.downloadStudentPdf(student.id, student.rollNumber);
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleDownloadSlipPdf = async () => {
+    if (!student.rollNumber) {
+      alert('Roll number has not been issued yet for this candidate. Candidate must have a verified fee payment before roll number issuance.');
+      return;
+    }
+    setIsDownloadingSlip(true);
+    try {
+      await mockApi.downloadRollSlipPdf(student.id, student.rollNumber);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to download roll number slip PDF.');
+    } finally {
+      setIsDownloadingSlip(false);
     }
   };
 
@@ -197,6 +215,28 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
           >
             <Download className="w-4 h-4" />
             <span>{isDownloading ? 'Generating PDF...' : 'Download Registration PDF'}</span>
+          </button>
+
+          <button
+            onClick={handleDownloadSlipPdf}
+            disabled={!student.rollNumber || isDownloadingSlip}
+            title={
+              !student.rollNumber
+                ? 'Roll number not issued yet (Fee payment pending verification or batch release)'
+                : 'Download Official Examination Entry Pass & Roll Number Slip'
+            }
+            className={`px-4 py-2 text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer ${
+              !student.rollNumber
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+            }`}
+          >
+            {isDownloadingSlip ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+            ) : (
+              <Ticket className="w-4 h-4 text-white" />
+            )}
+            <span>{isDownloadingSlip ? 'Generating Slip...' : 'Download Roll No Slip'}</span>
           </button>
 
           {role === 'SUPER_ADMIN' && (

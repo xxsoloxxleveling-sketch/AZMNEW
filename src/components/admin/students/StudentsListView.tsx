@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  Ticket,
 } from 'lucide-react';
 import { DataTable, Column } from '../shared/DataTable';
 import { StatusBadge } from '../shared/StatusBadge';
@@ -238,6 +239,29 @@ export const StudentsListView: React.FC = () => {
             className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-[#185b9d] transition cursor-pointer"
           >
             <Download className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => {
+              if (!row.rollNumber) {
+                alert('Roll number has not been issued yet for this candidate.');
+                return;
+              }
+              mockApi.downloadRollSlipPdf(row.id, row.rollNumber);
+            }}
+            disabled={!row.rollNumber}
+            title={
+              row.rollNumber
+                ? 'Download Official Roll Number Slip PDF'
+                : 'Roll number not issued yet'
+            }
+            className={`p-1.5 rounded-lg border transition cursor-pointer ${
+              row.rollNumber
+                ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                : 'border-slate-200 text-slate-300 cursor-not-allowed opacity-50'
+            }`}
+          >
+            <Ticket className="w-4 h-4" />
           </button>
 
           {role === 'SUPER_ADMIN' && (
