@@ -504,6 +504,128 @@ export class StudentsService {
   }
 
   /**
+   * Public Candidate Roll Number Slip search method.
+   */
+  async searchPublicSlip(searchQuery: string) {
+    const clean = searchQuery.trim().toLowerCase();
+    const cleanDigits = searchQuery.replace(/\D/g, '');
+
+    if (!clean && cleanDigits.length < 5) {
+      return {
+        success: false,
+        error: 'Please provide a valid Roll Number, CNIC / B-Form, or Application ID.',
+      };
+    }
+
+    const orClauses: any[] = [
+      { applicationNo: { equals: clean, mode: 'insensitive' } },
+      { rollNumber: { equals: clean, mode: 'insensitive' } },
+      { id: { equals: clean } },
+    ];
+
+    if (cleanDigits.length >= 5) {
+      orClauses.push({ cnicOrBForm: { contains: cleanDigits, mode: 'insensitive' } });
+      orClauses.push({ cnicOrBForm: { contains: clean, mode: 'insensitive' } });
+    }
+
+    if (clean.length >= 3) {
+      orClauses.push({ fullName: { equals: clean, mode: 'insensitive' } });
+    }
+
+    const student = await prisma.student.findFirst({
+      where: {
+        OR: orClauses,
+      },
+      include: {
+        feeRecords: true,
+        officeUse: true,
+        documents: true,
+      },
+    });
+
+    if (!student) {
+      return {
+        success: false,
+        error: 'No matching candidate record found in examination registry.',
+      };
+    }
+
+    // Determine fee payment status
+    const isFeePaid =
+      student.status === 'ACTIVE' &&
+      ((student.feeRecords && student.feeRecords.some((f) => f.status === 'PAID')) ||
+        Boolean(student.rollNumber && student.rollNumber.startsWith('AZMVS')));
+
+    if (!isFeePaid) {
+      return {
+        success: false,
+        error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Please deposit PKR 300 via JazzCash (03051755551) or Faysal Bank (3126701000006213) and send receipt to WhatsApp 0305-1755551 to activate your Roll Number Slip.`,
+      };
+    }
+
+    // Check release schedule
+    const releaseConfig = await this.getReleaseConfig();
+    const isReleased =
+      !releaseConfig.isScheduled ||
+      !releaseConfig.releaseDateTime ||
+      Date.now() >= new Date(releaseConfig.releaseDateTime).getTime();
+
+    if (!student.rollNumber || !isReleased) {
+      const dateFormatted = releaseConfig.releaseDateTime
+        ? new Date(releaseConfig.releaseDateTime).toLocaleString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'Official Release Schedule';
+      const msg = !student.rollNumber
+        ? `Registration fee payment of PKR 300 is confirmed! Official Roll Numbers and examination hall seating plans are scheduled for batch release on ${dateFormatted}. Please return on the release date to download your slip.`
+        : releaseConfig.announcementMessage || 'Official Roll Number Slips are scheduled for release.';
+
+      return {
+        success: false,
+        error: `SCHEDULED_RELEASE:::${student.fullName}:::${student.applicationNo}:::${dateFormatted}:::${msg}`,
+      };
+    }
+
+    const rollNo = student.rollNumber;
+
+    return {
+      success: true,
+      data: {
+        rollNo: rollNo,
+        applicationId: student.applicationNo || student.id || 'APP-2026',
+        candidateName: student.fullName,
+        fatherName: student.fatherName,
+        cnicBForm: student.cnicOrBForm,
+        classLevel: student.currentClass || 'SSC-II (Class 10th)',
+        candidatePhoto:
+          student.photoUrl ||
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
+        testCenter: student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra',
+        centerAddress: 'Main College Road, Mansehra / Abbottabad Regional Center, KP',
+        examDate: student.officeUse?.testDate || 'Sunday, 15 November 2026',
+        reportingTime: student.officeUse?.testReportingTime || '09:00 AM',
+        examStartTime: '10:00 AM - 12:00 PM (120 Mins)',
+        roomNo: student.assignedRoom || 'HALL-01',
+        seatIndex: student.seatNo || `SEAT-${rollNo.split('-').pop() || '0101'}`,
+        instructions: [
+          'Bring this original printed Roll Number Slip along with your original CNIC or B-Form to the examination center.',
+          'Candidates must report to their assigned examination hall 45 minutes prior to the scheduled exam commencement time.',
+          'Electronic devices, mobile phones, smartwatches, and programmable calculators are strictly prohibited inside the hall.',
+          'Standard blue/black ballpoints and a transparent clipboard are permitted for optical answer sheet marking.',
+          'Biometric verification will take place at the entrance gate before seating allocation.',
+        ],
+        issuedAt: student.updatedAt.toISOString(),
+        qrPayload: `https://azmaio.com/verify?rollNo=${rollNo}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`,
+      },
+    };
+  }
+
+  /**
    * Batch issues sequential roll numbers and biometric QR codes for all students with fee status PAID but rollNumber null.
    */
   async issueRollNumbers(input?: { scheduledDate?: string }) {

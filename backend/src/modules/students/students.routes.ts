@@ -48,6 +48,16 @@ router.get(
   studentsController.getReleaseConfig
 );
 
+// Public Roll Number Slip Search Endpoint (CNIC, Roll No, Application No)
+router.get(
+  '/search-slip',
+  studentsController.searchPublicSlip
+);
+router.post(
+  '/search-slip',
+  studentsController.searchPublicSlip
+);
+
 // Protected routes (Admin / Teachers / Super Admin)
 router.use(authenticate);
 

@@ -42,7 +42,7 @@ export interface ApiResponse<T> {
 // 1. Roll Number Slips API
 // -------------------------------------------------------------
 export async function searchRollNumberSlip(query: string): Promise<ApiResponse<RollNumberSlip>> {
-  const clean = query.trim().toLowerCase();
+  const clean = query.trim();
   const cleanDigits = query.replace(/\D/g, '');
 
   if (!clean && cleanDigits.length < 5) {
@@ -50,20 +50,31 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
   }
 
   try {
+    const res: any = await apiFetch<any>(`/api/students/search-slip?query=${encodeURIComponent(clean)}`);
+    if (res && typeof res.success === 'boolean') {
+      return res;
+    }
+  } catch (err: any) {
+    console.warn('Live search-slip endpoint error:', err);
+  }
+
+  try {
     const { mockApi, fetchRollNumberReleaseConfig } = await import('../lib/mockApi');
     const [students, releaseConfig] = await Promise.all([
-      mockApi.getStudents(),
+      mockApi.getStudents().catch(() => []),
       fetchRollNumberReleaseConfig().catch(() => mockApi.getRollNumberReleaseConfig()),
     ]);
 
+    const cleanLower = clean.toLowerCase();
+
     // Match by rollNumber, applicationNo, CNIC, or ID
     const student = students.find((s: any) => {
-      const matchRoll = s.rollNumber && (s.rollNumber.toLowerCase() === clean || s.rollNumber.toLowerCase().includes(clean));
-      const matchApp = s.applicationNo && (s.applicationNo.toLowerCase() === clean || s.applicationNo.toLowerCase().includes(clean));
-      const matchId = s.id && s.id.toLowerCase() === clean;
+      const matchRoll = s.rollNumber && (s.rollNumber.toLowerCase() === cleanLower || s.rollNumber.toLowerCase().includes(cleanLower));
+      const matchApp = s.applicationNo && (s.applicationNo.toLowerCase() === cleanLower || s.applicationNo.toLowerCase().includes(cleanLower));
+      const matchId = s.id && s.id.toLowerCase() === cleanLower;
       const sDigits = s.cnicOrBForm ? s.cnicOrBForm.replace(/\D/g, '') : '';
       const matchCnic = cleanDigits.length >= 5 && sDigits && (sDigits === cleanDigits || sDigits.includes(cleanDigits));
-      const matchName = s.fullName && s.fullName.toLowerCase() === clean;
+      const matchName = s.fullName && s.fullName.toLowerCase() === cleanLower;
 
       return matchRoll || matchApp || matchId || matchCnic || matchName;
     });
@@ -128,7 +139,7 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
         roomNo: student.assignedRoom || 'HALL-01',
         seatIndex: student.seatNo || `SEAT-${rollNo.split('-').pop() || '0101'}`,
         securityHash: `AZMVS-SHA256-${rollNo}`,
-        qrPayload: student.qrToken || `VERIFIED-${rollNo}`,
+        qrPayload: student.qrToken || `https://azmaio.com/verify?rollNo=${rollNo}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`,
         barcode: `||| |||| || ||||| ${rollNo}`,
         specialInstructions: [
           'Bring your original CNIC / B-Form along with this printed entry slip to the examination centre.',
@@ -138,20 +149,19 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
         ],
       };
 
-      return {
-        success: true,
-        data: slip
-      };
-
+      return { success: true, data: slip };
     }
-  } catch (err) {
-    console.error('searchRollNumberSlip error:', err);
-  }
 
-  return {
-    success: false,
-    error: `No registered candidate or issued slip found for "${query}". Please check your CNIC / Application ID, or verify that your registration was submitted.`
-  };
+    return {
+      success: false,
+      error: 'No matching candidate record found in examination registry.'
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || 'Failed to search examination registry.'
+    };
+  }
 }
 
 

@@ -234,6 +234,16 @@ export class StudentsController {
     }
   }
 
+  async searchPublicSlip(req: Request, res: Response, next: NextFunction) {
+    try {
+      const query = String(req.query.query || req.body?.query || '');
+      const result = await studentsService.searchPublicSlip(query);
+      return res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async purgeAll(_req: Request, res: Response, next: NextFunction) {
     try {
       const result = await studentsService.purgeAllData();
