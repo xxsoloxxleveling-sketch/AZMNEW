@@ -159,8 +159,8 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
                 <Mail className="w-4 h-4 text-[#70a9db] flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-[11px] text-slate-400">Official Correspondence</p>
-                  <a href="mailto:azmaio.scholarships@gmail.com" className="text-xs font-mono text-slate-200 hover:text-white">
-                    azmaio.scholarships@gmail.com
+                  <a href={`mailto:${OFFICIAL_DATA.email}`} className="text-xs font-mono text-slate-200 hover:text-white">
+                    {OFFICIAL_DATA.email}
                   </a>
                 </div>
               </div>

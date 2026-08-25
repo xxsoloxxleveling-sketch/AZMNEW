@@ -1424,7 +1424,7 @@ export function printStudentSlip(student: any) {
       <ul>
         <li>Retain this official confirmation slip for your records.</li>
         <li>Your Roll Number Slip with test center assignment will be issued once payment is verified.</li>
-        <li>Helpline / Support: <strong>0305-1755551</strong> / <strong>info@azmaio.com</strong>.</li>
+        <li>Helpline / Support: <strong>0305-1755551</strong> / <strong>azmgoc30@gmail.com</strong>.</li>
       </ul>
     </div>
 
