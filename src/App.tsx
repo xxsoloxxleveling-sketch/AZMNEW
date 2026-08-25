@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import { AuthProvider, useAuth } from './lib/authContext';
 import { AdminTab } from './components/admin/layout/AdminSidebar';
 import type { MockStudent } from './lib/mockApi';
+import { wakeUpBackend } from './lib/apiClient';
 
 // Lazy Loaded Below-The-Fold Public Components
 const Footer = lazy(() =>
@@ -164,6 +165,11 @@ function AppContent() {
   const [isGlobalAddStudentOpen, setIsGlobalAddStudentOpen] = useState(false);
   const [isGlobalFeeOpen, setIsGlobalFeeOpen] = useState(false);
   const [studentsForChallan, setStudentsForChallan] = useState<MockStudent[]>([]);
+
+  // Fire-and-forget backend health ping on initial site load
+  useEffect(() => {
+    wakeUpBackend();
+  }, []);
 
   // Hash-based route listener for browser URLs (e.g. #dashboard, #login, #register, #scan)
   useEffect(() => {

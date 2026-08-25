@@ -165,3 +165,44 @@ export async function apiDownloadPdf(
   document.body.removeChild(anchor);
   window.URL.revokeObjectURL(blobUrl);
 }
+
+/**
+ * Fire-and-forget backend health ping to wake up sleeping Render free-tier instances
+ * and warm the database connection pool.
+ * - Non-blocking and silent
+ * - Uses AbortController with a 15s timeout
+ * - Fails silently without logging errors or blocking UI
+ */
+let lastPingTime = 0;
+export function wakeUpBackend(minIntervalMs = 15000): void {
+  const now = Date.now();
+  if (minIntervalMs > 0 && now - lastPingTime < minIntervalMs) {
+    return;
+  }
+  lastPingTime = now;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      try {
+        controller.abort();
+      } catch {
+        // Silently swallow abort error
+      }
+    }, 15000);
+
+    fetch(`${API_BASE_URL}/api/health`, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+      .then(() => clearTimeout(timeoutId))
+      .catch(() => {
+        clearTimeout(timeoutId);
+        // Fail silently - never throw or block
+      });
+  } catch {
+    // Fail silently
+  }
+}

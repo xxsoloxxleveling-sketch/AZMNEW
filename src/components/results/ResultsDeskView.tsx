@@ -3,6 +3,7 @@ import { OFFICIAL_DATA } from '../../data/scholarshipData';
 import { searchCandidateResult, fetchPublicMeritList } from '../../services/api';
 import { ResultCard, PublicMeritEntry, PageTab } from '../../types';
 import { Logo } from '../common/Logo';
+import { wakeUpBackend } from '../../lib/apiClient';
 import { 
   Search, 
   Award, 
@@ -40,6 +41,11 @@ export const ResultsDeskView: React.FC<ResultsDeskViewProps> = ({ onSelectTab })
   const [activeMeritFilter, setActiveMeritFilter] = useState<string>('all');
   const [districtFilter, setDistrictFilter] = useState<string>('all');
   const [meritSearch, setMeritSearch] = useState<string>('');
+
+  // Pre-warm backend when visiting results desk
+  useEffect(() => {
+    wakeUpBackend();
+  }, []);
 
   useEffect(() => {
     fetchPublicMeritList({ category: activeMeritFilter, district: districtFilter, search: meritSearch })

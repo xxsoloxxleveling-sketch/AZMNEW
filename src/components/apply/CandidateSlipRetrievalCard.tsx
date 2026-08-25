@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Download,
@@ -18,6 +18,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { mockApi, MockStudent, printStudentDossier } from '../../lib/mockApi';
+import { wakeUpBackend } from '../../lib/apiClient';
 
 interface CandidateSlipRetrievalCardProps {
   onBackToApply?: () => void;
@@ -34,6 +35,11 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showVoucher, setShowVoucher] = useState(false);
+
+  // Pre-warm backend when opening retrieval card
+  useEffect(() => {
+    wakeUpBackend();
+  }, []);
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

@@ -5,6 +5,7 @@ import { searchRollNumberSlip } from '../../services/api';
 import { RollNumberSlip, PageTab } from '../../types';
 import { Logo } from '../common/Logo';
 import { StudentDossierModal } from '../common/StudentDossierModal';
+import { wakeUpBackend } from '../../lib/apiClient';
 import { 
   Search, 
   Printer, 
@@ -37,6 +38,11 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   const [hasSearched, setHasSearched] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
+
+  // Pre-warm backend when visiting roll number slips desk
+  useEffect(() => {
+    wakeUpBackend();
+  }, []);
 
   useEffect(() => {
     if (selectedSlip?.rollNo) {

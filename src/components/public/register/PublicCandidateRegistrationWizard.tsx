@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   School,
   ArrowRight,
@@ -16,6 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
+import { wakeUpBackend } from '../../../lib/apiClient';
 
 interface PublicCandidateRegistrationWizardProps {
   onNavigateHome: () => void;
@@ -29,6 +30,18 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
   const [currentStage, setCurrentStage] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registeredStudent, setRegisteredStudent] = useState<MockStudent | null>(null);
+
+  // Ping backend on wizard mount
+  useEffect(() => {
+    wakeUpBackend();
+  }, []);
+
+  // Ping backend immediately when candidate reaches the final declarations/signature stage
+  useEffect(() => {
+    if (currentStage === 8) {
+      wakeUpBackend(0);
+    }
+  }, [currentStage]);
 
   const [formData, setFormData] = useState({
     // Stage 1: Personal
