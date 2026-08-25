@@ -226,10 +226,6 @@ export interface MockStudentDocument {
 
 let currentUser: CurrentUser | null = getUser<CurrentUser>() || null;
 
-const STUDENTS_STORAGE_KEY = 'AZM_REGISTERED_STUDENTS_V';
-const TEST_CENTERS_STORAGE_KEY = 'AZM_TEST_CENTERS_V';
-const DOCUMENTS_STORAGE_KEY = 'AZM_STUDENT_DOCS_V';
-
 export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
   {
     id: 'tc-1',
@@ -297,66 +293,6 @@ export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
   },
 ];
 
-export function getLocalTestCenters(): MockTestCenter[] {
-  try {
-    const raw = localStorage.getItem(TEST_CENTERS_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch (err) {}
-  return DEFAULT_TEST_CENTERS;
-}
-
-export function saveLocalTestCenters(list: MockTestCenter[]): void {
-  try {
-    localStorage.setItem(TEST_CENTERS_STORAGE_KEY, JSON.stringify(list));
-  } catch (err) {}
-}
-
-
-const UPLOADED_FILES_STORAGE_KEY = 'AZM_STUDENT_UPLOADED_FILES_V';
-
-export function saveUploadedFilesForCandidate(keys: (string | undefined | null)[], files: any): void {
-  try {
-    if (!files || typeof files !== 'object' || Object.keys(files).length === 0) return;
-    const raw = localStorage.getItem(UPLOADED_FILES_STORAGE_KEY);
-    const map = raw ? JSON.parse(raw) : {};
-    keys.filter(Boolean).forEach((k) => {
-      const clean = String(k).toLowerCase().trim();
-      const digits = String(k).replace(/\D/g, '');
-      map[clean] = { ...(map[clean] || {}), ...files };
-      if (digits.length >= 5) {
-        map[digits] = { ...(map[digits] || {}), ...files };
-      }
-    });
-    localStorage.setItem(UPLOADED_FILES_STORAGE_KEY, JSON.stringify(map));
-  } catch (e) {}
-}
-
-export function getUploadedFilesForCandidate(keys: (string | undefined | null)[]): any {
-  try {
-    const raw = localStorage.getItem(UPLOADED_FILES_STORAGE_KEY);
-    if (!raw) return {};
-    const map = JSON.parse(raw);
-    const merged: Record<string, any> = {};
-
-    for (const k of keys) {
-      if (!k) continue;
-      const clean = String(k).toLowerCase().trim();
-      const digits = String(k).replace(/\D/g, '');
-      if (map[clean] && typeof map[clean] === 'object') {
-        Object.assign(merged, map[clean]);
-      }
-      if (digits.length >= 5 && map[digits] && typeof map[digits] === 'object') {
-        Object.assign(merged, map[digits]);
-      }
-    }
-    return merged;
-  } catch (e) {}
-  return {};
-}
-
 export function getCanonicalStudentKey(s: {
   id?: string;
   applicationNo?: string;
@@ -375,100 +311,6 @@ export function getCanonicalStudentKey(s: {
     return `NAME_${s.fullName.trim().toLowerCase()}_${s.fatherName.trim().toLowerCase()}`;
   }
   return s.id ? s.id.trim().toLowerCase() : `STD_${Math.random()}`;
-}
-
-export function getLocalStudents(): MockStudent[] {
-  try {
-    const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
-    if (!raw) return [];
-    const list: MockStudent[] = JSON.parse(raw);
-    if (!Array.isArray(list)) return [];
-
-    // Strict filter: Purge any fake / dummy "Registered Candidate" or "John Doe" entries
-    const cleanList = list.filter((s) => {
-      if (!s || !s.fullName) return false;
-      const name = s.fullName.trim().toLowerCase();
-      const father = (s.fatherName || '').trim().toLowerCase();
-      if (name === 'registered candidate' || name === 'john doe' || father === 'guardian') {
-        return false;
-      }
-      return true;
-    });
-
-    // Strict deduplication on read
-    const map = new Map<string, MockStudent>();
-    cleanList.forEach((s) => {
-      const key = getCanonicalStudentKey(s);
-      map.set(key, s);
-    });
-
-    const finalClean = Array.from(map.values());
-    if (finalClean.length !== list.length) {
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(finalClean));
-    }
-    return finalClean;
-  } catch (err) {
-    return [];
-  }
-}
-
-
-export function saveLocalStudent(student: MockStudent): void {
-  try {
-    const list = getLocalStudents();
-    const cleanKey = getCanonicalStudentKey(student);
-
-    const idx = list.findIndex((s) => getCanonicalStudentKey(s) === cleanKey);
-    if (idx >= 0) {
-      list[idx] = {
-        ...list[idx],
-        ...student,
-        uploadedDocuments: {
-          ...(list[idx].uploadedDocuments || {}),
-          ...(student.uploadedDocuments || {}),
-        },
-      };
-    } else {
-      list.unshift(student);
-    }
-
-    const dedupedMap = new Map<string, MockStudent>();
-    list.forEach((s) => {
-      dedupedMap.set(getCanonicalStudentKey(s), s);
-    });
-
-    const finalArray = Array.from(dedupedMap.values());
-    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(finalArray));
-
-    const allDocs = student.uploadedDocuments || (idx >= 0 ? list[idx].uploadedDocuments : undefined);
-    if (allDocs) {
-      saveUploadedFilesForCandidate(
-        [student.id, student.applicationNo, student.rollNumber, student.cnicOrBForm, student.fullName],
-        allDocs
-      );
-    }
-  } catch (err) {}
-}
-
-
-
-export function deleteLocalStudent(idOrAppNo: string): boolean {
-  try {
-    const list = getLocalStudents();
-    const clean = idOrAppNo.toLowerCase().trim();
-    const cleanDigits = idOrAppNo.replace(/\D/g, '');
-    const filtered = list.filter(
-      (s) =>
-        s.id.toLowerCase() !== clean &&
-        (!s.applicationNo || s.applicationNo.toLowerCase() !== clean) &&
-        (!s.rollNumber || s.rollNumber.toLowerCase() !== clean) &&
-        (!cleanDigits || cleanDigits.length < 5 || !s.cnicOrBForm || s.cnicOrBForm.replace(/\D/g, '') !== cleanDigits)
-    );
-    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(filtered));
-    return true;
-  } catch (err) {
-    return false;
-  }
 }
 
 export interface RollNumberReleaseConfig {
@@ -491,171 +333,24 @@ const DEFAULT_RELEASE_CONFIG: RollNumberReleaseConfig = {
   updatedAt: '2026-08-24T00:00:00Z',
 };
 
-const RELEASE_CONFIG_STORAGE_KEY = 'AZM_ROLL_NUMBER_RELEASE_CONFIG_V';
+let inMemoryReleaseConfig: RollNumberReleaseConfig = { ...DEFAULT_RELEASE_CONFIG };
 
 export function getRollNumberReleaseConfig(): RollNumberReleaseConfig {
-  try {
-    const raw = localStorage.getItem(RELEASE_CONFIG_STORAGE_KEY);
-    if (raw) return { ...DEFAULT_RELEASE_CONFIG, ...JSON.parse(raw) };
-  } catch (err) {}
-  return DEFAULT_RELEASE_CONFIG;
+  return inMemoryReleaseConfig;
 }
 
 export function saveRollNumberReleaseConfig(
   config: Partial<RollNumberReleaseConfig>
 ): RollNumberReleaseConfig {
-  try {
-    const current = getRollNumberReleaseConfig();
-    const updated = { ...current, ...config, updatedAt: new Date().toISOString() };
-    localStorage.setItem(RELEASE_CONFIG_STORAGE_KEY, JSON.stringify(updated));
-    return updated;
-  } catch (err) {
-    return DEFAULT_RELEASE_CONFIG;
-  }
+  inMemoryReleaseConfig = { ...inMemoryReleaseConfig, ...config, updatedAt: new Date().toISOString() };
+  return inMemoryReleaseConfig;
 }
 
 export function isRollNumberReleased(): boolean {
-  const config = getRollNumberReleaseConfig();
-  if (!config.isScheduled) return true; // Immediate release mode
-  if (!config.releaseDateTime) return true;
-  const targetDate = new Date(config.releaseDateTime).getTime();
-  const now = Date.now();
-  return now >= targetDate;
-}
-
-const PAID_STUDENTS_KEY = 'AZM_PAID_STUDENT_IDS_V';
-
-export function markStudentFeePaid(keys: (string | undefined | null)[]): void {
-  try {
-    const raw = localStorage.getItem(PAID_STUDENTS_KEY);
-    const paidSet = new Set<string>(raw ? JSON.parse(raw) : []);
-    keys.filter(Boolean).forEach((k) => {
-      const clean = String(k).toLowerCase().trim();
-      const digits = String(k).replace(/\D/g, '');
-      paidSet.add(clean);
-      if (digits.length >= 5) paidSet.add(digits);
-    });
-    localStorage.setItem(PAID_STUDENTS_KEY, JSON.stringify(Array.from(paidSet)));
-  } catch (e) {}
-}
-
-export function isStudentFeePaid(student: {
-  id?: string;
-  applicationNo?: string;
-  cnicOrBForm?: string;
-  rollNumber?: string | null;
-  feeStatus?: string;
-}): boolean {
-  if (student.feeStatus === 'PAID') return true;
-  try {
-    const raw = localStorage.getItem(PAID_STUDENTS_KEY);
-    if (!raw) return false;
-    const paidList: string[] = JSON.parse(raw);
-    const cleanId = student.id?.toLowerCase().trim();
-    const cleanApp = student.applicationNo?.toLowerCase().trim();
-    const cleanRoll = student.rollNumber?.toLowerCase().trim();
-    const cleanDigits = student.cnicOrBForm ? student.cnicOrBForm.replace(/\D/g, '') : '';
-    return paidList.some(
-      (p) => p === cleanId || p === cleanApp || p === cleanRoll || (cleanDigits.length >= 5 && p === cleanDigits)
-    );
-  } catch (e) {
-    return false;
-  }
-}
-
-export function updateLocalStudentPayment(studentId: string, assignedRollNo?: string, studentObj?: any): MockStudent | null {
-  try {
-    markStudentFeePaid([
-      studentId,
-      assignedRollNo,
-      studentObj?.id,
-      studentObj?.applicationNo,
-      studentObj?.cnicOrBForm,
-      studentObj?.rollNumber,
-      studentObj?.fullName,
-    ]);
-
-    const list = getLocalStudents();
-    const cleanQuery = studentId.toLowerCase().trim();
-    const cleanDigits = studentId.replace(/\D/g, '');
-
-    const idx = list.findIndex(
-      (s) =>
-        s.id.toLowerCase() === cleanQuery ||
-        (s.applicationNo && s.applicationNo.toLowerCase() === cleanQuery) ||
-        (s.rollNumber && s.rollNumber.toLowerCase() === cleanQuery) ||
-        (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits) ||
-        (studentObj?.id && s.id.toLowerCase() === String(studentObj.id).toLowerCase()) ||
-        (studentObj?.applicationNo && s.applicationNo && s.applicationNo.toLowerCase() === String(studentObj.applicationNo).toLowerCase()) ||
-        (studentObj?.cnicOrBForm && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === String(studentObj.cnicOrBForm).replace(/\D/g, ''))
-    );
-
-    if (idx >= 0) {
-      let rollNumber = list[idx].rollNumber || null;
-      if (assignedRollNo && isRollNumberReleased()) {
-        rollNumber = assignedRollNo;
-      }
-
-      markStudentFeePaid([list[idx].id, list[idx].applicationNo, list[idx].cnicOrBForm, list[idx].rollNumber]);
-
-      list[idx] = {
-        ...list[idx],
-        ...(studentObj || {}),
-        feeStatus: 'PAID',
-        rollNumber,
-        qrToken: rollNumber ? `VERIFIED-${rollNumber}` : `FEE-PAID-${list[idx].applicationNo || list[idx].id}`,
-        qrImageUrl: rollNumber
-          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(rollNumber)}`
-          : undefined,
-      };
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
-      return list[idx];
-    } else if (studentObj && studentObj.fullName && !studentObj.fullName.toLowerCase().includes('registered candidate')) {
-      let rollNumber = studentObj.rollNumber || null;
-      if (assignedRollNo && isRollNumberReleased()) {
-        rollNumber = assignedRollNo;
-      }
-      const realStudent: MockStudent = {
-        ...studentObj,
-        feeStatus: 'PAID',
-        rollNumber,
-      };
-      list.unshift(realStudent);
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
-      return realStudent;
-    }
-  } catch (err) {}
-  return null;
-}
-
-
-
-export function releaseAllPaidRollNumbers(): number {
-  try {
-    const list = getLocalStudents();
-    const year = new Date().getFullYear();
-    let count = 0;
-
-    const updated = list.map((s, idx) => {
-      if (s.feeStatus === 'PAID' && !s.rollNumber) {
-        count++;
-        const seq = (idx + 1).toString().padStart(4, '0');
-        const rollNumber = `AZMVS-${year}-${seq}`;
-        return {
-          ...s,
-          rollNumber,
-          qrToken: `VERIFIED-${rollNumber}`,
-          qrImageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(rollNumber)}`,
-        };
-      }
-      return s;
-    });
-
-    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updated));
-    return count;
-  } catch (err) {
-    return 0;
-  }
+  if (!inMemoryReleaseConfig.isScheduled) return true;
+  if (!inMemoryReleaseConfig.releaseDateTime) return true;
+  const targetDate = new Date(inMemoryReleaseConfig.releaseDateTime).getTime();
+  return Date.now() >= targetDate;
 }
 
 
@@ -1250,36 +945,11 @@ export const mockApi = {
       seatNo?: string;
     }
   ): Promise<MockStudent | null> {
-    await apiFetch<any>(`/api/exam-halls/students/${studentId}/allocation`, {
+    const res = await apiFetch<any>(`/api/exam-halls/students/${studentId}/allocation`, {
       method: 'PATCH',
       body: JSON.stringify(allocation),
     });
-
-    const list = getLocalStudents();
-    const cleanId = studentId.toLowerCase().trim();
-    const cleanDigits = studentId.replace(/\D/g, '');
-
-    const idx = list.findIndex(
-      (s) =>
-        s.id.toLowerCase() === cleanId ||
-        (s.applicationNo && s.applicationNo.toLowerCase() === cleanId) ||
-        (s.rollNumber && s.rollNumber.toLowerCase() === cleanId) ||
-        (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits)
-    );
-
-    if (idx >= 0) {
-      list[idx] = {
-        ...list[idx],
-        ...allocation,
-        officeUse: {
-          ...(list[idx].officeUse || {}),
-          testCentre: allocation.testCenterName || list[idx].officeUse?.testCentre,
-        },
-      };
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
-      return list[idx];
-    }
-    return null;
+    return res?.data || res;
   },
 
   async batchAssignStudentsToHall(
@@ -1287,7 +957,7 @@ export const mockApi = {
     hallInfo: { hallName: string; roomNumber: string; testCenterName?: string; testCenterId?: string },
     studentIds: string[]
   ): Promise<number> {
-    await apiFetch<any>(`/api/exam-halls/${hallId}/batch-assign`, {
+    const res = await apiFetch<any>(`/api/exam-halls/${hallId}/batch-assign`, {
       method: 'POST',
       body: JSON.stringify({
         studentIds,
@@ -1296,71 +966,14 @@ export const mockApi = {
         testCenterName: hallInfo.testCenterName,
       }),
     });
-
-    const all = await this.getStudents();
-    let updatedCount = 0;
-
-    studentIds.forEach((sid, idx) => {
-      const cleanId = sid.toLowerCase().trim();
-      const cleanDigits = sid.replace(/\D/g, '');
-      const existing = all.find(
-        (s) =>
-          s.id.toLowerCase() === cleanId ||
-          (s.applicationNo && s.applicationNo.toLowerCase() === cleanId) ||
-          (s.rollNumber && s.rollNumber.toLowerCase() === cleanId) ||
-          (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits)
-      );
-      if (existing) {
-        const updated: MockStudent = {
-          ...existing,
-          assignedHallId: hallId,
-          assignedHall: hallInfo.hallName,
-          assignedRoom: hallInfo.roomNumber,
-          testCenterName: hallInfo.testCenterName || existing.testCenterName || 'Main Campus Examination Center',
-          testCenterId: hallInfo.testCenterId || existing.testCenterId,
-          seatNo: existing.seatNo || `Seat #${idx + 1}`,
-          officeUse: {
-            ...(existing.officeUse || {}),
-            testCentre: hallInfo.testCenterName || existing.officeUse?.testCentre,
-          },
-        };
-        saveLocalStudent(updated);
-        updatedCount++;
-      }
-    });
-
-    return updatedCount;
+    return res?.count || studentIds.length;
   },
 
   async unassignStudentFromHall(studentId: string): Promise<boolean> {
     await apiFetch<any>(`/api/exam-halls/students/${studentId}/allocation`, {
       method: 'DELETE',
     });
-
-    const list = getLocalStudents();
-    const cleanId = studentId.toLowerCase().trim();
-    const cleanDigits = studentId.replace(/\D/g, '');
-
-    const idx = list.findIndex(
-      (s) =>
-        s.id.toLowerCase() === cleanId ||
-        (s.applicationNo && s.applicationNo.toLowerCase() === cleanId) ||
-        (s.rollNumber && s.rollNumber.toLowerCase() === cleanId) ||
-        (cleanDigits.length >= 5 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === cleanDigits)
-    );
-
-    if (idx >= 0) {
-      list[idx] = {
-        ...list[idx],
-        assignedHallId: undefined,
-        assignedHall: undefined,
-        assignedRoom: undefined,
-        seatNo: undefined,
-      };
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
-      return true;
-    }
-    return false;
+    return true;
   },
 
 

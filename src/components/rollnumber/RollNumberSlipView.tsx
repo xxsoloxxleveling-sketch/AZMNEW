@@ -20,7 +20,8 @@ import {
   Sparkles,
   Info,
   Loader2,
-  FileQuestion
+  FileQuestion,
+  FileText
 } from 'lucide-react';
 
 interface RollNumberSlipViewProps {

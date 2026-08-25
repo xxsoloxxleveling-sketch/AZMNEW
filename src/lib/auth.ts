@@ -22,8 +22,39 @@ export function wipeAllCookies(): void {
   } catch (e) {}
 }
 
-// Purge any cookies immediately on load
+export function purgeLegacyDataCaches(): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const legacyKeys = [
+        'AZM_REGISTERED_STUDENTS_V',
+        'AZM_PAID_STUDENT_IDS_V',
+        'AZM_STUDENT_UPLOADED_FILES_V',
+        'AZM_STUDENT_DOCS_V',
+        'AZM_EXAM_HALLS_V',
+        'AZM_PAID_FEE_KEYS_V',
+        'AZM_STAFF_V',
+        'AZM_PAYROLL_V',
+        'AZM_TRANSACTIONS_V',
+        'AZM_PARTNERS_V',
+        'AZM_HALL_ASSIGNMENTS_V',
+        'AZM_SEAT_ALLOCATIONS_V',
+        'AZM_ATTENDANCE_V',
+        'AZM_TEST_CENTERS_V',
+        'AZM_ROLL_NUMBER_SCHEDULE_V',
+        'AZM_ROLL_NUMBER_RELEASE_CONFIG_V',
+      ];
+      legacyKeys.forEach((key) => {
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {}
+      });
+    }
+  } catch (e) {}
+}
+
+// Purge any cookies & legacy data caches immediately on load
 wipeAllCookies();
+purgeLegacyDataCaches();
 
 export const authStorage = {
   setToken(token: string): void {

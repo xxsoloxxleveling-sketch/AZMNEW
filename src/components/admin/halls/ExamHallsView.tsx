@@ -122,20 +122,12 @@ const DEFAULT_HALLS: ExamHall[] = [
   },
 ];
 
-const HALLS_STORAGE_KEY = 'AZM_EXAM_HALLS_V';
-
 interface ExamHallsViewProps {
   onOpenQrScanner?: () => void;
 }
 
 export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner }) => {
-  const [halls, setHalls] = useState<ExamHall[]>(() => {
-    try {
-      const raw = localStorage.getItem(HALLS_STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return DEFAULT_HALLS;
-  });
+  const [halls, setHalls] = useState<ExamHall[]>(DEFAULT_HALLS);
 
   const [testCenters, setTestCenters] = useState<MockTestCenter[]>([]);
   const [selectedHallId, setSelectedHallId] = useState<string>(halls[0]?.id || 'hall-6');
@@ -318,7 +310,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
     }
   };
 
-  const handleCreateHall = (e: React.FormEvent) => {
+  const handleCreateHall = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newHallData.name.trim() || !newHallData.roomNumber.trim()) {
       alert('Please provide hall name and room number.');
@@ -329,11 +321,11 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
       ...newHallData,
       capacity: Number(newHallData.capacity) || 50,
     };
+    try {
+      await mockApi.createExamHall(created);
+    } catch (err) {}
     const updated = [...halls, created];
     setHalls(updated);
-    try {
-      localStorage.setItem(HALLS_STORAGE_KEY, JSON.stringify(updated));
-    } catch (e) {}
     setSelectedHallId(created.id);
     setIsAddModalOpen(false);
     setNewHallData({
@@ -348,6 +340,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
       examDate: 'Sunday, 15 Nov 2026',
       centerName: 'Main Campus Examination Center, Mansehra',
     });
+    loadData();
   };
 
   const printHallAttendanceSheet = () => {
