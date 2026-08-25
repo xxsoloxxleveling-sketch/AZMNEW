@@ -667,10 +667,19 @@ export class StudentsService {
   }
 
   /**
-   * Deletes a student record.
+   * Deletes a student record while preserving financial transaction ledger immutability.
    */
   async deleteStudent(id: string) {
-    await this.getStudentById(id);
+    const student = await this.getStudentById(id);
+
+    // Unlink transaction foreign keys to preserve immutable financial audit logs
+    const feeIds = student.feeRecords?.map((f: any) => f.id) || [];
+    if (feeIds.length > 0) {
+      await prisma.transaction.updateMany({
+        where: { relatedFeeId: { in: feeIds } },
+        data: { relatedFeeId: null },
+      });
+    }
 
     return prisma.student.delete({
       where: { id },

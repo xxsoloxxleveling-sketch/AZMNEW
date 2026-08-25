@@ -3,8 +3,10 @@ import { Users, UserPlus, Shield, CheckCircle, X, Loader2 } from 'lucide-react';
 import { mockApi, MockUserAccount, Role } from '../../../lib/mockApi';
 import { DataTable, Column } from '../shared/DataTable';
 import { StatusBadge } from '../shared/StatusBadge';
+import { useAuth } from '../../../lib/authContext';
 
 export const UserManagementTab: React.FC = () => {
+  const { isLoading: authLoading } = useAuth();
   const [users, setUsers] = useState<MockUserAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -15,6 +17,7 @@ export const UserManagementTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchUsers = async () => {
+    if (authLoading) return;
     setIsLoading(true);
     setError(null);
     try {
@@ -28,8 +31,10 @@ export const UserManagementTab: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (!authLoading) {
+      fetchUsers();
+    }
+  }, [authLoading]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();

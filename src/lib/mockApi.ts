@@ -504,303 +504,38 @@ export const mockApi = {
   // 3. Students Management
 
   async getStudents(filters?: { classLevel?: string; status?: string; search?: string }): Promise<MockStudent[]> {
-    let serverList: MockStudent[] = [];
-    try {
-      const params = new URLSearchParams();
-      params.append('limit', '500');
-      if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
-      if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
-      if (filters?.search) params.append('search', filters.search);
-      const query = `?${params.toString()}`;
+    const params = new URLSearchParams();
+    params.append('limit', '500');
+    if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
+    if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
+    if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
+    const query = `?${params.toString()}`;
 
-      const res: any = await apiFetch<any>(`/api/students${query}`);
-      const raw = Array.isArray(res) ? res : Array.isArray(res?.students) ? res.students : [];
-      serverList = raw.map((s: any) => ({
-        ...s,
-        rollNumber: s.rollNumber || null,
-        feeStatus: s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : 'UNPAID'),
-        attendancePercentage: s.attendancePercentage ?? 100,
-      }));
-
-      // Cache server records to local storage to keep state fresh across reloads
-      if (serverList.length > 0) {
-        serverList.forEach((s) => {
-          saveLocalStudent(s);
-        });
-      }
-    } catch (err) {
-      console.warn('Live students fetch error:', err);
-    }
-
-    // Merge with local persistent students into a single canonical map
-    const localList = getLocalStudents();
-    const studentMap = new Map<string, MockStudent>();
-
-    // 1. Seed with local
-    localList.forEach((s) => {
-      const k = getCanonicalStudentKey(s);
-      studentMap.set(k, s);
-    });
-
-    // 2. Merge server list with real feeStatus from PostgreSQL
-    serverList.forEach((s) => {
-      const k = getCanonicalStudentKey(s);
-      const existing = studentMap.get(k);
-      const realFeeStatus = s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : existing?.feeStatus || 'UNPAID');
-      const roll = s.rollNumber || existing?.rollNumber || null;
-
-      if (existing) {
-        studentMap.set(k, {
-          ...existing,
-          ...s,
-          id: s.id || existing.id,
-          applicationNo: s.applicationNo || existing.applicationNo,
-          uploadedDocuments: existing.uploadedDocuments || s.uploadedDocuments,
-          academicRecords: s.academicRecords?.length ? s.academicRecords : existing.academicRecords,
-          feeStatus: realFeeStatus,
-          rollNumber: roll,
-          attendancePercentage: s.attendancePercentage ?? existing.attendancePercentage ?? 100,
-        });
-      } else {
-        studentMap.set(k, {
-          ...s,
-          feeStatus: realFeeStatus,
-          rollNumber: roll,
-          attendancePercentage: s.attendancePercentage ?? 100,
-        });
-      }
-    });
-
-    let result = Array.from(studentMap.values()).filter(
-      (s) =>
-        s &&
-        s.fullName &&
-        s.fullName.trim().toLowerCase() !== 'registered candidate' &&
-        s.fullName.trim().toLowerCase() !== 'john doe' &&
-        (s.fatherName || '').trim().toLowerCase() !== 'guardian'
-    );
-
-    if (filters?.search) {
-      const q = filters.search.toLowerCase().trim();
-      const qDigits = filters.search.replace(/\D/g, '');
-      result = result.filter(
-        (s) =>
-          s.fullName.toLowerCase().includes(q) ||
-          s.fatherName.toLowerCase().includes(q) ||
-          (s.applicationNo && s.applicationNo.toLowerCase().includes(q)) ||
-          (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
-          (qDigits.length >= 4 && s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '').includes(qDigits))
-      );
-    }
-
-    if (filters?.classLevel && filters.classLevel !== 'ALL') {
-      result = result.filter((s) => s.currentClass?.includes(filters.classLevel!));
-    }
-
-    if (filters?.status && filters.status !== 'ALL') {
-      result = result.filter((s) => s.status === filters.status);
-    }
-
-    return result;
+    const res: any = await apiFetch<any>(`/api/students${query}`);
+    const raw = Array.isArray(res) ? res : Array.isArray(res?.students) ? res.students : [];
+    return raw.map((s: any) => ({
+      ...s,
+      rollNumber: s.rollNumber || null,
+      feeStatus: s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : 'UNPAID'),
+      attendancePercentage: s.attendancePercentage ?? 100,
+    }));
   },
-
 
   async getStudentById(id: string): Promise<MockStudent> {
-    const local = getLocalStudents().find(
-      (s) =>
-        s.id === id ||
-        s.applicationNo === id ||
-        (s.cnicOrBForm && s.cnicOrBForm.replace(/\D/g, '') === id.replace(/\D/g, ''))
-    );
-    const extraFiles = getUploadedFilesForCandidate([
-      id,
-      local?.applicationNo,
-      local?.cnicOrBForm,
-      local?.fullName,
-    ]);
-
-    const isPaid = (local && isStudentFeePaid(local)) || (local?.feeStatus === 'PAID');
-
-    try {
-      const s: any = await apiFetch<any>(`/api/students/${id}`);
-      return {
-        ...(local || {}),
-        ...s,
-        uploadedDocuments: {
-          ...extraFiles,
-          ...(local?.uploadedDocuments || {}),
-          ...(s.uploadedDocuments || {}),
-        },
-        feeStatus: isPaid ? 'PAID' : (s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : local?.feeStatus || 'UNPAID')),
-        attendancePercentage: s.attendancePercentage ?? 100,
-      };
-    } catch (err) {
-      if (local) {
-        return {
-          ...local,
-          feeStatus: isPaid ? 'PAID' : local.feeStatus || 'UNPAID',
-          uploadedDocuments: {
-            ...extraFiles,
-            ...(local.uploadedDocuments || {}),
-          },
-        };
-      }
-      throw err;
-    }
+    const s: any = await apiFetch<any>(`/api/students/${id}`);
+    return {
+      ...s,
+      feeStatus: s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : 'UNPAID'),
+      attendancePercentage: s.attendancePercentage ?? 100,
+    };
   },
 
-
   async createStudent(studentData: any): Promise<MockStudent> {
-    const rawUploaded = studentData.uploadedDocuments || {};
-
-    // 1. Save uploaded documents in browser local vault
-    if (studentData.uploadedDocuments) {
-      saveUploadedFilesForCandidate(
-        [studentData.cnicOrBForm, studentData.fullName, studentData.id, studentData.applicationNo],
-        studentData.uploadedDocuments
-      );
-    }
-
-    // 2. Prepare sanitized uploadedDocuments without huge base64 strings so network payload is light
-    const sanitizedUploadedDocs: Record<string, any> = {};
-    for (const [key, val] of Object.entries(rawUploaded)) {
-      const item: any = val;
-      if (item) {
-        sanitizedUploadedDocs[key] = {
-          name: item.name,
-          size: item.size,
-          publicUrl: item.publicUrl,
-          supabasePath: item.supabasePath,
-          dataUrl: item.publicUrl || (item.dataUrl && item.dataUrl.length < 500 ? item.dataUrl : undefined),
-          uploadedAt: item.uploadedAt || new Date().toISOString(),
-        };
-      }
-    }
-
-    const { uploadedDocuments, ...cleanData } = studentData;
-    const networkPayload: any = {
-      ...cleanData,
-      photoUrl: cleanData.photoUrl && cleanData.photoUrl.length < 300000 ? cleanData.photoUrl : undefined,
-      uploadedDocuments: Object.keys(sanitizedUploadedDocs).length > 0 ? sanitizedUploadedDocs : undefined,
-    };
-
-    try {
-      const created = await apiFetch<MockStudent>('/api/students/register', {
-        method: 'POST',
-        body: JSON.stringify(networkPayload),
-      });
-
-      const merged: MockStudent = {
-        ...cleanData,
-        ...created,
-        uploadedDocuments: rawUploaded,
-      };
-
-      saveLocalStudent(merged);
-
-      if (Object.keys(rawUploaded).length > 0) {
-        saveUploadedFilesForCandidate(
-          [
-            merged.id,
-            merged.applicationNo,
-            merged.rollNumber,
-            merged.cnicOrBForm,
-            merged.fullName,
-            studentData.cnicOrBForm,
-          ],
-          rawUploaded
-        );
-
-        // Upload attached documents and photo directly to Supabase Storage
-        (async () => {
-          for (const [docKey, docVal] of Object.entries(rawUploaded)) {
-            const item: any = docVal;
-            if (item && item.dataUrl && item.dataUrl.startsWith('data:')) {
-              try {
-                const upRes = await mockApi.uploadStudentDocument({
-                  studentId: merged.id,
-                  applicationNo: merged.applicationNo,
-                  cnicOrBForm: merged.cnicOrBForm,
-                  docType: docKey,
-                  fileName: item.name,
-                  fileData: item.dataUrl,
-                });
-                if (upRes?.publicUrl) {
-                  item.publicUrl = upRes.publicUrl;
-                  item.supabasePath = upRes.path;
-                  saveUploadedFilesForCandidate([merged.id, merged.applicationNo, merged.cnicOrBForm], {
-                    [docKey]: item,
-                  });
-                }
-              } catch (e) {}
-            }
-          }
-        })();
-      }
-
-      return merged;
-    } catch (err: any) {
-      const msg = (err.message || '').toLowerCase();
-      const isRecoverableError =
-        msg.includes('failed to fetch') ||
-        msg.includes('networkerror') ||
-        msg.includes('500') ||
-        msg.includes('502') ||
-        msg.includes('503') ||
-        msg.includes('504') ||
-        msg.includes('413') ||
-        msg.includes('large') ||
-        msg.includes('payload') ||
-        msg.includes('entity') ||
-        msg.includes('unique constraint') ||
-        msg.includes('applicationno') ||
-        msg.includes('prisma');
-
-      if (err.message && !isRecoverableError && !msg.includes('cold start') && !msg.includes('already registered')) {
-        throw err;
-      }
-
-      // Offline / Render backend cold start / Large upload fallback
-      const appNo = `APP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      const fallbackStudent: MockStudent = {
-        id: `std_${Date.now()}`,
-        applicationNo: appNo,
-        studentId: appNo,
-        rollNumber: null,
-        fullName: studentData.fullName,
-        fatherName: studentData.fatherName,
-        gender: studentData.gender,
-        dateOfBirth: String(studentData.dateOfBirth),
-        cnicOrBForm: studentData.cnicOrBForm,
-        address: studentData.address,
-        district: studentData.district,
-        province: studentData.province,
-        parentMobile: studentData.parentMobile,
-        whatsapp: studentData.whatsapp,
-        email: studentData.email,
-        currentClass: studentData.currentClass,
-        schoolName: studentData.schoolName,
-        boardOrUniversity: studentData.boardOrUniversity,
-        scholarshipCategory: studentData.scholarshipCategory,
-        photoUrl: studentData.photoUrl,
-        qrToken: `PENDING-FEE-${appNo}`,
-        status: 'ACTIVE',
-        feeStatus: 'UNPAID',
-        createdAt: new Date().toISOString(),
-        academicRecords: studentData.academicRecords || [],
-        documents: studentData.documents || {},
-        uploadedDocuments: studentData.uploadedDocuments || {},
-      };
-      saveLocalStudent(fallbackStudent);
-      if (studentData.uploadedDocuments) {
-        saveUploadedFilesForCandidate(
-          [fallbackStudent.id, fallbackStudent.applicationNo, fallbackStudent.cnicOrBForm, fallbackStudent.fullName],
-          studentData.uploadedDocuments
-        );
-      }
-      return fallbackStudent;
-    }
+    const created = await apiFetch<MockStudent>('/api/students/register', {
+      method: 'POST',
+      body: JSON.stringify(studentData),
+    });
+    return created;
   },
 
   async uploadStudentDocument(params: {
@@ -812,77 +547,37 @@ export const mockApi = {
     fileData: string;
     contentType?: string;
   }): Promise<{ publicUrl: string; path: string }> {
-    try {
-      const res = await apiFetch<any>('/api/students/upload-document', {
-        method: 'POST',
-        body: JSON.stringify(params),
-      });
-      return res?.data || res;
-    } catch (err) {
-      console.warn(`Supabase Storage upload warning for ${params.docType}:`, err);
-      return { publicUrl: params.fileData, path: '' };
-    }
+    const res = await apiFetch<any>('/api/students/upload-document', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    return res?.data || res;
   },
 
-  async approveStudentPayment(studentId: string, studentObj?: any): Promise<any> {
-    try {
-      const res = await apiFetch<any>(`/api/students/${studentId}/approve-payment`, {
-        method: 'POST',
-      });
-      updateLocalStudentPayment(studentId);
-      return res || { success: true };
-    } catch (err) {
-      console.warn('Backend payment approval error:', err);
-      throw err;
-    }
+  async approveStudentPayment(studentId: string): Promise<{ success: boolean }> {
+    const res = await apiFetch<any>(`/api/students/${studentId}/approve-payment`, {
+      method: 'POST',
+    });
+    return res || { success: true };
   },
 
   async getRollNumberStatus(): Promise<{ readyCount: number; issuedCount: number; totalPaidCount: number; scheduledDate?: string }> {
-    try {
-      const res = await apiFetch<any>('/api/students/roll-number-status');
-      return res?.data || res;
-    } catch (err) {
-      const local = getLocalStudents();
-      const paid = local.filter((s) => s.feeStatus === 'PAID');
-      const ready = paid.filter((s) => !s.rollNumber);
-      const issued = local.filter((s) => !!s.rollNumber);
-      return {
-        readyCount: ready.length,
-        issuedCount: issued.length,
-        totalPaidCount: paid.length,
-        scheduledDate: 'Sunday, 25 October 2026',
-      };
-    }
+    const res = await apiFetch<any>('/api/students/roll-number-status');
+    return res?.data || res;
   },
 
   async issueRollNumbers(scheduledDate?: string): Promise<{ count: number; message: string }> {
-    try {
-      const res = await apiFetch<any>('/api/students/issue-roll-numbers', {
-        method: 'POST',
-        body: JSON.stringify({ scheduledDate }),
-      });
-      releaseAllPaidRollNumbers();
-      return res?.data || res;
-    } catch (err) {
-      console.warn('Backend batch roll number issuance error:', err);
-      const count = releaseAllPaidRollNumbers();
-      return {
-        count,
-        message: `Issued roll numbers for ${count} eligible candidate(s).`,
-      };
-    }
+    const res = await apiFetch<any>('/api/students/issue-roll-numbers', {
+      method: 'POST',
+      body: JSON.stringify({ scheduledDate }),
+    });
+    return res?.data || res;
   },
 
-
   async deleteStudent(studentId: string): Promise<boolean> {
-    try {
-      await apiFetch<any>(`/api/students/${studentId}`, {
-        method: 'DELETE',
-      });
-    } catch (err) {
-      console.warn('Backend student deletion notice:', err);
-    }
-    deleteLocalStudent(studentId);
+    await apiFetch<any>(`/api/students/${studentId}`, {
+      method: 'DELETE',
+    });
     return true;
   },
 

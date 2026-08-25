@@ -16,8 +16,10 @@ import {
   X,
 } from 'lucide-react';
 import { mockApi, MockTestCenter } from '../../../lib/mockApi';
+import { useAuth } from '../../../lib/authContext';
 
 export const TestCentersTab: React.FC = () => {
+  const { isLoading: authLoading } = useAuth();
   const [centers, setCenters] = useState<MockTestCenter[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -40,14 +42,20 @@ export const TestCentersTab: React.FC = () => {
   });
 
   useEffect(() => {
-    loadCenters();
-  }, []);
+    if (!authLoading) {
+      loadCenters();
+    }
+  }, [authLoading]);
 
   const loadCenters = async () => {
+    if (authLoading) return;
     setIsLoading(true);
-    const data = await mockApi.getTestCenters();
-    setCenters(data);
-    setIsLoading(false);
+    try {
+      const data = await mockApi.getTestCenters();
+      setCenters(data);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleOpenAdd = () => {

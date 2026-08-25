@@ -19,8 +19,10 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { mockApi, MockStudentDocument } from '../../../lib/mockApi';
+import { useAuth } from '../../../lib/authContext';
 
 export const DocumentVaultView: React.FC = () => {
+  const { isLoading: authLoading } = useAuth();
   const [documents, setDocuments] = useState<MockStudentDocument[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -29,14 +31,20 @@ export const DocumentVaultView: React.FC = () => {
   const [selectedDoc, setSelectedDoc] = useState<MockStudentDocument | null>(null);
 
   useEffect(() => {
-    loadDocuments();
-  }, []);
+    if (!authLoading) {
+      loadDocuments();
+    }
+  }, [authLoading]);
 
   const loadDocuments = async () => {
+    if (authLoading) return;
     setIsLoading(true);
-    const docs = await mockApi.getStudentDocuments();
-    setDocuments(docs);
-    setIsLoading(false);
+    try {
+      const docs = await mockApi.getStudentDocuments();
+      setDocuments(docs);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleUpdateStatus = async (

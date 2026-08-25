@@ -11,13 +11,16 @@ import {
 import { DataTable, Column } from '../shared/DataTable';
 import { StatCard } from '../shared/StatCard';
 import { mockApi, MockTransaction } from '../../../lib/mockApi';
+import { useAuth } from '../../../lib/authContext';
 
 export const TransactionsListView: React.FC = () => {
+  const { isLoading: authLoading } = useAuth();
   const [transactions, setTransactions] = useState<MockTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState('ALL');
 
   const fetchTransactions = async () => {
+    if (authLoading) return;
     setIsLoading(true);
     try {
       const data = await mockApi.getTransactions(typeFilter);
@@ -28,8 +31,10 @@ export const TransactionsListView: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchTransactions();
-  }, [typeFilter]);
+    if (!authLoading) {
+      fetchTransactions();
+    }
+  }, [authLoading, typeFilter]);
 
   const totalFeeIncome = transactions
     .filter((t) => t.type === 'FEE_INCOME')

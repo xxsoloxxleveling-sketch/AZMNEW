@@ -13,14 +13,17 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { StatCard } from '../shared/StatCard';
 import { mockApi, MockPayrollRecord } from '../../../lib/mockApi';
 import { RunPayrollModal } from './RunPayrollModal';
+import { useAuth } from '../../../lib/authContext';
 
 export const PayrollListView: React.FC = () => {
+  const { isLoading: authLoading } = useAuth();
   const [payrollList, setPayrollList] = useState<MockPayrollRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
   const [monthFilter, setMonthFilter] = useState('2026-08');
 
   const fetchPayroll = async () => {
+    if (authLoading) return;
     setIsLoading(true);
     try {
       const data = await mockApi.getPayroll(monthFilter !== 'ALL' ? monthFilter : undefined);
@@ -31,8 +34,10 @@ export const PayrollListView: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchPayroll();
-  }, [monthFilter]);
+    if (!authLoading) {
+      fetchPayroll();
+    }
+  }, [authLoading, monthFilter]);
 
   const handleMarkPaid = async (record: MockPayrollRecord) => {
     try {

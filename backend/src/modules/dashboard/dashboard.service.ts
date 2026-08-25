@@ -99,6 +99,7 @@ export class DashboardService {
 
     // 5. Financial Flow (Transactions for Current Month)
     const allTransactions = await prisma.transaction.findMany();
+    const activeFeeIdSet = new Set(allFeeRecords.map((f) => f.id));
 
     let monthFeeIncome = 0;
     let monthSalaryExpense = 0;
@@ -108,7 +109,10 @@ export class DashboardService {
     for (const tx of allTransactions) {
       const txAmount = Number(tx.amount || 0);
       if (tx.type === TransactionType.FEE_INCOME) {
-        monthFeeIncome += txAmount;
+        // Only count fee income if it is not linked to a deleted fee record
+        if (!tx.relatedFeeId || activeFeeIdSet.has(tx.relatedFeeId)) {
+          monthFeeIncome += txAmount;
+        }
       } else if (tx.type === TransactionType.SALARY_EXPENSE) {
         monthSalaryExpense += txAmount;
       } else if (tx.type === TransactionType.OTHER_INCOME) {

@@ -10,8 +10,10 @@ import {
 import { DataTable, Column } from '../shared/DataTable';
 import { StatusBadge } from '../shared/StatusBadge';
 import { mockApi, MockStudent, MockAttendance } from '../../../lib/mockApi';
+import { useAuth } from '../../../lib/authContext';
 
 export const ManualAttendanceTab: React.FC = () => {
+  const { isLoading: authLoading } = useAuth();
   const [students, setStudents] = useState<MockStudent[]>([]);
   const [todayData, setTodayData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,6 +22,7 @@ export const ManualAttendanceTab: React.FC = () => {
   const [statusToMark, setStatusToMark] = useState<'PRESENT' | 'LATE' | 'ABSENT'>('PRESENT');
 
   const fetchData = async () => {
+    if (authLoading) return;
     setIsLoading(true);
     try {
       const [stList, attData] = await Promise.all([
@@ -34,8 +37,10 @@ export const ManualAttendanceTab: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (!authLoading) {
+      fetchData();
+    }
+  }, [authLoading]);
 
   const handleMarkManual = async (student: MockStudent, status: 'PRESENT' | 'LATE' | 'ABSENT') => {
     try {

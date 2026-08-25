@@ -25,6 +25,7 @@ import {
   Edit3,
 } from 'lucide-react';
 import { mockApi, MockStudent, MockTestCenter } from '../../../lib/mockApi';
+import { useAuth } from '../../../lib/authContext';
 
 export interface ExamHall {
   id: string;
@@ -159,11 +160,16 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
     centerName: 'Main Campus Examination Center, Mansehra',
   });
 
+  const { isLoading: authLoading } = useAuth();
+
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!authLoading) {
+      loadData();
+    }
+  }, [authLoading]);
 
   const loadData = async () => {
+    if (authLoading) return;
     setIsLoading(true);
     const [stData, tcData, hallsData] = await Promise.all([
       mockApi.getStudents().catch(() => []),

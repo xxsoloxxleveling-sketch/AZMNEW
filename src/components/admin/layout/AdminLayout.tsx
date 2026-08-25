@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { AdminSidebar, AdminTab } from './AdminSidebar';
 import { AdminHeader } from './AdminHeader';
+import { useAuth } from '../../../lib/authContext';
+import { Loader2 } from 'lucide-react';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -27,7 +29,19 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   headerActions,
   onNavigatePublic,
 }) => {
+  const { isLoading: authLoading } = useAuth();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-3">
+        <Loader2 className="w-8 h-8 text-[#185b9d] animate-spin" />
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Initializing administrative credentials & security session...
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex text-slate-900 font-sans">

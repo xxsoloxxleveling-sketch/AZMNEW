@@ -15,8 +15,10 @@ import { StatCard } from '../shared/StatCard';
 import { mockApi, MockFeeChallan, MockStudent } from '../../../lib/mockApi';
 import { GenerateChallanModal } from './GenerateChallanModal';
 import { MarkFeePaidModal } from './MarkFeePaidModal';
+import { useAuth } from '../../../lib/authContext';
 
 export const FeesListView: React.FC = () => {
+  const { isLoading: authLoading } = useAuth();
   const [fees, setFees] = useState<MockFeeChallan[]>([]);
   const [students, setStudents] = useState<MockStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,6 +29,7 @@ export const FeesListView: React.FC = () => {
   const [monthFilter, setMonthFilter] = useState('ALL');
 
   const fetchData = async () => {
+    if (authLoading) return;
     setIsLoading(true);
     try {
       const [feeList, stList] = await Promise.all([
@@ -41,8 +44,10 @@ export const FeesListView: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [statusFilter, monthFilter]);
+    if (!authLoading) {
+      fetchData();
+    }
+  }, [authLoading, statusFilter, monthFilter]);
 
   const totalBilled = fees.reduce((sum, f) => sum + (Number(f.amountDue) || 0), 0);
   const totalCollected = fees.reduce((sum, f) => sum + (Number(f.amountPaid) || 0), 0);

@@ -22,10 +22,11 @@ import { StudentDetailView } from './StudentDetailView';
 import { useAuth } from '../../../lib/authContext';
 
 export const StudentsListView: React.FC = () => {
-  const { role } = useAuth();
+  const { role, isLoading: authLoading } = useAuth();
   const [students, setStudents] = useState<MockStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<MockStudent | null>(null);
   const [isWalkInOpen, setIsWalkInOpen] = useState(false);
   const [classFilter, setClassFilter] = useState('ALL');
@@ -37,8 +38,10 @@ export const StudentsListView: React.FC = () => {
   const [isIssuingBatch, setIsIssuingBatch] = useState(false);
 
   const fetchStudents = async (showFullLoading = true) => {
+    if (authLoading) return;
     if (showFullLoading) setIsLoading(true);
     setIsRefreshing(true);
+    setErrorMessage(null);
     try {
       const [data, statusData] = await Promise.all([
         mockApi.getStudents({
@@ -49,8 +52,9 @@ export const StudentsListView: React.FC = () => {
       ]);
       setStudents(Array.isArray(data) ? data : []);
       if (statusData) setRollStatus(statusData);
-    } catch {
-      setStudents([]);
+    } catch (err: any) {
+      console.warn('Students fetch error:', err);
+      setErrorMessage(err?.message || 'Failed to retrieve students from live database.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -58,18 +62,24 @@ export const StudentsListView: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchStudents();
+    if (!authLoading) {
+      fetchStudents();
+    }
 
     // Auto-refresh when tab gains focus or every 10 seconds for real-time registration sync
-    const handleFocus = () => fetchStudents(false);
+    const handleFocus = () => {
+      if (!authLoading) fetchStudents(false);
+    };
     window.addEventListener('focus', handleFocus);
-    const interval = setInterval(() => fetchStudents(false), 10000);
+    const interval = setInterval(() => {
+      if (!authLoading) fetchStudents(false);
+    }, 10000);
 
     return () => {
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);
     };
-  }, [classFilter, statusFilter]);
+  }, [authLoading, classFilter, statusFilter]);
 
   const handleStudentCreated = (newStudent: MockStudent) => {
     setStudents((prev) => [newStudent, ...prev]);
@@ -247,6 +257,22 @@ export const StudentsListView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {errorMessage && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span className="text-xs font-semibold">{errorMessage}</span>
+          </div>
+          <button
+            onClick={() => fetchStudents(true)}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Connection</span>
+          </button>
+        </div>
+      )}
+
       {/* Table Component */}
       <DataTable
         columns={columns}

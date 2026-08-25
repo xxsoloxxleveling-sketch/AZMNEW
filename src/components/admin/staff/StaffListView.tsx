@@ -4,13 +4,16 @@ import { DataTable, Column } from '../shared/DataTable';
 import { StatusBadge } from '../shared/StatusBadge';
 import { mockApi, MockStaff } from '../../../lib/mockApi';
 import { AddEditStaffModal } from './AddEditStaffModal';
+import { useAuth } from '../../../lib/authContext';
 
 export const StaffListView: React.FC = () => {
+  const { isLoading: authLoading } = useAuth();
   const [staffList, setStaffList] = useState<MockStaff[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const fetchStaff = async () => {
+    if (authLoading) return;
     setIsLoading(true);
     try {
       const data = await mockApi.getStaff();
@@ -21,8 +24,10 @@ export const StaffListView: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchStaff();
-  }, []);
+    if (!authLoading) {
+      fetchStaff();
+    }
+  }, [authLoading]);
 
   const columns: Column<MockStaff>[] = [
     {
