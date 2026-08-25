@@ -528,37 +528,35 @@ export class StudentsService {
   }
 
   /**
-   * Public Candidate Roll Number Slip search method.
+   * Public Candidate Roll Number Slip search method with exact priority, partial matching, and multi-match safeguards.
    */
   async searchPublicSlip(searchQuery: string) {
-    const clean = searchQuery.trim().toLowerCase();
-    const cleanDigits = searchQuery.replace(/\D/g, '');
+    const rawQuery = searchQuery.trim();
+    const clean = rawQuery.toLowerCase();
+    const cleanDigits = rawQuery.replace(/\D/g, '');
 
-    if (!clean && cleanDigits.length < 5) {
+    if (!clean || (clean.length < 3 && cleanDigits.length < 3)) {
       return {
         success: false,
-        error: 'Please provide a valid Roll Number, CNIC / B-Form, or Application ID.',
+        error: 'Please enter at least 3 characters or digits (e.g. 0002, CNIC, or Roll Number) to search.',
       };
     }
 
-    const orClauses: any[] = [
-      { applicationNo: { equals: clean, mode: 'insensitive' } },
+    // Step 1: Attempt exact match first
+    const exactClauses: any[] = [
       { rollNumber: { equals: clean, mode: 'insensitive' } },
-      { id: { equals: clean } },
+      { applicationNo: { equals: clean, mode: 'insensitive' } },
+      { id: { equals: rawQuery } },
+      { cnicOrBForm: { equals: clean, mode: 'insensitive' } },
     ];
 
-    if (cleanDigits.length >= 5) {
-      orClauses.push({ cnicOrBForm: { contains: cleanDigits, mode: 'insensitive' } });
-      orClauses.push({ cnicOrBForm: { contains: clean, mode: 'insensitive' } });
+    if (cleanDigits.length >= 11) {
+      exactClauses.push({ cnicOrBForm: { equals: cleanDigits } });
     }
 
-    if (clean.length >= 3) {
-      orClauses.push({ fullName: { equals: clean, mode: 'insensitive' } });
-    }
-
-    const student = await prisma.student.findFirst({
+    let student = await prisma.student.findFirst({
       where: {
-        OR: orClauses,
+        OR: exactClauses,
       },
       include: {
         feeRecords: true,
@@ -567,10 +565,58 @@ export class StudentsService {
       },
     });
 
+    // Step 2: If no exact match, perform safe partial matching
+    if (!student) {
+      const partialClauses: any[] = [
+        { rollNumber: { contains: clean, mode: 'insensitive' } },
+        { applicationNo: { contains: clean, mode: 'insensitive' } },
+        { cnicOrBForm: { contains: clean, mode: 'insensitive' } },
+      ];
+
+      if (cleanDigits.length >= 3) {
+        partialClauses.push({ rollNumber: { contains: cleanDigits, mode: 'insensitive' } });
+        partialClauses.push({ applicationNo: { contains: cleanDigits, mode: 'insensitive' } });
+        partialClauses.push({ cnicOrBForm: { contains: cleanDigits, mode: 'insensitive' } });
+      }
+
+      if (clean.length >= 3) {
+        partialClauses.push({ fullName: { contains: clean, mode: 'insensitive' } });
+      }
+
+      const matchingStudents = await prisma.student.findMany({
+        where: {
+          OR: partialClauses,
+        },
+        include: {
+          feeRecords: true,
+          officeUse: true,
+          documents: true,
+        },
+        take: 5,
+      });
+
+      if (matchingStudents.length === 0) {
+        return {
+          success: false,
+          error: `No matching candidate record found in examination registry for "${rawQuery}".`,
+        };
+      }
+
+      // Safeguard: Multiple matches requires user to be more specific
+      if (matchingStudents.length > 1) {
+        return {
+          success: false,
+          error: `Multiple records match "${rawQuery}". To protect candidate privacy, please enter your full Roll Number (e.g. AZMVS-2026-0002), 13-digit CNIC, or Application ID.`,
+        };
+      }
+
+      student = matchingStudents[0];
+    }
+
     if (!student) {
       return {
         success: false,
-        error: 'No matching candidate record found in examination registry.',
+        error: `No matching candidate record found in examination registry for "${rawQuery}".`,
       };
     }
 

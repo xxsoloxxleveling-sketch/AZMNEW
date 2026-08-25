@@ -45,8 +45,8 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
   const clean = query.trim();
   const cleanDigits = query.replace(/\D/g, '');
 
-  if (!clean && cleanDigits.length < 5) {
-    return { success: false, error: 'Please provide a valid Roll Number, CNIC / B-Form, or Application ID.' };
+  if (!clean || (clean.length < 3 && cleanDigits.length < 3)) {
+    return { success: false, error: 'Please enter at least 3 characters or digits (e.g. 0002, CNIC, or Roll Number) to search.' };
   }
 
   try {
@@ -67,17 +67,38 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
 
     const cleanLower = clean.toLowerCase();
 
-    // Match by rollNumber, applicationNo, CNIC, or ID
-    const student = students.find((s: any) => {
-      const matchRoll = s.rollNumber && (s.rollNumber.toLowerCase() === cleanLower || s.rollNumber.toLowerCase().includes(cleanLower));
-      const matchApp = s.applicationNo && (s.applicationNo.toLowerCase() === cleanLower || s.applicationNo.toLowerCase().includes(cleanLower));
+    // 1. Attempt exact match
+    let student = students.find((s: any) => {
+      const matchRoll = s.rollNumber && s.rollNumber.toLowerCase() === cleanLower;
+      const matchApp = s.applicationNo && s.applicationNo.toLowerCase() === cleanLower;
       const matchId = s.id && s.id.toLowerCase() === cleanLower;
       const sDigits = s.cnicOrBForm ? s.cnicOrBForm.replace(/\D/g, '') : '';
-      const matchCnic = cleanDigits.length >= 5 && sDigits && (sDigits === cleanDigits || sDigits.includes(cleanDigits));
-      const matchName = s.fullName && s.fullName.toLowerCase() === cleanLower;
-
-      return matchRoll || matchApp || matchId || matchCnic || matchName;
+      const matchCnic = (s.cnicOrBForm && s.cnicOrBForm.toLowerCase() === cleanLower) || (cleanDigits.length >= 11 && sDigits === cleanDigits);
+      return matchRoll || matchApp || matchId || matchCnic;
     });
+
+    // 2. Attempt partial match if no exact match
+    if (!student) {
+      const partialMatches = students.filter((s: any) => {
+        const matchRoll = s.rollNumber && s.rollNumber.toLowerCase().includes(cleanLower);
+        const matchApp = s.applicationNo && s.applicationNo.toLowerCase().includes(cleanLower);
+        const sDigits = s.cnicOrBForm ? s.cnicOrBForm.replace(/\D/g, '') : '';
+        const matchCnic = (s.cnicOrBForm && s.cnicOrBForm.toLowerCase().includes(cleanLower)) || (cleanDigits.length >= 3 && sDigits.includes(cleanDigits));
+        const matchName = clean.length >= 3 && s.fullName && s.fullName.toLowerCase().includes(cleanLower);
+        return matchRoll || matchApp || matchCnic || matchName;
+      });
+
+      if (partialMatches.length > 1) {
+        return {
+          success: false,
+          error: `Multiple records match "${clean}". To protect candidate privacy, please enter your full Roll Number (e.g. AZMVS-2026-0002), 13-digit CNIC, or Application ID.`
+        };
+      }
+
+      if (partialMatches.length === 1) {
+        student = partialMatches[0];
+      }
+    }
 
     if (student) {
       // Check if fee is paid or roll number issued
