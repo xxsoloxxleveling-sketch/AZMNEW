@@ -19,38 +19,28 @@ interface HeroSectionProps {
   language?: 'en' | 'ur';
 }
 
+const REGISTRATION_DEADLINE = new Date('2026-08-30T23:59:59+05:00').getTime();
+
+const getCountdown = () => {
+  const diff = Math.max(0, REGISTRATION_DEADLINE - Date.now());
+  return {
+    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+    minutes: Math.floor((diff / (1000 * 60)) % 60),
+    seconds: Math.floor((diff / 1000) % 60)
+  };
+};
+
 // Memoized isolated countdown timer component so timer ticks do NOT re-render HeroSection
 const HeroCountdown: React.FC = React.memo(() => {
-  const [timeLeft, setTimeLeft] = useState({
-    days: 6,
-    hours: 21,
-    minutes: 48,
-    seconds: 15
-  });
+  const [timeLeft, setTimeLeft] = useState(getCountdown);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-    const startTimer = setTimeout(() => {
-      timer = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev.seconds > 0) {
-            return { ...prev, seconds: prev.seconds - 1 };
-          } else if (prev.minutes > 0) {
-            return { ...prev, minutes: 59, seconds: 59 };
-          } else if (prev.hours > 0) {
-            return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-          } else if (prev.days > 0) {
-            return { ...prev, days: prev.days - 1, hours: 23, minutes: 59, seconds: 59 };
-          }
-          return prev;
-        });
-      }, 1000);
-    }, 3500);
+    const timer = setInterval(() => {
+      setTimeLeft(getCountdown());
+    }, 1000);
 
-    return () => {
-      clearTimeout(startTimer);
-      if (timer) clearInterval(timer);
-    };
+    return () => clearInterval(timer);
   }, []);
 
   return (
