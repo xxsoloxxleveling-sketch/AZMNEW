@@ -20,12 +20,20 @@ export const documentChecklistSchema = z.object({
   otherDocuments: z.string().optional().nullable(),
 });
 
+export const safeDateTransform = (val: any) => {
+  if (!val) return undefined;
+  if (typeof val === 'string' && (val.startsWith('data:') || val.length > 50)) {
+    return undefined;
+  }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? undefined : d;
+};
+
 export const officeUseUpdateSchema = z.object({
   documentVerifiedBy: z.string().optional(),
   documentVerifiedAt: z
-    .string()
-    .or(z.date())
-    .transform((v) => new Date(v))
+    .union([z.string(), z.date(), z.null(), z.undefined()])
+    .transform(safeDateTransform)
     .optional(),
   eligibility: z.nativeEnum(EligibilityStatus).optional(),
   eligibilityRemarks: z.string().optional(),
@@ -33,14 +41,12 @@ export const officeUseUpdateSchema = z.object({
   testCentre: z.string().optional(),
   testReportingTime: z.string().optional(),
   testDate: z
-    .string()
-    .or(z.date())
-    .transform((v) => new Date(v))
+    .union([z.string(), z.date(), z.null(), z.undefined()])
+    .transform(safeDateTransform)
     .optional(),
   interviewDate: z
-    .string()
-    .or(z.date())
-    .transform((v) => new Date(v))
+    .union([z.string(), z.date(), z.null(), z.undefined()])
+    .transform(safeDateTransform)
     .optional(),
   interviewTime: z.string().optional(),
   panelNo: z.string().optional(),
@@ -58,9 +64,12 @@ export const createStudentSchema = z.object({
     .transform((val) => (String(val).toUpperCase() === 'FEMALE' ? Gender.FEMALE : Gender.MALE))
     .default(Gender.MALE),
   dateOfBirth: z
-    .string()
-    .or(z.date())
-    .transform((val) => new Date(val)),
+    .union([z.string(), z.date(), z.null(), z.undefined()])
+    .transform((val) => {
+      const d = safeDateTransform(val);
+      return d || new Date('2008-01-01');
+    })
+    .default(new Date('2008-01-01')),
   age: z.union([z.number(), z.string().transform((v) => parseInt(v, 10) || undefined)]).optional(),
   cnicOrBForm: z
     .string()
@@ -106,17 +115,17 @@ export const createStudentSchema = z.object({
   emergencyContact: z.string().min(1, 'Emergency contact is required'),
   emergencyRelation: z.string().default('Guardian'),
 
-  // Part F: Declaration Dates
+  // Part F: Declaration Dates & Signatures
   applicantSignedAt: z
-    .string()
-    .or(z.date())
-    .transform((v) => new Date(v))
+    .union([z.string(), z.date(), z.null(), z.undefined()])
+    .transform(safeDateTransform)
     .optional(),
   parentSignedAt: z
-    .string()
-    .or(z.date())
-    .transform((v) => new Date(v))
+    .union([z.string(), z.date(), z.null(), z.undefined()])
+    .transform(safeDateTransform)
     .optional(),
+  signatureDataUrl: z.string().optional().nullable(),
+  signature: z.string().optional().nullable(),
 
   // Part I: Referral Source
   referralSource: z.string().optional().nullable(),

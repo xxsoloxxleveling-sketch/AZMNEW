@@ -695,9 +695,18 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
+          signature: formData.signatureDataUrl
+            ? {
+                name: 'Applicant_Digital_Signature.png',
+                size: '25 KB',
+                dataUrl: formData.signatureDataUrl,
+                uploadedAt: new Date().toISOString(),
+              }
+            : undefined,
         },
+        signatureDataUrl: formData.signatureDataUrl || undefined,
+        applicantSignedAt: new Date().toISOString(),
       };
-
 
       const student = await mockApi.createStudent(backendPayload);
 

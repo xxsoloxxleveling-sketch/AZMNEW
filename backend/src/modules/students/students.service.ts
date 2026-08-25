@@ -189,13 +189,35 @@ export class StudentsService {
       throw error;
     }
 
-    const { academicRecords, documents, photoUrl: inputPhotoUrl, uploadedDocuments, ...baseData } = input;
-    const rawDob = baseData.dateOfBirth ? new Date(baseData.dateOfBirth) : new Date();
+    const {
+      academicRecords,
+      documents,
+      photoUrl: inputPhotoUrl,
+      uploadedDocuments,
+      signatureDataUrl,
+      signature,
+      ...baseData
+    } = input as any;
+
+    const rawDob =
+      baseData.dateOfBirth && !isNaN(new Date(baseData.dateOfBirth).getTime())
+        ? new Date(baseData.dateOfBirth)
+        : new Date('2008-01-01');
 
     // Auto-discover pre-uploaded files in Supabase Storage under CNIC folder
     const cnicFolder = input.cnicOrBForm.replace(/[^\w-]/g, '_');
     const resolvedDocs: Record<string, any> = uploadedDocuments ? { ...uploadedDocuments } : {};
     let photoUrl = inputPhotoUrl;
+
+    const sigData = signatureDataUrl || signature || (uploadedDocuments as any)?.signature?.dataUrl;
+    if (sigData && !resolvedDocs['signature']) {
+      resolvedDocs['signature'] = {
+        name: `${input.fullName}_Digital_Signature.png`,
+        size: 'Digital Pad Attached',
+        dataUrl: sigData,
+        uploadedAt: new Date().toISOString(),
+      };
+    }
 
     try {
       // 1. Check student-photos under CNIC folder
