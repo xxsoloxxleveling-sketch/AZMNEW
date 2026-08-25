@@ -550,7 +550,14 @@ export class StudentsService {
       { cnicOrBForm: { equals: clean, mode: 'insensitive' } },
     ];
 
-    if (cleanDigits.length >= 11) {
+    const formattedCnic =
+      cleanDigits.length === 13
+        ? `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 12)}-${cleanDigits.slice(12)}`
+        : null;
+
+    if (formattedCnic) {
+      exactClauses.push({ cnicOrBForm: { equals: formattedCnic, mode: 'insensitive' } });
+    } else if (cleanDigits.length >= 11) {
       exactClauses.push({ cnicOrBForm: { equals: cleanDigits } });
     }
 
@@ -572,6 +579,10 @@ export class StudentsService {
         { applicationNo: { contains: clean, mode: 'insensitive' } },
         { cnicOrBForm: { contains: clean, mode: 'insensitive' } },
       ];
+
+      if (formattedCnic) {
+        partialClauses.push({ cnicOrBForm: { contains: formattedCnic, mode: 'insensitive' } });
+      }
 
       if (cleanDigits.length >= 3) {
         partialClauses.push({ rollNumber: { contains: cleanDigits, mode: 'insensitive' } });

@@ -67,13 +67,21 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
 
     const cleanLower = clean.toLowerCase();
 
+    const formattedCnic =
+      cleanDigits.length === 13
+        ? `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 12)}-${cleanDigits.slice(12)}`
+        : null;
+
     // 1. Attempt exact match
     let student = students.find((s: any) => {
       const matchRoll = s.rollNumber && s.rollNumber.toLowerCase() === cleanLower;
       const matchApp = s.applicationNo && s.applicationNo.toLowerCase() === cleanLower;
       const matchId = s.id && s.id.toLowerCase() === cleanLower;
       const sDigits = s.cnicOrBForm ? s.cnicOrBForm.replace(/\D/g, '') : '';
-      const matchCnic = (s.cnicOrBForm && s.cnicOrBForm.toLowerCase() === cleanLower) || (cleanDigits.length >= 11 && sDigits === cleanDigits);
+      const matchCnic =
+        (s.cnicOrBForm && s.cnicOrBForm.toLowerCase() === cleanLower) ||
+        (formattedCnic && s.cnicOrBForm && s.cnicOrBForm.toLowerCase() === formattedCnic.toLowerCase()) ||
+        (cleanDigits.length >= 11 && sDigits === cleanDigits);
       return matchRoll || matchApp || matchId || matchCnic;
     });
 
@@ -83,7 +91,10 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
         const matchRoll = s.rollNumber && s.rollNumber.toLowerCase().includes(cleanLower);
         const matchApp = s.applicationNo && s.applicationNo.toLowerCase().includes(cleanLower);
         const sDigits = s.cnicOrBForm ? s.cnicOrBForm.replace(/\D/g, '') : '';
-        const matchCnic = (s.cnicOrBForm && s.cnicOrBForm.toLowerCase().includes(cleanLower)) || (cleanDigits.length >= 3 && sDigits.includes(cleanDigits));
+        const matchCnic =
+          (s.cnicOrBForm && s.cnicOrBForm.toLowerCase().includes(cleanLower)) ||
+          (formattedCnic && s.cnicOrBForm && s.cnicOrBForm.toLowerCase().includes(formattedCnic.toLowerCase())) ||
+          (cleanDigits.length >= 3 && sDigits.includes(cleanDigits));
         const matchName = clean.length >= 3 && s.fullName && s.fullName.toLowerCase().includes(cleanLower);
         return matchRoll || matchApp || matchCnic || matchName;
       });
