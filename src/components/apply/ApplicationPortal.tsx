@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StudentApplicationData, PartnerSchoolData, PageTab } from '../../types';
 import { MONTHLY_ASSISTANCE_RATES, BENEFICIARY_CATEGORIES, OFFICIAL_DATA } from '../../data/scholarshipData';
-import { mockApi, saveUploadedFilesForCandidate, printStudentDossier } from '../../lib/mockApi';
+import { mockApi, printStudentDossier } from '../../lib/mockApi';
 import { CandidateSlipRetrievalCard } from './CandidateSlipRetrievalCard';
 import { 
 
@@ -436,14 +436,6 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         ...prev,
         photoUrl: dataUrl,
       }));
-      saveUploadedFilesForCandidate([formData.cnicBForm, formData.fullName], {
-        photo: {
-          name: file.name || 'Candidate_Passport_Photo.jpg',
-          size: sizeFormatted,
-          dataUrl,
-          uploadedAt: new Date().toISOString(),
-        },
-      });
 
       // Upload directly to Supabase Storage
       mockApi.uploadStudentDocument({
@@ -454,15 +446,6 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       }).then((upRes) => {
         if (upRes?.publicUrl) {
           setFormData((prev) => ({ ...prev, photoUrl: upRes.publicUrl }));
-          saveUploadedFilesForCandidate([formData.cnicBForm, formData.fullName], {
-            photo: {
-              name: file.name || 'Candidate_Passport_Photo.jpg',
-              size: sizeFormatted,
-              dataUrl: upRes.publicUrl,
-              publicUrl: upRes.publicUrl,
-              uploadedAt: new Date().toISOString(),
-            },
-          });
         }
       }).catch(() => {});
     } catch (err) {
@@ -539,15 +522,6 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           ? 'paymentReceipt'
           : docKey;
 
-      saveUploadedFilesForCandidate([formData.cnicBForm, formData.fullName], {
-        [targetField]: {
-          name: standardDocName,
-          size: sizeFormatted,
-          dataUrl,
-          uploadedAt: new Date().toISOString(),
-        },
-      });
-
       // Upload directly to Supabase Storage
       mockApi.uploadStudentDocument({
         cnicOrBForm: formData.cnicBForm || 'TEMP_CANDIDATE',
@@ -565,15 +539,6 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
               publicUrl: upRes.publicUrl,
             },
           }));
-          saveUploadedFilesForCandidate([formData.cnicBForm, formData.fullName], {
-            [targetField]: {
-              name: standardDocName,
-              size: sizeFormatted,
-              dataUrl: upRes.publicUrl,
-              publicUrl: upRes.publicUrl,
-              uploadedAt: new Date().toISOString(),
-            },
-          });
         }
       }).catch(() => {});
     } catch (err) {
@@ -735,11 +700,6 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
 
       const student = await mockApi.createStudent(backendPayload);
-
-      saveUploadedFilesForCandidate(
-        [formData.cnicBForm, formData.fullName, student.id, student.applicationNo],
-        backendPayload.uploadedDocuments
-      );
 
       setCreatedStudent(student);
 

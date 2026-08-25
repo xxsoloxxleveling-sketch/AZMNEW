@@ -313,6 +313,8 @@ export function getCanonicalStudentKey(s: {
   return s.id ? s.id.trim().toLowerCase() : `STD_${Math.random()}`;
 }
 
+export function saveUploadedFilesForCandidate(_keys?: any, _files?: any): void {}
+
 export interface RollNumberReleaseConfig {
   isScheduled: boolean; // true = schedule on/after releaseDateTime; false = immediate on payment approval
   releaseDateTime: string; // ISO string e.g. "2026-10-15T09:00:00"
@@ -1347,12 +1349,6 @@ export const mockApi = {
 
   // 11. Document Storage Vault & Student Document Inspector
   async getStudentDocuments(studentId?: string): Promise<MockStudentDocument[]> {
-    let savedDocs: MockStudentDocument[] = [];
-    try {
-      const raw = localStorage.getItem(DOCUMENTS_STORAGE_KEY);
-      if (raw) savedDocs = JSON.parse(raw);
-    } catch (e) {}
-
     const students = await this.getStudents();
     const docMap = new Map<string, MockStudentDocument>();
 
@@ -1368,33 +1364,18 @@ export const mockApi = {
 
       if (!matches) return;
 
-      const localCandidate = getLocalStudents().find(
-        (l) =>
-          l.id === s.id ||
-          l.applicationNo === s.applicationNo ||
-          (l.cnicOrBForm && l.cnicOrBForm.replace(/\D/g, '') === s.cnicOrBForm?.replace(/\D/g, ''))
-      );
-
-      const localFiles = getUploadedFilesForCandidate([
-        s.id,
-        s.applicationNo,
-        s.rollNumber,
-        s.cnicOrBForm,
-        s.fullName,
-        localCandidate?.id,
-        localCandidate?.applicationNo,
-        localCandidate?.cnicOrBForm,
-      ]);
-
-      const up = {
-        ...localFiles,
-        ...(localCandidate?.uploadedDocuments || {}),
-        ...(s.uploadedDocuments || {}),
-      };
-
+      const up = s.uploadedDocuments || {};
       const candKey = s.applicationNo || s.id;
+      const officeUse = (s as any).officeUse;
+      const docStatus: 'VERIFIED' | 'PENDING_REVIEW' | 'REJECTED' =
+        officeUse?.eligibility === 'ELIGIBLE'
+          ? 'VERIFIED'
+          : officeUse?.eligibility === 'NOT_ELIGIBLE'
+          ? 'REJECTED'
+          : 'PENDING_REVIEW';
+      const rejectionReason = officeUse?.eligibilityRemarks;
 
-      // 1. Candidate Photo (Only if actually uploaded or photoUrl exists)
+      // 1. Candidate Photo
       const photoFile = up.photo;
       const photoUrl =
         photoFile?.publicUrl ||
@@ -1416,11 +1397,12 @@ export const mockApi = {
           fileSize: photoFile?.size || 'Candidate Photo',
           fileType: 'image/jpeg',
           uploadedAt: photoFile?.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'PENDING_REVIEW',
+          status: docStatus,
+          rejectionReason,
         });
       }
 
-      // 2. CNIC / B-Form Document (ONLY IF ACTUALLY UPLOADED)
+      // 2. CNIC / B-Form Document
       const bformFile = up.bform || up.bformUploaded || up.cnic || up.candidateCnic;
       if (bformFile && (bformFile.dataUrl || bformFile.publicUrl || bformFile.fileUrl)) {
         const bformUrl = bformFile.publicUrl || bformFile.dataUrl || bformFile.fileUrl;
@@ -1437,11 +1419,12 @@ export const mockApi = {
           fileSize: bformFile.size || 'Candidate Attachment',
           fileType: bformUrl.includes('application/pdf') || bformFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
           uploadedAt: bformFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'PENDING_REVIEW',
+          status: docStatus,
+          rejectionReason,
         });
       }
 
-      // 3. Father / Guardian CNIC (ONLY IF ACTUALLY UPLOADED)
+      // 3. Father / Guardian CNIC
       const fatherCnicFile = up.fatherCnic || up.fatherCnicUploaded || up.fcnic;
       if (fatherCnicFile && (fatherCnicFile.dataUrl || fatherCnicFile.publicUrl || fatherCnicFile.fileUrl)) {
         const fatherCnicUrl = fatherCnicFile.publicUrl || fatherCnicFile.dataUrl || fatherCnicFile.fileUrl;
@@ -1458,11 +1441,12 @@ export const mockApi = {
           fileSize: fatherCnicFile.size || 'Candidate Attachment',
           fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
           uploadedAt: fatherCnicFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'PENDING_REVIEW',
+          status: docStatus,
+          rejectionReason,
         });
       }
 
-      // 4. Academic Transcript / DMC (ONLY IF ACTUALLY UPLOADED)
+      // 4. Academic Transcript / DMC
       const dmcFile = up.dmc || up.dmcUploaded || up.resultCard || up.previousResult;
       if (dmcFile && (dmcFile.dataUrl || dmcFile.publicUrl || dmcFile.fileUrl)) {
         const dmcUrl = dmcFile.publicUrl || dmcFile.dataUrl || dmcFile.fileUrl;
@@ -1479,11 +1463,12 @@ export const mockApi = {
           fileSize: dmcFile.size || 'Candidate Attachment',
           fileType: dmcUrl.includes('application/pdf') || dmcFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
           uploadedAt: dmcFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'PENDING_REVIEW',
+          status: docStatus,
+          rejectionReason,
         });
       }
 
-      // 5. Payment Deposit Receipt (ONLY IF ACTUALLY UPLOADED)
+      // 5. Payment Deposit Receipt
       const feeFile = up.paymentReceipt || up.incomeCertUploaded || up.receipt || up.challan;
       if (feeFile && (feeFile.dataUrl || feeFile.publicUrl || feeFile.fileUrl)) {
         const feeUrl = feeFile.publicUrl || feeFile.dataUrl || feeFile.fileUrl;
@@ -1500,11 +1485,12 @@ export const mockApi = {
           fileSize: feeFile.size || 'Candidate Attachment',
           fileType: feeUrl.includes('application/pdf') || feeFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
           uploadedAt: feeFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'PENDING_REVIEW',
+          status: docStatus,
+          rejectionReason,
         });
       }
 
-      // 6. Domicile Certificate (ONLY IF ACTUALLY UPLOADED)
+      // 6. Domicile Certificate
       const domicileFile = up.domicile || up.domicileUploaded;
       if (domicileFile && (domicileFile.dataUrl || domicileFile.publicUrl || domicileFile.fileUrl)) {
         const domicileUrl = domicileFile.publicUrl || domicileFile.dataUrl || domicileFile.fileUrl;
@@ -1524,94 +1510,47 @@ export const mockApi = {
               ? 'application/pdf'
               : 'image/jpeg',
           uploadedAt: domicileFile.uploadedAt || s.createdAt || new Date().toISOString(),
-          status: 'PENDING_REVIEW',
+          status: docStatus,
+          rejectionReason,
         });
       }
-
-
     });
 
-    const generatedDocs = Array.from(docMap.values());
-
-    return generatedDocs.map((doc) => {
-      const overridden = savedDocs.find((saved) => saved.id === doc.id);
-      return overridden ? { ...doc, ...overridden } : doc;
-    });
+    return Array.from(docMap.values());
   },
 
-
-
   async updateDocumentStatus(
-    docId: string,
+    _docId: string,
     status: 'VERIFIED' | 'PENDING_REVIEW' | 'REJECTED',
     rejectionReason?: string,
     studentId?: string
   ): Promise<boolean> {
-    try {
-      let savedDocs: MockStudentDocument[] = [];
-      const raw = localStorage.getItem(DOCUMENTS_STORAGE_KEY);
-      if (raw) savedDocs = JSON.parse(raw);
-
-      const idx = savedDocs.findIndex((d) => d.id === docId);
-      if (idx >= 0) {
-        savedDocs[idx].status = status;
-        if (rejectionReason) savedDocs[idx].rejectionReason = rejectionReason;
-      } else {
-        savedDocs.push({
-          id: docId,
-          status,
-          rejectionReason,
-        } as any);
+    if (studentId) {
+      try {
+        await apiFetch(`/api/students/${studentId}/office-use`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            documentVerifiedBy: status === 'VERIFIED' ? 'Admin Reviewer' : undefined,
+            documentVerifiedAt: status === 'VERIFIED' ? new Date().toISOString() : undefined,
+            eligibility: status === 'VERIFIED' ? 'ELIGIBLE' : status === 'REJECTED' ? 'NOT_ELIGIBLE' : undefined,
+            eligibilityRemarks: rejectionReason,
+          }),
+        });
+        return true;
+      } catch (e) {
+        console.warn('Backend office-use document verification sync notice:', e);
+        return false;
       }
-      localStorage.setItem(DOCUMENTS_STORAGE_KEY, JSON.stringify(savedDocs));
-
-      // Persist to backend OfficeUseRecord if studentId provided
-      if (studentId) {
-        try {
-          await apiFetch(`/api/students/${studentId}/office-use`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-              documentVerifiedBy: status === 'VERIFIED' ? 'Admin Reviewer' : undefined,
-              documentVerifiedAt: status === 'VERIFIED' ? new Date().toISOString() : undefined,
-              eligibility: status === 'VERIFIED' ? 'ELIGIBLE' : status === 'REJECTED' ? 'NOT_ELIGIBLE' : undefined,
-              eligibilityRemarks: rejectionReason,
-            }),
-          });
-        } catch (e) {
-          console.warn('Backend office-use document verification sync notice:', e);
-        }
-      }
-
-      return true;
-    } catch (e) {
-      return false;
     }
+    return true;
   },
 
   async purgeAllData(): Promise<boolean> {
     try {
-      // 1. Trigger backend database and storage purge
       await apiFetch('/api/students/purge-all-system-data', { method: 'POST' }).catch((err) => {
         console.warn('Backend purge API notification:', err);
       });
-
-      // 2. Wipe all local storage candidate/attendance/fee caches
-      try {
-        localStorage.removeItem(STUDENTS_STORAGE_KEY);
-        localStorage.removeItem('AZM_STUDENT_APP_V');
-        localStorage.removeItem('AZM_STUDENT_DOCS_V');
-        localStorage.removeItem('AZM_STUDENT_UPLOADED_FILES_V');
-        localStorage.removeItem('AZM_PAID_FEE_KEYS_V');
-        localStorage.removeItem('AZM_STAFF_V');
-        localStorage.removeItem('AZM_PAYROLL_V');
-        localStorage.removeItem('AZM_TRANSACTIONS_V');
-        localStorage.removeItem('AZM_PARTNERS_V');
-        localStorage.removeItem('AZM_HALL_ASSIGNMENTS_V');
-        localStorage.removeItem('AZM_SEAT_ALLOCATIONS_V');
-        localStorage.removeItem('AZM_ATTENDANCE_V');
-        localStorage.removeItem('AZM_ROLL_NUMBER_SCHEDULE_V');
-      } catch (e) {}
-
+      purgeLegacyDataCaches();
       return true;
     } catch (err) {
       console.error('Failed to purge data:', err);
