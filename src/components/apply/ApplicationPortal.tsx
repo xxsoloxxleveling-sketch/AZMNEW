@@ -24,6 +24,8 @@ import {
   validateDependents,
   validateEmergencyContact,
   validateAcademicRecord,
+  validateAcademicRecordsList,
+  validateDocumentFile,
   mapSubmitErrorToFriendlyMessage,
   trimObjectStrings,
 } from '../../utils/formValidation';
@@ -122,6 +124,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const [uploadedDocs, setUploadedDocs] = useState<{
     [key: string]: { name: string; size: string; dataUrl?: string };
   }>({});
+
+  // Multi-file DMC documents state
+  const [dmcFiles, setDmcFiles] = useState<
+    Array<{ id: string; name: string; size: string; dataUrl: string; publicUrl?: string }>
+  >([]);
 
   // Signature canvas ref
   const sigCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -659,6 +666,13 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const validation = validateDocumentFile(file, 5);
+    if (!validation.isValid) {
+      alert(validation.error || 'Invalid file format or size.');
+      e.target.value = '';
+      return;
+    }
+
     try {
       const standardDocName = getFormattedDocName(docKey, file.name);
       const { dataUrl, sizeFormatted } = await compressImageFile(file, 1200, 0.75);
@@ -716,8 +730,106 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     }
   };
 
+  // Multi-File DMC Upload Handler
+  const handleDmcFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const validation = validateDocumentFile(file, 5);
+      if (!validation.isValid) {
+        alert(validation.error || `Invalid file ${file.name}`);
+        continue;
+      }
 
+      try {
+        const cleanName = (formData.fullName || 'Candidate')
+          .trim()
+          .replace(/[^a-zA-Z0-9]/g, '_')
+          .replace(/_+/g, '_');
+        const ext = file.name.split('.').pop() || 'jpg';
+        const dmcIndex = dmcFiles.length + i + 1;
+        const standardDocName = `${cleanName}_DMC_${dmcIndex}.${ext}`;
+
+        let dataUrl: string;
+        let sizeFormatted: string;
+
+        if (file.type.startsWith('image/')) {
+          const comp = await compressImageFile(file, 1200, 0.75);
+          dataUrl = comp.dataUrl;
+          sizeFormatted = comp.sizeFormatted;
+        } else {
+          dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+          sizeFormatted = `${(file.size / 1024).toFixed(0)} KB`;
+        }
+
+        const newDmc = {
+          id: `dmc_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`,
+          name: standardDocName,
+          size: sizeFormatted,
+          dataUrl,
+        };
+
+        setDmcFiles((prev) => [...prev, newDmc]);
+        setFormData((prev) => ({
+          ...prev,
+          documents: {
+            ...prev.documents,
+            dmcUploaded: true,
+          },
+        }));
+
+        setUploadedDocs((prev) => ({
+          ...prev,
+          dmcUploaded: newDmc,
+        }));
+
+        // Upload in background to Supabase
+        mockApi
+          .uploadStudentDocument({
+            cnicOrBForm: formData.cnicBForm || 'TEMP_CANDIDATE',
+            docType: dmcIndex === 1 ? 'dmc' : `dmc_${dmcIndex}`,
+            fileName: standardDocName,
+            fileData: dataUrl,
+          })
+          .catch(() => {});
+      } catch (err) {
+        console.warn('DMC upload error:', err);
+      }
+    }
+    e.target.value = '';
+  };
+
+  const handleRemoveDmcFile = (id: string) => {
+    setDmcFiles((prev) => {
+      const next = prev.filter((f) => f.id !== id);
+      if (next.length === 0) {
+        setFormData((p) => ({
+          ...p,
+          documents: {
+            ...p.documents,
+            dmcUploaded: false,
+          },
+        }));
+        setUploadedDocs((p) => {
+          const copy = { ...p };
+          delete copy.dmcUploaded;
+          return copy;
+        });
+      } else {
+        setUploadedDocs((p) => ({
+          ...p,
+          dmcUploaded: next[0],
+        }));
+      }
+      return next;
+    });
+  };
 
   const handleRemoveDocument = (docKey: string) => {
     setUploadedDocs((prev) => {
@@ -800,16 +912,17 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       }
 
       case 6: {
-        if (!formData.academicRecords || formData.academicRecords.length === 0) {
-          errs.push('Please add at least one academic record before continuing.');
-        }
+        const recordsErr = validateAcademicRecordsList(formData.academicRecords, formData.currentClass);
+        if (recordsErr) errs.push(recordsErr);
         break;
       }
 
       case 7: {
         if (!formData.documents?.bformUploaded) errs.push('Candidate B-Form / CNIC scanned copy is required.');
         if (!formData.documents?.fatherCnicUploaded) errs.push('Father / Guardian CNIC scanned copy is required.');
-        if (!formData.documents?.dmcUploaded) errs.push('Previous Examination DMC / Result Card is required.');
+        if (!formData.documents?.dmcUploaded && dmcFiles.length === 0) {
+          errs.push('Previous Examination DMC / Result Card is required.');
+        }
         break;
       }
 
@@ -961,11 +1074,27 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
-          dmc: uploadedDocs.dmcUploaded
+          dmc: dmcFiles[0]
+            ? {
+                name: dmcFiles[0].name,
+                size: dmcFiles[0].size,
+                dataUrl: dmcFiles[0].dataUrl,
+                uploadedAt: new Date().toISOString(),
+              }
+            : uploadedDocs.dmcUploaded
             ? {
                 name: uploadedDocs.dmcUploaded.name,
                 size: uploadedDocs.dmcUploaded.size,
                 dataUrl: uploadedDocs.dmcUploaded.dataUrl,
+                uploadedAt: new Date().toISOString(),
+              }
+            : undefined,
+          dmcFiles: dmcFiles.length > 0 ? dmcFiles : undefined,
+          dmc_2: dmcFiles[1]
+            ? {
+                name: dmcFiles[1].name,
+                size: dmcFiles[1].size,
+                dataUrl: dmcFiles[1].dataUrl,
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
@@ -2121,6 +2250,19 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     <span className="text-xs text-slate-500 font-medium">10% Merit Weighting</span>
                   </div>
 
+                  {/* BS Program Specific Guidance / Requirement Notice */}
+                  {(formData.currentClass || '').toLowerCase().includes('bs') && (
+                    <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs flex items-start gap-2.5 text-blue-900">
+                      <Sparkles className="w-4 h-4 text-[#185b9d] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold block">BS Program Requirement: 2 Academic Qualifications</span>
+                        <span className="text-[11px] text-blue-700 leading-relaxed">
+                          BS Program applicants must submit results for <strong>two different qualifications</strong> (e.g. Matric / SSC and FSc / Intermediate / Pre-Medical / Pre-Engineering). Please ensure you add both records.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {formData.academicRecords.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs border-collapse">
@@ -2161,7 +2303,21 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   ) : (
                     <div className="p-6 rounded-2xl bg-rose-50/50 border border-rose-200 text-center text-xs space-y-1">
                       <p className="font-bold text-rose-800">No academic records added yet.</p>
-                      <p className="text-rose-600">Please enter your previous examination marks below and click "Add Record" to proceed.</p>
+                      <p className="text-rose-600">
+                        {(formData.currentClass || '').toLowerCase().includes('bs')
+                          ? 'BS applicants must submit results for two different qualifications (e.g. Matric and FSc). Please enter your examination marks below and click "Add Record".'
+                          : 'Please enter your previous examination marks below and click "Add Record" to proceed.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* If BS applicant has only 1 record */}
+                  {(formData.currentClass || '').toLowerCase().includes('bs') && formData.academicRecords.length === 1 && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span>
+                        1 qualification added ({formData.academicRecords[0].gradeClass}). <strong>1 more qualification required</strong> (e.g. FSc / Intermediate) for BS applicants.
+                      </span>
                     </div>
                   )}
 
@@ -2176,7 +2332,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Class / Grade *</label>
                         <input
                           type="text"
-                          placeholder="e.g. Class 9th / Matric"
+                          placeholder="e.g. Matric / SSC or FSc / Pre-Medical"
                           value={newGrade}
                           onChange={(e) => setNewGrade(e.target.value)}
                           className={`w-full px-3 py-2 text-xs rounded-xl bg-white border focus:outline-hidden ${
@@ -2206,7 +2362,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Total Marks *</label>
                         <input
                           type="number"
-                          placeholder="e.g. 550"
+                          placeholder="e.g. 1100"
                           value={newTotalMarks || ''}
                           onChange={(e) => setNewTotalMarks(Number(e.target.value))}
                           className={`w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border focus:outline-hidden ${
@@ -2221,7 +2377,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Obtained Marks *</label>
                         <input
                           type="number"
-                          placeholder="e.g. 485"
+                          placeholder="e.g. 985"
                           value={newObtMarks || ''}
                           onChange={(e) => setNewObtMarks(Number(e.target.value))}
                           className={`w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border focus:outline-hidden ${
@@ -2233,11 +2389,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         )}
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">School / Institute Name *</label>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">School / College / Institute Name *</label>
                         <div className="flex gap-2">
                           <input
                             type="text"
-                            placeholder="e.g. Government High School Gandhian"
+                            placeholder="e.g. BISE Abbottabad / Degree College"
                             value={newInstitute}
                             onChange={(e) => setNewInstitute(e.target.value)}
                             className={`flex-1 px-3 py-2 text-xs rounded-xl bg-white border focus:outline-hidden ${
@@ -2262,7 +2418,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span>DMC results will be authenticated during the 6-member interview scrutiny.</span>
+                    <span>Academic scores will be verified from physical DMCs during scrutiny.</span>
                   </div>
                 </div>
               )}
@@ -2276,100 +2432,407 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     </h3>
                     <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 inline-flex items-center gap-1 w-fit">
                       <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                      PDF, JPG, PNG, or Word format
+                      PDF, JPG, PNG, or Word format (Max 5 MB each)
                     </span>
                   </div>
 
+                  {/* Soft Reminder for BS Applicants */}
+                  {(formData.currentClass || '').toLowerCase().includes('bs') && (
+                    <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#185b9d] flex-shrink-0" />
+                      <span>
+                        <strong>BS Program Reminder:</strong> You have added 2 academic qualifications — please upload a DMC for each (e.g. Matric DMC & FSc DMC).
+                      </span>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {[
-                      { key: 'bformUploaded' as const, title: 'Candidate B-Form / CNIC Scanned Copy', req: true },
-                      { key: 'fatherCnicUploaded' as const, title: 'Father / Guardian CNIC Front & Back', req: true },
-                      { key: 'dmcUploaded' as const, title: 'Last Examination DMC / Result Card', req: true },
-                      { key: 'domicileUploaded' as const, title: 'Domicile Certificate (Optional)', req: false },
-                      { key: 'incomeCertUploaded' as const, title: 'Income / Need Proof Certificate (Optional)', req: false },
+                    {/* B-Form / CNIC */}
+                    <div
+                      id="field-bformUploaded"
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                        formData.documents.bformUploaded
+                          ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-300/30'
+                          : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <FileCheck className={`w-4 h-4 flex-shrink-0 ${formData.documents.bformUploaded ? 'text-emerald-600' : 'text-slate-400'}`} />
+                            <span className="text-xs font-bold text-slate-800 leading-snug">Candidate B-Form / CNIC Scanned Copy</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-100 flex-shrink-0">
+                            Required
+                          </span>
+                        </div>
 
-                    ].map((doc) => {
-                      const isUploaded = formData.documents[doc.key];
-                      const fileInfo = uploadedDocs[doc.key];
-
-                      return (
-                        <div
-                          key={doc.key}
-                          id={`field-${doc.key}`}
-                          className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
-                            isUploaded
-                              ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-300/30'
-                              : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
-                          }`}
-                        >
-                          <div className="space-y-1.5">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <FileCheck className={`w-4 h-4 flex-shrink-0 ${isUploaded ? 'text-emerald-600' : 'text-slate-400'}`} />
-                                <span className="text-xs font-bold text-slate-800 leading-snug">{doc.title}</span>
-                              </div>
-                              {doc.req && (
-                                <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-100 flex-shrink-0">
-                                  Required
-                                </span>
-                              )}
+                        {formData.documents.bformUploaded && uploadedDocs.bformUploaded ? (
+                          <div className="p-2 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs">
+                            <div className="min-w-0 pr-2">
+                              <span className="font-semibold text-slate-800 truncate block text-[11px]">
+                                {uploadedDocs.bformUploaded.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {uploadedDocs.bformUploaded.size}
+                              </span>
                             </div>
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex-shrink-0">
+                              Attached ✓
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-400">PDF, JPG, PNG (Max 5 MB)</p>
+                        )}
+                      </div>
 
-                            {isUploaded && fileInfo ? (
-                              <div className="p-2 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs">
-                                <div className="min-w-0 pr-2">
-                                  <span className="font-semibold text-slate-800 truncate block text-[11px]">
-                                    {fileInfo.name}
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                        {formData.documents.bformUploaded ? (
+                          <>
+                            <label className="flex-1 cursor-pointer py-1.5 text-center text-xs font-bold text-[#185b9d] bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition">
+                              Change File
+                              <input
+                                type="file"
+                                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                onChange={(e) => handleDocumentUpload('bformUploaded', e)}
+                                className="hidden"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDocument('bformUploaded')}
+                              className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </>
+                        ) : (
+                          <label className="w-full cursor-pointer py-2 text-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-[#185b9d] hover:text-white rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5">
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>+ Choose Document File</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                              onChange={(e) => handleDocumentUpload('bformUploaded', e)}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Father CNIC */}
+                    <div
+                      id="field-fatherCnicUploaded"
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                        formData.documents.fatherCnicUploaded
+                          ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-300/30'
+                          : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <FileCheck className={`w-4 h-4 flex-shrink-0 ${formData.documents.fatherCnicUploaded ? 'text-emerald-600' : 'text-slate-400'}`} />
+                            <span className="text-xs font-bold text-slate-800 leading-snug">Father / Guardian CNIC Front & Back</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-100 flex-shrink-0">
+                            Required
+                          </span>
+                        </div>
+
+                        {formData.documents.fatherCnicUploaded && uploadedDocs.fatherCnicUploaded ? (
+                          <div className="p-2 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs">
+                            <div className="min-w-0 pr-2">
+                              <span className="font-semibold text-slate-800 truncate block text-[11px]">
+                                {uploadedDocs.fatherCnicUploaded.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {uploadedDocs.fatherCnicUploaded.size}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex-shrink-0">
+                              Attached ✓
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-400">PDF, JPG, PNG (Max 5 MB)</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                        {formData.documents.fatherCnicUploaded ? (
+                          <>
+                            <label className="flex-1 cursor-pointer py-1.5 text-center text-xs font-bold text-[#185b9d] bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition">
+                              Change File
+                              <input
+                                type="file"
+                                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                onChange={(e) => handleDocumentUpload('fatherCnicUploaded', e)}
+                                className="hidden"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDocument('fatherCnicUploaded')}
+                              className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </>
+                        ) : (
+                          <label className="w-full cursor-pointer py-2 text-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-[#185b9d] hover:text-white rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5">
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>+ Choose Document File</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                              onChange={(e) => handleDocumentUpload('fatherCnicUploaded', e)}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Multi-File DMC Upload Card */}
+                    <div
+                      id="field-dmcUploaded"
+                      className={`sm:col-span-2 p-4 rounded-2xl border transition-all space-y-3 ${
+                        formData.documents.dmcUploaded || dmcFiles.length > 0
+                          ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-300/30'
+                          : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <FileCheck className={`w-4 h-4 flex-shrink-0 ${formData.documents.dmcUploaded || dmcFiles.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`} />
+                            <span className="text-xs font-bold text-slate-800 leading-snug">
+                              Last Examination DMC / Result Card(s)
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Attach your official mark sheets (PDF, JPG, PNG, DOC — Max 5 MB each). Multiple uploads supported.
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-100 flex-shrink-0">
+                          Required
+                        </span>
+                      </div>
+
+                      {/* List of uploaded DMC files */}
+                      {dmcFiles.length > 0 && (
+                        <div className="space-y-2 pt-1">
+                          {dmcFiles.map((df, idx) => (
+                            <div
+                              key={df.id}
+                              className="p-2.5 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs shadow-2xs"
+                            >
+                              <div className="flex items-center gap-2 min-w-0 pr-2">
+                                <FileCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <span className="font-bold text-slate-800 truncate block text-[11px]">
+                                    {df.name}
                                   </span>
                                   <span className="text-[10px] text-slate-400 font-mono">
-                                    {fileInfo.size}
+                                    {df.size} • Certificate #{idx + 1}
                                   </span>
                                 </div>
-                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex-shrink-0">
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
                                   Attached ✓
                                 </span>
-                              </div>
-                            ) : (
-                              <p className="text-[10px] text-slate-400">PDF, JPG, PNG, or Word document</p>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-                            {isUploaded ? (
-                              <>
-                                <label className="flex-1 cursor-pointer py-1.5 text-center text-xs font-bold text-[#185b9d] bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition">
-                                  Change File
-                                  <input
-                                    type="file"
-                                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                                    onChange={(e) => handleDocumentUpload(doc.key, e)}
-                                    className="hidden"
-                                  />
-                                </label>
                                 <button
                                   type="button"
-                                  onClick={() => handleRemoveDocument(doc.key)}
-                                  className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition cursor-pointer"
+                                  onClick={() => handleRemoveDmcFile(df.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                  title="Remove this DMC"
                                 >
-                                  Remove
+                                  <X className="w-3.5 h-3.5" />
                                 </button>
-                              </>
-                            ) : (
-                              <label className="w-full cursor-pointer py-2 text-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-[#185b9d] hover:text-white rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5">
-                                <UploadCloud className="w-3.5 h-3.5" />
-                                <span>+ Choose Document File</span>
-                                <input
-                                  type="file"
-                                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                                  onChange={(e) => handleDocumentUpload(doc.key, e)}
-                                  className="hidden"
-                                />
-                              </label>
-                            )}
+                              </div>
+                            </div>
+                          ))}
+
+                          <div className="p-2 rounded-xl bg-emerald-100/70 border border-emerald-300/80 text-[11px] text-emerald-900 font-semibold flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>DMC uploaded. Upload next DMC if any.</span>
                           </div>
                         </div>
-                      );
-                    })}
+                      )}
+
+                      {/* Add DMC Buttons */}
+                      <div className="pt-1">
+                        {dmcFiles.length > 0 ? (
+                          <label className="w-full cursor-pointer py-2 text-center text-xs font-bold text-[#185b9d] bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition flex items-center justify-center gap-1.5">
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>+ Add Another DMC</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                              onChange={handleDmcFilesUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        ) : (
+                          <label className="w-full cursor-pointer py-2 text-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-[#185b9d] hover:text-white rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5">
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>+ Choose DMC File(s)</span>
+                            <input
+                              type="file"
+                              multiple
+                              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                              onChange={handleDmcFilesUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Domicile Certificate */}
+                    <div
+                      id="field-domicileUploaded"
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                        formData.documents.domicileUploaded
+                          ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-300/30'
+                          : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <FileCheck className={`w-4 h-4 flex-shrink-0 ${formData.documents.domicileUploaded ? 'text-emerald-600' : 'text-slate-400'}`} />
+                            <span className="text-xs font-bold text-slate-800 leading-snug">Domicile Certificate (Optional)</span>
+                          </div>
+                        </div>
+
+                        {formData.documents.domicileUploaded && uploadedDocs.domicileUploaded ? (
+                          <div className="p-2 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs">
+                            <div className="min-w-0 pr-2">
+                              <span className="font-semibold text-slate-800 truncate block text-[11px]">
+                                {uploadedDocs.domicileUploaded.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {uploadedDocs.domicileUploaded.size}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex-shrink-0">
+                              Attached ✓
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-400">PDF, JPG, PNG (Max 5 MB)</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                        {formData.documents.domicileUploaded ? (
+                          <>
+                            <label className="flex-1 cursor-pointer py-1.5 text-center text-xs font-bold text-[#185b9d] bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition">
+                              Change File
+                              <input
+                                type="file"
+                                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                onChange={(e) => handleDocumentUpload('domicileUploaded', e)}
+                                className="hidden"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDocument('domicileUploaded')}
+                              className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </>
+                        ) : (
+                          <label className="w-full cursor-pointer py-2 text-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-[#185b9d] hover:text-white rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5">
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>+ Choose Document File</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                              onChange={(e) => handleDocumentUpload('domicileUploaded', e)}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Income Certificate */}
+                    <div
+                      id="field-incomeCertUploaded"
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                        formData.documents.incomeCertUploaded
+                          ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-300/30'
+                          : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <FileCheck className={`w-4 h-4 flex-shrink-0 ${formData.documents.incomeCertUploaded ? 'text-emerald-600' : 'text-slate-400'}`} />
+                            <span className="text-xs font-bold text-slate-800 leading-snug">Income / Need Proof Certificate (Optional)</span>
+                          </div>
+                        </div>
+
+                        {formData.documents.incomeCertUploaded && uploadedDocs.incomeCertUploaded ? (
+                          <div className="p-2 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs">
+                            <div className="min-w-0 pr-2">
+                              <span className="font-semibold text-slate-800 truncate block text-[11px]">
+                                {uploadedDocs.incomeCertUploaded.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {uploadedDocs.incomeCertUploaded.size}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex-shrink-0">
+                              Attached ✓
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-400">PDF, JPG, PNG (Max 5 MB)</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                        {formData.documents.incomeCertUploaded ? (
+                          <>
+                            <label className="flex-1 cursor-pointer py-1.5 text-center text-xs font-bold text-[#185b9d] bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition">
+                              Change File
+                              <input
+                                type="file"
+                                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                onChange={(e) => handleDocumentUpload('incomeCertUploaded', e)}
+                                className="hidden"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDocument('incomeCertUploaded')}
+                              className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </>
+                        ) : (
+                          <label className="w-full cursor-pointer py-2 text-center text-xs font-bold text-slate-700 bg-slate-100 hover:bg-[#185b9d] hover:text-white rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5">
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>+ Choose Document File</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                              onChange={(e) => handleDocumentUpload('incomeCertUploaded', e)}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

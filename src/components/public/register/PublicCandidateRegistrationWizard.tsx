@@ -37,6 +37,7 @@ import {
   validateDependents,
   validateEmergencyContact,
   validateAcademicRecord,
+  validateAcademicRecordsList,
   mapSubmitErrorToFriendlyMessage,
   trimObjectStrings,
 } from '../../../utils/formValidation';
@@ -311,9 +312,8 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
         break;
       }
       case 6: {
-        if (!formData.academicRecords || formData.academicRecords.length === 0) {
-          errs.push('Please add at least one academic record before continuing.');
-        }
+        const recordsErr = validateAcademicRecordsList(formData.academicRecords, formData.currentClass);
+        if (recordsErr) errs.push(recordsErr);
         break;
       }
       case 7: {
@@ -1150,6 +1150,19 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <p className="text-xs text-slate-400">Previous annual exam scores and passing board.</p>
                 </div>
 
+                {/* BS Program Requirement Guidance */}
+                {(formData.currentClass || '').toLowerCase().includes('bs') && (
+                  <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs flex items-start gap-2.5 text-blue-900">
+                    <Award className="w-4 h-4 text-[#185b9d] flex-shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block">BS Program Requirement: 2 Academic Qualifications</span>
+                      <span className="text-[11px] text-blue-700 leading-relaxed">
+                        BS Program applicants must submit results for <strong>two different qualifications</strong> (e.g. Matric / SSC and FSc / Intermediate / Pre-Medical / Pre-Engineering).
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {formData.academicRecords.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
@@ -1190,7 +1203,21 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                 ) : (
                   <div className="p-6 rounded-2xl bg-rose-50/50 border border-rose-200 text-center text-xs space-y-1">
                     <p className="font-bold text-rose-800">No academic records added yet.</p>
-                    <p className="text-rose-600">Please enter your previous examination marks below and click "Add Record" to proceed.</p>
+                    <p className="text-rose-600">
+                      {(formData.currentClass || '').toLowerCase().includes('bs')
+                        ? 'BS applicants must submit results for two different qualifications (e.g. Matric and FSc). Please enter your examination marks below and click "Add Record".'
+                        : 'Please enter your previous examination marks below and click "Add Record" to proceed.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* If BS applicant has only 1 record */}
+                {(formData.currentClass || '').toLowerCase().includes('bs') && formData.academicRecords.length === 1 && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>
+                      1 qualification added ({formData.academicRecords[0].examLevel}). <strong>1 more qualification required</strong> (e.g. FSc / Intermediate) for BS applicants.
+                    </span>
                   </div>
                 )}
 

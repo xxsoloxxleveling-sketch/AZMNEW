@@ -440,6 +440,86 @@ export function validateAcademicRecord(record: {
 }
 
 /**
+ * Validates the academic records list for stage completion.
+ * - BS Program applicants must submit >= 2 records with different Class/Grade levels.
+ * - Non-BS applicants must submit >= 1 record.
+ */
+export function validateAcademicRecordsList(
+  records?: Array<{ gradeClass?: string; examLevel?: string }>,
+  currentClass?: string
+): string | null {
+  const isBs = (currentClass || '').toLowerCase().includes('bs');
+
+  if (!records || records.length === 0) {
+    return isBs
+      ? 'BS applicants must submit results for two different qualifications (e.g. Matric and FSc). Please add your academic records before continuing.'
+      : 'Please add at least one academic record before continuing.';
+  }
+
+  if (isBs) {
+    if (records.length < 2) {
+      return 'BS applicants must submit results for two different qualifications (e.g. Matric and FSc). Please add your second academic record before continuing.';
+    }
+
+    // Check distinct grade/class levels
+    const distinctLevels = new Set(
+      records
+        .map((r) => (r.gradeClass || r.examLevel || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    if (distinctLevels.size < 2) {
+      const firstLevel = (records[0].gradeClass || records[0].examLevel || 'this qualification').trim();
+      return `You've added records for the same level (${firstLevel}). Please add your FSc/Pre-Engineering/Pre-Medical result as well.`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Validates an uploaded document file format and size cap.
+ */
+export function validateDocumentFile(
+  file: File,
+  maxSizeMb = 5
+): { isValid: boolean; error: string | null } {
+  if (!file) {
+    return { isValid: false, error: 'No file selected.' };
+  }
+
+  const validTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ];
+
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  const validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'];
+
+  if (!validTypes.includes(file.type) && !validExtensions.includes(ext)) {
+    return {
+      isValid: false,
+      error: `Invalid file format (${file.name}). Please upload a PDF, JPG, PNG, or Word document.`,
+    };
+  }
+
+  const maxBytes = maxSizeMb * 1024 * 1024;
+  if (file.size > maxBytes) {
+    const sizeInMb = (file.size / (1024 * 1024)).toFixed(1);
+    return {
+      isValid: false,
+      error: `File size (${sizeInMb} MB) exceeds the maximum allowed size of ${maxSizeMb} MB.`,
+    };
+  }
+
+  return { isValid: true, error: null };
+}
+
+/**
  * Maps technical backend / fetch / network errors into student-friendly, actionable messages.
  */
 export function mapSubmitErrorToFriendlyMessage(error: any): string {
