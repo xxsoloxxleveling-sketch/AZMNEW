@@ -134,7 +134,7 @@ export function validateGender(gender?: string): string | null {
 
 /**
  * Validates date of birth and candidate age.
- * Sane range for scholarship candidates: 10 to 22 years old.
+ * Sane range for scholarship candidates: 10 to 30 years old.
  */
 export function validateDobAndAge(dob?: string): { error: string | null; age: number | null } {
   const trimmed = (dob || '').trim();
@@ -158,9 +158,9 @@ export function validateDobAndAge(dob?: string): { error: string | null; age: nu
     age--;
   }
 
-  if (age < 10 || age > 22) {
+  if (age < 10 || age > 30) {
     return {
-      error: `This doesn't look like a valid date of birth for a candidate (candidate age is ${age} years; must be between 10 and 22 years old).`,
+      error: `This doesn't look like a valid date of birth for a candidate (candidate age is ${age} years; must be between 10 and 30 years old).`,
       age,
     };
   }
