@@ -3,6 +3,30 @@ import { StudentApplicationData, PartnerSchoolData, PageTab } from '../../types'
 import { MONTHLY_ASSISTANCE_RATES, BENEFICIARY_CATEGORIES, OFFICIAL_DATA } from '../../data/scholarshipData';
 import { mockApi, printStudentDossier } from '../../lib/mockApi';
 import { CandidateSlipRetrievalCard } from './CandidateSlipRetrievalCard';
+import { PreSubmitCaptchaModal } from '../common/PreSubmitCaptchaModal';
+import {
+  formatCnic,
+  formatPakistaniPhone,
+  validateFullName,
+  validateFatherName,
+  validateCnic,
+  validateGender,
+  validateDobAndAge,
+  validatePhotoFile,
+  validateAddress,
+  validateDistrictProvince,
+  validatePhone,
+  validateEmail,
+  validateSchoolName,
+  validateGradeClass,
+  validateOccupation,
+  validateIncome,
+  validateDependents,
+  validateEmergencyContact,
+  validateAcademicRecord,
+  mapSubmitErrorToFriendlyMessage,
+  trimObjectStrings,
+} from '../../utils/formValidation';
 import { 
 
   User, 
@@ -66,6 +90,12 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [photoError, setPhotoError] = useState<string>('');
   const [stageErrors, setStageErrors] = useState<{ [key: number]: string[] }>({});
+
+  // Field-level validation and CAPTCHA states
+  const [touchedFields, setTouchedFields] = useState<{ [field: string]: boolean }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ [field: string]: string }>({});
+  const [academicRowErrors, setAcademicRowErrors] = useState<{ [field: string]: string }>({});
+  const [isCaptchaOpen, setIsCaptchaOpen] = useState<boolean>(false);
 
   
   // Payment Method & Challan Modal State
@@ -162,16 +192,132 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
   // Auto-mask CNIC/B-Form: 00000-0000000-0
   const handleCnicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, ''); // digits only
-    if (val.length > 13) val = val.substring(0, 13);
-    
-    let formatted = val;
-    if (val.length > 5 && val.length <= 12) {
-      formatted = `${val.substring(0, 5)}-${val.substring(5)}`;
-    } else if (val.length > 12) {
-      formatted = `${val.substring(0, 5)}-${val.substring(5, 12)}-${val.substring(12, 13)}`;
+    const formatted = formatCnic(e.target.value);
+    setFormData((prev) => ({ ...prev, cnicBForm: formatted }));
+    if (touchedFields.cnicBForm) {
+      const err = validateCnic(formatted);
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        if (err) next.cnicBForm = err;
+        else delete next.cnicBForm;
+        return next;
+      });
     }
-    setFormData(prev => ({ ...prev, cnicBForm: formatted }));
+  };
+
+  // Auto-format Pakistani phone numbers: 03XX-XXXXXXX
+  const handlePhoneChange = (
+    field: 'parentMobile' | 'mobile' | 'whatsapp',
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const formatted = formatPakistaniPhone(e.target.value);
+    setFormData((prev) => ({ ...prev, [field]: formatted }));
+    if (touchedFields[field]) {
+      const label =
+        field === 'parentMobile'
+          ? "Father / Guardian's Mobile"
+          : field === 'whatsapp'
+          ? 'WhatsApp Number'
+          : 'Candidate Mobile';
+      const err = validatePhone(formatted, label);
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        if (err) next[field] = err;
+        else delete next[field];
+        return next;
+      });
+    }
+  };
+
+  // Field blur validator
+  const handleBlur = (field: string) => {
+    setTouchedFields((prev) => ({ ...prev, [field]: true }));
+    validateSingleField(field);
+  };
+
+  const validateSingleField = (field: string): string | null => {
+    let err: string | null = null;
+    switch (field) {
+      case 'fullName':
+        err = validateFullName(formData.fullName);
+        break;
+      case 'fatherName':
+        err = validateFatherName(formData.fatherName);
+        break;
+      case 'cnicBForm':
+        err = validateCnic(formData.cnicBForm);
+        break;
+      case 'gender':
+        err = validateGender(formData.gender);
+        break;
+      case 'dob': {
+        const { error, age } = validateDobAndAge(formData.dob);
+        err = error;
+        if (age !== null && String(formData.age) !== String(age)) {
+          setFormData((prev) => ({ ...prev, age: String(age) }));
+        }
+        break;
+      }
+      case 'permanentAddress':
+        err = validateAddress(formData.permanentAddress);
+        break;
+      case 'district':
+      case 'province':
+        err = validateDistrictProvince(formData.district, formData.province);
+        break;
+      case 'parentMobile':
+        err = validatePhone(formData.parentMobile, "Father / Guardian Mobile");
+        break;
+      case 'mobile':
+        err = validatePhone(formData.mobile, "Candidate Mobile");
+        break;
+      case 'whatsapp':
+        err = validatePhone(formData.whatsapp, "WhatsApp Number");
+        break;
+      case 'email':
+        err = validateEmail(formData.email);
+        break;
+      case 'currentClass':
+        err = validateGradeClass(formData.currentClass);
+        break;
+      case 'schoolName':
+        err = validateSchoolName(formData.schoolName);
+        break;
+      case 'guardianOccupation':
+        err = validateOccupation(formData.guardianOccupation);
+        break;
+      case 'monthlyHouseholdIncome':
+        err = validateIncome(formData.monthlyHouseholdIncome);
+        break;
+      case 'dependentsCount':
+        err = validateDependents(formData.dependentsCount);
+        break;
+      case 'emergencyContact':
+        err = validateEmergencyContact(formData.emergencyContact);
+        break;
+      default:
+        break;
+    }
+
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (err) {
+        next[field] = err;
+      } else {
+        delete next[field];
+      }
+      return next;
+    });
+
+    return err;
+  };
+
+  const scrollToField = (fieldId: string) => {
+    const el = document.getElementById(fieldId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.focus();
+    }
   };
 
   // Sync initialClass prop if user navigates from homepage category selection
@@ -252,7 +398,10 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     });
     setCurrentStage(1);
     setStageErrors({});
+    setTouchedFields({});
+    setFieldErrors({});
     setSubmitError('');
+    setPhotoError('');
   };
 
   const saveDraft = () => {
@@ -324,22 +473,32 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const [newInstitute, setNewInstitute] = useState('');
 
   const handleAddAcademicRecord = () => {
-    if (!newGrade || !newInstitute || newTotalMarks <= 0) {
-      alert('Please fill in Exam Class, Year, Marks, and Institute name.');
+    const rowValidation = validateAcademicRecord({
+      gradeClass: newGrade,
+      passingYear: newYear || String(new Date().getFullYear()),
+      totalMarks: newTotalMarks,
+      obtainedMarks: newObtMarks,
+      institute: newInstitute,
+    });
+
+    if (rowValidation) {
+      setAcademicRowErrors(rowValidation);
       return;
     }
+
+    setAcademicRowErrors({});
     const pct = Number(((newObtMarks / newTotalMarks) * 100).toFixed(1));
     setFormData(prev => ({
       ...prev,
       academicRecords: [
         ...prev.academicRecords,
         {
-          gradeClass: newGrade,
-          passingYear: newYear || '2025',
+          gradeClass: newGrade.trim(),
+          passingYear: (newYear || String(new Date().getFullYear())).trim(),
           totalMarks: newTotalMarks,
           obtainedMarks: newObtMarks,
           percentage: pct,
-          institute: newInstitute
+          institute: newInstitute.trim()
         }
       ]
     }));
@@ -357,14 +516,13 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     }));
   };
 
-  // Photo Upload Handler with Max 200KB Validation
+  // Photo Upload Handler with Client-Side Validation (MIME, <=200KB, >=200x200px)
   const compressImageFile = (
     file: File,
     maxWidth = 1200,
     quality = 0.75
   ): Promise<{ dataUrl: string; sizeFormatted: string }> => {
     return new Promise((resolve) => {
-      // If it's a PDF or non-image, read it directly
       if (!file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -430,14 +588,26 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Strict client-side validation before processing
+    const validation = await validatePhotoFile(file);
+    if (!validation.valid) {
+      setPhotoError(validation.error || 'Your photo must be a JPG, PNG, or WebP under 200 KB.');
+      return;
+    }
+
     try {
-      const { dataUrl, sizeFormatted } = await compressImageFile(file, 600, 0.8);
+      const { dataUrl } = await compressImageFile(file, 600, 0.85);
       setFormData((prev) => ({
         ...prev,
         photoUrl: dataUrl,
       }));
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.photo;
+        return next;
+      });
 
-      // Upload directly to Supabase Storage
+      // Upload in background to storage
       mockApi.uploadStudentDocument({
         cnicOrBForm: formData.cnicBForm || 'TEMP_CANDIDATE',
         docType: 'photo',
@@ -564,8 +734,119 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     }));
   };
 
-  // Complete Application Submit to Live Database
-  const handleFinalSubmit = async (e: React.FormEvent) => {
+  // Check if current stage is valid
+  const getStageErrors = (stageNum: number): string[] => {
+    const errs: string[] = [];
+
+    switch (stageNum) {
+      case 1: {
+        const nameErr = validateFullName(formData.fullName);
+        if (nameErr) errs.push(nameErr);
+        const fNameErr = validateFatherName(formData.fatherName);
+        if (fNameErr) errs.push(fNameErr);
+        const cnicErr = validateCnic(formData.cnicBForm);
+        if (cnicErr) errs.push(cnicErr);
+        const genderErr = validateGender(formData.gender);
+        if (genderErr) errs.push(genderErr);
+        const { error: dobErr } = validateDobAndAge(formData.dob);
+        if (dobErr) errs.push(dobErr);
+        if (!formData.photoUrl) errs.push('Passport-size Candidate Photograph (Max 200 KB) is required.');
+        break;
+      }
+
+      case 2: {
+        const addrErr = validateAddress(formData.permanentAddress);
+        if (addrErr) errs.push(addrErr);
+        const distErr = validateDistrictProvince(formData.district, formData.province);
+        if (distErr) errs.push(distErr);
+        const parentMobErr = validatePhone(formData.parentMobile, 'Father / Guardian Mobile');
+        if (parentMobErr) errs.push(parentMobErr);
+        const mobErr = validatePhone(formData.mobile, 'Candidate Mobile');
+        if (mobErr) errs.push(mobErr);
+        const waErr = validatePhone(formData.whatsapp, 'WhatsApp Number');
+        if (waErr) errs.push(waErr);
+        const emailErr = validateEmail(formData.email);
+        if (emailErr) errs.push(emailErr);
+        break;
+      }
+
+      case 3: {
+        const classErr = validateGradeClass(formData.currentClass);
+        if (classErr) errs.push(classErr);
+        const schErr = validateSchoolName(formData.schoolName);
+        if (schErr) errs.push(schErr);
+        if (!formData.currentRollNo?.trim()) errs.push('Current School Roll Number is required.');
+        break;
+      }
+
+      case 4: {
+        if (!formData.appliedCategory) errs.push('Please select a Scholarship Category.');
+        if (formData.isSpecialNeed && !formData.specialNeedDetails?.trim()) {
+          errs.push('Please describe special need / disability details.');
+        }
+        break;
+      }
+
+      case 5: {
+        const occErr = validateOccupation(formData.guardianOccupation);
+        if (occErr) errs.push(occErr);
+        const incErr = validateIncome(formData.monthlyHouseholdIncome);
+        if (incErr) errs.push(incErr);
+        const depErr = validateDependents(formData.dependentsCount);
+        if (depErr) errs.push(depErr);
+        const emErr = validateEmergencyContact(formData.emergencyContact);
+        if (emErr) errs.push(emErr);
+        break;
+      }
+
+      case 6: {
+        if (!formData.academicRecords || formData.academicRecords.length === 0) {
+          errs.push('Please add at least one academic record before continuing.');
+        }
+        break;
+      }
+
+      case 7: {
+        if (!formData.documents?.bformUploaded) errs.push('Candidate B-Form / CNIC scanned copy is required.');
+        if (!formData.documents?.fatherCnicUploaded) errs.push('Father / Guardian CNIC scanned copy is required.');
+        if (!formData.documents?.dmcUploaded) errs.push('Previous Examination DMC / Result Card is required.');
+        break;
+      }
+
+      case 8: {
+        if (!formData.declarationAccepted) errs.push('Please accept the legal terms and evaluation protocol undertaking.');
+        if (!formData.signatureDataUrl && !hasSignature) errs.push('Please draw your digital signature on the pad above.');
+        break;
+      }
+
+      default:
+        break;
+    }
+
+    return errs;
+  };
+
+  const isStageComplete = (stageNum: number): boolean => {
+    return getStageErrors(stageNum).length === 0;
+  };
+
+  const getIncompleteStagesBefore8 = () => {
+    const incomplete: { stage: number; title: string; errors: string[] }[] = [];
+    for (let s = 1; s <= 7; s++) {
+      const errs = getStageErrors(s);
+      if (errs.length > 0) {
+        incomplete.push({
+          stage: s,
+          title: stagesList[s - 1].title,
+          errors: errs,
+        });
+      }
+    }
+    return incomplete;
+  };
+
+  // Pre-Submit Flow: Opens CAPTCHA modal only if all stages are valid
+  const handleFinalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError('');
 
@@ -573,7 +854,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     const incomplete = getIncompleteStagesBefore8();
     if (incomplete.length > 0) {
       setSubmitError(
-        `Incomplete Fields: Stage ${incomplete[0].stage} (${incomplete[0].title}) is missing required information: ${incomplete[0].errors[0]}`
+        `Incomplete Information: Stage ${incomplete[0].stage} (${incomplete[0].title}) has missing or invalid fields: ${incomplete[0].errors[0]}`
       );
       setCurrentStage(incomplete[0].stage);
       setStageErrors((prev) => ({ ...prev, [incomplete[0].stage]: incomplete[0].errors }));
@@ -588,70 +869,79 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       return;
     }
 
+    // All validation passed - open 3-step warm-up & CAPTCHA modal
+    setIsCaptchaOpen(true);
+  };
+
+  // Real Database Submission (Fired after CAPTCHA challenge is solved)
+  const executeFinalSubmission = async () => {
+    setSubmitError('');
     setIsSubmitting(true);
 
     try {
-      const emailVal = formData.email?.trim();
-      const studentMobileVal = formData.mobile?.trim() || '0300-0000000';
-      const parentMobileVal = formData.parentMobile?.trim() || formData.emergencyContact?.trim() || studentMobileVal;
+      // Global whitespace trimming across all fields
+      const cleanData = trimObjectStrings(formData);
 
+      const emailVal = cleanData.email;
+      const studentMobileVal = cleanData.mobile || '0300-0000000';
+      const parentMobileVal = cleanData.parentMobile || cleanData.emergencyContact || studentMobileVal;
 
       const backendPayload = {
-        fullName: formData.fullName.trim(),
-        fatherName: formData.fatherName.trim(),
-        gender: formData.gender?.toUpperCase() === 'FEMALE' ? 'FEMALE' : 'MALE',
-        dateOfBirth: formData.dob || '2008-01-01',
-        age: parseInt(formData.age, 10) || 16,
-        cnicOrBForm: formData.cnicBForm.trim(),
+        fullName: cleanData.fullName,
+        fatherName: cleanData.fatherName,
+        gender: cleanData.gender?.toUpperCase() === 'FEMALE' ? 'FEMALE' : 'MALE',
+        dateOfBirth: cleanData.dob || '2008-01-01',
+        age: parseInt(String(cleanData.age), 10) || 16,
+        cnicOrBForm: cleanData.cnicBForm,
         nationality: 'Pakistani',
         religion: 'Islam',
-        address: formData.permanentAddress?.trim() || 'Address',
-        district: formData.district?.trim() || 'Mansehra',
-        province: formData.province?.trim() || 'Khyber Pakhtunkhwa',
+        address: cleanData.permanentAddress || 'Address',
+        district: cleanData.district || 'Mansehra',
+        province: cleanData.province || 'Khyber Pakhtunkhwa',
         studentMobile: studentMobileVal,
         parentMobile: parentMobileVal,
-        whatsapp: formData.whatsapp?.trim() || studentMobileVal,
+        whatsapp: cleanData.whatsapp || studentMobileVal,
         email: emailVal && emailVal.includes('@') ? emailVal : undefined,
-        currentClass: formData.currentClass || 'SSC-II (Class 10th)',
-        hsscGroup: formData.discipline || undefined,
-        schoolName: formData.schoolName?.trim() || 'School',
-        boardOrUniversity: formData.boardUniversity || 'BISE Abbottabad',
-        currentRollNo: formData.currentRollNo?.trim() || undefined,
-        scholarshipCategory: formData.appliedCategory?.includes('Orphan')
+        currentClass: cleanData.currentClass || 'SSC-II (Class 10th)',
+        hsscGroup: cleanData.discipline || undefined,
+        schoolName: cleanData.schoolName || 'School',
+        boardOrUniversity: cleanData.boardUniversity || 'BISE Abbottabad',
+        currentRollNo: cleanData.currentRollNo || undefined,
+        scholarshipCategory: cleanData.appliedCategory?.includes('Orphan')
           ? 'ORPHAN'
-          : formData.appliedCategory?.includes('Disability')
+          : cleanData.appliedCategory?.includes('Disability')
           ? 'PERSON_WITH_DISABILITY'
-          : formData.appliedCategory?.includes('Needy') || formData.isSpecialNeed
+          : cleanData.appliedCategory?.includes('Needy') || cleanData.isSpecialNeed
           ? 'FINANCIALLY_NEEDY'
           : 'GENERAL_MERIT',
-        guardianOccupation: formData.guardianOccupation?.trim() || 'Business / Private',
-        guardianMonthlyIncome: Number(formData.monthlyHouseholdIncome) || 0,
-        emergencyContact: parentMobileVal,
+        guardianOccupation: cleanData.guardianOccupation || 'Business / Private',
+        guardianMonthlyIncome: Number(cleanData.monthlyHouseholdIncome) || 0,
+        emergencyContact: cleanData.emergencyContact || parentMobileVal,
         emergencyRelation: 'Guardian',
         referralSource: 'AZM.AIO Online Apply Portal',
-        photoUrl: formData.photoUrl || undefined,
-        academicRecords: (formData.academicRecords || []).map((r) => ({
+        photoUrl: cleanData.photoUrl || undefined,
+        academicRecords: (cleanData.academicRecords || []).map((r) => ({
           examLevel: r.gradeClass || 'Class 9th',
           boardOrUni: r.institute || 'BISE',
-          yearOfPassing: r.passingYear || '2025',
+          yearOfPassing: r.passingYear || String(new Date().getFullYear()),
           totalMarks: Math.round(Number(r.totalMarks)) || 550,
           obtainedMarks: Math.round(Number(r.obtainedMarks)) || 450,
           percentage: Number(r.percentage) || 80,
         })),
         documents: {
-          bformCnicCopy: !!formData.documents?.bformUploaded,
-          fatherCnicCopy: !!formData.documents?.fatherCnicUploaded,
-          passportPhotos: !!formData.photoUrl,
-          previousResultCard: !!formData.documents?.dmcUploaded,
-          domicileCertificate: !!formData.documents?.domicileUploaded,
-          incomeCertificate: !!formData.documents?.incomeCertUploaded,
+          bformCnicCopy: !!cleanData.documents?.bformUploaded,
+          fatherCnicCopy: !!cleanData.documents?.fatherCnicUploaded,
+          passportPhotos: !!cleanData.photoUrl,
+          previousResultCard: !!cleanData.documents?.dmcUploaded,
+          domicileCertificate: !!cleanData.documents?.domicileUploaded,
+          incomeCertificate: !!cleanData.documents?.incomeCertUploaded,
         },
         uploadedDocuments: {
-          photo: formData.photoUrl
+          photo: cleanData.photoUrl
             ? {
                 name: 'Candidate_Passport_Photo.jpg',
                 size: '180 KB',
-                dataUrl: formData.photoUrl,
+                dataUrl: cleanData.photoUrl,
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
@@ -695,25 +985,25 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
-          signature: formData.signatureDataUrl
+          signature: cleanData.signatureDataUrl
             ? {
                 name: 'Applicant_Digital_Signature.png',
                 size: '25 KB',
-                dataUrl: formData.signatureDataUrl,
+                dataUrl: cleanData.signatureDataUrl,
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
         },
-        signatureDataUrl: formData.signatureDataUrl || undefined,
+        signatureDataUrl: cleanData.signatureDataUrl || undefined,
         applicantSignedAt: new Date().toISOString(),
       };
 
       const student = await mockApi.createStudent(backendPayload);
 
       setCreatedStudent(student);
-
       setSubmittedAppId(student.applicationNo || student.id);
       setIsSubmitted(true);
+      setIsCaptchaOpen(false);
 
       try {
         localStorage.removeItem('AZM_STUDENT_APP_V');
@@ -730,10 +1020,9 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         });
       } catch (err) {}
     } catch (err: any) {
-      setSubmitError(
-        err.message ||
-          'Failed to submit registration. Please check that your CNIC is not already registered.'
-      );
+      const friendlyMsg = mapSubmitErrorToFriendlyMessage(err);
+      setSubmitError(friendlyMsg);
+      throw new Error(friendlyMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -759,46 +1048,35 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         photoUrl: formData.photoUrl,
         createdAt: new Date().toISOString(),
       };
-      await mockApi.downloadStudentPdf(studentData.id, studentData.rollNumber, studentData);
+      await mockApi.downloadRegistrationSlipPdf(studentData);
     } catch (err: any) {
-      console.warn('Download PDF notice:', err);
+      alert(err.message || 'Failed to download PDF registration slip');
     } finally {
       setIsDownloadingPdf(false);
     }
   };
 
-
-  // Partner School Submit to Live Database
   const handlePartnerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsPartnerSubmitting(true);
     try {
-      const backendPayload = {
+      const payload = {
         institutionName: partnerData.institutionName,
-        institutionType:
-          partnerData.category?.toLowerCase().includes('college') || partnerData.category?.toLowerCase().includes('inter')
-            ? 'COLLEGE'
-            : partnerData.category?.toLowerCase().includes('uni')
-            ? 'UNIVERSITY'
-            : 'SCHOOL',
-        campus: partnerData.campus || 'Main Campus',
-        address: partnerData.address || 'Campus Address',
-        district: partnerData.district || 'Abbottabad',
-        province: 'Khyber Pakhtunkhwa',
-        contactName: partnerData.contactPerson || 'Principal / Administrator',
-        contactDesignation: partnerData.designation || 'Head of Institution',
-        contactMobile: partnerData.whatsapp || '0300-0000000',
-        contactWhatsapp: partnerData.whatsapp,
-        contactEmail: `${partnerData.institutionName.toLowerCase().replace(/[^a-z0-9]/g, '')}@partner.edu.pk`,
-        website: 'https://jadoon.edu.pk',
-        classesOffered: ['SSC', 'HSSC'],
-        studentStrength: Number(partnerData.totalStudentStrength) || 100,
-        expectedApplicants: Number(partnerData.expectedApplicants) || 50,
-        agreedToTerms: true,
+        category: partnerData.category,
+        campus: partnerData.campus,
+        address: partnerData.address,
+        district: partnerData.district,
+        contactPerson: partnerData.contactPerson,
+        designation: partnerData.designation,
+        whatsapp: partnerData.whatsapp,
+        email: partnerData.email,
+        totalStudentStrength: Number(partnerData.totalStudentStrength) || 0,
+        expectedApplicants: Number(partnerData.expectedApplicants) || 0,
+        stampUploaded: !!partnerData.stampUploaded,
       };
 
-      const partner = await mockApi.registerPartner(backendPayload);
-      setCreatedPartner(partner);
+      const res = await mockApi.registerPartnerSchool(payload);
+      setCreatedPartner(res.data);
       setIsPartnerSubmitted(true);
       try {
         const confettiModule = await import('canvas-confetti');
@@ -806,7 +1084,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
       } catch (err) {}
     } catch (err: any) {
-      alert(err.message || 'Failed to submit partner affiliation.');
+      alert(err.message || 'Failed to submit partner school application');
     } finally {
       setIsPartnerSubmitting(false);
     }
@@ -823,7 +1101,6 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       setIsDownloadingPartnerPdf(false);
     }
   };
-
 
   // Calculate Progress %
   const calculateProgress = () => {
@@ -847,98 +1124,6 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     { num: 7, title: 'Document Uploads', icon: UploadCloud },
     { num: 8, title: 'Declaration & Signature', icon: CheckCircle2 },
   ];
-
-  // Real-time Stage Validation Logic
-  const getStageErrors = (stageNum: number): string[] => {
-    const errs: string[] = [];
-
-    switch (stageNum) {
-      case 1:
-        if (!formData.fullName?.trim()) errs.push('Candidate Full Name is required.');
-        if (!formData.fatherName?.trim()) errs.push("Father's / Guardian's Name is required.");
-        if (!formData.dob) errs.push('Date of Birth is required.');
-        if (!formData.cnicBForm?.trim()) {
-          errs.push('Candidate CNIC / B-Form Number is required.');
-        } else if (formData.cnicBForm.replace(/\D/g, '').length !== 13) {
-          errs.push('CNIC / B-Form must contain exactly 13 digits (e.g., 13503-1234567-1).');
-        }
-        if (!formData.photoUrl) errs.push('Passport-size Candidate Photograph (Max 200 KB) is required.');
-        break;
-
-      case 2:
-        if (!formData.permanentAddress?.trim()) errs.push('Permanent Residential Address is required.');
-        if (!formData.district?.trim()) errs.push('District is required.');
-        if (!formData.parentMobile?.trim()) errs.push('Father / Guardian Mobile Number is required.');
-        if (!formData.mobile?.trim()) errs.push('Candidate / Active Mobile Number is required.');
-        if (!formData.whatsapp?.trim()) errs.push('Active WhatsApp Number is required for examination alerts.');
-        break;
-
-
-      case 3:
-        if (!formData.currentClass?.trim()) errs.push('Target Applied Grade / Class is required.');
-        if (!formData.schoolName?.trim()) errs.push('Current School / College Name is required.');
-        if (!formData.currentRollNo?.trim()) errs.push('Current School Roll Number is required.');
-        break;
-
-      case 4:
-        if (!formData.appliedCategory) errs.push('Please select a Scholarship Category.');
-        if (formData.isSpecialNeed && !formData.specialNeedDetails?.trim()) {
-          errs.push('Please describe special need / disability details.');
-        }
-        break;
-
-      case 5:
-        if (!formData.guardianOccupation?.trim()) errs.push("Guardian / Father's Occupation is required.");
-        if (!formData.monthlyHouseholdIncome || Number(formData.monthlyHouseholdIncome) <= 0) {
-          errs.push('Monthly Household Income must be greater than 0.');
-        }
-        if (!formData.emergencyContact?.trim()) errs.push('Emergency Contact Mobile is required.');
-        break;
-
-      case 6:
-        if (!formData.academicRecords || formData.academicRecords.length === 0) {
-          errs.push('Please add at least one academic record (e.g., Class 9th / 8th result) in the table above.');
-        }
-        break;
-
-      case 7:
-        if (!formData.documents?.bformUploaded) errs.push('Candidate B-Form / CNIC scanned copy is required.');
-        if (!formData.documents?.fatherCnicUploaded) errs.push('Father / Guardian CNIC scanned copy is required.');
-        if (!formData.documents?.dmcUploaded) errs.push('Previous Examination DMC / Result Card is required.');
-        // Domicile certificate is completely optional
-        break;
-
-
-      case 8:
-        if (!formData.declarationAccepted) errs.push('Please accept the legal terms and evaluation protocol undertaking.');
-        if (!formData.signatureDataUrl && !hasSignature) errs.push('Please draw your digital signature on the pad above.');
-        break;
-
-      default:
-        break;
-    }
-
-    return errs;
-  };
-
-  const isStageComplete = (stageNum: number): boolean => {
-    return getStageErrors(stageNum).length === 0;
-  };
-
-  const getIncompleteStagesBefore8 = () => {
-    const incomplete: { stage: number; title: string; errors: string[] }[] = [];
-    for (let s = 1; s <= 7; s++) {
-      const errs = getStageErrors(s);
-      if (errs.length > 0) {
-        incomplete.push({
-          stage: s,
-          title: stagesList[s - 1].title,
-          errors: errs,
-        });
-      }
-    }
-    return incomplete;
-  };
 
   const handleProceedNext = (targetStage: number) => {
     // If moving forward, validate the current stage first
@@ -967,9 +1152,16 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     window.scrollTo({ top: 180, behavior: 'smooth' });
   };
 
-
   return (
     <div className="py-10 max-w-7xl mx-auto px-4 sm:px-6">
+      {/* Pre-Submit CAPTCHA & Server Warm-up Modal */}
+      <PreSubmitCaptchaModal
+        isOpen={isCaptchaOpen}
+        onClose={() => setIsCaptchaOpen(false)}
+        onConfirmSubmit={executeFinalSubmission}
+        isSubmitting={isSubmitting}
+      />
+
       {/* Header & Tab Switcher */}
       <div className="text-center max-w-3xl mx-auto space-y-4 mb-8">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#185b9d]/10 text-[#185b9d] border border-[#185b9d]/20">
@@ -1134,13 +1326,35 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Full Name (as per B-Form / School Record) *
                       </label>
                       <input
+                        id="field-fullName"
                         type="text"
                         required
                         placeholder="e.g. Muhammad Hamza Khan"
                         value={formData.fullName}
-                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          setFormData({ ...formData, fullName: e.target.value });
+                          if (touchedFields.fullName) {
+                            const err = validateFullName(e.target.value);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.fullName = err; else delete next.fullName;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('fullName')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.fullName && fieldErrors.fullName
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.fullName && fieldErrors.fullName && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.fullName}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1148,13 +1362,35 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Father / Guardian Name *
                       </label>
                       <input
+                        id="field-fatherName"
                         type="text"
                         required
                         placeholder="e.g. Tariq Mehmood Khan"
                         value={formData.fatherName}
-                        onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          setFormData({ ...formData, fatherName: e.target.value });
+                          if (touchedFields.fatherName) {
+                            const err = validateFatherName(e.target.value);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.fatherName = err; else delete next.fatherName;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('fatherName')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.fatherName && fieldErrors.fatherName
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.fatherName && fieldErrors.fatherName && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.fatherName}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1162,14 +1398,27 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         CNIC / B-Form Number (Auto-Masked) *
                       </label>
                       <input
+                        id="field-cnicBForm"
                         type="text"
                         required
                         placeholder="13503-1234567-1"
                         value={formData.cnicBForm}
                         onChange={handleCnicChange}
-                        className="w-full px-3.5 py-2.5 text-xs font-mono font-bold rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onBlur={() => handleBlur('cnicBForm')}
+                        className={`w-full px-3.5 py-2.5 text-xs font-mono font-bold rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.cnicBForm && fieldErrors.cnicBForm
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
-                      <span className="text-[10px] text-slate-400 mt-1 block">Format: 13 Digits (13501-XXXXXXX-X)</span>
+                      {touchedFields.cnicBForm && fieldErrors.cnicBForm ? (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.cnicBForm}</span>
+                        </p>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 mt-1 block">Format: 13 Digits (13501-XXXXXXX-X)</span>
+                      )}
                     </div>
 
                     <div>
@@ -1177,14 +1426,36 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Gender *
                       </label>
                       <select
+                        id="field-gender"
                         value={formData.gender}
-                        onChange={(e) => setFormData({ ...formData, gender: e.target.value as any })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          setFormData({ ...formData, gender: e.target.value as any });
+                          if (touchedFields.gender) {
+                            const err = validateGender(e.target.value);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.gender = err; else delete next.gender;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('gender')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.gender && fieldErrors.gender
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       >
                         <option value="male">Male</option>
                         <option value="female">Female</option>
                         <option value="other">Other</option>
                       </select>
+                      {touchedFields.gender && fieldErrors.gender && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.gender}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1192,15 +1463,45 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Date of Birth *
                       </label>
                       <input
+                        id="field-dob"
                         type="date"
                         required
                         value={formData.dob}
-                        onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          const dobVal = e.target.value;
+                          const { age } = validateDobAndAge(dobVal);
+                          setFormData((prev) => ({
+                            ...prev,
+                            dob: dobVal,
+                            ...(age !== null ? { age: String(age) } : {}),
+                          }));
+                          if (touchedFields.dob) {
+                            const { error: dobErr } = validateDobAndAge(dobVal);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (dobErr) next.dob = dobErr; else delete next.dob;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('dob')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.dob && fieldErrors.dob
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.dob && fieldErrors.dob ? (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.dob}</span>
+                        </p>
+                      ) : formData.age ? (
+                        <span className="text-[10px] text-slate-500 mt-1 block">Calculated Age: {formData.age} years</span>
+                      ) : null}
                     </div>
 
-                    <div>
+                    <div id="field-photo">
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs font-bold text-slate-700">
                           Passport Size Photo (Max 200 KB) *
@@ -1279,13 +1580,35 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Permanent Residential Address *
                       </label>
                       <input
+                        id="field-permanentAddress"
                         type="text"
                         required
                         placeholder="Village / Street / Mohallah / House #"
                         value={formData.permanentAddress}
-                        onChange={(e) => setFormData({ ...formData, permanentAddress: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          setFormData({ ...formData, permanentAddress: e.target.value });
+                          if (touchedFields.permanentAddress) {
+                            const err = validateAddress(e.target.value);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.permanentAddress = err; else delete next.permanentAddress;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('permanentAddress')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.permanentAddress && fieldErrors.permanentAddress
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.permanentAddress && fieldErrors.permanentAddress && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.permanentAddress}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1293,8 +1616,20 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         District *
                       </label>
                       <select
+                        id="field-district"
                         value={formData.district}
-                        onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                        onChange={(e) => {
+                          setFormData({ ...formData, district: e.target.value });
+                          if (touchedFields.district) {
+                            const err = validateDistrictProvince(e.target.value, formData.province);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.district = err; else delete next.district;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('district')}
                         className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
                       >
                         <option value="Mansehra">Mansehra</option>
@@ -1302,8 +1637,26 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         <option value="Haripur">Haripur</option>
                         <option value="Battagram">Battagram</option>
                         <option value="Torghar">Torghar</option>
-                        <option value="Kohistan">Kohistan</option>
-                        <option value="Other District (KP / Pakistan)">Other District (KP / Pakistan)</option>
+                        <option value="Kohistan Upper">Kohistan Upper</option>
+                        <option value="Kohistan Lower">Kohistan Lower</option>
+                        <option value="Kolai-Palas">Kolai-Palas</option>
+                        <option value="Peshawar">Peshawar</option>
+                        <option value="Mardan">Mardan</option>
+                        <option value="Swabi">Swabi</option>
+                        <option value="Charsadda">Charsadda</option>
+                        <option value="Nowshera">Nowshera</option>
+                        <option value="Kohat">Kohat</option>
+                        <option value="Bannu">Bannu</option>
+                        <option value="Dera Ismail Khan">Dera Ismail Khan</option>
+                        <option value="Swat">Swat</option>
+                        <option value="Dir Upper">Dir Upper</option>
+                        <option value="Dir Lower">Dir Lower</option>
+                        <option value="Chitral Upper">Chitral Upper</option>
+                        <option value="Chitral Lower">Chitral Lower</option>
+                        <option value="Malakand">Malakand</option>
+                        <option value="Buner">Buner</option>
+                        <option value="Shangla">Shangla</option>
+                        <option value="Other District">Other District (KP / Pakistan)</option>
                       </select>
                     </div>
 
@@ -1312,6 +1665,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Province *
                       </label>
                       <input
+                        id="field-province"
                         type="text"
                         readOnly
                         value={formData.province}
@@ -1324,13 +1678,25 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Father / Guardian Mobile Number *
                       </label>
                       <input
+                        id="field-parentMobile"
                         type="tel"
                         required
                         placeholder="0300-1234567"
                         value={formData.parentMobile}
-                        onChange={(e) => setFormData({ ...formData, parentMobile: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => handlePhoneChange('parentMobile', e)}
+                        onBlur={() => handleBlur('parentMobile')}
+                        className={`w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.parentMobile && fieldErrors.parentMobile
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.parentMobile && fieldErrors.parentMobile && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.parentMobile}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1338,13 +1704,25 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Candidate Mobile Number (SMS Alerts) *
                       </label>
                       <input
+                        id="field-mobile"
                         type="tel"
                         required
                         placeholder="0300-1234567"
                         value={formData.mobile}
-                        onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => handlePhoneChange('mobile', e)}
+                        onBlur={() => handleBlur('mobile')}
+                        className={`w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.mobile && fieldErrors.mobile
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.mobile && fieldErrors.mobile && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.mobile}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1352,13 +1730,25 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         WhatsApp Number (Roll No Slip & Exam Notes) *
                       </label>
                       <input
+                        id="field-whatsapp"
                         type="tel"
                         required
                         placeholder="0305-1234567"
                         value={formData.whatsapp}
-                        onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => handlePhoneChange('whatsapp', e)}
+                        onBlur={() => handleBlur('whatsapp')}
+                        className={`w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.whatsapp && fieldErrors.whatsapp
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.whatsapp && fieldErrors.whatsapp && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.whatsapp}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1366,12 +1756,34 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Email Address (Optional)
                       </label>
                       <input
+                        id="field-email"
                         type="email"
                         placeholder="student@example.com"
                         value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          setFormData({ ...formData, email: e.target.value });
+                          if (touchedFields.email) {
+                            const err = validateEmail(e.target.value);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.email = err; else delete next.email;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('email')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.email && fieldErrors.email
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.email && fieldErrors.email && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.email}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1391,6 +1803,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Current Class Level Applying For *
                       </label>
                       <select
+                        id="field-currentClass"
                         value={formData.currentClass}
                         onChange={(e) => setFormData({ ...formData, currentClass: e.target.value })}
                         className="w-full px-3.5 py-2.5 text-xs font-bold text-[#185b9d] rounded-xl bg-blue-50 border border-blue-200 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
@@ -1408,6 +1821,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Discipline / Group *
                       </label>
                       <input
+                        id="field-discipline"
                         type="text"
                         placeholder="Science (Biology) / Pre-Engg / Computer Science"
                         value={formData.discipline}
@@ -1421,13 +1835,35 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Current School / College Name *
                       </label>
                       <input
+                        id="field-schoolName"
                         type="text"
                         required
                         placeholder="e.g. Government High School Gandhian / Dubai International College"
                         value={formData.schoolName}
-                        onChange={(e) => setFormData({ ...formData, schoolName: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          setFormData({ ...formData, schoolName: e.target.value });
+                          if (touchedFields.schoolName) {
+                            const err = validateSchoolName(e.target.value);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.schoolName = err; else delete next.schoolName;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('schoolName')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.schoolName && fieldErrors.schoolName
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.schoolName && fieldErrors.schoolName && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.schoolName}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1435,6 +1871,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Affiliated BISE Board / University *
                       </label>
                       <select
+                        id="field-boardUniversity"
                         value={formData.boardUniversity}
                         onChange={(e) => setFormData({ ...formData, boardUniversity: e.target.value })}
                         className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
@@ -1451,10 +1888,12 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Current Institutional Roll No
+                        Current Institutional Roll No *
                       </label>
                       <input
+                        id="field-currentRollNo"
                         type="text"
+                        required
                         placeholder="e.g. 4210"
                         value={formData.currentRollNo}
                         onChange={(e) => setFormData({ ...formData, currentRollNo: e.target.value })}
@@ -1529,13 +1968,35 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Father / Guardian Occupation *
                       </label>
                       <input
+                        id="field-guardianOccupation"
                         type="text"
                         required
                         placeholder="e.g. Daily Wage Worker / Farmer / Teacher / Private Job"
                         value={formData.guardianOccupation}
-                        onChange={(e) => setFormData({ ...formData, guardianOccupation: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          setFormData({ ...formData, guardianOccupation: e.target.value });
+                          if (touchedFields.guardianOccupation) {
+                            const err = validateOccupation(e.target.value);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.guardianOccupation = err; else delete next.guardianOccupation;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('guardianOccupation')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.guardianOccupation && fieldErrors.guardianOccupation
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.guardianOccupation && fieldErrors.guardianOccupation && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.guardianOccupation}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1543,12 +2004,35 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Total Monthly Household Income (PKR) *
                       </label>
                       <input
+                        id="field-monthlyHouseholdIncome"
                         type="number"
                         required
-                        value={formData.monthlyHouseholdIncome}
-                        onChange={(e) => setFormData({ ...formData, monthlyHouseholdIncome: Number(e.target.value) })}
-                        className="w-full px-3.5 py-2.5 text-xs font-mono font-bold rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        value={formData.monthlyHouseholdIncome || ''}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setFormData({ ...formData, monthlyHouseholdIncome: val });
+                          if (touchedFields.monthlyHouseholdIncome) {
+                            const err = validateIncome(val);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.monthlyHouseholdIncome = err; else delete next.monthlyHouseholdIncome;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('monthlyHouseholdIncome')}
+                        className={`w-full px-3.5 py-2.5 text-xs font-mono font-bold rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.monthlyHouseholdIncome && fieldErrors.monthlyHouseholdIncome
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.monthlyHouseholdIncome && fieldErrors.monthlyHouseholdIncome && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.monthlyHouseholdIncome}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1556,11 +2040,34 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Number of Family Dependents (Brothers/Sisters) *
                       </label>
                       <input
+                        id="field-dependentsCount"
                         type="number"
                         value={formData.dependentsCount}
-                        onChange={(e) => setFormData({ ...formData, dependentsCount: Number(e.target.value) })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setFormData({ ...formData, dependentsCount: val });
+                          if (touchedFields.dependentsCount) {
+                            const err = validateDependents(val);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.dependentsCount = err; else delete next.dependentsCount;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('dependentsCount')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.dependentsCount && fieldErrors.dependentsCount
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.dependentsCount && fieldErrors.dependentsCount && (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.dependentsCount}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1568,13 +2075,37 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                         Emergency Contact Person & Phone *
                       </label>
                       <input
+                        id="field-emergencyContact"
                         type="text"
                         required
-                        placeholder="e.g. Uncle: 0312-9876543"
+                        placeholder="e.g. Tariq Khan (Uncle) - 0312-9876543"
                         value={formData.emergencyContact}
-                        onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
+                        onChange={(e) => {
+                          setFormData({ ...formData, emergencyContact: e.target.value });
+                          if (touchedFields.emergencyContact) {
+                            const err = validateEmergencyContact(e.target.value);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              if (err) next.emergencyContact = err; else delete next.emergencyContact;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => handleBlur('emergencyContact')}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-hidden transition ${
+                          touchedFields.emergencyContact && fieldErrors.emergencyContact
+                            ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                            : 'bg-slate-50 border-slate-300 focus:bg-white focus:border-[#185b9d]'
+                        }`}
                       />
+                      {touchedFields.emergencyContact && fieldErrors.emergencyContact ? (
+                        <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{fieldErrors.emergencyContact}</span>
+                        </p>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 mt-1 block">Include person name and 11-digit phone number</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1617,7 +2148,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveAcademicRecord(rIdx)}
-                                  className="text-rose-600 hover:text-rose-800 font-bold text-xs"
+                                  className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
                                 >
                                   Remove
                                 </button>
@@ -1628,9 +2159,9 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                       </table>
                     </div>
                   ) : (
-                    <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500 space-y-1">
-                      <p className="font-semibold text-slate-700">No academic records added yet.</p>
-                      <p>Enter your previous grade results below to include them with your application.</p>
+                    <div className="p-6 rounded-2xl bg-rose-50/50 border border-rose-200 text-center text-xs space-y-1">
+                      <p className="font-bold text-rose-800">No academic records added yet.</p>
+                      <p className="text-rose-600">Please enter your previous examination marks below and click "Add Record" to proceed.</p>
                     </div>
                   )}
 
@@ -1648,18 +2179,28 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                           placeholder="e.g. Class 9th / Matric"
                           value={newGrade}
                           onChange={(e) => setNewGrade(e.target.value)}
-                          className="w-full px-3 py-2 text-xs rounded-xl bg-white border border-slate-300 focus:outline-hidden"
+                          className={`w-full px-3 py-2 text-xs rounded-xl bg-white border focus:outline-hidden ${
+                            academicRowErrors.gradeClass ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                          }`}
                         />
+                        {academicRowErrors.gradeClass && (
+                          <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.gradeClass}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Passing Year *</label>
                         <input
                           type="text"
-                          placeholder="e.g. 2025"
+                          placeholder={`e.g. ${new Date().getFullYear()}`}
                           value={newYear}
                           onChange={(e) => setNewYear(e.target.value)}
-                          className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border border-slate-300 focus:outline-hidden"
+                          className={`w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border focus:outline-hidden ${
+                            academicRowErrors.passingYear ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                          }`}
                         />
+                        {academicRowErrors.passingYear && (
+                          <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.passingYear}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Total Marks *</label>
@@ -1668,8 +2209,13 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                           placeholder="e.g. 550"
                           value={newTotalMarks || ''}
                           onChange={(e) => setNewTotalMarks(Number(e.target.value))}
-                          className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border border-slate-300 focus:outline-hidden"
+                          className={`w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border focus:outline-hidden ${
+                            academicRowErrors.totalMarks ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                          }`}
                         />
+                        {academicRowErrors.totalMarks && (
+                          <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.totalMarks}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Obtained Marks *</label>
@@ -1678,8 +2224,13 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                           placeholder="e.g. 485"
                           value={newObtMarks || ''}
                           onChange={(e) => setNewObtMarks(Number(e.target.value))}
-                          className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border border-slate-300 focus:outline-hidden"
+                          className={`w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border focus:outline-hidden ${
+                            academicRowErrors.obtainedMarks ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                          }`}
                         />
+                        {academicRowErrors.obtainedMarks && (
+                          <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.obtainedMarks}</p>
+                        )}
                       </div>
                       <div className="sm:col-span-2">
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">School / Institute Name *</label>
@@ -1689,17 +2240,22 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                             placeholder="e.g. Government High School Gandhian"
                             value={newInstitute}
                             onChange={(e) => setNewInstitute(e.target.value)}
-                            className="flex-1 px-3 py-2 text-xs rounded-xl bg-white border border-slate-300 focus:outline-hidden"
+                            className={`flex-1 px-3 py-2 text-xs rounded-xl bg-white border focus:outline-hidden ${
+                              academicRowErrors.institute ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                            }`}
                           />
                           <button
                             type="button"
                             onClick={handleAddAcademicRecord}
-                            className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1"
+                            className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             <span>Add Record</span>
                           </button>
                         </div>
+                        {academicRowErrors.institute && (
+                          <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.institute}</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1720,7 +2276,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     </h3>
                     <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 inline-flex items-center gap-1 w-fit">
                       <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                      No file size limit for documents
+                      PDF, JPG, PNG, or Word format
                     </span>
                   </div>
 
@@ -1739,6 +2295,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                       return (
                         <div
                           key={doc.key}
+                          id={`field-${doc.key}`}
                           className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
                             isUploaded
                               ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-300/30'
@@ -1792,7 +2349,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveDocument(doc.key)}
-                                  className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition"
+                                  className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition cursor-pointer"
                                 >
                                   Remove
                                 </button>
@@ -1895,7 +2452,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                               <button
                                 type="button"
                                 onClick={() => handleProceedNext(st.num)}
-                                className="text-[11px] font-bold text-rose-700 bg-white hover:bg-rose-100 px-3 py-1 rounded-lg border border-rose-300 shadow-xs flex items-center gap-1 transition self-start sm:self-center"
+                                className="text-[11px] font-bold text-rose-700 bg-white hover:bg-rose-100 px-3 py-1 rounded-lg border border-rose-300 shadow-xs flex items-center gap-1 transition self-start sm:self-center cursor-pointer"
                               >
                                 <span>Go to Stage {st.num} to Fix</span>
                                 <ArrowRight className="w-3 h-3" />
@@ -1920,6 +2477,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
                     <label className="flex items-center gap-2 pt-2 text-slate-900 font-bold cursor-pointer">
                       <input
+                        id="field-declarationAccepted"
                         type="checkbox"
                         required
                         checked={formData.declarationAccepted}
@@ -1931,7 +2489,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   </div>
 
                   {/* Interactive Signature Pad */}
-                  <div>
+                  <div id="field-signatureDataUrl">
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-xs font-bold text-slate-800">
                         Candidate / Guardian Digital Signature Pad (Draw with mouse or finger):
@@ -1939,7 +2497,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                       <button
                         type="button"
                         onClick={clearSignature}
-                        className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1"
+                        className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 cursor-pointer"
                       >
                         <RotateCcw className="w-3 h-3" /> Clear Signature
                       </button>
@@ -1981,7 +2539,18 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   </div>
                   <ul className="list-disc pl-6 space-y-1 text-rose-700 font-medium text-[11px]">
                     {stageErrors[currentStage].map((errText, eIdx) => (
-                      <li key={eIdx}>{errText}</li>
+                      <li
+                        key={eIdx}
+                        className="cursor-pointer hover:underline"
+                        onClick={() => {
+                          const alertEl = document.getElementById('stage-validation-alert');
+                          if (alertEl) {
+                            alertEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                        }}
+                      >
+                        {errText}
+                      </li>
                     ))}
                   </ul>
                 </motion.div>
@@ -1994,7 +2563,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     <button
                       type="button"
                       onClick={() => handleProceedNext(Math.max(currentStage - 1, 1))}
-                      className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5 focus:outline-hidden"
+                      className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5 focus:outline-hidden cursor-pointer"
                     >
                       <ArrowLeft className="w-4 h-4" />
                       <span>Previous Stage</span>
@@ -2003,7 +2572,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     <button
                       type="button"
                       onClick={saveDraft}
-                      className="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1"
+                      className="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
                     >
                       <Save className="w-3.5 h-3.5" />
                       <span>{saveStatus || 'Auto-Save Draft'}</span>
@@ -2015,8 +2584,9 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   {currentStage < 8 ? (
                     <button
                       type="button"
+                      disabled={!isStageComplete(currentStage)}
                       onClick={() => handleProceedNext(currentStage + 1)}
-                      className="px-6 py-2.5 text-xs font-bold text-white bg-[#185b9d] hover:bg-[#13497e] rounded-xl shadow-md transition-all flex items-center gap-2 focus:outline-hidden"
+                      className="px-6 py-2.5 text-xs font-bold text-white bg-[#185b9d] hover:bg-[#13497e] disabled:opacity-40 disabled:cursor-not-allowed rounded-xl shadow-md transition-all flex items-center gap-2 focus:outline-hidden cursor-pointer"
                     >
                       <span>Next: Stage {currentStage + 1}</span>
                       <ArrowRight className="w-4 h-4" />
@@ -2024,9 +2594,9 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                   ) : (
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !isStageComplete(8) || getIncompleteStagesBefore8().length > 0}
                       id="btn-final-submit-application"
-                      className="px-8 py-3 text-xs font-extrabold text-white bg-gradient-to-r from-[#185b9d] via-emerald-600 to-[#299b46] hover:opacity-95 disabled:opacity-60 rounded-xl shadow-lg transition-all flex items-center gap-2 transform hover:scale-[1.02] focus:outline-hidden"
+                      className="px-8 py-3 text-xs font-extrabold text-white bg-gradient-to-r from-[#185b9d] via-emerald-600 to-[#299b46] hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-lg transition-all flex items-center gap-2 transform hover:scale-[1.02] focus:outline-hidden cursor-pointer"
                     >
                       {isSubmitting ? (
                         <>

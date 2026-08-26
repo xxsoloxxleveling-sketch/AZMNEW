@@ -5,18 +5,42 @@ import {
   ArrowLeft,
   CheckCircle,
   Download,
-  QrCode,
   FileCheck,
   User,
   Phone,
   BookOpen,
   Award,
-  ShieldCheck,
   CheckCircle2,
+  AlertCircle,
   Loader2,
+  RotateCcw,
+  Plus,
 } from 'lucide-react';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
 import { wakeUpBackend } from '../../../lib/apiClient';
+import {
+  formatCnic,
+  formatPakistaniPhone,
+  validateFullName,
+  validateFatherName,
+  validateCnic,
+  validateGender,
+  validateDobAndAge,
+  validateAddress,
+  validateDistrictProvince,
+  validatePhone,
+  validateEmail,
+  validateSchoolName,
+  validateGradeClass,
+  validateOccupation,
+  validateIncome,
+  validateDependents,
+  validateEmergencyContact,
+  validateAcademicRecord,
+  mapSubmitErrorToFriendlyMessage,
+  trimObjectStrings,
+} from '../../../utils/formValidation';
+import { PreSubmitCaptchaModal } from '../../common/PreSubmitCaptchaModal';
 
 interface PublicCandidateRegistrationWizardProps {
   onNavigateHome: () => void;
@@ -29,14 +53,21 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
 }) => {
   const [currentStage, setCurrentStage] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCaptchaOpen, setIsCaptchaOpen] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [registeredStudent, setRegisteredStudent] = useState<MockStudent | null>(null);
+
+  // Field touch and error states
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [academicRowErrors, setAcademicRowErrors] = useState<Record<string, string>>({});
 
   // Ping backend on wizard mount
   useEffect(() => {
     wakeUpBackend();
   }, []);
 
-  // Ping backend immediately when candidate reaches the final declarations/signature stage
+  // Ping backend immediately when candidate reaches the final declarations stage
   useEffect(() => {
     if (currentStage === 8) {
       wakeUpBackend(0);
@@ -76,6 +107,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
     // Stage 5: Emergency & Family
     guardianOccupation: '',
     guardianMonthlyIncome: 75000,
+    dependentsCount: 4,
     emergencyContact: '',
     emergencyRelation: 'Father',
 
@@ -84,7 +116,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
       {
         examLevel: 'SSC-I (Class 9th Board Exam)',
         boardOrUni: 'BISE Abbottabad',
-        yearOfPassing: '2025',
+        yearOfPassing: String(new Date().getFullYear() - 1),
         totalMarks: 550,
         obtainedMarks: 495,
         percentage: 90.0,
@@ -108,6 +140,13 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
     signatureName: '',
   });
 
+  // State for adding new academic records
+  const [newGrade, setNewGrade] = useState('');
+  const [newYear, setNewYear] = useState(String(new Date().getFullYear()));
+  const [newTotalMarks, setNewTotalMarks] = useState<number | ''>('');
+  const [newObtMarks, setNewObtMarks] = useState<number | ''>('');
+  const [newInstitute, setNewInstitute] = useState('');
+
   const totalStages = 8;
 
   const stageTitles = [
@@ -121,7 +160,188 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
     'Declarations & Submission',
   ];
 
+  const handleCnicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCnic(e.target.value);
+    setFormData((prev) => ({ ...prev, cnicOrBForm: formatted }));
+    if (touchedFields.cnicOrBForm) {
+      const err = validateCnic(formatted);
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        if (err) next.cnicOrBForm = err; else delete next.cnicOrBForm;
+        return next;
+      });
+    }
+  };
+
+  const handlePhoneChange = (fieldName: 'parentMobile' | 'studentMobile' | 'whatsapp', e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPakistaniPhone(e.target.value);
+    setFormData((prev) => ({ ...prev, [fieldName]: formatted }));
+    if (touchedFields[fieldName]) {
+      const label = fieldName === 'parentMobile' ? 'Parent Mobile' : fieldName === 'studentMobile' ? 'Candidate Mobile' : 'WhatsApp';
+      const err = validatePhone(formatted, label);
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        if (err) next[fieldName] = err; else delete next[fieldName];
+        return next;
+      });
+    }
+  };
+
+  const handleBlur = (field: string) => {
+    setTouchedFields((prev) => ({ ...prev, [field]: true }));
+    validateField(field);
+  };
+
+  const validateField = (field: string) => {
+    let err: string | null = null;
+    switch (field) {
+      case 'fullName':
+        err = validateFullName(formData.fullName);
+        break;
+      case 'fatherName':
+        err = validateFatherName(formData.fatherName);
+        break;
+      case 'cnicOrBForm':
+        err = validateCnic(formData.cnicOrBForm);
+        break;
+      case 'gender':
+        err = validateGender(formData.gender);
+        break;
+      case 'dateOfBirth':
+        err = validateDobAndAge(formData.dateOfBirth).error;
+        break;
+      case 'address':
+        err = validateAddress(formData.address);
+        break;
+      case 'district':
+        err = validateDistrictProvince(formData.district, formData.province);
+        break;
+      case 'parentMobile':
+        err = validatePhone(formData.parentMobile, 'Parent Mobile');
+        break;
+      case 'studentMobile':
+        err = validatePhone(formData.studentMobile, 'Candidate Mobile');
+        break;
+      case 'whatsapp':
+        if (formData.whatsapp) err = validatePhone(formData.whatsapp, 'WhatsApp');
+        break;
+      case 'email':
+        err = validateEmail(formData.email);
+        break;
+      case 'schoolName':
+        err = validateSchoolName(formData.schoolName);
+        break;
+      case 'currentClass':
+        err = validateGradeClass(formData.currentClass);
+        break;
+      case 'guardianOccupation':
+        err = validateOccupation(formData.guardianOccupation);
+        break;
+      case 'guardianMonthlyIncome':
+        err = validateIncome(formData.guardianMonthlyIncome);
+        break;
+      case 'emergencyContact':
+        err = validateEmergencyContact(formData.emergencyContact);
+        break;
+      default:
+        break;
+    }
+
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[field] = err; else delete next[field];
+      return next;
+    });
+    return err;
+  };
+
+  const getStageErrors = (stage: number): string[] => {
+    const errs: string[] = [];
+    switch (stage) {
+      case 1: {
+        const e1 = validateFullName(formData.fullName);
+        if (e1) errs.push(e1);
+        const e2 = validateFatherName(formData.fatherName);
+        if (e2) errs.push(e2);
+        const e3 = validateCnic(formData.cnicOrBForm);
+        if (e3) errs.push(e3);
+        const e4 = validateGender(formData.gender);
+        if (e4) errs.push(e4);
+        const { error: e5 } = validateDobAndAge(formData.dateOfBirth);
+        if (e5) errs.push(e5);
+        break;
+      }
+      case 2: {
+        const e1 = validateAddress(formData.address);
+        if (e1) errs.push(e1);
+        const e2 = validateDistrictProvince(formData.district, formData.province);
+        if (e2) errs.push(e2);
+        const e3 = validatePhone(formData.parentMobile, 'Parent Mobile');
+        if (e3) errs.push(e3);
+        const e4 = validatePhone(formData.studentMobile, 'Candidate Mobile');
+        if (e4) errs.push(e4);
+        if (formData.whatsapp) {
+          const e5 = validatePhone(formData.whatsapp, 'WhatsApp');
+          if (e5) errs.push(e5);
+        }
+        if (formData.email) {
+          const e6 = validateEmail(formData.email);
+          if (e6) errs.push(e6);
+        }
+        break;
+      }
+      case 3: {
+        const e1 = validateGradeClass(formData.currentClass);
+        if (e1) errs.push(e1);
+        const e2 = validateSchoolName(formData.schoolName);
+        if (e2) errs.push(e2);
+        break;
+      }
+      case 4: {
+        if (!formData.scholarshipCategory) errs.push('Please select a Scholarship Category.');
+        break;
+      }
+      case 5: {
+        const e1 = validateOccupation(formData.guardianOccupation);
+        if (e1) errs.push(e1);
+        const e2 = validateIncome(formData.guardianMonthlyIncome);
+        if (e2) errs.push(e2);
+        const e3 = validateEmergencyContact(formData.emergencyContact);
+        if (e3) errs.push(e3);
+        break;
+      }
+      case 6: {
+        if (!formData.academicRecords || formData.academicRecords.length === 0) {
+          errs.push('Please add at least one academic record before continuing.');
+        }
+        break;
+      }
+      case 7: {
+        if (!formData.documents.bformCnicCopy) errs.push('Candidate B-Form / CNIC copy confirmation is required.');
+        if (!formData.documents.fatherCnicCopy) errs.push('Father / Guardian CNIC copy confirmation is required.');
+        if (!formData.documents.previousResultCard) errs.push('Previous Examination Result Card is required.');
+        break;
+      }
+      case 8: {
+        if (!formData.agreedToApplicantDeclaration) errs.push('Please accept the applicant undertaking.');
+        if (!formData.agreedToParentDeclaration) errs.push('Please confirm parent / guardian endorsement.');
+        break;
+      }
+      default:
+        break;
+    }
+    return errs;
+  };
+
+  const isStageComplete = (stage: number) => getStageErrors(stage).length === 0;
+
   const handleNext = () => {
+    const errs = getStageErrors(currentStage);
+    if (errs.length > 0) {
+      setSubmitError(errs[0]);
+      return;
+    }
+    setSubmitError('');
     if (currentStage < totalStages) {
       setCurrentStage((prev) => prev + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -129,25 +349,95 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
   };
 
   const handlePrev = () => {
+    setSubmitError('');
     if (currentStage > 1) {
       setCurrentStage((prev) => prev - 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleAddAcademicRecord = () => {
+    const rowValidation = validateAcademicRecord({
+      gradeClass: newGrade,
+      passingYear: newYear,
+      totalMarks: newTotalMarks,
+      obtainedMarks: newObtMarks,
+      institute: newInstitute,
+    });
+
+    if (!rowValidation.valid) {
+      setAcademicRowErrors(rowValidation.errors);
+      return;
+    }
+
+    setAcademicRowErrors({});
+    const total = Number(newTotalMarks);
+    const obt = Number(newObtMarks);
+    const percentage = Math.round((obt / total) * 1000) / 10;
+
+    setFormData((prev) => ({
+      ...prev,
+      academicRecords: [
+        ...prev.academicRecords,
+        {
+          examLevel: newGrade,
+          boardOrUni: newInstitute,
+          yearOfPassing: newYear,
+          totalMarks: total,
+          obtainedMarks: obt,
+          percentage,
+        },
+      ],
+    }));
+
+    setNewGrade('');
+    setNewTotalMarks('');
+    setNewObtMarks('');
+    setNewInstitute('');
+  };
+
+  const handleRemoveAcademicRecord = (idx: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      academicRecords: prev.academicRecords.filter((_, i) => i !== idx),
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError('');
+
+    // Pre-flight check all stages 1 to 8
+    for (let s = 1; s <= 8; s++) {
+      const errs = getStageErrors(s);
+      if (errs.length > 0) {
+        setSubmitError(`Stage ${s} (${stageTitles[s - 1]}): ${errs[0]}`);
+        setCurrentStage(s);
+        return;
+      }
+    }
+
+    // Open Pre-Submit CAPTCHA modal
+    setIsCaptchaOpen(true);
+  };
+
+  const executeFinalSubmission = async () => {
+    setSubmitError('');
     setIsSubmitting(true);
 
     try {
+      const cleanData = trimObjectStrings(formData);
       const student = await mockApi.createStudent({
-        ...formData,
-        guardianMonthlyIncome: Number(formData.guardianMonthlyIncome),
-        age: Number(formData.age),
+        ...cleanData,
+        guardianMonthlyIncome: Number(cleanData.guardianMonthlyIncome),
+        age: Number(cleanData.age),
       });
       setRegisteredStudent(student);
+      setIsCaptchaOpen(false);
     } catch (err: any) {
-      alert(err.message || 'Failed to submit registration');
+      const friendlyMsg = mapSubmitErrorToFriendlyMessage(err);
+      setSubmitError(friendlyMsg);
+      throw new Error(friendlyMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -271,6 +561,14 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
 
         {/* Wizard Form Card */}
         <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/80 shadow-md space-y-6">
+          {/* Pre-Submit CAPTCHA & Server Warm-up Modal */}
+          <PreSubmitCaptchaModal
+            isOpen={isCaptchaOpen}
+            onClose={() => setIsCaptchaOpen(false)}
+            onConfirmSubmit={executeFinalSubmission}
+            isSubmitting={isSubmitting}
+          />
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Stage 1: Personal Information */}
             {currentStage === 1 && (
@@ -283,32 +581,88 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Candidate Full Name *</label>
                     <input
+                      id="field-fullName"
                       type="text"
                       required
                       placeholder="e.g. Hamza Tariq Jadoon"
                       value={formData.fullName}
-                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]"
+                      onChange={(e) => {
+                        setFormData({ ...formData, fullName: e.target.value });
+                        if (touchedFields.fullName) {
+                          const err = validateFullName(e.target.value);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (err) next.fullName = err; else delete next.fullName;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('fullName')}
+                      className={`w-full px-3.5 py-2.5 text-sm rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.fullName && fieldErrors.fullName
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]'
+                      }`}
                     />
+                    {touchedFields.fullName && fieldErrors.fullName && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.fullName}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Father Name *</label>
                     <input
+                      id="field-fatherName"
                       type="text"
                       required
                       placeholder="e.g. Tariq Mehmood"
                       value={formData.fatherName}
-                      onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]"
+                      onChange={(e) => {
+                        setFormData({ ...formData, fatherName: e.target.value });
+                        if (touchedFields.fatherName) {
+                          const err = validateFatherName(e.target.value);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (err) next.fatherName = err; else delete next.fatherName;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('fatherName')}
+                      className={`w-full px-3.5 py-2.5 text-sm rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.fatherName && fieldErrors.fatherName
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]'
+                      }`}
                     />
+                    {touchedFields.fatherName && fieldErrors.fatherName && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.fatherName}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Gender *</label>
                     <select
+                      id="field-gender"
                       value={formData.gender}
-                      onChange={(e) => setFormData({ ...formData, gender: e.target.value as any })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, gender: e.target.value as any });
+                        if (touchedFields.gender) {
+                          const err = validateGender(e.target.value);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (err) next.gender = err; else delete next.gender;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('gender')}
                       className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
                     >
                       <option value="MALE">Male</option>
@@ -319,29 +673,70 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">CNIC or B-Form Number *</label>
                     <input
+                      id="field-cnicOrBForm"
                       type="text"
                       required
                       placeholder="13101-9876543-1"
                       value={formData.cnicOrBForm}
-                      onChange={(e) => setFormData({ ...formData, cnicOrBForm: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]"
+                      onChange={handleCnicChange}
+                      onBlur={() => handleBlur('cnicOrBForm')}
+                      className={`w-full px-3.5 py-2.5 text-sm font-mono rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.cnicOrBForm && fieldErrors.cnicOrBForm
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]'
+                      }`}
                     />
+                    {touchedFields.cnicOrBForm && fieldErrors.cnicOrBForm && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.cnicOrBForm}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Date of Birth *</label>
                     <input
+                      id="field-dateOfBirth"
                       type="date"
                       required
                       value={formData.dateOfBirth}
-                      onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const { age } = validateDobAndAge(val);
+                        setFormData((prev) => ({
+                          ...prev,
+                          dateOfBirth: val,
+                          ...(age !== null ? { age } : {}),
+                        }));
+                        if (touchedFields.dateOfBirth) {
+                          const { error: dobErr } = validateDobAndAge(val);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (dobErr) next.dateOfBirth = dobErr; else delete next.dateOfBirth;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('dateOfBirth')}
+                      className={`w-full px-3.5 py-2.5 text-sm rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.dateOfBirth && fieldErrors.dateOfBirth
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white'
+                      }`}
                     />
+                    {touchedFields.dateOfBirth && fieldErrors.dateOfBirth && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.dateOfBirth}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Nationality</label>
                     <input
+                      id="field-nationality"
                       type="text"
                       value={formData.nationality}
                       onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
@@ -363,22 +758,60 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Parent / Guardian Mobile *</label>
                     <input
+                      id="field-parentMobile"
                       type="text"
                       required
                       placeholder="0300-1234567"
                       value={formData.parentMobile}
-                      onChange={(e) => setFormData({ ...formData, parentMobile: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]"
+                      onChange={(e) => handlePhoneChange('parentMobile', e)}
+                      onBlur={() => handleBlur('parentMobile')}
+                      className={`w-full px-3.5 py-2.5 text-sm font-mono rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.parentMobile && fieldErrors.parentMobile
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d]'
+                      }`}
                     />
+                    {touchedFields.parentMobile && fieldErrors.parentMobile && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.parentMobile}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">WhatsApp Number</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Candidate Active Mobile *</label>
                     <input
+                      id="field-studentMobile"
+                      type="text"
+                      required
+                      placeholder="0300-1234567"
+                      value={formData.studentMobile}
+                      onChange={(e) => handlePhoneChange('studentMobile', e)}
+                      onBlur={() => handleBlur('studentMobile')}
+                      className={`w-full px-3.5 py-2.5 text-sm font-mono rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.studentMobile && fieldErrors.studentMobile
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white'
+                      }`}
+                    />
+                    {touchedFields.studentMobile && fieldErrors.studentMobile && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.studentMobile}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">WhatsApp Number (Optional)</label>
+                    <input
+                      id="field-whatsapp"
                       type="text"
                       placeholder="0300-1234567"
                       value={formData.whatsapp}
-                      onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                      onChange={(e) => handlePhoneChange('whatsapp', e)}
+                      onBlur={() => handleBlur('whatsapp')}
                       className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
                     />
                   </div>
@@ -386,10 +819,22 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">District *</label>
                     <input
+                      id="field-district"
                       type="text"
                       required
                       value={formData.district}
-                      onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, district: e.target.value });
+                        if (touchedFields.district) {
+                          const err = validateDistrictProvince(e.target.value, formData.province);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (err) next.district = err; else delete next.district;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('district')}
                       className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
                     />
                   </div>
@@ -397,24 +842,47 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Province *</label>
                     <input
+                      id="field-province"
                       type="text"
                       required
                       value={formData.province}
-                      onChange={(e) => setFormData({ ...formData, province: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
+                      readOnly
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-100 border border-slate-200 rounded-xl text-slate-600"
                     />
                   </div>
 
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-bold text-slate-700 mb-1">Permanent Residential Address *</label>
                     <input
+                      id="field-address"
                       type="text"
                       required
                       placeholder="House #, Street, Mohallah / Sector"
                       value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
+                      onChange={(e) => {
+                        setFormData({ ...formData, address: e.target.value });
+                        if (touchedFields.address) {
+                          const err = validateAddress(e.target.value);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (err) next.address = err; else delete next.address;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('address')}
+                      className={`w-full px-3.5 py-2.5 text-sm rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.address && fieldErrors.address
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white'
+                      }`}
                     />
+                    {touchedFields.address && fieldErrors.address && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.address}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -431,6 +899,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Admission Class Level *</label>
                     <select
+                      id="field-currentClass"
                       value={formData.currentClass}
                       onChange={(e) => setFormData({ ...formData, currentClass: e.target.value })}
                       className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
@@ -449,18 +918,41 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Current School / College Name *</label>
                     <input
+                      id="field-schoolName"
                       type="text"
                       required
                       placeholder="e.g. Jadoon Public School"
                       value={formData.schoolName}
-                      onChange={(e) => setFormData({ ...formData, schoolName: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
+                      onChange={(e) => {
+                        setFormData({ ...formData, schoolName: e.target.value });
+                        if (touchedFields.schoolName) {
+                          const err = validateSchoolName(e.target.value);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (err) next.schoolName = err; else delete next.schoolName;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('schoolName')}
+                      className={`w-full px-3.5 py-2.5 text-sm rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.schoolName && fieldErrors.schoolName
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white'
+                      }`}
                     />
+                    {touchedFields.schoolName && fieldErrors.schoolName && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.schoolName}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Board / University</label>
                     <input
+                      id="field-boardOrUniversity"
                       type="text"
                       value={formData.boardOrUniversity}
                       onChange={(e) => setFormData({ ...formData, boardOrUniversity: e.target.value })}
@@ -471,6 +963,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">School Roll No</label>
                     <input
+                      id="field-currentRollNo"
                       type="text"
                       placeholder="e.g. 45892"
                       value={formData.currentRollNo}
@@ -532,41 +1025,111 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Guardian Occupation *</label>
                     <input
+                      id="field-guardianOccupation"
                       type="text"
                       required
                       placeholder="e.g. Government Officer / Business"
                       value={formData.guardianOccupation}
-                      onChange={(e) => setFormData({ ...formData, guardianOccupation: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
+                      onChange={(e) => {
+                        setFormData({ ...formData, guardianOccupation: e.target.value });
+                        if (touchedFields.guardianOccupation) {
+                          const err = validateOccupation(e.target.value);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (err) next.guardianOccupation = err; else delete next.guardianOccupation;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('guardianOccupation')}
+                      className={`w-full px-3.5 py-2.5 text-sm rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.guardianOccupation && fieldErrors.guardianOccupation
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white'
+                      }`}
                     />
+                    {touchedFields.guardianOccupation && fieldErrors.guardianOccupation && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.guardianOccupation}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Monthly Household Income (PKR) *</label>
                     <input
+                      id="field-guardianMonthlyIncome"
                       type="number"
                       required
                       value={formData.guardianMonthlyIncome}
-                      onChange={(e) => setFormData({ ...formData, guardianMonthlyIncome: Number(e.target.value) })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setFormData({ ...formData, guardianMonthlyIncome: val });
+                        if (touchedFields.guardianMonthlyIncome) {
+                          const err = validateIncome(val);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (err) next.guardianMonthlyIncome = err; else delete next.guardianMonthlyIncome;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('guardianMonthlyIncome')}
+                      className={`w-full px-3.5 py-2.5 text-sm font-mono rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.guardianMonthlyIncome && fieldErrors.guardianMonthlyIncome
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white'
+                      }`}
                     />
+                    {touchedFields.guardianMonthlyIncome && fieldErrors.guardianMonthlyIncome && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.guardianMonthlyIncome}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Emergency Contact Number *</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Emergency Contact Person & Phone *</label>
                     <input
+                      id="field-emergencyContact"
                       type="text"
                       required
-                      placeholder="0300-1234567"
+                      placeholder="e.g. Tariq Khan (Uncle) - 0300-1234567"
                       value={formData.emergencyContact}
-                      onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
+                      onChange={(e) => {
+                        setFormData({ ...formData, emergencyContact: e.target.value });
+                        if (touchedFields.emergencyContact) {
+                          const err = validateEmergencyContact(e.target.value);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            if (err) next.emergencyContact = err; else delete next.emergencyContact;
+                            return next;
+                          });
+                        }
+                      }}
+                      onBlur={() => handleBlur('emergencyContact')}
+                      className={`w-full px-3.5 py-2.5 text-sm rounded-xl border focus:outline-hidden transition ${
+                        touchedFields.emergencyContact && fieldErrors.emergencyContact
+                          ? 'border-rose-400 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
+                          : 'bg-slate-50 border-slate-200 focus:bg-white'
+                      }`}
                     />
+                    {touchedFields.emergencyContact && fieldErrors.emergencyContact ? (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{fieldErrors.emergencyContact}</span>
+                      </p>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 mt-1 block">Must contain contact person name and 11-digit phone number</span>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Relationship with Candidate *</label>
                     <input
+                      id="field-emergencyRelation"
                       type="text"
                       required
                       placeholder="Father / Mother / Uncle"
@@ -587,46 +1150,141 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   <p className="text-xs text-slate-400">Previous annual exam scores and passing board.</p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                {formData.academicRecords.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 font-bold">
+                          <th className="p-2.5 rounded-l-lg">Class / Exam</th>
+                          <th className="p-2.5">Year</th>
+                          <th className="p-2.5">Total Marks</th>
+                          <th className="p-2.5">Obtained Marks</th>
+                          <th className="p-2.5">% Score</th>
+                          <th className="p-2.5">Institute</th>
+                          <th className="p-2.5 rounded-r-lg text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {formData.academicRecords.map((rec, rIdx) => (
+                          <tr key={rIdx}>
+                            <td className="p-2.5 font-bold text-slate-900">{rec.examLevel}</td>
+                            <td className="p-2.5 font-mono">{rec.yearOfPassing}</td>
+                            <td className="p-2.5 font-mono">{rec.totalMarks}</td>
+                            <td className="p-2.5 font-mono font-bold text-[#185b9d]">{rec.obtainedMarks}</td>
+                            <td className="p-2.5 font-mono font-bold text-emerald-700">{rec.percentage}%</td>
+                            <td className="p-2.5 text-slate-600">{rec.boardOrUni}</td>
+                            <td className="p-2.5 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAcademicRecord(rIdx)}
+                                className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-2xl bg-rose-50/50 border border-rose-200 text-center text-xs space-y-1">
+                    <p className="font-bold text-rose-800">No academic records added yet.</p>
+                    <p className="text-rose-600">Please enter your previous examination marks below and click "Add Record" to proceed.</p>
+                  </div>
+                )}
+
+                {/* Add Academic Record Form */}
+                <div className="p-4 rounded-2xl bg-slate-100/80 border border-slate-200 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Plus className="w-3.5 h-3.5 text-[#185b9d]" />
+                    Add Academic Record
+                  </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Exam Level</label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Class / Grade *</label>
                       <input
                         type="text"
-                        value={formData.academicRecords[0].examLevel}
-                        onChange={(e) => {
-                          const updated = [...formData.academicRecords];
-                          updated[0].examLevel = e.target.value;
-                          setFormData({ ...formData, academicRecords: updated });
-                        }}
-                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg"
+                        placeholder="e.g. SSC-I (Class 9th)"
+                        value={newGrade}
+                        onChange={(e) => setNewGrade(e.target.value)}
+                        className={`w-full px-3 py-2 text-xs rounded-xl bg-white border focus:outline-hidden ${
+                          academicRowErrors.gradeClass ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                        }`}
                       />
+                      {academicRowErrors.gradeClass && (
+                        <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.gradeClass}</p>
+                      )}
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Total Marks</label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Passing Year *</label>
                       <input
-                        type="number"
-                        value={formData.academicRecords[0].totalMarks}
-                        onChange={(e) => {
-                          const updated = [...formData.academicRecords];
-                          updated[0].totalMarks = Number(e.target.value);
-                          setFormData({ ...formData, academicRecords: updated });
-                        }}
-                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg"
+                        type="text"
+                        placeholder={`e.g. ${new Date().getFullYear()}`}
+                        value={newYear}
+                        onChange={(e) => setNewYear(e.target.value)}
+                        className={`w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border focus:outline-hidden ${
+                          academicRowErrors.passingYear ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                        }`}
                       />
+                      {academicRowErrors.passingYear && (
+                        <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.passingYear}</p>
+                      )}
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Obtained Marks</label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Total Marks *</label>
                       <input
                         type="number"
-                        value={formData.academicRecords[0].obtainedMarks}
-                        onChange={(e) => {
-                          const updated = [...formData.academicRecords];
-                          updated[0].obtainedMarks = Number(e.target.value);
-                          setFormData({ ...formData, academicRecords: updated });
-                        }}
-                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg"
+                        placeholder="e.g. 550"
+                        value={newTotalMarks || ''}
+                        onChange={(e) => setNewTotalMarks(Number(e.target.value))}
+                        className={`w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border focus:outline-hidden ${
+                          academicRowErrors.totalMarks ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                        }`}
                       />
+                      {academicRowErrors.totalMarks && (
+                        <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.totalMarks}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Obtained Marks *</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 485"
+                        value={newObtMarks || ''}
+                        onChange={(e) => setNewObtMarks(Number(e.target.value))}
+                        className={`w-full px-3 py-2 text-xs font-mono rounded-xl bg-white border focus:outline-hidden ${
+                          academicRowErrors.obtainedMarks ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                        }`}
+                      />
+                      {academicRowErrors.obtainedMarks && (
+                        <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.obtainedMarks}</p>
+                      )}
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Board / School Name *</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. BISE Abbottabad"
+                          value={newInstitute}
+                          onChange={(e) => setNewInstitute(e.target.value)}
+                          className={`flex-1 px-3 py-2 text-xs rounded-xl bg-white border focus:outline-hidden ${
+                            academicRowErrors.institute ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddAcademicRecord}
+                          className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Record</span>
+                        </button>
+                      </div>
+                      {academicRowErrors.institute && (
+                        <p className="text-[10px] text-rose-600 font-semibold mt-0.5">{academicRowErrors.institute}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -651,6 +1309,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   ].map((doc) => (
                     <label
                       key={doc.key}
+                      id={`field-${doc.key}`}
                       className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white cursor-pointer transition"
                     >
                       <input
@@ -686,6 +1345,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                     Part I: How did you hear about this scholarship program?
                   </label>
                   <input
+                    id="field-referralSource"
                     type="text"
                     required
                     value={formData.referralSource}
@@ -702,6 +1362,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   </p>
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-900 pt-1">
                     <input
+                      id="field-agreedToApplicantDeclaration"
                       type="checkbox"
                       checked={formData.agreedToApplicantDeclaration}
                       onChange={(e) => setFormData({ ...formData, agreedToApplicantDeclaration: e.target.checked })}
@@ -719,6 +1380,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                   </p>
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-900 pt-1">
                     <input
+                      id="field-agreedToParentDeclaration"
                       type="checkbox"
                       checked={formData.agreedToParentDeclaration}
                       onChange={(e) => setFormData({ ...formData, agreedToParentDeclaration: e.target.checked })}
@@ -730,13 +1392,21 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
               </div>
             )}
 
+            {/* Error Message Box */}
+            {submitError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                <span>{submitError}</span>
+              </div>
+            )}
+
             {/* Navigation Buttons */}
             <div className="flex items-center justify-between pt-6 border-t border-slate-100">
               {currentStage > 1 ? (
                 <button
                   type="button"
                   onClick={handlePrev}
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition flex items-center gap-2"
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition flex items-center gap-2 cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Previous Step</span>
@@ -748,8 +1418,9 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
               {currentStage < totalStages ? (
                 <button
                   type="button"
+                  disabled={!isStageComplete(currentStage)}
                   onClick={handleNext}
-                  className="px-6 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white text-xs font-bold shadow-md shadow-blue-500/20 transition flex items-center gap-2"
+                  className="px-6 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497d] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-md shadow-blue-500/20 transition flex items-center gap-2 cursor-pointer"
                 >
                   <span>Continue</span>
                   <ArrowRight className="w-4 h-4" />
@@ -757,8 +1428,8 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
               ) : (
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition flex items-center gap-2 disabled:opacity-60"
+                  disabled={isSubmitting || !isStageComplete(8)}
+                  className="px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition flex items-center gap-2 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
