@@ -183,7 +183,7 @@ export const UserManagementTab: React.FC = () => {
                 <input
                   type="email"
                   required
-                  placeholder="e.g. asad@jadoon.edu.pk"
+                  placeholder="e.g. examiner@azmaio.com"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"

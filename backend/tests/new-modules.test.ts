@@ -29,21 +29,21 @@ async function runTests() {
   // Generate tokens for Super Admin, Admin, and Teacher
   const superAdminToken = signAccessToken({
     userId: 'test-superadmin-id',
-    email: 'superadmin@jadoon.edu.pk',
+    email: 'superadmin@azmaio.com',
     role: Role.SUPER_ADMIN,
     name: 'Super Admin',
   });
 
   const adminToken = signAccessToken({
     userId: 'test-admin-id',
-    email: 'admin@jadoon.edu.pk',
+    email: 'admin@azmaio.com',
     role: Role.ADMIN,
     name: 'Admin User',
   });
 
   const teacherToken = signAccessToken({
     userId: 'test-teacher-id',
-    email: 'teacher@jadoon.edu.pk',
+    email: 'teacher@azmaio.com',
     role: Role.TEACHER,
     name: 'Teacher User',
   });
@@ -75,7 +75,7 @@ async function runTests() {
     assert(usersData.data.length >= 4, 'Users list includes seeded accounts (Super Admin, Admin, Teacher, Accountant)');
 
     // 1.4 Create New User
-    const testEmail = `test_examiner_${Date.now()}@jadoon.edu.pk`;
+    const testEmail = `test_examiner_${Date.now()}@azmaio.com`;
     const createRes = await fetch(`${baseUrl}/api/users`, {
       method: 'POST',
       headers: {

@@ -137,7 +137,7 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
             <div className="absolute bottom-3 left-3 right-3 text-white">
               <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">Real Examination Center</span>
-              <p className="text-xs font-bold leading-tight">OMR Testing at Jadoon Campus (Session IV)</p>
+              <p className="text-xs font-bold leading-tight">OMR Testing at Mansehra Central Campus (Session IV)</p>
             </div>
           </div>
 

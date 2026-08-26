@@ -233,7 +233,7 @@ export const ContactView: React.FC<ContactViewProps> = ({ onSelectTab }) => {
                 <MapPin className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-white block">AZM.AIO (Pvt.) Ltd. Central Office</span>
-                  <span>Jadoon Plaza, Karakoram Highway, Gandhian, Mansehra, KP, Pakistan</span>
+                  <span>AZM Secretariat, Karakoram Highway, Gandhian, Mansehra, KP, Pakistan</span>
                 </div>
               </div>
 

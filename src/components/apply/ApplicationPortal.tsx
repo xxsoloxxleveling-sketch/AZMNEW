@@ -3519,10 +3519,10 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                 <div className="space-y-2.5">
                   <div className="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <strong className="text-slate-900 block font-bold">1. Jadoon Public High School & College (Head Office)</strong>
+                      <strong className="text-slate-900 block font-bold">1. AZM Central Facilitation Secretariat (Head Office)</strong>
                       <span className="text-slate-500 text-[11px]">Karakoram Highway, Gandhian, Mansehra • Mon-Sat (8:30 AM - 4:30 PM)</span>
                     </div>
-                    <span className="font-mono text-xs font-bold text-[#185b9d]">0344-0197194</span>
+                    <span className="font-mono text-xs font-bold text-[#185b9d]">0305-1755551</span>
                   </div>
 
                   <div className="p-3 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">

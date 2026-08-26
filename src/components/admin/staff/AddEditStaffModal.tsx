@@ -72,7 +72,7 @@ export const AddEditStaffModal: React.FC<AddEditStaffModalProps> = ({
             <input
               type="text"
               required
-              placeholder="e.g. Prof. Tariq Jadoon"
+              placeholder="e.g. Prof. Tariq Khan"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"

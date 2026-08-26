@@ -747,7 +747,7 @@ export class StudentsService {
     for (const student of eligibleStudents) {
       const rollNumber = await this.generateRollNumber();
       const qrToken = qrService.generateSignedQrToken(rollNumber);
-      const qrPayload = `https://jadoon.edu.pk/attend?token=${qrToken}`;
+      const qrPayload = `https://azmaio.com/attend?token=${qrToken}`;
       const qrImageUrl = await qrService.generateQrDataUrl(qrPayload);
 
       try {
@@ -960,7 +960,7 @@ export class StudentsService {
    */
   async getStudentQr(id: string) {
     const student = await this.getStudentById(id);
-    const qrPayload = `https://jadoon.edu.pk/attend?token=${student.qrToken}`;
+    const qrPayload = `https://azmaio.com/attend?token=${student.qrToken}`;
     const qrBuffer = await qrService.generateQrBuffer(qrPayload);
 
     return {

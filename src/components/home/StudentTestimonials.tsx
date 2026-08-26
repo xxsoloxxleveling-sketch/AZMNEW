@@ -65,7 +65,7 @@ export const StudentTestimonials: React.FC<StudentTestimonialsProps> = ({ onSele
     {
       id: 'achiever-3',
       name: 'AZM Merit Scholars Cohort',
-      school: 'Jadoon, Khyber & Dubai Campuses',
+      school: 'Partner High Schools & Colleges (Mansehra & Abbottabad)',
       awardTitle: 'PKR 13 Lacs+ Scholarship Grants & Certificates',
       badge: 'PKR 1.3M+ Grants Disbursed',
       badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',

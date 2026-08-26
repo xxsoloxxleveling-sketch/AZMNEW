@@ -135,7 +135,7 @@ export const PublicPartnerRegistrationPage: React.FC<PublicPartnerRegistrationPa
             <Building className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-sm font-extrabold text-slate-900">Jadoon Public School & College</h1>
+            <h1 className="text-sm font-extrabold text-slate-900">AZM.AIO Educational Network</h1>
             <p className="text-[10px] text-slate-400 font-medium">Partner Institution Registration</p>
           </div>
         </div>
@@ -153,7 +153,7 @@ export const PublicPartnerRegistrationPage: React.FC<PublicPartnerRegistrationPa
           <div className="space-y-1.5 border-b border-slate-100 pb-4">
             <h2 className="text-xl font-bold text-slate-900">Institutional Examination Center Agreement</h2>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Schools, colleges, and academies partnering with JPS to host test sessions and register students.
+              Schools, colleges, and academies partnering with AZM.AIO to host test sessions and register students.
             </p>
           </div>
 
@@ -322,7 +322,7 @@ export const PublicPartnerRegistrationPage: React.FC<PublicPartnerRegistrationPa
             <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-2">
               <span className="text-xs font-bold text-[#185b9d] block">Institutional Undertaking</span>
               <p className="text-xs text-slate-600 leading-relaxed">
-                We agree to collaborate with Jadoon PS to facilitate candidate registration, examination hall supervision, and merit scholarship outreach.
+                We agree to collaborate with AZM.AIO Educational Network to facilitate candidate registration, examination hall supervision, and merit scholarship outreach.
               </p>
               <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-900 pt-1">
                 <input

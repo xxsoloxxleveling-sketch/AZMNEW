@@ -455,7 +455,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
           <div className="space-y-2">
             <h2 className="text-2xl font-extrabold text-slate-900">Registration Submitted Successfully!</h2>
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-              Your candidate registration for the Jadoon PS Scholarship Examination has been received. Please download and print your official registration slip.
+              Your candidate registration for the AZM.AIO Scholarship Examination has been received. Please download and print your official registration slip.
             </p>
           </div>
 
@@ -518,7 +518,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
             <School className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-sm font-extrabold text-slate-900">Jadoon Public School</h1>
+            <h1 className="text-sm font-extrabold text-slate-900">AZM.AIO Portal</h1>
             <p className="text-[10px] text-slate-400 font-medium">Candidate Online Registration Form</p>
           </div>
         </div>
@@ -584,7 +584,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                       id="field-fullName"
                       type="text"
                       required
-                      placeholder="e.g. Hamza Tariq Jadoon"
+                      placeholder="e.g. Muhammad Hamza"
                       value={formData.fullName}
                       onChange={(e) => {
                         setFormData({ ...formData, fullName: e.target.value });
@@ -921,7 +921,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                       id="field-schoolName"
                       type="text"
                       required
-                      placeholder="e.g. Jadoon Public School"
+                      placeholder="e.g. Govt High School / Degree College"
                       value={formData.schoolName}
                       onChange={(e) => {
                         setFormData({ ...formData, schoolName: e.target.value });

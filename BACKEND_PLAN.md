@@ -1,4 +1,4 @@
-# Jadoon PS — School Management System Backend Plan
+# AZM.AIO — Educational & Scholarship Management System Backend Plan
 
 This document is the single source of truth for building the backend. Give this
 file to Antigravity (or any coding agent) at the start of every session so it
@@ -8,8 +8,8 @@ has full context without you re-explaining the project each time.
 
 ## 1. What This System Does
 
-A school management platform for Jadoon Public School (and reusable for other
-AZM.AIO partner schools later). Core modules:
+A unified examination, student registration, and scholarship platform for AZM.AIO
+and its network of partner schools. Core modules:
 
 - Student registration → auto-generated Roll Number + unique QR code
 - QR-based attendance (examiner/teacher scans QR, system marks present)

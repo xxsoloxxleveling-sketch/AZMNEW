@@ -453,7 +453,7 @@ export const mockApi = {
     currentUser = {
       ...(currentUser || {
         id: 'usr_001',
-        email: 'admin@azm.org.pk',
+        email: 'admin@azmaio.com',
         avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
       }),
       role,

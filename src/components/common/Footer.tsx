@@ -129,7 +129,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
             </h4>
             <ul className="space-y-3 text-xs text-slate-300">
               <li className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                <strong className="text-white block font-medium">1. Jadoon Public High School & College</strong>
+                <strong className="text-white block font-medium">1. AZM Central Facilitation Secretariat</strong>
                 <span className="text-slate-400 text-[11px] block">Gandhian, Karakoram Highway (Head Office)</span>
                 <span className="text-emerald-400 text-[11px] font-mono font-semibold">0305-1755551</span>
               </li>

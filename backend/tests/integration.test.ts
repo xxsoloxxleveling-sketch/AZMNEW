@@ -17,7 +17,7 @@ async function runLiveIntegrationTest() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      email: 'superadmin@jadoon.edu.pk',
+      email: 'superadmin@azmaio.com',
       password: 'AdminPassword123!',
     }),
   });
@@ -47,8 +47,8 @@ async function runLiveIntegrationTest() {
   // 4. Public Student Registration
   console.log('\n4. Testing POST /api/students/register (Candidate Form)...');
   const studentPayload = {
-    fullName: 'Hamza Jadoon Integration Test',
-    fatherName: 'Tariq Jadoon',
+    fullName: 'Hamza Khan Integration Test',
+    fatherName: 'Tariq Khan',
     gender: 'MALE',
     dateOfBirth: '2009-05-15',
     age: 17,
@@ -60,7 +60,7 @@ async function runLiveIntegrationTest() {
     province: 'Khyber Pakhtunkhwa',
     parentMobile: '0300-9988776',
     currentClass: 'SSC-II (Class 10th)',
-    schoolName: 'Jadoon Public School & College',
+    schoolName: 'Govt Post Graduate College',
     boardOrUniversity: 'BISE Abbottabad',
     scholarshipCategory: 'GENERAL_MERIT',
     emergencyContact: '0300-9988776',

@@ -1,7 +1,7 @@
 {
-  "name": "jadoon-sms-backend",
+  "name": "azmaio-backend",
   "version": "1.0.0",
-  "description": "Backend API for Jadoon Public School Management System",
+  "description": "Backend API for AZM.AIO Management & Scholarship System",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

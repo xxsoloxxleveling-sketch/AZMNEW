@@ -9,15 +9,31 @@ export async function seedDatabase() {
   const passwordHash = await hashPassword(superAdminPassword);
 
   const superAdmin = await prisma.user.upsert({
+    where: { email: 'superadmin@azmaio.com' },
+    update: {
+      passwordHash,
+      role: Role.SUPER_ADMIN,
+      name: 'AZM.AIO Super Admin',
+    },
+    create: {
+      email: 'superadmin@azmaio.com',
+      name: 'AZM.AIO Super Admin',
+      passwordHash,
+      role: Role.SUPER_ADMIN,
+    },
+  });
+
+  // Seed backwards-compatible superadmin alias
+  await prisma.user.upsert({
     where: { email: 'superadmin@jadoon.edu.pk' },
     update: {
       passwordHash,
       role: Role.SUPER_ADMIN,
-      name: 'Jadoon Super Admin',
+      name: 'AZM.AIO Super Admin',
     },
     create: {
       email: 'superadmin@jadoon.edu.pk',
-      name: 'Jadoon Super Admin',
+      name: 'AZM.AIO Super Admin',
       passwordHash,
       role: Role.SUPER_ADMIN,
     },
@@ -27,14 +43,14 @@ export async function seedDatabase() {
   const teacherPassword = 'TeacherPassword123!';
   const teacherHash = await hashPassword(teacherPassword);
   const teacher = await prisma.user.upsert({
-    where: { email: 'teacher@jadoon.edu.pk' },
+    where: { email: 'teacher@azmaio.com' },
     update: {
       passwordHash: teacherHash,
       role: Role.TEACHER,
       name: 'Ahmad Khan',
     },
     create: {
-      email: 'teacher@jadoon.edu.pk',
+      email: 'teacher@azmaio.com',
       name: 'Ahmad Khan',
       passwordHash: teacherHash,
       role: Role.TEACHER,
@@ -45,14 +61,14 @@ export async function seedDatabase() {
   const adminPassword = 'Admin123!';
   const adminHash = await hashPassword(adminPassword);
   const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@jadoon.edu.pk' },
+    where: { email: 'admin@azmaio.com' },
     update: {
       passwordHash: adminHash,
       role: Role.ADMIN,
       name: 'Muhammad Rashid (Admin)',
     },
     create: {
-      email: 'admin@jadoon.edu.pk',
+      email: 'admin@azmaio.com',
       name: 'Muhammad Rashid (Admin)',
       passwordHash: adminHash,
       role: Role.ADMIN,
@@ -63,14 +79,14 @@ export async function seedDatabase() {
   const accountantPassword = 'Accountant123!';
   const accountantHash = await hashPassword(accountantPassword);
   const accountantUser = await prisma.user.upsert({
-    where: { email: 'accountant@jadoon.edu.pk' },
+    where: { email: 'accountant@azmaio.com' },
     update: {
       passwordHash: accountantHash,
       role: Role.ACCOUNTANT,
       name: 'Kashif Finance',
     },
     create: {
-      email: 'accountant@jadoon.edu.pk',
+      email: 'accountant@azmaio.com',
       name: 'Kashif Finance',
       passwordHash: accountantHash,
       role: Role.ACCOUNTANT,
@@ -118,7 +134,7 @@ export async function seedDatabase() {
       capacity: 350,
       reportingTime: '09:00 AM',
       testDate: 'Sunday, 15 November 2026',
-      contactPerson: 'Prof. Tariq Jadoon',
+      contactPerson: 'Prof. Tariq Khan',
       contactPhone: '0305-1755551',
       status: 'ACTIVE',
     },
@@ -131,7 +147,7 @@ export async function seedDatabase() {
       capacity: 350,
       reportingTime: '09:00 AM',
       testDate: 'Sunday, 15 November 2026',
-      contactPerson: 'Prof. Tariq Jadoon',
+      contactPerson: 'Prof. Tariq Khan',
       contactPhone: '0305-1755551',
       status: 'ACTIVE',
     },
@@ -264,7 +280,7 @@ export async function seedDatabase() {
       targetClass: '1st Year / 2nd Year',
       wing: 'Main Campus Central Auditorium',
       capacity: 150,
-      invigilatorName: 'Prof. Dr. M. Jadoon (Chief Supt.)',
+      invigilatorName: 'Prof. Dr. M. Tariq (Chief Supt.)',
       invigilatorPhone: '0305-1755551',
       reportingTime: '09:00 AM',
       examDate: 'Sunday, 15 Nov 2026',

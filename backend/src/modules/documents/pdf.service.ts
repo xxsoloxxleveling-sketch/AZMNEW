@@ -243,7 +243,7 @@ export class PdfService {
         <td class="header-left">
           <div class="org-title">AZM SCHOLARSHIP PROGRAM</div>
           <div class="form-title">Candidate Registration Form — Session V (2026)</div>
-          <div class="sub-title">Jadoon Public School & College System | AZM.AIO Educational Network</div>
+          <div class="sub-title">AZM.AIO Educational Network | Scholarship & Examination Authority</div>
         </td>
         <td class="header-right">
           <div class="photo-box">

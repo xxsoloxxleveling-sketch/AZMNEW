@@ -70,7 +70,7 @@ app.get('/api/health', async (_req: Request, res: Response) => {
     status: isDbConnected ? 'ok' : 'degraded',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    service: 'jadoon-sms-backend',
+    service: 'azmaio-backend',
     database: {
       status: dbStatus,
       ...(dbLatencyMs !== null ? { latencyMs: dbLatencyMs } : {}),

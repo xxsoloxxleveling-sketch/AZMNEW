@@ -115,7 +115,7 @@ const DEFAULT_HALLS: ExamHall[] = [
     targetClass: '1st Year / 2nd Year',
     wing: 'Main Campus Central Auditorium',
     capacity: 150,
-    invigilatorName: 'Prof. Dr. M. Jadoon (Chief Supt.)',
+    invigilatorName: 'Prof. Dr. M. Tariq (Chief Supt.)',
     invigilatorPhone: '0305-1755551',
     reportingTime: '09:00 AM',
     examDate: 'Sunday, 15 Nov 2026',

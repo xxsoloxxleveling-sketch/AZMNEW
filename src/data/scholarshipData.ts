@@ -56,7 +56,7 @@ export const OFFICIAL_ALERTS: AlertItem[] = [
     id: 'alert-4',
     title: 'In-Person Registration Centres (Mansehra)',
     subtitle: '3 Physical Facilitation Hubs Open',
-    message: 'Candidates and school principals can submit physical forms at Jadoon Public College Gandhian, Dubai International School Kashmir Road, or Khyber Public College Mansehra (Mon-Sat, 9 AM to 4 PM).',
+    message: 'Candidates and school principals can submit physical forms at AZM Central Desk Gandhian, Dubai International School Kashmir Road, or Khyber Public College Mansehra (Mon-Sat, 9 AM to 4 PM).',
     type: 'info',
     badge: 'Physical Hubs',
     date: 'Active Daily',
@@ -82,7 +82,7 @@ export const OFFICIAL_DATA = {
   helpline: '0305-1755551',
   helplineHours: 'Mon to Sat, 9:00 AM to 5:00 PM',
   email: 'azmgoc30@gmail.com',
-  headOffice: 'Jadoon Public High School & College, Gandhian, Mansehra, KP, Pakistan',
+  headOffice: 'AZM Central Secretariat, Gandhian, Karakoram Highway, Mansehra, KP, Pakistan',
   registrationFee: 'PKR 300 (Nominal Entry Fee for Session V)',
 
   paymentAccounts: {
@@ -433,10 +433,10 @@ export const SESSION_V_CALENDAR: CalendarEvent[] = [
 export const REGISTRATION_HUBS = [
   {
     id: 'hub-1',
-    name: 'Jadoon Public High School & College',
-    campus: 'Headquarters & Examination Center',
+    name: 'AZM Central Facilitation Secretariat',
+    campus: 'Central Headquarters & Examination Center',
     address: 'Gandhian, Karakoram Highway, Mansehra, KP',
-    focalPerson: 'Prof. Muhammad Asif Jadoon',
+    focalPerson: 'Central Admissions Desk',
     contact: '0305-1755551',
     timing: '8:30 AM - 4:30 PM (Mon-Sat)',
     capacity: '1,200 Candidates',
