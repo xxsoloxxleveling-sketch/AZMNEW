@@ -26,6 +26,7 @@ import {
   validateAcademicRecord,
   validateAcademicRecordsList,
   validateDocumentFile,
+  autoCompressImageFile,
   mapSubmitErrorToFriendlyMessage,
   trimObjectStrings,
 } from '../../utils/formValidation';
@@ -129,6 +130,9 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const [dmcFiles, setDmcFiles] = useState<
     Array<{ id: string; name: string; size: string; dataUrl: string; publicUrl?: string }>
   >([]);
+
+  // Auto-compressing photo loading indicator state
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
 
   // Signature canvas ref
   const sigCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -595,15 +599,18 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Strict client-side validation before processing
+    // Fast client-side format & integrity check
     const validation = await validatePhotoFile(file);
     if (!validation.valid) {
-      setPhotoError(validation.error || 'Your photo must be a JPG, PNG, or WebP under 200 KB.');
+      setPhotoError(validation.error || "We couldn't process this photo — please try a different one.");
+      e.target.value = '';
       return;
     }
 
+    setIsCompressingPhoto(true);
     try {
-      const { dataUrl } = await compressImageFile(file, 600, 0.85);
+      // Auto-compress any photo client-side down to under 195 KB (preserving aspect ratio)
+      const { dataUrl } = await autoCompressImageFile(file, 195, 800);
       setFormData((prev) => ({
         ...prev,
         photoUrl: dataUrl,
@@ -614,19 +621,23 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         return next;
       });
 
-      // Upload in background to storage
+      // Upload in background to Supabase Storage
       mockApi.uploadStudentDocument({
         cnicOrBForm: formData.cnicBForm || 'TEMP_CANDIDATE',
         docType: 'photo',
-        fileName: file.name || 'Candidate_Passport_Photo.jpg',
+        fileName: getFormattedDocName('photo', file.name),
         fileData: dataUrl,
       }).then((upRes) => {
         if (upRes?.publicUrl) {
           setFormData((prev) => ({ ...prev, photoUrl: upRes.publicUrl }));
         }
       }).catch(() => {});
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Photo compression fallback:', err);
+      setPhotoError(err?.message || "We couldn't process this photo — please try a different one.");
+    } finally {
+      setIsCompressingPhoto(false);
+      e.target.value = '';
     }
   };
 
@@ -675,7 +686,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
     try {
       const standardDocName = getFormattedDocName(docKey, file.name);
-      const { dataUrl, sizeFormatted } = await compressImageFile(file, 1200, 0.75);
+      const { dataUrl, sizeFormatted } = await autoCompressImageFile(file, 600, 1400);
       setUploadedDocs((prev) => ({
         ...prev,
         [docKey]: {
@@ -730,7 +741,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     }
   };
 
-  // Multi-File DMC Upload Handler
+  // Multi-File DMC Upload Handler with Auto-Compression
   const handleDmcFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -752,21 +763,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         const dmcIndex = dmcFiles.length + i + 1;
         const standardDocName = `${cleanName}_DMC_${dmcIndex}.${ext}`;
 
-        let dataUrl: string;
-        let sizeFormatted: string;
-
-        if (file.type.startsWith('image/')) {
-          const comp = await compressImageFile(file, 1200, 0.75);
-          dataUrl = comp.dataUrl;
-          sizeFormatted = comp.sizeFormatted;
-        } else {
-          dataUrl = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.readAsDataURL(file);
-          });
-          sizeFormatted = `${(file.size / 1024).toFixed(0)} KB`;
-        }
+        const { dataUrl, sizeFormatted } = await autoCompressImageFile(file, 600, 1400);
 
         const newDmc = {
           id: `dmc_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`,
@@ -862,7 +859,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         if (genderErr) errs.push(genderErr);
         const { error: dobErr } = validateDobAndAge(formData.dob);
         if (dobErr) errs.push(dobErr);
-        if (!formData.photoUrl) errs.push('Passport-size Candidate Photograph (Max 200 KB) is required.');
+        if (!formData.photoUrl) errs.push('Passport-size Candidate Photograph is required.');
         break;
       }
 
@@ -1633,10 +1630,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                     <div id="field-photo">
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs font-bold text-slate-700">
-                          Passport Size Photo (Max 200 KB) *
+                          Passport Size Photograph *
                         </label>
-                        <span className="text-[10px] font-semibold text-[#185b9d] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                          Max 200 KB
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-emerald-600" />
+                          Auto-Compressed
                         </span>
                       </div>
                       
@@ -1660,8 +1658,14 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                           </div>
                         ) : (
                           <label className="w-14 h-14 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#185b9d] bg-slate-50 flex flex-col items-center justify-center cursor-pointer transition-colors text-slate-400 hover:text-[#185b9d]">
-                            <Camera className="w-5 h-5" />
-                            <span className="text-[9px] font-bold mt-0.5">Upload</span>
+                            {isCompressingPhoto ? (
+                              <Loader2 className="w-5 h-5 animate-spin text-[#185b9d]" />
+                            ) : (
+                              <Camera className="w-5 h-5" />
+                            )}
+                            <span className="text-[9px] font-bold mt-0.5">
+                              {isCompressingPhoto ? '...' : 'Upload'}
+                            </span>
                             <input
                               type="file"
                               accept="image/png,image/jpeg,image/jpg,image/webp"
@@ -1671,17 +1675,24 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                           </label>
                         )}
                         <div className="space-y-1">
-                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition">
-                            <UploadCloud className="w-3.5 h-3.5" />
-                            <span>{formData.photoUrl ? 'Replace Photo' : 'Select Photo (Max 200 KB)'}</span>
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/jpg,image/webp"
-                              onChange={handlePhotoUpload}
-                              className="hidden"
-                            />
-                          </label>
-                          <p className="text-[10px] text-slate-400">JPG, PNG or WebP with white / light background</p>
+                          {isCompressingPhoto ? (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-50 text-[#185b9d] rounded-xl font-semibold border border-blue-200">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Compressing photo...</span>
+                            </div>
+                          ) : (
+                            <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition">
+                              <UploadCloud className="w-3.5 h-3.5" />
+                              <span>{formData.photoUrl ? 'Replace Photo' : 'Upload Candidate Photograph'}</span>
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/jpg,image/webp"
+                                onChange={handlePhotoUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          )}
+                          <p className="text-[10px] text-slate-400">JPG, PNG or WebP — automatically resized & optimized</p>
                         </div>
                       </div>
 

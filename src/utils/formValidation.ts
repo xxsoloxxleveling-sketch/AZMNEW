@@ -169,13 +169,22 @@ export function validateDobAndAge(dob?: string): { error: string | null; age: nu
 }
 
 /**
- * Validates passport photo file for MIME type, file size (<= 200 KB), and minimum dimensions (>= 200x200px).
+ * Validates passport photo file for supported image format (JPG, PNG, WebP).
+ * Minimum dimension rejection and manual size limits have been removed in favor of client-side auto-compression.
  */
 export function validatePhotoFile(file: File): Promise<{ valid: boolean; error?: string }> {
   return new Promise((resolve) => {
+    if (!file) {
+      resolve({ valid: false, error: 'No photo selected.' });
+      return;
+    }
+
     // 1. File Type / MIME Validation
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type.toLowerCase())) {
+    const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (!allowedTypes.includes(file.type.toLowerCase()) && !allowedExtensions.includes(ext)) {
       resolve({
         valid: false,
         error: 'Your photo must be a JPG, PNG, or WebP image file.',
@@ -183,35 +192,17 @@ export function validatePhotoFile(file: File): Promise<{ valid: boolean; error?:
       return;
     }
 
-    // 2. File Size Validation (<= 200 KB = 204,800 bytes)
-    const maxBytes = 200 * 1024;
-    if (file.size > maxBytes) {
-      const actualKb = Math.round(file.size / 1024);
-      resolve({
-        valid: false,
-        error: `Photo file size (${actualKb} KB) exceeds the maximum allowed 200 KB limit.`,
-      });
-      return;
-    }
-
-    // 3. Image Dimensions Validation (>= 200x200)
+    // 2. Validate image is non-corrupt
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        if (img.width < 200 || img.height < 200) {
-          resolve({
-            valid: false,
-            error: `Image dimensions (${img.width}×${img.height}px) are too small. Please upload a clear photo of at least 200×200 pixels.`,
-          });
-        } else {
-          resolve({ valid: true });
-        }
+        resolve({ valid: true });
       };
       img.onerror = () => {
         resolve({
           valid: false,
-          error: 'Corrupt or unreadable image file. Please choose another photograph.',
+          error: "We couldn't process this photo — please try a different one.",
         });
       };
       img.src = e.target?.result as string;
@@ -219,8 +210,127 @@ export function validatePhotoFile(file: File): Promise<{ valid: boolean; error?:
     reader.onerror = () => {
       resolve({
         valid: false,
-        error: 'Unable to read photo file. Please try again.',
+        error: "We couldn't process this photo — please try a different one.",
       });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Auto-compresses any image file client-side to ensure it is under the target size limit (default 195 KB for passport photos).
+ * Uses iterative downscaling and quality reduction on HTML5 Canvas while preserving aspect ratio.
+ */
+export function autoCompressImageFile(
+  file: File,
+  targetMaxKb = 195,
+  maxDimension = 800
+): Promise<{ dataUrl: string; sizeBytes: number; sizeFormatted: string }> {
+  return new Promise((resolve, reject) => {
+    const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+    const isImage = file.type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(ext);
+
+    // If not an image (e.g. PDF/DOC in document upload), read as DataURL directly
+    if (!isImage) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        const sizeBytes = file.size;
+        const sizeFormatted =
+          sizeBytes > 1024 * 1024
+            ? `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.round(sizeBytes / 1024)} KB`;
+        resolve({ dataUrl, sizeBytes, sizeFormatted });
+      };
+      reader.onerror = () =>
+        reject(new Error("We couldn't process this document — please try a different one."));
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+
+          // Scale down dimensions if exceeding maxDimension, preserving aspect ratio
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const targetMaxBytes = targetMaxKb * 1024;
+          let currentQuality = 0.85;
+          let currentWidth = Math.max(width, 10);
+          let currentHeight = Math.max(height, 10);
+
+          canvas.width = currentWidth;
+          canvas.height = currentHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            const rawDataUrl = e.target?.result as string;
+            resolve({
+              dataUrl: rawDataUrl,
+              sizeBytes: file.size,
+              sizeFormatted: `${Math.round(file.size / 1024)} KB`,
+            });
+            return;
+          }
+
+          // Fill white background for transparent PNGs converted to JPEG
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, currentWidth, currentHeight);
+          ctx.drawImage(img, 0, 0, currentWidth, currentHeight);
+
+          let dataUrl = canvas.toDataURL('image/jpeg', currentQuality);
+          let approxBytes = Math.round((dataUrl.length * 3) / 4);
+
+          // Iterative compression loop to bring under target size
+          let iterations = 0;
+          while (approxBytes > targetMaxBytes && iterations < 10) {
+            iterations++;
+            if (currentQuality > 0.50) {
+              currentQuality -= 0.12;
+            } else {
+              // Scale down dimensions by 15% and redraw
+              currentWidth = Math.max(Math.round(currentWidth * 0.85), 100);
+              currentHeight = Math.max(Math.round(currentHeight * 0.85), 100);
+              canvas.width = currentWidth;
+              canvas.height = currentHeight;
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillRect(0, 0, currentWidth, currentHeight);
+              ctx.drawImage(img, 0, 0, currentWidth, currentHeight);
+              currentQuality = 0.70;
+            }
+            dataUrl = canvas.toDataURL('image/jpeg', currentQuality);
+            approxBytes = Math.round((dataUrl.length * 3) / 4);
+          }
+
+          const sizeFormatted =
+            approxBytes > 1024 * 1024
+              ? `${(approxBytes / (1024 * 1024)).toFixed(1)} MB`
+              : `${Math.round(approxBytes / 1024)} KB`;
+
+          resolve({ dataUrl, sizeBytes: approxBytes, sizeFormatted });
+        } catch (err) {
+          reject(new Error("We couldn't process this photo — please try a different one."));
+        }
+      };
+      img.onerror = () => {
+        reject(new Error("We couldn't process this photo — please try a different one."));
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => {
+      reject(new Error("We couldn't process this photo — please try a different one."));
     };
     reader.readAsDataURL(file);
   });
