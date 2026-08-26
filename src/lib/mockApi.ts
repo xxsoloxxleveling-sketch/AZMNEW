@@ -992,6 +992,13 @@ export const mockApi = {
     }
   },
 
+  async deleteTransaction(transactionId: string): Promise<boolean> {
+    await apiFetch<any>(`/api/transactions/${transactionId}`, {
+      method: 'DELETE',
+    });
+    return true;
+  },
+
   // 10. User Management (Super Admin)
   async getUsers(): Promise<MockUserAccount[]> {
     const res = await apiFetch<any>('/api/users');

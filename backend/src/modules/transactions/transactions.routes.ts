@@ -20,4 +20,10 @@ router.get(
   transactionsController.getById
 );
 
+router.delete(
+  '/:id',
+  authorizeRoles(Role.SUPER_ADMIN),
+  transactionsController.delete
+);
+
 export default router;

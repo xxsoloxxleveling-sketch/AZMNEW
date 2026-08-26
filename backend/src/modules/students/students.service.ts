@@ -918,20 +918,38 @@ export class StudentsService {
   }
 
   /**
-   * Deletes a student record while preserving financial transaction ledger immutability.
+   * Deletes a student record and cascade-deletes all associated transactions, fee records, and documents.
    */
   async deleteStudent(id: string) {
     const student = await this.getStudentById(id);
 
-    // Unlink transaction foreign keys to preserve immutable financial audit logs
+    // 1. Find all fee record IDs for this student
     const feeIds = student.feeRecords?.map((f: any) => f.id) || [];
+    const appNo = student.applicationNo;
+    const stdId = student.id;
+
+    // 2. Cascade delete all linked General Ledger transactions
+    const orConditions: any[] = [];
     if (feeIds.length > 0) {
-      await prisma.transaction.updateMany({
-        where: { relatedFeeId: { in: feeIds } },
-        data: { relatedFeeId: null },
-      });
+      orConditions.push({ relatedFeeId: { in: feeIds } });
+    }
+    if (appNo) {
+      orConditions.push({ description: { contains: appNo } });
+    }
+    if (stdId) {
+      orConditions.push({ description: { contains: stdId } });
     }
 
+    if (orConditions.length > 0) {
+      const deletedTxCount = await prisma.transaction.deleteMany({
+        where: { OR: orConditions },
+      });
+      console.log(
+        `[AUDIT] Cascaded deletion of ${deletedTxCount.count} transaction(s) for deleted student ${student.fullName} (${student.applicationNo || id}) at ${new Date().toISOString()}`
+      );
+    }
+
+    // 3. Delete student (Prisma cascades academicRecords, documents, officeUse, attendance, feeRecords)
     return prisma.student.delete({
       where: { id },
     });

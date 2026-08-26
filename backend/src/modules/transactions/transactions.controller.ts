@@ -29,6 +29,20 @@ export class TransactionsController {
       next(error);
     }
   }
+
+  async delete(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const result = await transactionsService.deleteTransaction(req.params.id, user);
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const transactionsController = new TransactionsController();
+
