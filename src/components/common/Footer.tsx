@@ -109,6 +109,16 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
                   <span className="text-[#70a9db]">›</span> 6-Member Interview Protocol
                 </button>
               </li>
+              <li>
+                <a
+                  href="https://chat.whatsapp.com/DEDabWqTVVOIhNd0oqOCqO?s=cl&p=i&mlu=4"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors flex items-center gap-1.5"
+                >
+                  <span className="text-emerald-400">›</span> Join Official WhatsApp Group 💬
+                </a>
+              </li>
             </ul>
           </div>
 

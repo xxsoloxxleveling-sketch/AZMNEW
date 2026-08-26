@@ -19,6 +19,9 @@ const AlertsSection = lazy(() =>
 const WhatsAppButton = lazy(() =>
   import('./components/common/WhatsAppButton').then((m) => ({ default: m.WhatsAppButton }))
 );
+const WhatsAppCommunitySection = lazy(() =>
+  import('./components/home/WhatsAppCommunitySection').then((m) => ({ default: m.WhatsAppCommunitySection }))
+);
 const RegistrationAlertModal = lazy(() =>
   import('./components/home/RegistrationAlertModal').then((m) => ({ default: m.RegistrationAlertModal }))
 );
@@ -461,6 +464,7 @@ function AppContent() {
                 onSelectTab={handleSelectTab}
                 onOpenAlertModal={() => setIsAlertModalOpen(true)}
               />
+              <WhatsAppCommunitySection />
               <PartnerMarquee />
               <WorkflowBento onSelectTab={handleSelectTab} />
               <StudentTestimonials onSelectTab={handleSelectTab} />
