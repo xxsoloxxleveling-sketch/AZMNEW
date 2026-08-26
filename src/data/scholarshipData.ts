@@ -82,7 +82,7 @@ export const OFFICIAL_DATA = {
   helpline: '0305-1755551',
   helplineHours: 'Mon to Sat, 9:00 AM to 5:00 PM',
   email: 'azmgoc30@gmail.com',
-  headOffice: 'AZM Central Secretariat, Gandhian, Karakoram Highway, Mansehra, KP, Pakistan',
+  headOffice: 'AZM Central Secretariat, Jaddoon Plaza, Gandhian, Karakoram Highway, Mansehra, KP, Pakistan',
   registrationFee: 'PKR 300 (Nominal Entry Fee for Session V)',
 
   paymentAccounts: {

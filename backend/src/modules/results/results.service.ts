@@ -61,7 +61,7 @@ export class ResultsService {
       examVenue: (student as any).officeUse?.testCentre || student.assignedHall || 'AZM Examination Center - Mansehra Main Campus',
       reportingSlot: (student as any).officeUse?.testReportingTime || '09:00 AM',
       interviewDate: isQualified ? (student as any).officeUse?.interviewDate || '25 November 2026' : undefined,
-      interviewVenue: isQualified ? 'AZM Central Secretariat, Karakoram Highway, Gandhian, Mansehra' : undefined,
+      interviewVenue: isQualified ? 'AZM Central Secretariat, Jaddoon Plaza, Karakoram Highway, Mansehra' : undefined,
       subjectScores: [
         { subject: 'English Language & Comprehension', obtained: Math.round(score * 0.25), total: 25, accuracy: Math.round((score / 100) * 100) },
         { subject: 'Mathematics & Analytical Reasoning', obtained: Math.round(score * 0.25), total: 25, accuracy: Math.round((score / 100) * 100) },
