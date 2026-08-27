@@ -728,6 +728,12 @@ export const mockApi = {
     );
   },
 
+  async downloadRegistrationSlipPdf(studentData: any): Promise<void> {
+    const studentId = studentData?.id || studentData?.applicationNo;
+    const rollNumber = studentData?.rollNumber;
+    return this.downloadStudentPdf(studentId, rollNumber, studentData);
+  },
+
 
   // 4. Partner Institutions
   async getPartners(): Promise<MockPartner[]> {

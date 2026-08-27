@@ -1181,7 +1181,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         photoUrl: formData.photoUrl,
         createdAt: new Date().toISOString(),
       };
-      await mockApi.downloadRegistrationSlipPdf(studentData);
+      await mockApi.downloadStudentPdf(
+        studentData.id || studentData.applicationNo,
+        studentData.rollNumber,
+        studentData
+      );
     } catch (err: any) {
       alert(err.message || 'Failed to download PDF registration slip');
     } finally {
