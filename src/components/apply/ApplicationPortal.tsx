@@ -4,6 +4,7 @@ import { MONTHLY_ASSISTANCE_RATES, BENEFICIARY_CATEGORIES, OFFICIAL_DATA } from 
 import { mockApi, printStudentDossier } from '../../lib/mockApi';
 import { CandidateSlipRetrievalCard } from './CandidateSlipRetrievalCard';
 import { PreSubmitCaptchaModal } from '../common/PreSubmitCaptchaModal';
+import { wakeUpBackend, startPeriodicHeartbeat } from '../../lib/apiClient';
 import {
   formatCnic,
   formatPakistaniPhone,
@@ -337,6 +338,12 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       setFormData(prev => ({ ...prev, currentClass: initialClass }));
     }
   }, [initialClass]);
+
+  // Keep server awake with background heartbeat while filling multi-stage application form
+  useEffect(() => {
+    const stopHeartbeat = startPeriodicHeartbeat(180000);
+    return () => stopHeartbeat();
+  }, []);
 
   // LocalStorage Draft loader
   useEffect(() => {
@@ -1273,6 +1280,10 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       delete next[currentStage];
       return next;
     });
+
+    if (targetStage === 8) {
+      wakeUpBackend(0);
+    }
 
     setCurrentStage(targetStage);
     window.scrollTo({ top: 180, behavior: 'smooth' });

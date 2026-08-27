@@ -55,13 +55,19 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshPromise;
 }
 
+export interface ApiFetchOptions extends RequestInit {
+  timeoutMs?: number;
+  retryOnColdStart?: boolean;
+}
+
 /**
  * Standard HTTP client wrapping fetch with automatic JWT Bearer token attachment,
- * JSON serialization, automatic token refresh, and backend error envelope parsing.
+ * JSON serialization, automatic token refresh, configurable cold-start timeout,
+ * and backend error envelope parsing.
  */
 export async function apiFetch<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: ApiFetchOptions = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   let token = getToken();
@@ -75,10 +81,75 @@ export async function apiFetch<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  let response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  // Set timeout: default 60 seconds; 90 seconds for registration/submit
+  const timeoutMs = options.timeoutMs || (endpoint.includes('/students/register') ? 90000 : 60000);
+  const retryOnColdStart = options.retryOnColdStart ?? endpoint.includes('/students/register');
+
+  const executeFetch = async (currentSignal?: AbortSignal): Promise<Response> => {
+    return fetch(url, {
+      ...options,
+      headers,
+      signal: currentSignal || options.signal,
+    });
+  };
+
+  let response: Response;
+
+  // Set up AbortController for timeout
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    try {
+      timeoutController.abort();
+    } catch {}
+  }, timeoutMs);
+
+  try {
+    response = await executeFetch(timeoutController.signal);
+  } catch (initialErr: any) {
+    // If the error was a cold-start network refusal or transient timeout on registration, retry once after 2.5s
+    const isNetworkOrAbort =
+      initialErr.name === 'AbortError' ||
+      initialErr.message?.includes('Failed to fetch') ||
+      initialErr.message?.includes('NetworkError') ||
+      initialErr.message?.includes('network');
+
+    if (retryOnColdStart && isNetworkOrAbort) {
+      console.warn(`[apiClient] Initial attempt to ${endpoint} timed out or failed (${initialErr.message}). Retrying in 2.5s while server warms...`);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+
+      const retryController = new AbortController();
+      const retryTimeoutId = setTimeout(() => {
+        try {
+          retryController.abort();
+        } catch {}
+      }, 75000);
+
+      try {
+        response = await executeFetch(retryController.signal);
+      } catch (retryErr: any) {
+        clearTimeout(retryTimeoutId);
+        const err: any = new Error(
+          retryErr.name === 'AbortError'
+            ? 'The server took longer than 90 seconds to respond. Please check your connection and press Retry.'
+            : 'Could not connect to the AZM.AIO server. Please check your internet connection and try again.'
+        );
+        err.isNetworkError = true;
+        throw err;
+      } finally {
+        clearTimeout(retryTimeoutId);
+      }
+    } else {
+      const err: any = new Error(
+        initialErr.name === 'AbortError'
+          ? 'Server request timed out. Please retry.'
+          : initialErr.message || 'Failed to fetch from server.'
+      );
+      err.isNetworkError = true;
+      throw err;
+    }
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   // Handle 401 Unauthorized by attempting automatic token refresh
   if (response.status === 401 && !endpoint.includes('/api/auth/login') && !endpoint.includes('/api/auth/refresh')) {
@@ -170,7 +241,7 @@ export async function apiDownloadPdf(
  * Fire-and-forget backend health ping to wake up sleeping Render free-tier instances
  * and warm the database connection pool.
  * - Non-blocking and silent
- * - Uses AbortController with a 15s timeout
+ * - Uses AbortController with an extended 45s timeout to support Render cold starts
  * - Fails silently without logging errors or blocking UI
  */
 let lastPingTime = 0;
@@ -189,7 +260,7 @@ export function wakeUpBackend(minIntervalMs = 15000): void {
       } catch {
         // Silently swallow abort error
       }
-    }, 15000);
+    }, 45000);
 
     fetch(`${API_BASE_URL}/api/health`, {
       method: 'GET',
@@ -205,4 +276,18 @@ export function wakeUpBackend(minIntervalMs = 15000): void {
   } catch {
     // Fail silently
   }
+}
+
+/**
+ * Starts a recurring background heartbeat to keep the Render container awake while
+ * a student is actively filling out the multi-stage application form.
+ * Returns a cleanup function.
+ */
+export function startPeriodicHeartbeat(intervalMs = 180000): () => void {
+  wakeUpBackend(0);
+  const timer = setInterval(() => {
+    wakeUpBackend(120000);
+  }, intervalMs);
+
+  return () => clearInterval(timer);
 }

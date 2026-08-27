@@ -17,7 +17,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
-import { wakeUpBackend } from '../../../lib/apiClient';
+import { wakeUpBackend, startPeriodicHeartbeat } from '../../../lib/apiClient';
 import {
   formatCnic,
   formatPakistaniPhone,
@@ -63,9 +63,10 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [academicRowErrors, setAcademicRowErrors] = useState<Record<string, string>>({});
 
-  // Ping backend on wizard mount
+  // Keep server awake with background heartbeat while on registration wizard
   useEffect(() => {
-    wakeUpBackend();
+    const stopHeartbeat = startPeriodicHeartbeat(180000);
+    return () => stopHeartbeat();
   }, []);
 
   // Ping backend immediately when candidate reaches the final declarations stage

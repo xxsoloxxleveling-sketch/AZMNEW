@@ -184,6 +184,26 @@ export class StudentsService {
     });
 
     if (existing) {
+      const ageInMs = Date.now() - new Date(existing.createdAt).getTime();
+      const isRecentSubmission = ageInMs < 15 * 60 * 1000; // within last 15 minutes
+      const isSameName =
+        (existing.fullName || '').trim().toLowerCase() === (input.fullName || '').trim().toLowerCase();
+
+      if (isRecentSubmission && isSameName) {
+        logger.info(
+          `Idempotent retry returning existing candidate: ${existing.applicationNo} (${existing.cnicOrBForm})`
+        );
+        const fullStudent = await prisma.student.findUnique({
+          where: { id: existing.id },
+          include: {
+            academicRecords: true,
+            documents: true,
+            officeUse: true,
+          },
+        });
+        return this.formatStudentWithDocuments(fullStudent || existing);
+      }
+
       const error: AppError = new Error(
         `A student with CNIC / B-Form '${input.cnicOrBForm}' is already registered.`
       );

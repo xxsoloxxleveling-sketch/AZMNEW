@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ShieldCheck, RefreshCw, CheckCircle2, AlertCircle, Loader2, ArrowRight, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ShieldCheck, RefreshCw, AlertCircle, Loader2, ArrowRight, X, RotateCcw, WifiOff } from 'lucide-react';
 import { API_BASE_URL } from '../../lib/apiClient';
 
 interface PreSubmitCaptchaModalProps {
@@ -9,13 +9,26 @@ interface PreSubmitCaptchaModalProps {
   isSubmitting: boolean;
 }
 
-type ModalStep = 'warmup' | 'captcha' | 'submitting';
+type ModalStep = 'warmup' | 'captcha' | 'submitting' | 'error';
 
 interface MathChallenge {
   num1: number;
   num2: number;
   operator: '+' | '-';
   answer: number;
+}
+
+function createRandomChallenge(): MathChallenge {
+  const isAddition = Math.random() > 0.3;
+  if (isAddition) {
+    const n1 = Math.floor(Math.random() * 12) + 2; // 2 to 13
+    const n2 = Math.floor(Math.random() * 9) + 2;  // 2 to 10
+    return { num1: n1, num2: n2, operator: '+', answer: n1 + n2 };
+  } else {
+    const n1 = Math.floor(Math.random() * 15) + 6; // 6 to 20
+    const n2 = Math.floor(Math.random() * (n1 - 1)) + 1; // 1 to n1-1
+    return { num1: n1, num2: n2, operator: '-', answer: n1 - n2 };
+  }
 }
 
 export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
@@ -25,51 +38,42 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
   isSubmitting: parentSubmitting,
 }) => {
   const [step, setStep] = useState<ModalStep>('warmup');
-  const [warmupStatus, setWarmupStatus] = useState<'pinging' | 'ready' | 'timeout'>('pinging');
-  const [challenge, setChallenge] = useState<MathChallenge>({ num1: 0, num2: 0, operator: '+', answer: 0 });
+  const [challenge, setChallenge] = useState<MathChallenge>(() => createRandomChallenge());
   const [userAnswer, setUserAnswer] = useState<string>('');
   const [captchaError, setCaptchaError] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [submissionError, setSubmissionError] = useState<string>('');
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
 
-  // Generate a random arithmetic challenge (e.g. 7 + 6 or 15 - 4)
-  const generateNewChallenge = () => {
-    const isAddition = Math.random() > 0.3;
-    let n1: number;
-    let n2: number;
-    let ans: number;
-    let op: '+' | '-' = '+';
+  // Timer ref for submitting elapsed duration
+  const timerRef = useRef<any>(null);
 
-    if (isAddition) {
-      n1 = Math.floor(Math.random() * 12) + 2; // 2 to 13
-      n2 = Math.floor(Math.random() * 9) + 2;  // 2 to 10
-      ans = n1 + n2;
-      op = '+';
-    } else {
-      n1 = Math.floor(Math.random() * 15) + 6; // 6 to 20
-      n2 = Math.floor(Math.random() * (n1 - 1)) + 1; // 1 to n1-1
-      ans = n1 - n2;
-      op = '-';
-    }
-
-    setChallenge({ num1: n1, num2: n2, operator: op, answer: ans });
+  // Generate a new challenge explicitly
+  const refreshChallenge = () => {
+    setChallenge(createRandomChallenge());
     setUserAnswer('');
     setCaptchaError('');
   };
 
-  // When modal opens, run Step 1: Server warm-up ping
+  // When modal opens, initialize state and trigger background warm-up
   useEffect(() => {
     if (isOpen) {
       setStep('warmup');
-      setWarmupStatus('pinging');
-      generateNewChallenge();
+      refreshChallenge();
+      setSubmissionError('');
+      setElapsedSeconds(0);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         try {
           controller.abort();
         } catch {}
-        setWarmupStatus('timeout');
-      }, 15000);
+      }, 45000);
+
+      // Fast-path transition: If warm-up takes > 1.2s, let user solve CAPTCHA in parallel
+      const parallelTransition = setTimeout(() => {
+        setStep((prev) => (prev === 'warmup' ? 'captcha' : prev));
+      }, 1200);
 
       fetch(`${API_BASE_URL}/api/health`, {
         method: 'GET',
@@ -79,23 +83,18 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
       })
         .then(() => {
           clearTimeout(timeoutId);
-          setWarmupStatus('ready');
-          // Smooth transition to CAPTCHA step
-          setTimeout(() => {
-            setStep('captcha');
-          }, 800);
+          clearTimeout(parallelTransition);
+          setStep((prev) => (prev === 'warmup' ? 'captcha' : prev));
         })
         .catch(() => {
           clearTimeout(timeoutId);
-          // Even if ping fails or times out, allow candidate to proceed to CAPTCHA
-          setWarmupStatus('ready');
-          setTimeout(() => {
-            setStep('captcha');
-          }, 1200);
+          clearTimeout(parallelTransition);
+          setStep((prev) => (prev === 'warmup' ? 'captcha' : prev));
         });
 
       return () => {
         clearTimeout(timeoutId);
+        clearTimeout(parallelTransition);
         try {
           controller.abort();
         } catch {}
@@ -103,7 +102,45 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
     }
   }, [isOpen]);
 
+  // Handle submitting timer for user reassurance
+  useEffect(() => {
+    if (step === 'submitting' || isProcessing) {
+      setElapsedSeconds(0);
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [step, isProcessing]);
+
   if (!isOpen) return null;
+
+  // Execute the actual submission
+  const runSubmit = async () => {
+    setStep('submitting');
+    setIsProcessing(true);
+    setSubmissionError('');
+
+    try {
+      await onConfirmSubmit();
+      // On success, parent will close modal and show confirmation screen
+    } catch (err: any) {
+      const errMsg = err?.message || 'Server connection timed out. Please retry.';
+      setSubmissionError(errMsg);
+      setStep('error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleVerifyAndSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,24 +148,15 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
 
     const parsed = parseInt(userAnswer.trim(), 10);
     if (isNaN(parsed) || parsed !== challenge.answer) {
-      setCaptchaError('Incorrect answer. Please solve the new challenge below to continue.');
-      generateNewChallenge();
+      setCaptchaError('Incorrect answer. Please solve the challenge or click the refresh button for a new question.');
       return;
     }
 
-    // CAPTCHA solved! Move to Step 3: Submitting
-    setStep('submitting');
-    setIsProcessing(true);
+    await runSubmit();
+  };
 
-    try {
-      await onConfirmSubmit();
-    } catch (err: any) {
-      // If parent submit fails, let user retry without leaving modal or losing data
-      setStep('captcha');
-      generateNewChallenge();
-    } finally {
-      setIsProcessing(false);
-    }
+  const handleDirectRetry = async () => {
+    await runSubmit();
   };
 
   return (
@@ -139,7 +167,7 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+            className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -155,12 +183,12 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
             <div className="space-y-1.5">
               <h3 className="text-lg font-bold text-slate-900">Connecting to Server</h3>
               <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                Connecting to the AZM.AIO server… this can take a few seconds during initial activation.
+                Establishing a secure connection to the AZM.AIO application database…
               </p>
             </div>
             <div className="pt-2">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
-                Step 1 of 3: Network Pre-Flight
+                Step 1 of 2: Network Pre-Flight
               </span>
             </div>
           </div>
@@ -183,11 +211,11 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
             <form onSubmit={handleVerifyAndSubmit} className="space-y-4">
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
                 <div className="flex items-center justify-center gap-3 font-mono text-2xl font-bold text-slate-800 tracking-wider">
-                  <span className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs min-w-[40px]">
+                  <span className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs min-w-[44px]">
                     {challenge.num1}
                   </span>
-                  <span className="text-[#185b9d] text-xl">{challenge.operator}</span>
-                  <span className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs min-w-[40px]">
+                  <span className="text-[#185b9d] text-xl font-sans">{challenge.operator}</span>
+                  <span className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs min-w-[44px]">
                     {challenge.num2}
                   </span>
                   <span className="text-slate-400">=</span>
@@ -213,9 +241,9 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
                   />
                   <button
                     type="button"
-                    onClick={generateNewChallenge}
-                    className="p-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition flex items-center justify-center"
-                    title="Get a different challenge"
+                    onClick={refreshChallenge}
+                    className="p-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition flex items-center justify-center cursor-pointer"
+                    title="Get a different math question"
                   >
                     <RefreshCw className="w-4 h-4" />
                   </button>
@@ -239,7 +267,7 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <p className="text-[10px] text-center text-slate-400">
-                  Your entered form details are preserved safely.
+                  Your entered form details and uploaded files are preserved safely.
                 </p>
               </div>
             </form>
@@ -247,16 +275,78 @@ export const PreSubmitCaptchaModal: React.FC<PreSubmitCaptchaModalProps> = ({
         )}
 
         {/* ================= STEP 3: SUBMITTING ================= */}
-        {(step === 'submitting' || isProcessing || parentSubmitting) && (
+        {step === 'submitting' && (
           <div className="text-center py-8 space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto text-emerald-600">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mx-auto text-[#185b9d]">
               <Loader2 className="w-8 h-8 animate-spin" />
             </div>
             <div className="space-y-1.5">
-              <h3 className="text-lg font-bold text-slate-900">Submitting Application…</h3>
-              <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                Recording your candidate profile and generating your official Session V registration receipt…
+              <h3 className="text-lg font-bold text-slate-900">
+                {elapsedSeconds < 5
+                  ? 'Submitting Application…'
+                  : elapsedSeconds < 15
+                  ? 'Connecting to Examination Server…'
+                  : 'Waking Up Cloud Instance…'}
+              </h3>
+              <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                {elapsedSeconds < 15
+                  ? 'Recording your candidate profile and generating your official Session V registration receipt…'
+                  : 'The secure server is completing its cold-start activation (~30s). Please keep this screen open, all your uploaded documents and information are safe.'}
               </p>
+            </div>
+            {elapsedSeconds >= 8 && (
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                Elapsed: {elapsedSeconds}s
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= STEP 4: ERROR & DIRECT RETRY ================= */}
+        {step === 'error' && (
+          <div className="space-y-5">
+            <div className="text-center space-y-1.5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto text-amber-600 mb-2">
+                <WifiOff className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">Submission Paused</h3>
+              <p className="text-xs text-slate-500">
+                We encountered an issue connecting to the application server.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                  {submissionError || "Could not complete the request. The server may be waking up."}
+                </p>
+              </div>
+              <p className="text-[11px] text-slate-600 pl-6">
+                ✓ <strong>Good news:</strong> None of your information was lost. You do not need to re-type your form.
+              </p>
+            </div>
+
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                onClick={handleDirectRetry}
+                className="w-full py-3 px-4 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Retry Submission Now</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  refreshChallenge();
+                  setStep('captcha');
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
+              >
+                Solve a Different Verification Math Question
+              </button>
             </div>
           </div>
         )}
