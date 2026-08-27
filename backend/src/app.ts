@@ -18,6 +18,8 @@ import examHallsRoutes from './modules/exam-halls/examHalls.routes';
 import grievancesRoutes from './modules/grievances/grievances.routes';
 import resultsRoutes from './modules/results/results.routes';
 
+import { logger } from './lib/logger';
+
 const app: Express = express();
 app.set('trust proxy', 1);
 
@@ -25,10 +27,43 @@ app.set('trust proxy', 1);
 const allowedOrigins = [
   env.CORS_ORIGIN,
   env.FRONTEND_URL,
+  'https://azmaio.com',
+  'https://www.azmaio.com',
+  'http://azmaio.com',
+  'http://www.azmaio.com',
+  'https://azmnew.onrender.com',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:4173',
+  'http://localhost:5000',
 ].filter(Boolean) as string[];
+
+const isOriginAllowed = (origin: string | undefined): boolean => {
+  if (!origin) return true;
+  if (env.NODE_ENV !== 'production') return true;
+
+  // Exact match
+  if (allowedOrigins.includes(origin)) return true;
+
+  // Comma-separated env entries
+  const envOrigins = [env.CORS_ORIGIN, env.FRONTEND_URL]
+    .filter(Boolean)
+    .flatMap((o) => (o as string).split(',').map((s) => s.trim()));
+  if (envOrigins.includes(origin)) return true;
+
+  // Domain & subdomain matching for azmaio.com and render
+  try {
+    const url = new URL(origin);
+    if (url.hostname === 'azmaio.com' || url.hostname.endsWith('.azmaio.com')) {
+      return true;
+    }
+    if (url.hostname === 'onrender.com' || url.hostname.endsWith('.onrender.com')) {
+      return true;
+    }
+  } catch {}
+
+  return false;
+};
 
 app.use(
   cors({
@@ -36,16 +71,20 @@ app.use(
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void
     ) => {
-      // In development or test, allow local tooling; in production, enforce strict whitelist
-      if (!origin || allowedOrigins.includes(origin) || env.NODE_ENV !== 'production') {
+      if (isOriginAllowed(origin)) {
         callback(null, true);
       } else {
+        logger.warn(`CORS rejected for origin: ${origin}`);
         callback(new Error(`CORS policy violation: Origin "${origin}" is not permitted.`));
       }
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Origin'],
+    exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length'],
   })
 );
+app.options('*', cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
