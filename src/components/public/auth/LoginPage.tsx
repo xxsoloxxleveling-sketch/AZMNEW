@@ -69,7 +69,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
       return;
     }
     if (!emailRegex.test(email.trim())) {
-      setServerError('Please enter a valid email address (e.g. admin@azmaio.com).');
+      setServerError('Please enter a valid email address (e.g. chief.admin@azmaio.com).');
       return;
     }
     if (!password.trim()) {
@@ -162,7 +162,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
                       if (serverError) setServerError(null);
                     }}
                     onBlur={() => handleBlur('email')}
-                    placeholder="admin@azmaio.com"
+                    placeholder="chief.admin@azmaio.com"
                     disabled={isSubmitting}
                     className={`w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50/60 border rounded-xl placeholder:text-slate-400 focus:bg-white focus:outline-none transition ${
                       emailError

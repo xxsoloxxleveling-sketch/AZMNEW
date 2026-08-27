@@ -4,7 +4,7 @@ import { Role } from '@prisma/client';
 export const createUserSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email address').trim().toLowerCase(),
-  password: z.string().min(6, 'Password must be at least 6 characters').optional().default('AdminPassword123!'),
+  password: z.string().min(6, 'Password must be at least 6 characters').optional().default('Azm@Staff#2026!'),
   role: z.nativeEnum(Role).default(Role.TEACHER),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
 });

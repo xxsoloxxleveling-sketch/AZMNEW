@@ -3,93 +3,111 @@ import { hashPassword } from '../src/lib/hash';
 import { logger } from '../src/lib/logger';
 
 export async function seedDatabase() {
-  logger.info('🌱 Seeding default accounts...');
+  logger.info('🌱 Purging legacy accounts and seeding new default credentials...');
 
-  const superAdminPassword = 'AdminPassword123!';
-  const passwordHash = await hashPassword(superAdminPassword);
+  // 1. Permanently delete all old / legacy accounts so NO ONE can login with old emails
+  const obsoleteEmails = [
+    'superadmin@jadoon.edu.pk',
+    'admin@jadoon.edu.pk',
+    'teacher@jadoon.edu.pk',
+    'accountant@jadoon.edu.pk',
+    'superadmin@azmaio.com',
+    'admin@azmaio.com',
+    'teacher@azmaio.com',
+    'accountant@azmaio.com',
+  ];
+
+  await prisma.user.deleteMany({
+    where: {
+      email: { in: obsoleteEmails },
+    },
+  });
+
+  // 2. Seed new Super Admin
+  const superAdminEmail = 'chief.admin@azmaio.com';
+  const superAdminPassword = 'Azm@Admin#992026!';
+  const superAdminHash = await hashPassword(superAdminPassword);
 
   const superAdmin = await prisma.user.upsert({
-    where: { email: 'superadmin@azmaio.com' },
+    where: { email: superAdminEmail },
     update: {
-      passwordHash,
+      passwordHash: superAdminHash,
       role: Role.SUPER_ADMIN,
-      name: 'AZM.AIO Super Admin',
+      name: 'AZM.AIO Chief Administrator',
+      status: 'ACTIVE',
     },
     create: {
-      email: 'superadmin@azmaio.com',
-      name: 'AZM.AIO Super Admin',
-      passwordHash,
+      email: superAdminEmail,
+      name: 'AZM.AIO Chief Administrator',
+      passwordHash: superAdminHash,
       role: Role.SUPER_ADMIN,
+      status: 'ACTIVE',
     },
   });
 
-  // Seed backwards-compatible superadmin alias
-  await prisma.user.upsert({
-    where: { email: 'superadmin@jadoon.edu.pk' },
-    update: {
-      passwordHash,
-      role: Role.SUPER_ADMIN,
-      name: 'AZM.AIO Super Admin',
-    },
-    create: {
-      email: 'superadmin@jadoon.edu.pk',
-      name: 'AZM.AIO Super Admin',
-      passwordHash,
-      role: Role.SUPER_ADMIN,
-    },
-  });
-
-  // Seed a sample Teacher for testing role-based restrictions
-  const teacherPassword = 'TeacherPassword123!';
-  const teacherHash = await hashPassword(teacherPassword);
-  const teacher = await prisma.user.upsert({
-    where: { email: 'teacher@azmaio.com' },
-    update: {
-      passwordHash: teacherHash,
-      role: Role.TEACHER,
-      name: 'Ahmad Khan',
-    },
-    create: {
-      email: 'teacher@azmaio.com',
-      name: 'Ahmad Khan',
-      passwordHash: teacherHash,
-      role: Role.TEACHER,
-    },
-  });
-
-  // Seed Admin
-  const adminPassword = 'Admin123!';
+  // 3. Seed new Admin (Examinations & Admissions Controller)
+  const adminEmail = 'exam.controller@azmaio.com';
+  const adminPassword = 'Azm@ExamDesk#2026!';
   const adminHash = await hashPassword(adminPassword);
+
   const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@azmaio.com' },
+    where: { email: adminEmail },
     update: {
       passwordHash: adminHash,
       role: Role.ADMIN,
-      name: 'Muhammad Rashid (Admin)',
+      name: 'Examination & Admissions Controller',
+      status: 'ACTIVE',
     },
     create: {
-      email: 'admin@azmaio.com',
-      name: 'Muhammad Rashid (Admin)',
+      email: adminEmail,
+      name: 'Examination & Admissions Controller',
       passwordHash: adminHash,
       role: Role.ADMIN,
+      status: 'ACTIVE',
     },
   });
 
-  // Seed Accountant
-  const accountantPassword = 'Accountant123!';
+  // 4. Seed new Accountant (Finance & Accounts Desk)
+  const accountantEmail = 'finance.officer@azmaio.com';
+  const accountantPassword = 'Azm@Accounts#2026!';
   const accountantHash = await hashPassword(accountantPassword);
+
   const accountantUser = await prisma.user.upsert({
-    where: { email: 'accountant@azmaio.com' },
+    where: { email: accountantEmail },
     update: {
       passwordHash: accountantHash,
       role: Role.ACCOUNTANT,
-      name: 'Kashif Finance',
+      name: 'Finance & Accounts Officer',
+      status: 'ACTIVE',
     },
     create: {
-      email: 'accountant@azmaio.com',
-      name: 'Kashif Finance',
+      email: accountantEmail,
+      name: 'Finance & Accounts Officer',
       passwordHash: accountantHash,
       role: Role.ACCOUNTANT,
+      status: 'ACTIVE',
+    },
+  });
+
+  // 5. Seed new Teacher / Invigilator Lead
+  const teacherEmail = 'invigilator.lead@azmaio.com';
+  const teacherPassword = 'Azm@Invigilation#2026!';
+  const teacherHash = await hashPassword(teacherPassword);
+
+  const teacher = await prisma.user.upsert({
+    where: { email: teacherEmail },
+    update: {
+      passwordHash: teacherHash,
+      role: Role.TEACHER,
+      name: 'Chief Invigilator & Test Supervisor',
+      status: 'ACTIVE',
+    },
+    create: {
+      email: teacherEmail,
+      name: 'Chief Invigilator & Test Supervisor',
+      passwordHash: teacherHash,
+      role: Role.TEACHER,
+      status: 'ACTIVE',
     },
   });
 

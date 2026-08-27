@@ -285,7 +285,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold text-slate-900 truncate">{user?.name || 'Admin User'}</p>
-              <p className="text-[10px] text-slate-400 truncate">{user?.email || 'admin@azmaio.com'}</p>
+              <p className="text-[10px] text-slate-400 truncate">{user?.email || 'chief.admin@azmaio.com'}</p>
             </div>
           </div>
 

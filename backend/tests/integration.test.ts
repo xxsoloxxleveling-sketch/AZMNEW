@@ -17,8 +17,8 @@ async function runLiveIntegrationTest() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      email: 'superadmin@azmaio.com',
-      password: 'AdminPassword123!',
+      email: 'chief.admin@azmaio.com',
+      password: 'Azm@Admin#992026!',
     }),
   });
   const loginData = (await loginRes.json()) as any;

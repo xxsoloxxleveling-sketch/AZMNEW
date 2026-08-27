@@ -29,21 +29,21 @@ async function runTests() {
   // Generate tokens for Super Admin, Admin, and Teacher
   const superAdminToken = signAccessToken({
     userId: 'test-superadmin-id',
-    email: 'superadmin@azmaio.com',
+    email: 'chief.admin@azmaio.com',
     role: Role.SUPER_ADMIN,
     name: 'Super Admin',
   });
 
   const adminToken = signAccessToken({
     userId: 'test-admin-id',
-    email: 'admin@azmaio.com',
+    email: 'exam.controller@azmaio.com',
     role: Role.ADMIN,
     name: 'Admin User',
   });
 
   const teacherToken = signAccessToken({
     userId: 'test-teacher-id',
-    email: 'teacher@azmaio.com',
+    email: 'invigilator.lead@azmaio.com',
     role: Role.TEACHER,
     name: 'Teacher User',
   });
