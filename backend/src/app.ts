@@ -51,13 +51,20 @@ const isOriginAllowed = (origin: string | undefined): boolean => {
     .flatMap((o) => (o as string).split(',').map((s) => s.trim()));
   if (envOrigins.includes(origin)) return true;
 
-  // Domain & subdomain matching for azmaio.com and render
+  // Domain & subdomain matching
   try {
     const url = new URL(origin);
-    if (url.hostname === 'azmaio.com' || url.hostname.endsWith('.azmaio.com')) {
-      return true;
-    }
-    if (url.hostname === 'onrender.com' || url.hostname.endsWith('.onrender.com')) {
+    const host = url.hostname.toLowerCase();
+    if (
+      host === 'azmaio.com' ||
+      host.endsWith('.azmaio.com') ||
+      host === 'onrender.com' ||
+      host.endsWith('.onrender.com') ||
+      host.endsWith('.hostingersite.com') ||
+      host.endsWith('.hostinger.com') ||
+      host.endsWith('.vercel.app') ||
+      host.endsWith('.netlify.app')
+    ) {
       return true;
     }
   } catch {}
@@ -75,7 +82,7 @@ app.use(
         callback(null, true);
       } else {
         logger.warn(`CORS rejected for origin: ${origin}`);
-        callback(new Error(`CORS policy violation: Origin "${origin}" is not permitted.`));
+        callback(null, false);
       }
     },
     credentials: true,
