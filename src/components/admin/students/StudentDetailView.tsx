@@ -40,12 +40,175 @@ interface StudentDetailViewProps {
   onBack: () => void;
 }
 
+function extractStudentDocuments(s: any): MockStudentDocument[] {
+  if (!s) return [];
+  const docMap = new Map<string, MockStudentDocument>();
+  const candKey = s.applicationNo || s.id || 'CAND';
+
+  let up = s.uploadedDocuments;
+  if (typeof up === 'string') {
+    try { up = JSON.parse(up); } catch {}
+  }
+  if (!up && s.uploadedDocsJson) {
+    try { up = JSON.parse(s.uploadedDocsJson); } catch {}
+  }
+  up = up || {};
+
+  const officeUse = s.officeUse;
+  const docStatus: 'VERIFIED' | 'PENDING_REVIEW' | 'REJECTED' =
+    officeUse?.eligibility === 'ELIGIBLE'
+      ? 'VERIFIED'
+      : officeUse?.eligibility === 'NOT_ELIGIBLE'
+      ? 'REJECTED'
+      : 'PENDING_REVIEW';
+  const rejectionReason = officeUse?.eligibilityRemarks;
+
+  // 1. Candidate Passport Photo
+  const photoFile = up.photo;
+  const photoUrl =
+    photoFile?.publicUrl ||
+    photoFile?.dataUrl ||
+    s.photoUrl ||
+    (s.id ? `${API_BASE_URL}/api/students/${s.applicationNo || s.id}/document/photo` : '');
+
+  if (photoFile || s.photoUrl || (photoUrl && photoUrl.length > 5)) {
+    docMap.set(`${candKey}_PHOTO`, {
+      id: `doc_photo_${s.id || '1'}`,
+      studentId: s.id || '1',
+      studentName: s.fullName || 'Candidate',
+      rollNumber: s.rollNumber || 'PENDING',
+      applicationNo: s.applicationNo || 'APP-2026',
+      currentClass: s.currentClass || 'SSC',
+      docType: 'CANDIDATE_PHOTO',
+      title: photoFile?.name || `${s.fullName || 'Candidate'}_Passport_Photo.jpg`,
+      fileUrl: photoUrl,
+      fileSize: photoFile?.size || 'Candidate Photo',
+      fileType: 'image/jpeg',
+      uploadedAt: photoFile?.uploadedAt || s.createdAt || new Date().toISOString(),
+      status: docStatus,
+      rejectionReason,
+    });
+  }
+
+  // 2. Candidate B-Form / CNIC
+  const bformFile = up.bform || up.bformUploaded || up.cnic || up.candidateCnic;
+  if (bformFile && (bformFile.dataUrl || bformFile.publicUrl || bformFile.fileUrl)) {
+    const bformUrl = bformFile.publicUrl || bformFile.dataUrl || bformFile.fileUrl;
+    docMap.set(`${candKey}_BFORM`, {
+      id: `doc_cnic_${s.id || '2'}`,
+      studentId: s.id || '2',
+      studentName: s.fullName || 'Candidate',
+      rollNumber: s.rollNumber || 'PENDING',
+      applicationNo: s.applicationNo || 'APP-2026',
+      currentClass: s.currentClass || 'SSC',
+      docType: 'CNIC_BFORM',
+      title: bformFile.name || `${s.fullName || 'Candidate'}_Candidate_BForm_CNIC.jpg`,
+      fileUrl: bformUrl,
+      fileSize: bformFile.size || 'Candidate Attachment',
+      fileType: bformUrl.includes('application/pdf') || bformFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+      uploadedAt: bformFile.uploadedAt || s.createdAt || new Date().toISOString(),
+      status: docStatus,
+      rejectionReason,
+    });
+  }
+
+  // 3. Father / Guardian CNIC
+  const fatherCnicFile = up.fatherCnic || up.fatherCnicUploaded || up.fcnic;
+  if (fatherCnicFile && (fatherCnicFile.dataUrl || fatherCnicFile.publicUrl || fatherCnicFile.fileUrl)) {
+    const fatherCnicUrl = fatherCnicFile.publicUrl || fatherCnicFile.dataUrl || fatherCnicFile.fileUrl;
+    docMap.set(`${candKey}_FATHER_CNIC`, {
+      id: `doc_fcnic_${s.id || '3'}`,
+      studentId: s.id || '3',
+      studentName: s.fullName || 'Candidate',
+      rollNumber: s.rollNumber || 'PENDING',
+      applicationNo: s.applicationNo || 'APP-2026',
+      currentClass: s.currentClass || 'SSC',
+      docType: 'CNIC_BFORM',
+      title: fatherCnicFile.name || `${s.fullName || 'Candidate'}_Father_CNIC.jpg`,
+      fileUrl: fatherCnicUrl,
+      fileSize: fatherCnicFile.size || 'Candidate Attachment',
+      fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+      uploadedAt: fatherCnicFile.uploadedAt || s.createdAt || new Date().toISOString(),
+      status: docStatus,
+      rejectionReason,
+    });
+  }
+
+  // 4. Academic DMC / Marksheet
+  const dmcFile = up.dmc || up.dmcUploaded || up.resultCard || up.previousResult;
+  if (dmcFile && (dmcFile.dataUrl || dmcFile.publicUrl || dmcFile.fileUrl)) {
+    const dmcUrl = dmcFile.publicUrl || dmcFile.dataUrl || dmcFile.fileUrl;
+    docMap.set(`${candKey}_DMC`, {
+      id: `doc_dmc_${s.id || '4'}`,
+      studentId: s.id || '4',
+      studentName: s.fullName || 'Candidate',
+      rollNumber: s.rollNumber || 'PENDING',
+      applicationNo: s.applicationNo || 'APP-2026',
+      currentClass: s.currentClass || 'SSC',
+      docType: 'PREVIOUS_DMC',
+      title: dmcFile.name || `${s.fullName || 'Candidate'}_DMC_Marksheet.jpg`,
+      fileUrl: dmcUrl,
+      fileSize: dmcFile.size || 'Candidate Attachment',
+      fileType: dmcUrl.includes('application/pdf') || dmcFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+      uploadedAt: dmcFile.uploadedAt || s.createdAt || new Date().toISOString(),
+      status: docStatus,
+      rejectionReason,
+    });
+  }
+
+  // 5. Payment Deposit Slip / Receipt
+  const feeFile = up.paymentReceipt || up.incomeCertUploaded || up.receipt || up.challan;
+  if (feeFile && (feeFile.dataUrl || feeFile.publicUrl || feeFile.fileUrl)) {
+    const feeUrl = feeFile.publicUrl || feeFile.dataUrl || feeFile.fileUrl;
+    docMap.set(`${candKey}_FEE`, {
+      id: `doc_pay_${s.id || '5'}`,
+      studentId: s.id || '5',
+      studentName: s.fullName || 'Candidate',
+      rollNumber: s.rollNumber || 'PENDING',
+      applicationNo: s.applicationNo || 'APP-2026',
+      currentClass: s.currentClass || 'SSC',
+      docType: 'PAYMENT_CHALLAN',
+      title: feeFile.name || `${s.fullName || 'Candidate'}_Fee_Payment_Receipt.jpg`,
+      fileUrl: feeUrl,
+      fileSize: feeFile.size || 'Candidate Attachment',
+      fileType: feeUrl.includes('application/pdf') || feeFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
+      uploadedAt: feeFile.uploadedAt || s.createdAt || new Date().toISOString(),
+      status: docStatus,
+      rejectionReason,
+    });
+  }
+
+  // 6. Domicile Certificate
+  const domicileFile = up.domicile || up.domicileUploaded;
+  if (domicileFile && (domicileFile.dataUrl || domicileFile.publicUrl || domicileFile.fileUrl)) {
+    const domicileUrl = domicileFile.publicUrl || domicileFile.dataUrl || domicileFile.fileUrl;
+    docMap.set(`${candKey}_DOMICILE`, {
+      id: `doc_dom_${s.id || '6'}`,
+      studentId: s.id || '6',
+      studentName: s.fullName || 'Candidate',
+      rollNumber: s.rollNumber || 'PENDING',
+      applicationNo: s.applicationNo || 'APP-2026',
+      currentClass: s.currentClass || 'SSC',
+      docType: 'CNIC_BFORM',
+      title: domicileFile.name || `${s.fullName || 'Candidate'}_Domicile_Certificate.jpg`,
+      fileUrl: domicileUrl,
+      fileSize: domicileFile.size || 'Candidate Attachment',
+      fileType: domicileUrl.includes('application/pdf') || domicileFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+      uploadedAt: domicileFile.uploadedAt || s.createdAt || new Date().toISOString(),
+      status: docStatus,
+      rejectionReason,
+    });
+  }
+
+  return Array.from(docMap.values());
+}
+
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, onBack }) => {
   const { role } = useAuth();
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingSlip, setIsDownloadingSlip] = useState(false);
   const [isDossierOpen, setIsDossierOpen] = useState(false);
-  const [documents, setDocuments] = useState<MockStudentDocument[]>([]);
+  const [documents, setDocuments] = useState<MockStudentDocument[]>(() => extractStudentDocuments(student));
   const [selectedDoc, setSelectedDoc] = useState<MockStudentDocument | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -66,7 +229,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
   useEffect(() => {
     loadDocuments();
     loadCenters();
-  }, [student.id, student.applicationNo]);
+  }, [student.id, student.applicationNo, student.photoUrl, student.uploadedDocuments]);
 
   const loadCenters = async () => {
     try {
@@ -76,12 +239,20 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
   };
 
   const loadDocuments = async () => {
+    const directDocs = extractStudentDocuments(student);
+    if (directDocs.length > 0) {
+      setDocuments(directDocs);
+    }
     try {
       const docs = await mockApi.getStudentDocuments(student.id || student.applicationNo || student.cnicOrBForm);
-      setDocuments(docs || []);
+      if (docs && docs.length > 0) {
+        setDocuments(docs);
+      } else if (directDocs.length > 0) {
+        setDocuments(directDocs);
+      }
     } catch (e) {
       console.warn('Failed to load documents:', e);
-      setDocuments([]);
+      if (directDocs.length > 0) setDocuments(directDocs);
     }
   };
 

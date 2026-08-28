@@ -1127,7 +1127,15 @@ export const mockApi = {
 
       if (!matches) return;
 
-      const up = s.uploadedDocuments || {};
+      let up = s.uploadedDocuments;
+      if (typeof up === 'string') {
+        try { up = JSON.parse(up); } catch {}
+      }
+      if (!up && (s as any).uploadedDocsJson) {
+        try { up = JSON.parse((s as any).uploadedDocsJson); } catch {}
+      }
+      up = up || {};
+
       const candKey = s.applicationNo || s.id;
       const officeUse = (s as any).officeUse;
       const docStatus: 'VERIFIED' | 'PENDING_REVIEW' | 'REJECTED' =
@@ -1143,7 +1151,7 @@ export const mockApi = {
       const photoUrl =
         photoFile?.publicUrl ||
         photoFile?.dataUrl ||
-        (s.photoUrl && !s.photoUrl.includes('supabase.co/storage') ? s.photoUrl : null) ||
+        s.photoUrl ||
         `${API_BASE_URL}/api/students/${s.applicationNo || s.id}/document/photo`;
 
       if (photoFile || s.photoUrl) {
