@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { logger } from '../../lib/logger';
 
 /**
@@ -74,10 +75,35 @@ export class PdfService {
       logger.warn('@sparticuz/chromium launch notice, falling back to standard puppeteer:', coreErr.message);
     }
 
-    // Fallback: standard puppeteer (for Windows/Mac local development or standard containers)
+    // Check known system executable paths if in container / Linux
+    const knownPaths = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      process.env.CHROME_BIN,
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+    ].filter(Boolean) as string[];
+
     const puppeteerModule = await import('puppeteer');
     const puppeteer = puppeteerModule.default || puppeteerModule;
 
+    for (const p of knownPaths) {
+      if (fs.existsSync(p)) {
+        try {
+          logger.info(`🚀 Launching system Chrome from: ${p}`);
+          return await puppeteer.launch({
+            executablePath: p,
+            headless: true,
+            args: memoryOptimizedArgs,
+          });
+        } catch (e: any) {
+          logger.warn(`Failed launching Chrome at ${p}:`, e.message);
+        }
+      }
+    }
+
+    // Fallback: standard puppeteer (for Windows/Mac local development or standard containers)
     return puppeteer.launch({
       headless: true,
       args: memoryOptimizedArgs,

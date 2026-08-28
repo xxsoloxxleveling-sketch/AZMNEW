@@ -5,9 +5,9 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "npx puppeteer browsers install chrome && tsc",
     "start": "node dist/server.js",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && npx puppeteer browsers install chrome",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts"
