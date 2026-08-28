@@ -56,8 +56,10 @@ export class StudentsService {
       Boolean(student.rollNumber);
     const feeStatus = isPaid ? 'PAID' : (student.feeRecords?.[0]?.status || 'UNPAID');
 
+    const { uploadedDocsJson, ...cleanStudent } = student;
+
     return {
-      ...student,
+      ...cleanStudent,
       feeStatus,
       uploadedDocuments: Object.keys(uploadedDocuments).length > 0 ? uploadedDocuments : undefined,
     };
@@ -862,7 +864,26 @@ export class StudentsService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+          id: true,
+          applicationNo: true,
+          rollNumber: true,
+          fullName: true,
+          fatherName: true,
+          gender: true,
+          dateOfBirth: true,
+          age: true,
+          cnicOrBForm: true,
+          studentMobile: true,
+          parentMobile: true,
+          whatsapp: true,
+          currentClass: true,
+          hsscGroup: true,
+          schoolName: true,
+          scholarshipCategory: true,
+          status: true,
+          createdAt: true,
+          photoUrl: true,
           feeRecords: { select: { status: true, amountDue: true, amountPaid: true } },
           officeUse: { select: { eligibility: true, eligibilityRemarks: true } },
         },
