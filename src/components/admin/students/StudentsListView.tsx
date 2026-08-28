@@ -406,10 +406,14 @@ export const StudentsListView: React.FC = () => {
               className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
             >
               <option value="ALL">All Classes</option>
+              <option value="Class 6th">Class 6th</option>
+              <option value="Class 7th">Class 7th</option>
               <option value="Class 8th">Class 8th</option>
               <option value="SSC-I">SSC-I (9th)</option>
               <option value="SSC-II">SSC-II (10th)</option>
-              <option value="HSSC">HSSC (College)</option>
+              <option value="HSSC-I">HSSC-I (11th)</option>
+              <option value="HSSC-II">HSSC-II (12th)</option>
+              <option value="HSSC">HSSC (All College)</option>
               <option value="BS">BS Degree</option>
             </select>
 
