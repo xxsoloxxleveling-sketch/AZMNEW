@@ -40,8 +40,12 @@ export class PdfService {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--no-first-run',
+      '--disable-software-rasterizer',
+      '--single-process',
       '--no-zygote',
+      '--no-first-run',
+      '--renderer-process-limit=1',
+      '--js-flags=--max-old-space-size=64',
       '--disable-extensions',
       '--disable-background-networking',
       '--disable-default-apps',
@@ -50,6 +54,7 @@ export class PdfService {
       '--hide-scrollbars',
       '--metrics-recording-only',
       '--mute-audio',
+      '--disable-features=IsolateOrigins,site-per-process,AudioServiceOutOfProcess',
     ];
 
     // Check known system executable paths if in container / Linux

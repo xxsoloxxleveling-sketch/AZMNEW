@@ -30,3 +30,5 @@ services:
         sync: false
       - key: PUPPETEER_CACHE_DIR
         value: /opt/render/project/src/backend/.cache/puppeteer
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=256"
