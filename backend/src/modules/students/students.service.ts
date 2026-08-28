@@ -863,7 +863,7 @@ export class StudentsService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          feeRecords: { select: { status: true, amount: true } },
+          feeRecords: { select: { status: true, amountDue: true, amountPaid: true } },
           officeUse: { select: { eligibility: true, eligibilityRemarks: true } },
         },
       }),

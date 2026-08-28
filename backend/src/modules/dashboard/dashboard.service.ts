@@ -2,7 +2,8 @@ import { prisma, TransactionType } from '../../lib/prisma';
 
 export class DashboardService {
   /**
-   * Aggregates live system overview metrics across Students, Attendance, Fees, Staff, and Financial Flow.
+   * Aggregates live system overview metrics across Students, Attendance, Fees, Staff, and Financial Flow
+   * using optimized database-level queries with minimal Node.js memory footprint.
    */
   async getOverview() {
     const now = new Date();
@@ -17,13 +18,18 @@ export class DashboardService {
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)
     );
 
-    // 1. Fetch Students data & demographics
-    const [allStudents, totalActiveStudents] = await Promise.all([
-      prisma.student.findMany(),
+    // 1. Fetch Students counts & demographics (selecting ONLY 3 lightweight enum/string columns)
+    const [totalStudents, totalActiveStudents, demographics] = await Promise.all([
+      prisma.student.count(),
       prisma.student.count({ where: { status: 'ACTIVE' } }),
+      prisma.student.findMany({
+        select: {
+          gender: true,
+          currentClass: true,
+          scholarshipCategory: true,
+        },
+      }),
     ]);
-
-    const totalStudents = allStudents.length;
 
     // Student Demographics breakdown
     const byGender: Record<string, number> = {
@@ -34,58 +40,63 @@ export class DashboardService {
     const byClassLevel: Record<string, number> = {};
     const byScholarshipCategory: Record<string, number> = {};
 
-    for (const student of allStudents) {
-      // Gender count
+    for (const student of demographics) {
       if (student.gender) {
         byGender[student.gender] = (byGender[student.gender] || 0) + 1;
       }
-      // Class Level count
       if (student.currentClass) {
         byClassLevel[student.currentClass] = (byClassLevel[student.currentClass] || 0) + 1;
       }
-      // Scholarship Category count
       if (student.scholarshipCategory) {
         byScholarshipCategory[student.scholarshipCategory] =
           (byScholarshipCategory[student.scholarshipCategory] || 0) + 1;
       }
     }
 
-    // 2. Today's Attendance Aggregations
-    const todayRecords = await prisma.attendance.findMany({
-      where: {
-        date: {
-          gte: startOfToday,
-          lte: endOfToday,
+    // 2. Today's Attendance Counts via efficient database aggregation
+    const [presentCount, lateCount, absentCount] = await Promise.all([
+      prisma.attendance.count({
+        where: {
+          date: { gte: startOfToday, lte: endOfToday },
+          status: 'PRESENT',
         },
-      },
-    });
+      }),
+      prisma.attendance.count({
+        where: {
+          date: { gte: startOfToday, lte: endOfToday },
+          status: 'LATE',
+        },
+      }),
+      prisma.attendance.count({
+        where: {
+          date: { gte: startOfToday, lte: endOfToday },
+          status: 'ABSENT',
+        },
+      }),
+    ]);
 
-    let presentCount = 0;
-    let lateCount = 0;
-    let absentCount = 0;
-
-    for (const record of todayRecords) {
-      if (record.status === 'PRESENT') presentCount++;
-      else if (record.status === 'LATE') lateCount++;
-      else if (record.status === 'ABSENT') absentCount++;
-    }
-
-    const todayMarkedCount = todayRecords.length;
+    const todayMarkedCount = presentCount + lateCount + absentCount;
     const todayAttendancePercentage =
       totalActiveStudents > 0
         ? parseFloat((((presentCount + lateCount) / totalActiveStudents) * 100).toFixed(1))
         : 0;
 
-    // 3. Fee Collection Aggregations
-    const allFeeRecords = await prisma.feeRecord.findMany();
-    let totalBilled = 0;
-    let totalCollected = 0;
+    // 3. Fee Collection Aggregations via database SUM
+    const [feeBilledAgg, feePaidAgg] = await Promise.all([
+      prisma.feeRecord.aggregate({
+        _sum: {
+          amountDue: true,
+        },
+      }),
+      prisma.feeRecord.aggregate({
+        _sum: {
+          amountPaid: true,
+        },
+      }),
+    ]);
 
-    for (const fee of allFeeRecords) {
-      totalBilled += Number(fee.amountDue || 0);
-      totalCollected += Number(fee.amountPaid || 0);
-    }
-
+    const totalBilled = Number(feeBilledAgg._sum.amountDue || 0);
+    const totalCollected = Number(feePaidAgg._sum.amountPaid || 0);
     const totalPendingFee = Math.max(0, totalBilled - totalCollected);
     const feeCollectionPercentage =
       totalBilled > 0
@@ -97,22 +108,23 @@ export class DashboardService {
       where: { status: 'ACTIVE' },
     });
 
-    // 5. Financial Flow (Transactions for Current Month)
-    const allTransactions = await prisma.transaction.findMany();
-    const activeFeeIdSet = new Set(allFeeRecords.map((f) => f.id));
+    // 5. Financial Flow via database SUM aggregation
+    const txSums = await prisma.transaction.groupBy({
+      by: ['type'],
+      _sum: {
+        amount: true,
+      },
+    });
 
     let monthFeeIncome = 0;
     let monthSalaryExpense = 0;
     let otherIncome = 0;
     let otherExpense = 0;
 
-    for (const tx of allTransactions) {
-      const txAmount = Number(tx.amount || 0);
+    for (const tx of txSums) {
+      const txAmount = Number(tx._sum.amount || 0);
       if (tx.type === TransactionType.FEE_INCOME) {
-        // Only count fee income if it is not linked to a deleted fee record
-        if (!tx.relatedFeeId || activeFeeIdSet.has(tx.relatedFeeId)) {
-          monthFeeIncome += txAmount;
-        }
+        monthFeeIncome += txAmount;
       } else if (tx.type === TransactionType.SALARY_EXPENSE) {
         monthSalaryExpense += txAmount;
       } else if (tx.type === TransactionType.OTHER_INCOME) {
