@@ -14,3 +14,5 @@ dev-db/
 *.sqlite
 uploads/
 **/uploads/
+.cache/
+**/.cache/

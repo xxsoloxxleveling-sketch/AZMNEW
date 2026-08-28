@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import { logger } from '../../lib/logger';
 
 /**
@@ -52,7 +53,7 @@ export class PdfService {
     ];
 
     // Check known system executable paths if in container / Linux
-    const knownPaths = [
+    const knownPaths: string[] = [
       process.env.PUPPETEER_EXECUTABLE_PATH,
       process.env.CHROME_BIN,
       '/usr/bin/google-chrome-stable',
@@ -61,13 +62,47 @@ export class PdfService {
       '/usr/bin/chromium-browser',
     ].filter(Boolean) as string[];
 
+    // Check project-level .cache/puppeteer and Render cache locations
+    const searchDirs = [
+      path.join(process.cwd(), '.cache', 'puppeteer'),
+      path.join(__dirname, '../../..', '.cache', 'puppeteer'),
+      '/opt/render/project/src/backend/.cache/puppeteer',
+      '/opt/render/.cache/puppeteer',
+    ];
+
+    for (const dir of searchDirs) {
+      if (fs.existsSync(dir)) {
+        try {
+          const findChrome = (currentDir: string): string | null => {
+            const files = fs.readdirSync(currentDir);
+            for (const file of files) {
+              const fullPath = path.join(currentDir, file);
+              const stat = fs.statSync(fullPath);
+              if (stat.isDirectory()) {
+                const found = findChrome(fullPath);
+                if (found) return found;
+              } else if (file === 'chrome' || file === 'chrome.exe') {
+                return fullPath;
+              }
+            }
+            return null;
+          };
+          const foundPath = findChrome(dir);
+          if (foundPath && !knownPaths.includes(foundPath)) {
+            logger.info(`🔍 Discovered Puppeteer Chrome binary at: ${foundPath}`);
+            knownPaths.unshift(foundPath);
+          }
+        } catch {}
+      }
+    }
+
     const puppeteerModule = await import('puppeteer');
     const puppeteer = puppeteerModule.default || puppeteerModule;
 
     for (const p of knownPaths) {
       if (fs.existsSync(p)) {
         try {
-          logger.info(`🚀 Launching system Chrome from: ${p}`);
+          logger.info(`🚀 Launching Chrome binary from: ${p}`);
           return await puppeteer.launch({
             executablePath: p,
             headless: true,
