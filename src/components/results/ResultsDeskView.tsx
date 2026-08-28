@@ -382,138 +382,89 @@ export const ResultsDeskView: React.FC<ResultsDeskViewProps> = ({ onSelectTab })
         </div>
       )}
 
-      {/* ================= PUBLIC MERIT LISTS TABLE ================= */}
+      {/* ================= OFFICIAL MERIT LIST ISSUANCE NOTICE ================= */}
       <div className="space-y-6 pt-8 border-t border-slate-200">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <span className="text-xs font-bold text-[#185b9d] uppercase tracking-widest">
-              Public Ledger Transparency
-            </span>
-            <h2 className="text-2xl font-bold font-display text-slate-900">
-              Session V (2026) Public Merit Lists
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Verified score rankings with masked CNICs protecting candidate privacy.
-            </p>
-          </div>
-
-          {/* Filters Group */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Category Filter */}
-            <select
-              value={activeMeritFilter}
-              onChange={(e) => setActiveMeritFilter(e.target.value)}
-              className="px-3 py-2 text-xs rounded-xl bg-white border border-slate-300 font-medium focus:outline-hidden"
-            >
-              <option value="all">All Categories (A to F)</option>
-              <option value="Category A">Category A (Top 2)</option>
-              <option value="Category B">Category B (Merit 3-20)</option>
-              <option value="Category C">Category C (Tuition %)</option>
-              <option value="Category D">Category D (Laptops)</option>
-              <option value="Category E">Category E (Orphans)</option>
-              <option value="Category F">Category F (Cash Prizes)</option>
-            </select>
-
-            {/* District Filter */}
-            <select
-              value={districtFilter}
-              onChange={(e) => setDistrictFilter(e.target.value)}
-              className="px-3 py-2 text-xs rounded-xl bg-white border border-slate-300 font-medium focus:outline-hidden"
-            >
-              <option value="all">All Districts</option>
-              <option value="Mansehra">Mansehra</option>
-              <option value="Abbottabad">Abbottabad</option>
-              <option value="Haripur">Haripur</option>
-              <option value="Battagram">Battagram</option>
-              <option value="Torghar">Torghar</option>
-            </select>
-
-            {/* Search Input */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search candidate / roll..."
-                value={meritSearch}
-                onChange={(e) => setMeritSearch(e.target.value)}
-                className="pl-8 pr-3 py-2 text-xs rounded-xl bg-white border border-slate-300 focus:outline-hidden"
-              />
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-            </div>
-          </div>
+        <div className="text-center max-w-3xl mx-auto space-y-2">
+          <span className="text-xs font-bold text-[#185b9d] uppercase tracking-widest">
+            Official Announcement
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-bold font-display text-slate-900">
+            Session V (2026) Official Merit List Schedule
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500">
+            Merit lists and final scholarship award ledgers are authorized and published directly by the AZM.AIO Central Directorate.
+          </p>
         </div>
 
-        {/* Merit Table View */}
-        <div className="overflow-hidden bg-white rounded-3xl border border-slate-200 shadow-sm">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider border-b border-slate-200">
-                <th className="py-3.5 px-4">Rank</th>
-                <th className="py-3.5 px-4">Roll Number</th>
-                <th className="py-3.5 px-4">Candidate Name</th>
-                <th className="py-3.5 px-4">Masked CNIC</th>
-                <th className="py-3.5 px-4">Class</th>
-                <th className="py-3.5 px-4">District</th>
-                <th className="py-3.5 px-4">Score</th>
-                <th className="py-3.5 px-4">Category</th>
-                <th className="py-3.5 px-4 text-right">Award Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredMeritList.length > 0 ? (
-                filteredMeritList.map((entry) => (
-                  <tr key={entry.rollNo} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
-                      <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs ${
-                        entry.rank <= 2 ? 'bg-amber-100 text-amber-900 font-extrabold' : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        {entry.rank}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-[#185b9d]">
-                      {entry.rollNo}
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-slate-900">
-                      {entry.candidateName}
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-500">
-                      {entry.maskedCnic}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-700">
-                      {entry.classLevel}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-600">
-                      {entry.district}
-                    </td>
-                    <td className="py-3.5 px-4 font-mono font-extrabold text-emerald-700 text-sm tabular-nums">
-                      {entry.testScore} / 100
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#185b9d] font-semibold text-[11px]">
-                        {entry.category}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-semibold text-emerald-700">
-                      {entry.status}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={9} className="py-12 px-4 text-center">
-                    <div className="max-w-md mx-auto space-y-2">
-                      <Clock className="w-8 h-8 text-[#185b9d] mx-auto opacity-70" />
-                      <p className="text-xs sm:text-sm font-bold text-slate-800">
-                        Session V Public Merit Ledger Pending Examination
-                      </p>
-                      <p className="text-xs text-slate-500 leading-relaxed">
-                        Official ranked lists will be published following the November 2026 standardized OMR test and 6-member interview evaluation rounds.
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        {/* Official Issuance Card */}
+        <div className="bg-gradient-to-br from-slate-900 via-[#0a192f] to-[#185b9d] text-white rounded-3xl p-8 sm:p-10 border border-blue-900/50 shadow-xl relative overflow-hidden">
+          {/* Subtle decorative glow */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 max-w-3xl mx-auto space-y-6 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center mx-auto text-amber-300 shadow-inner">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-3">
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                <Clock className="w-3.5 h-3.5" />
+                Under Official Directorate Preparation
+              </span>
+              <h3 className="text-xl sm:text-2xl font-bold font-display tracking-tight text-white">
+                Session V Merit List Will Be Issued by AZM.AIO Central Directorate
+              </h3>
+              <p className="text-sm text-slate-300 leading-relaxed max-w-2xl mx-auto">
+                The official Session V (2026) Merit List will be issued and published by the AZM.AIO Examination Authority following nationwide standardized OMR written tests and 6-member interview board assessments.
+              </p>
+            </div>
+
+            {/* Urdu Translation */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 text-center text-slate-200" dir="rtl">
+              <p className="text-sm sm:text-base font-semibold leading-relaxed text-amber-200 font-serif">
+                سیشن پنجم (2026) کی باضابطہ میرٹ لسٹ تحریری امتحان اور انٹرویو پینل کے بعد AZM.AIO سنٹرل ایگزامینیشن ڈائریکٹوریٹ کی جانب سے جاری کی جائے گی۔
+              </p>
+              <p className="text-xs text-slate-300 mt-1">
+                حتمی میرٹ لسٹ اور نتائج کا باقاعدہ اعلان سرکاری پورٹل اور واٹس ایپ ہیلپ لائن پر کیا جائے گا۔
+              </p>
+            </div>
+
+            {/* Metadata Badges */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-left">
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Issuing Authority</span>
+                <span className="text-xs font-bold text-white block">AZM.AIO Central Directorate</span>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Stage</span>
+                <span className="text-xs font-bold text-amber-300 block">Enrollment &amp; Roll Slips</span>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Schedule</span>
+                <span className="text-xs font-bold text-emerald-300 block">Post-Exam November 2026</span>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+              <a
+                href="https://wa.me/923051755551?text=Assalam-o-Alaikum%2C%20inquiring%20about%20AZM.AIO%20Session%20V%20Merit%20List%20schedule."
+                target="_blank"
+                rel="noreferrer"
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2"
+              >
+                <span>Inquire on Official WhatsApp Desk</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => onSelectTab('roll-number')}
+                className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 transition flex items-center gap-2 cursor-pointer"
+              >
+                <span>Check Roll Number Slip Status</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
