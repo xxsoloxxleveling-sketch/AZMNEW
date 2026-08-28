@@ -203,12 +203,13 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
   return Array.from(docMap.values());
 }
 
-export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, onBack }) => {
+export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: initialStudent, onBack }) => {
   const { role } = useAuth();
+  const [student, setStudent] = useState<MockStudent>(initialStudent);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingSlip, setIsDownloadingSlip] = useState(false);
   const [isDossierOpen, setIsDossierOpen] = useState(false);
-  const [documents, setDocuments] = useState<MockStudentDocument[]>(() => extractStudentDocuments(student));
+  const [documents, setDocuments] = useState<MockStudentDocument[]>(() => extractStudentDocuments(initialStudent));
   const [selectedDoc, setSelectedDoc] = useState<MockStudentDocument | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -216,20 +217,20 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
   // Test Center & Hall Allocation State
   const [testCenters, setTestCenters] = useState<MockTestCenter[]>([]);
   const [assignedCenter, setAssignedCenter] = useState<string>(
-    student.testCenterName || student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra'
+    initialStudent.testCenterName || initialStudent.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra'
   );
   const [assignedHall, setAssignedHall] = useState<string>(
-    student.assignedHall || 'Hall E (Matric SSC-II Main Examination Hall)'
+    initialStudent.assignedHall || 'Hall E (Matric SSC-II Main Examination Hall)'
   );
-  const [assignedRoom, setAssignedRoom] = useState<string>(student.assignedRoom || 'Hall 301-E');
-  const [seatNo, setSeatNo] = useState<string>(student.seatNo || 'Seat #01');
+  const [assignedRoom, setAssignedRoom] = useState<string>(initialStudent.assignedRoom || 'Hall 301-E');
+  const [seatNo, setSeatNo] = useState<string>(initialStudent.seatNo || 'Seat #01');
   const [isSavingAllocation, setIsSavingAllocation] = useState<boolean>(false);
   const [allocationSuccess, setAllocationSuccess] = useState<boolean>(false);
 
   useEffect(() => {
-    loadDocuments();
+    loadFullStudent();
     loadCenters();
-  }, [student.id, student.applicationNo, student.photoUrl, student.uploadedDocuments]);
+  }, [initialStudent.id, initialStudent.applicationNo]);
 
   const loadCenters = async () => {
     try {
@@ -238,20 +239,28 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
     } catch (e) {}
   };
 
-  const loadDocuments = async () => {
-    const directDocs = extractStudentDocuments(student);
+  const loadFullStudent = async () => {
+    const directDocs = extractStudentDocuments(initialStudent);
     if (directDocs.length > 0) {
       setDocuments(directDocs);
     }
     try {
-      const docs = await mockApi.getStudentDocuments(student.id || student.applicationNo || student.cnicOrBForm);
-      if (docs && docs.length > 0) {
-        setDocuments(docs);
-      } else if (directDocs.length > 0) {
-        setDocuments(directDocs);
+      const full = await mockApi.getStudentById(initialStudent.id || initialStudent.applicationNo);
+      if (full) {
+        setStudent(full);
+        const docs = extractStudentDocuments(full);
+        if (docs.length > 0) {
+          setDocuments(docs);
+        }
+        if (full.testCenterName || full.officeUse?.testCentre) {
+          setAssignedCenter(full.testCenterName || full.officeUse?.testCentre || '');
+        }
+        if (full.assignedHall) setAssignedHall(full.assignedHall);
+        if (full.assignedRoom) setAssignedRoom(full.assignedRoom);
+        if (full.seatNo) setSeatNo(full.seatNo);
       }
     } catch (e) {
-      console.warn('Failed to load documents:', e);
+      console.warn('Failed to load full student details:', e);
       if (directDocs.length > 0) setDocuments(directDocs);
     }
   };

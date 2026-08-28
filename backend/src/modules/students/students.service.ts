@@ -969,7 +969,7 @@ export class StudentsService {
    * Retrieves a student by unique ID including all relations.
    */
   async getStudentById(id: string) {
-    const student = await prisma.student.findUnique({
+    let student = await prisma.student.findUnique({
       where: { id },
       include: {
         academicRecords: true,
@@ -978,6 +978,24 @@ export class StudentsService {
         feeRecords: true,
       },
     });
+
+    if (!student) {
+      student = await prisma.student.findFirst({
+        where: {
+          OR: [
+            { applicationNo: id },
+            { cnicOrBForm: id },
+            { rollNumber: id },
+          ],
+        },
+        include: {
+          academicRecords: true,
+          documents: true,
+          officeUse: true,
+          feeRecords: true,
+        },
+      });
+    }
 
     if (!student) {
       const error: AppError = new Error(`Student with ID '${id}' not found.`);
