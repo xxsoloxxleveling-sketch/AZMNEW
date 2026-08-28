@@ -14,6 +14,8 @@ import {
   Clock,
   Loader2,
   Ticket,
+  MessageSquare,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, Column } from '../shared/DataTable';
 import { StatusBadge } from '../shared/StatusBadge';
@@ -21,6 +23,7 @@ import { mockApi, MockStudent } from '../../../lib/mockApi';
 import { AdminWalkInModal } from './AdminWalkInModal';
 import { StudentDetailView } from './StudentDetailView';
 import { useAuth } from '../../../lib/authContext';
+import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/whatsapp';
 
 export const StudentsListView: React.FC = () => {
   const { role, isLoading: authLoading } = useAuth();
@@ -31,7 +34,10 @@ export const StudentsListView: React.FC = () => {
   const [selectedStudent, setSelectedStudent] = useState<MockStudent | null>(null);
   const [isWalkInOpen, setIsWalkInOpen] = useState(false);
   const [classFilter, setClassFilter] = useState('ALL');
+  const [genderFilter, setGenderFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [rollStatus, setRollStatus] = useState<{ readyCount: number; issuedCount: number; totalPaidCount: number; scheduledDate?: string } | null>(null);
@@ -47,7 +53,9 @@ export const StudentsListView: React.FC = () => {
       const [data, statusData] = await Promise.all([
         mockApi.getStudents({
           classLevel: classFilter,
+          gender: genderFilter,
           status: statusFilter,
+          search: searchQuery,
         }),
         mockApi.getRollNumberStatus().catch(() => null),
       ]);
@@ -59,6 +67,22 @@ export const StudentsListView: React.FC = () => {
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setIsExportingPdf(true);
+    try {
+      await mockApi.downloadStudentsListPdf({
+        classLevel: classFilter,
+        gender: genderFilter,
+        status: statusFilter,
+        search: searchQuery,
+      });
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate and download filtered candidate roster PDF.');
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -80,7 +104,7 @@ export const StudentsListView: React.FC = () => {
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);
     };
-  }, [authLoading, classFilter, statusFilter]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery]);
 
   const handleStudentCreated = (newStudent: MockStudent) => {
     setStudents((prev) => [newStudent, ...prev]);
@@ -226,6 +250,34 @@ export const StudentsListView: React.FC = () => {
             </button>
           )}
 
+          {/* WhatsApp Quick-Contact Button */}
+          {(() => {
+            const wa = getStudentWhatsAppContact(row);
+            return (
+              <button
+                type="button"
+                onClick={(e) => {
+                  if (!wa.isDisabled && wa.url) {
+                    openWhatsAppInNewTab(wa.url, e);
+                  }
+                }}
+                disabled={wa.isDisabled}
+                title={
+                  wa.isDisabled
+                    ? wa.disabledReason || 'No contact number on file'
+                    : `Contact ${row.fullName} on WhatsApp (${wa.formattedPhone})`
+                }
+                className={`p-1.5 rounded-lg border transition ${
+                  !wa.isDisabled
+                    ? 'border-emerald-200 text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300 cursor-pointer shadow-2xs'
+                    : 'border-slate-200 text-slate-300 cursor-not-allowed opacity-40'
+                }`}
+              >
+                <MessageSquare className="w-4 h-4" />
+              </button>
+            );
+          })()}
+
           <button
             onClick={() => setSelectedStudent(row)}
             title="View Full Profile"
@@ -304,6 +356,8 @@ export const StudentsListView: React.FC = () => {
         keyExtractor={(row) => row.id}
         isLoading={isLoading}
         searchPlaceholder="Search by student name, roll number, or CNIC..."
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
         onRowClick={(row) => setSelectedStudent(row)}
         emptyTitle="No Students Enrolled"
         emptyMessage="Start by adding your first student walk-in registration or sync from online applications."
@@ -345,11 +399,11 @@ export const StudentsListView: React.FC = () => {
           </div>
         }
         filters={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select
               value={classFilter}
               onChange={(e) => setClassFilter(e.target.value)}
-              className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d]"
+              className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
             >
               <option value="ALL">All Classes</option>
               <option value="Class 8th">Class 8th</option>
@@ -360,14 +414,41 @@ export const StudentsListView: React.FC = () => {
             </select>
 
             <select
+              value={genderFilter}
+              onChange={(e) => setGenderFilter(e.target.value)}
+              className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
+            >
+              <option value="ALL">All Genders</option>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
+            </select>
+
+            <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d]"
+              className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
             >
               <option value="ALL">All Status</option>
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
             </select>
+
+            {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                disabled={isExportingPdf}
+                title="Download branded candidate roster PDF matching currently applied filters"
+                className="px-3 py-2 text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-[#185b9d] rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isExportingPdf ? (
+                  <Loader2 className="w-3.5 h-3.5 text-[#185b9d] animate-spin" />
+                ) : (
+                  <FileDown className="w-3.5 h-3.5 text-[#185b9d]" />
+                )}
+                <span>{isExportingPdf ? 'Exporting PDF...' : 'Download Filtered List (PDF)'}</span>
+              </button>
+            )}
           </div>
         }
       />

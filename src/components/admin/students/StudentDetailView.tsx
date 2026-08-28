@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Ticket,
   Loader2,
+  MessageSquare,
 } from 'lucide-react';
 import {
   MockStudent,
@@ -32,6 +33,7 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { StudentDossierModal } from '../../common/StudentDossierModal';
 import { useAuth } from '../../../lib/authContext';
 import { API_BASE_URL } from '../../../lib/apiClient';
+import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/whatsapp';
 
 interface StudentDetailViewProps {
   student: MockStudent;
@@ -190,6 +192,35 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, o
               <span>Approve Fee (PKR 300)</span>
             </button>
           )}
+
+          {/* WhatsApp Contact Action */}
+          {(() => {
+            const wa = getStudentWhatsAppContact(student);
+            return (
+              <button
+                type="button"
+                onClick={(e) => {
+                  if (!wa.isDisabled && wa.url) {
+                    openWhatsAppInNewTab(wa.url, e);
+                  }
+                }}
+                disabled={wa.isDisabled}
+                title={
+                  wa.isDisabled
+                    ? wa.disabledReason || 'No contact number on file'
+                    : `Contact ${student.fullName} on WhatsApp (${wa.formattedPhone})`
+                }
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 shadow-2xs ${
+                  !wa.isDisabled
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer'
+                    : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed opacity-50'
+                }`}
+              >
+                <MessageSquare className="w-4 h-4 text-emerald-600" />
+                <span>WhatsApp Contact</span>
+              </button>
+            );
+          })()}
 
           <button
             onClick={() => setIsDossierOpen(true)}

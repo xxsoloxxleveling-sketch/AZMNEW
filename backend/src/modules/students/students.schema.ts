@@ -146,7 +146,14 @@ export const updateStudentSchema = createStudentSchema.partial().extend({
 export const studentQuerySchema = z.object({
   search: z.string().optional(),
   classLevel: z.string().optional(),
-  status: z.nativeEnum(StudentStatus).optional(),
+  status: z
+    .string()
+    .optional()
+    .transform((val) => (val && val.toUpperCase() !== 'ALL' ? (val.toUpperCase() as StudentStatus) : undefined)),
+  gender: z
+    .string()
+    .optional()
+    .transform((val) => (val && val.toUpperCase() !== 'ALL' ? (val.toUpperCase() as Gender) : undefined)),
   page: z
     .string()
     .optional()
@@ -154,7 +161,7 @@ export const studentQuerySchema = z.object({
   limit: z
     .string()
     .optional()
-    .transform((val) => (val ? Math.max(1, Math.min(1000, parseInt(val, 10))) : 500)),
+    .transform((val) => (val ? Math.max(1, Math.min(2000, parseInt(val, 10))) : 500)),
 });
 
 export const ALLOWED_FILE_MIME_TYPES = [

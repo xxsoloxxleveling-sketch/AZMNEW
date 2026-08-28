@@ -141,7 +141,11 @@ class MemoryStore {
               list = list.filter((s) => s.status === where.status);
             }
             if (where.currentClass) {
-              list = list.filter((s) => s.currentClass === where.currentClass);
+              if (typeof where.currentClass === 'object' && where.currentClass.contains) {
+                list = list.filter((s) => (s.currentClass || '').toLowerCase().includes(where.currentClass.contains.toLowerCase()));
+              } else {
+                list = list.filter((s) => s.currentClass === where.currentClass);
+              }
             }
             if (where.gender) {
               list = list.filter((s) => s.gender === where.gender);

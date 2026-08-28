@@ -96,6 +96,14 @@ router.get(
   studentsController.getAll
 );
 
+// Export filtered student roster as branded PDF (SUPER_ADMIN, ADMIN)
+router.get(
+  '/export-pdf',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateQuery(studentQuerySchema),
+  studentsController.exportPdf
+);
+
 router.get(
   '/:id',
   studentsController.getById

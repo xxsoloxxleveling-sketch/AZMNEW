@@ -529,10 +529,11 @@ export const mockApi = {
 
   // 3. Students Management
 
-  async getStudents(filters?: { classLevel?: string; status?: string; search?: string }): Promise<MockStudent[]> {
+  async getStudents(filters?: { classLevel?: string; gender?: string; status?: string; search?: string }): Promise<MockStudent[]> {
     const params = new URLSearchParams();
     params.append('limit', '500');
     if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
+    if (filters?.gender && filters?.gender !== 'ALL') params.append('gender', filters.gender);
     if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
     if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
     const query = `?${params.toString()}`;
@@ -732,6 +733,30 @@ export const mockApi = {
     const studentId = studentData?.id || studentData?.applicationNo;
     const rollNumber = studentData?.rollNumber;
     return this.downloadStudentPdf(studentId, rollNumber, studentData);
+  },
+
+  async downloadStudentsListPdf(filters?: { classLevel?: string; gender?: string; status?: string; search?: string }): Promise<void> {
+    const params = new URLSearchParams();
+    if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
+    if (filters?.gender && filters?.gender !== 'ALL') params.append('gender', filters.gender);
+    if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
+    if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
+
+    const parts: string[] = ['AZM', 'Students'];
+    if (filters?.classLevel && filters.classLevel !== 'ALL') {
+      parts.push(filters.classLevel.replace(/[^a-zA-Z0-9]/g, ''));
+    }
+    if (filters?.gender && filters.gender !== 'ALL') {
+      parts.push(filters.gender.toLowerCase() === 'female' ? 'Female' : 'Male');
+    }
+    if (filters?.status && filters.status !== 'ALL') {
+      parts.push(filters.status);
+    }
+    const today = new Date().toISOString().split('T')[0];
+    parts.push(today);
+    const suggestedFilename = `${parts.join('-')}.pdf`;
+
+    await apiDownloadPdf(`/api/students/export-pdf?${params.toString()}`, suggestedFilename);
   },
 
 

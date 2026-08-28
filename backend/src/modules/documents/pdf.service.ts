@@ -88,7 +88,10 @@ export class PdfService {
    * Generates a PDF buffer from an HTML string.
    * Serialized through a concurrency queue to ensure only 1 Chromium instance runs at a time.
    */
-  async generatePdfFromHtml(html: string): Promise<Buffer> {
+  async generatePdfFromHtml(
+    html: string,
+    options?: { landscape?: boolean; format?: any; margin?: any }
+  ): Promise<Buffer> {
     return pdfQueue.enqueue(async () => {
       logger.info('📄 Processing PDF generation in isolated queue slot...');
       const browser = await this.launchBrowser();
@@ -106,17 +109,22 @@ export class PdfService {
 
         await page.setContent(html, {
           waitUntil: 'domcontentloaded',
-          timeout: 30000,
+          timeout: 45000,
         });
 
         const pdfUint8Array = await page.pdf({
-          format: 'A4',
+          format: options?.format || 'A4',
+          landscape: options?.landscape ?? false,
           printBackground: true,
-          margin: {
-            top: '10mm',
-            bottom: '10mm',
-            left: '10mm',
-            right: '10mm',
+          displayHeaderFooter: true,
+          headerTemplate: '<span></span>',
+          footerTemplate:
+            '<div style="width: 100%; font-size: 8px; color: #94a3b8; font-family: Segoe UI, Arial, sans-serif; display: flex; justify-content: space-between; padding: 0 10mm;"><span>AZM.AIO Examination Authority &copy; 2026</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>',
+          margin: options?.margin || {
+            top: '8mm',
+            bottom: '12mm',
+            left: '8mm',
+            right: '8mm',
           },
         });
 
@@ -916,6 +924,186 @@ export class PdfService {
       <span>Security Hash: AZMVS-SHA256-${rollNo}-${appNo}</span>
       <span>Official Portal: https://azmaio.com</span>
       <span>Registry Verification ID: ${student.id}</span>
+    </div>
+  </div>
+
+</body>
+</html>
+    `;
+  }
+
+  /**
+   * Generates filled HTML template for the official Branded Students List PDF Roster
+   */
+  generateStudentsListHtml(
+    students: any[],
+    filters: { classLevel?: string; gender?: string; status?: string; search?: string },
+    totalCount: number
+  ): string {
+    const generatedDate = new Date().toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+    const generatedTime = new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    const classLabel = filters.classLevel && filters.classLevel !== 'ALL' ? filters.classLevel : 'All Classes';
+    const genderLabel =
+      filters.gender && (filters.gender as any) !== 'ALL'
+        ? String(filters.gender).toUpperCase() === 'FEMALE'
+          ? 'Female Candidates'
+          : 'Male Candidates'
+        : 'All Genders';
+    const statusLabel = filters.status && (filters.status as any) !== 'ALL' ? filters.status : 'All Status';
+    const searchLabel = filters.search && filters.search.trim() ? `Search: "${filters.search.trim()}"` : null;
+
+    const filterTitle = [classLabel, genderLabel, statusLabel !== 'All Status' ? `Status: ${statusLabel}` : null, searchLabel]
+      .filter(Boolean)
+      .join(' — ');
+
+    const paidCount = students.filter((s) => s.feeStatus === 'PAID').length;
+    const unpaidCount = students.length - paidCount;
+
+    const rowsHtml =
+      students.length > 0
+        ? students
+            .map((s, idx) => {
+              const appNo = s.rollNumber || s.applicationNo || s.id;
+              const contact = s.parentMobile || s.studentMobile || s.mobile || s.whatsapp || s.emergencyContact || 'N/A';
+              const isPaid = s.feeStatus === 'PAID';
+              const att = s.attendancePercentage != null ? `${s.attendancePercentage}%` : '—';
+              const cat = (s.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ');
+
+              return `
+          <tr class="${idx % 2 === 1 ? 'even-row' : ''}">
+            <td class="text-center font-bold">${idx + 1}</td>
+            <td class="font-mono text-center font-bold text-navy">${appNo}</td>
+            <td><strong>${s.fullName || '—'}</strong></td>
+            <td>${s.fatherName || '—'}</td>
+            <td class="font-mono text-center">${s.cnicOrBForm || '—'}</td>
+            <td><span class="class-tag">${s.currentClass || '—'}</span><br/><small class="text-muted">${cat}</small></td>
+            <td class="text-center"><span class="badge ${isPaid ? 'badge-paid' : 'badge-unpaid'}">${s.feeStatus || 'UNPAID'}</span></td>
+            <td class="text-center font-bold">${att}</td>
+            <td class="font-mono text-center">${contact}</td>
+          </tr>
+              `;
+            })
+            .join('')
+        : `
+          <tr>
+            <td colspan="9" class="empty-state">
+              No students match the selected filter criteria (${classLabel}, ${genderLabel}, ${statusLabel}).
+            </td>
+          </tr>
+        `;
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AZM Students Roster — ${filterTitle}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: #fff; padding: 6mm 8mm; color: #0f172a; font-size: 10px; }
+    
+    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; border-bottom: 2.5px solid #1e3a8a; padding-bottom: 6px; }
+    .header-left { width: 70%; vertical-align: middle; }
+    .header-right { width: 30%; text-align: right; vertical-align: middle; }
+    
+    .org-title { font-size: 16px; font-weight: 900; color: #1e3a8a; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px; }
+    .doc-title { font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase; margin-bottom: 2px; }
+    .sub-title { font-size: 9.5px; color: #64748b; font-weight: 500; }
+    
+    .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-size: 9.5px; display: inline-block; text-align: right; }
+    .meta-box strong { color: #1e3a8a; }
+
+    .filter-ribbon { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .filter-title { font-size: 10.5px; font-weight: 700; color: #1e3a8a; }
+    .counts-summary { font-size: 9.5px; font-weight: 600; color: #334155; }
+    .counts-summary strong { color: #0f172a; }
+
+    .data-table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 15px; }
+    .data-table th, .data-table td { border: 1px solid #cbd5e1; padding: 4.5px 6px; vertical-align: middle; }
+    .data-table th { background: #1e3a8a; color: #ffffff; font-weight: 700; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.3px; }
+    .even-row { background: #f8fafc; }
+
+    .text-center { text-align: center; }
+    .text-navy { color: #1e3a8a; }
+    .text-muted { color: #64748b; font-size: 8px; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .font-bold { font-weight: 700; }
+
+    .class-tag { font-weight: 600; color: #0f172a; }
+
+    .badge { display: inline-block; padding: 1.5px 5px; border-radius: 3px; font-size: 7.5px; font-weight: 800; text-transform: uppercase; }
+    .badge-paid { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .badge-unpaid { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+
+    .empty-state { text-align: center; padding: 25px; color: #64748b; font-weight: 600; font-size: 10px; background: #fafafa; }
+
+    .footer-summary { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #cbd5e1; font-size: 9px; color: #475569; page-break-inside: avoid; }
+    .sig-line { width: 180px; border-top: 1px solid #94a3b8; text-align: center; padding-top: 4px; font-weight: 700; color: #334155; font-size: 8.5px; }
+  </style>
+</head>
+<body>
+
+  <table class="header-table">
+    <tr>
+      <td class="header-left">
+        <div class="org-title">AZM.AIO SCHOLARSHIP & EXAMINATION AUTHORITY</div>
+        <div class="doc-title">Official Candidate Roster — Session V (2026)</div>
+        <div class="sub-title">Central Scholarship Directorate | Jaddoon Plaza, Karakoram Highway, Mansehra, KP</div>
+      </td>
+      <td class="header-right">
+        <div class="meta-box">
+          <div>Generated: <strong>${generatedDate}</strong> (${generatedTime})</div>
+          <div>Total Candidates: <strong>${totalCount}</strong></div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="filter-ribbon">
+    <div class="filter-title">
+      Filter: <span>${filterTitle}</span>
+    </div>
+    <div class="counts-summary">
+      Total: <strong>${totalCount}</strong> &nbsp;|&nbsp; Paid: <strong style="color: #166534;">${paidCount}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color: #92400e;">${unpaidCount}</strong>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width: 4%;" class="text-center">Sr #</th>
+        <th style="width: 14%;" class="text-center">Roll / App No</th>
+        <th style="width: 17%;">Candidate Name</th>
+        <th style="width: 15%;">Father's Name</th>
+        <th style="width: 14%;" class="text-center">CNIC / B-Form</th>
+        <th style="width: 14%;">Class &amp; Category</th>
+        <th style="width: 7%;" class="text-center">Fee</th>
+        <th style="width: 5%;" class="text-center">Att %</th>
+        <th style="width: 10%;" class="text-center">Contact</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+  </table>
+
+  <div class="footer-summary">
+    <div>
+      <p>Report Ref: <strong>AZM-RST-${Date.now().toString().slice(-6)}</strong> &nbsp;|&nbsp; Confidential Administrative Record</p>
+      <p style="font-size: 8px; color: #94a3b8; margin-top: 2px;">This is an officially verified computer-generated document authorized by AZM.AIO Central Directorate.</p>
+    </div>
+    <div style="display: flex; gap: 30px;">
+      <div class="sig-line">Admissions Desk Verification</div>
+      <div class="sig-line">Controller of Examinations</div>
     </div>
   </div>
 

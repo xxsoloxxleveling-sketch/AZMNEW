@@ -14,6 +14,8 @@ interface DataTableProps<T> {
   data: T[];
   keyExtractor: (row: T) => string;
   searchPlaceholder?: string;
+  searchValue?: string;
+  onSearchChange?: (query: string) => void;
   searchFilter?: (row: T, query: string) => boolean;
   onRowClick?: (row: T) => void;
   isLoading?: boolean;
@@ -29,6 +31,8 @@ export function DataTable<T>({
   data,
   keyExtractor,
   searchPlaceholder = 'Search records...',
+  searchValue,
+  onSearchChange,
   searchFilter,
   onRowClick,
   isLoading = false,
@@ -38,7 +42,8 @@ export function DataTable<T>({
   filters,
   pageSize = 10,
 }: DataTableProps<T>) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  const searchQuery = searchValue !== undefined ? searchValue : internalSearchQuery;
   const [currentPage, setCurrentPage] = useState(1);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -98,7 +103,12 @@ export function DataTable<T>({
               placeholder={searchPlaceholder}
               value={searchQuery}
               onChange={(e) => {
-                setSearchQuery(e.target.value);
+                const val = e.target.value;
+                if (onSearchChange) {
+                  onSearchChange(val);
+                } else {
+                  setInternalSearchQuery(val);
+                }
                 setCurrentPage(1);
               }}
               className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-xl placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#185b9d]/20 focus:border-[#185b9d] transition"

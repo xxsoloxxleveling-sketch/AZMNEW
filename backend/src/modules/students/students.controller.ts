@@ -53,6 +53,18 @@ export class StudentsController {
     }
   }
 
+  async exportPdf(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { buffer, filename } = await studentsService.exportStudentsPdf(req.query as any);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.status(200).send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getById(req: Request, res: Response, next: NextFunction) {
     try {
       const student = await studentsService.getStudentById(req.params.id);

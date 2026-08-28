@@ -829,6 +829,10 @@ export class StudentsService {
       where.status = query.status;
     }
 
+    if (query.gender && (query.gender as any) !== 'ALL') {
+      where.gender = query.gender;
+    }
+
     if (query.classLevel && query.classLevel !== 'ALL') {
       where.currentClass = { contains: query.classLevel, mode: 'insensitive' };
     }
@@ -840,6 +844,7 @@ export class StudentsService {
         { rollNumber: { contains: s, mode: 'insensitive' } },
         { cnicOrBForm: { contains: s, mode: 'insensitive' } },
         { applicationNo: { contains: s, mode: 'insensitive' } },
+        { fatherName: { contains: s, mode: 'insensitive' } },
       ];
     }
 
@@ -868,6 +873,69 @@ export class StudentsService {
         totalPages: Math.ceil(total / limit) || 1,
       },
     };
+  }
+
+  /**
+   * Generates and exports a branded PDF document of students matching applied filters
+   */
+  async exportStudentsPdf(query: StudentQueryInput): Promise<{ buffer: Buffer; filename: string }> {
+    const where: any = {};
+
+    if (query.status && (query.status as any) !== 'ALL') {
+      where.status = query.status;
+    }
+
+    if (query.gender && (query.gender as any) !== 'ALL') {
+      where.gender = query.gender;
+    }
+
+    if (query.classLevel && query.classLevel !== 'ALL') {
+      where.currentClass = { contains: query.classLevel, mode: 'insensitive' };
+    }
+
+    if (query.search && query.search.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { fullName: { contains: s, mode: 'insensitive' } },
+        { rollNumber: { contains: s, mode: 'insensitive' } },
+        { cnicOrBForm: { contains: s, mode: 'insensitive' } },
+        { applicationNo: { contains: s, mode: 'insensitive' } },
+        { fatherName: { contains: s, mode: 'insensitive' } },
+      ];
+    }
+
+    const students = await prisma.student.findMany({
+      where,
+      take: 2000,
+      orderBy: [{ currentClass: 'asc' }, { fullName: 'asc' }],
+      include: {
+        academicRecords: true,
+        documents: true,
+        officeUse: true,
+        feeRecords: true,
+      },
+    });
+
+    const formattedStudents = students.map((s) => this.formatStudentWithDocuments(s));
+    const html = pdfService.generateStudentsListHtml(formattedStudents, query, formattedStudents.length);
+    const buffer = await pdfService.generatePdfFromHtml(html, { landscape: true });
+
+    // Generate descriptive filename: AZM-Students-Class10-Female-2026-08-28.pdf
+    const parts: string[] = ['AZM', 'Students'];
+    if (query.classLevel && query.classLevel !== 'ALL') {
+      parts.push(query.classLevel.replace(/[^a-zA-Z0-9]/g, ''));
+    }
+    if (query.gender && (query.gender as any) !== 'ALL') {
+      parts.push(String(query.gender).toLowerCase() === 'female' ? 'Female' : 'Male');
+    }
+    if (query.status && (query.status as any) !== 'ALL') {
+      parts.push(String(query.status));
+    }
+    const today = new Date().toISOString().split('T')[0];
+    parts.push(today);
+    const filename = `${parts.join('-')}.pdf`;
+
+    return { buffer, filename };
   }
 
   /**

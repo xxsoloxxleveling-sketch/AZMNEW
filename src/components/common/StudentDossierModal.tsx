@@ -7,8 +7,10 @@ import {
   Phone,
   BookOpen,
   Award,
+  MessageSquare,
 } from 'lucide-react';
 import { MockStudent, printStudentDossier } from '../../lib/mockApi';
+import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../utils/whatsapp';
 
 interface StudentDossierModalProps {
   isOpen: boolean;
@@ -294,6 +296,30 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
             Security Hash: SHA256-{rollNo}
           </span>
           <div className="flex items-center gap-2">
+            {(() => {
+              const wa = getStudentWhatsAppContact(student);
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    if (!wa.isDisabled && wa.url) {
+                      openWhatsAppInNewTab(wa.url, e);
+                    }
+                  }}
+                  disabled={wa.isDisabled}
+                  title={wa.isDisabled ? wa.disabledReason : `Contact on WhatsApp (${wa.formattedPhone})`}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border shadow-2xs ${
+                    !wa.isDisabled
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 cursor-pointer'
+                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>WhatsApp</span>
+                </button>
+              );
+            })()}
+
             <button
               onClick={() => printStudentDossier(student)}
               className="px-4 py-2 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
