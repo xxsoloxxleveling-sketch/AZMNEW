@@ -31,8 +31,7 @@ const pdfQueue = new PdfGenerationQueue();
 export class PdfService {
   /**
    * Launches a memory-optimized Chromium browser instance.
-   * Prioritizes puppeteer-core + @sparticuz/chromium on Linux/Render serverless,
-   * falling back to standard puppeteer in local development.
+   * Prioritizes direct Puppeteer with pre-installed Chrome for instant (<1s) rendering on Render.
    */
   private async launchBrowser() {
     const memoryOptimizedArgs = [
@@ -51,29 +50,6 @@ export class PdfService {
       '--metrics-recording-only',
       '--mute-audio',
     ];
-
-    // Try @sparticuz/chromium + puppeteer-core (Render Linux cloud)
-    try {
-      if (process.platform === 'linux') {
-        const chromiumModule = await import('@sparticuz/chromium');
-        const chromium = chromiumModule.default || chromiumModule;
-        const puppeteerCoreModule = await import('puppeteer-core');
-        const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
-
-        const executablePath = await chromium.executablePath();
-        if (executablePath) {
-          logger.info('🚀 Launching memory-optimized @sparticuz/chromium for PDF generation');
-          return await puppeteerCore.launch({
-            args: [...chromium.args, ...memoryOptimizedArgs],
-            defaultViewport: (chromium as any).defaultViewport || { width: 1280, height: 800 },
-            executablePath,
-            headless: (chromium as any).headless ?? true,
-          });
-        }
-      }
-    } catch (coreErr: any) {
-      logger.warn('@sparticuz/chromium launch notice, falling back to standard puppeteer:', coreErr.message);
-    }
 
     // Check known system executable paths if in container / Linux
     const knownPaths = [
@@ -103,11 +79,38 @@ export class PdfService {
       }
     }
 
-    // Fallback: standard puppeteer (for Windows/Mac local development or standard containers)
-    return puppeteer.launch({
-      headless: true,
-      args: memoryOptimizedArgs,
-    });
+    // Try standard puppeteer with installed browser cache
+    try {
+      return await puppeteer.launch({
+        headless: true,
+        args: memoryOptimizedArgs,
+      });
+    } catch (stdErr: any) {
+      logger.warn('Standard puppeteer launch failed, attempting serverless fallback:', stdErr.message);
+    }
+
+    // Fallback: @sparticuz/chromium + puppeteer-core (if running in AWS Lambda style environment)
+    try {
+      const chromiumModule = await import('@sparticuz/chromium');
+      const chromium = chromiumModule.default || chromiumModule;
+      const puppeteerCoreModule = await import('puppeteer-core');
+      const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
+
+      const executablePath = await chromium.executablePath();
+      if (executablePath) {
+        return await puppeteerCore.launch({
+          args: [...chromium.args, ...memoryOptimizedArgs],
+          defaultViewport: (chromium as any).defaultViewport || { width: 1280, height: 800 },
+          executablePath,
+          headless: (chromium as any).headless ?? true,
+        });
+      }
+    } catch (coreErr: any) {
+      logger.error('All Chromium launch strategies exhausted:', coreErr.message);
+      throw coreErr;
+    }
+
+    throw new Error('Unable to launch Chromium for PDF generation.');
   }
 
   /**
@@ -991,7 +994,13 @@ export class PdfService {
       .filter(Boolean)
       .join(' — ');
 
-    const paidCount = students.filter((s) => s.feeStatus === 'PAID').length;
+    const paidCount = students.filter((s) => {
+      return (
+        s.feeStatus === 'PAID' ||
+        (s.feeRecords && Array.isArray(s.feeRecords) && s.feeRecords.some((f: any) => f.status === 'PAID')) ||
+        Boolean(s.rollNumber)
+      );
+    }).length;
     const unpaidCount = students.length - paidCount;
 
     const rowsHtml =
@@ -1000,7 +1009,11 @@ export class PdfService {
             .map((s, idx) => {
               const appNo = s.rollNumber || s.applicationNo || s.id;
               const contact = s.parentMobile || s.studentMobile || s.mobile || s.whatsapp || s.emergencyContact || 'N/A';
-              const isPaid = s.feeStatus === 'PAID';
+              const isPaid =
+                s.feeStatus === 'PAID' ||
+                (s.feeRecords && Array.isArray(s.feeRecords) && s.feeRecords.some((f: any) => f.status === 'PAID')) ||
+                Boolean(s.rollNumber);
+              const feeStatus = isPaid ? 'PAID' : (s.feeRecords?.[0]?.status || 'UNPAID');
               const att = s.attendancePercentage != null ? `${s.attendancePercentage}%` : '—';
               const cat = (s.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ');
 
@@ -1012,7 +1025,7 @@ export class PdfService {
             <td>${s.fatherName || '—'}</td>
             <td class="font-mono text-center">${s.cnicOrBForm || '—'}</td>
             <td><span class="class-tag">${s.currentClass || '—'}</span><br/><small class="text-muted">${cat}</small></td>
-            <td class="text-center"><span class="badge ${isPaid ? 'badge-paid' : 'badge-unpaid'}">${s.feeStatus || 'UNPAID'}</span></td>
+            <td class="text-center"><span class="badge ${isPaid ? 'badge-paid' : 'badge-unpaid'}">${feeStatus}</span></td>
             <td class="text-center font-bold">${att}</td>
             <td class="font-mono text-center">${contact}</td>
           </tr>

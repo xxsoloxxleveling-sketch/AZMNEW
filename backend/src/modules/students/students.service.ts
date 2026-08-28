@@ -49,8 +49,16 @@ export class StudentsService {
       };
     }
 
+    // Determine accurate fee status across feeRecords & rollNumber issuance
+    const isPaid =
+      student.feeStatus === 'PAID' ||
+      (student.feeRecords && Array.isArray(student.feeRecords) && student.feeRecords.some((f: any) => f.status === 'PAID')) ||
+      Boolean(student.rollNumber);
+    const feeStatus = isPaid ? 'PAID' : (student.feeRecords?.[0]?.status || 'UNPAID');
+
     return {
       ...student,
+      feeStatus,
       uploadedDocuments: Object.keys(uploadedDocuments).length > 0 ? uploadedDocuments : undefined,
     };
   }
