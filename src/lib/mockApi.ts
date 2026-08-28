@@ -703,30 +703,27 @@ export const mockApi = {
 
 
   async downloadStudentPdf(studentId: string, rollNumber?: string, studentObj?: any): Promise<void> {
-    try {
-      await apiDownloadPdf(
-        `/api/students/${studentId}/registration-pdf`,
-        `Student_Registration_${rollNumber || studentId}.pdf`
-      );
-    } catch (err) {
-      console.warn('Live PDF endpoint error, opening printable registration slip:', err);
-      let data = studentObj;
-      if (!data) {
-        try {
-          data = await this.getStudentById(studentId);
-        } catch (fetchErr) {
-          data = { id: studentId, rollNumber };
-        }
+    let data = studentObj;
+    if (!data || !data.fullName) {
+      try {
+        data = await this.getStudentById(studentId);
+      } catch {
+        data = { id: studentId, rollNumber };
       }
-      printStudentSlip(data || { id: studentId, rollNumber });
     }
+    printStudentSlip(data || { id: studentId, rollNumber });
   },
 
-  async downloadRollSlipPdf(studentId: string, rollNumber?: string): Promise<void> {
-    await apiDownloadPdf(
-      `/api/students/${studentId}/roll-slip-pdf`,
-      `RollNoSlip-${rollNumber || studentId}.pdf`
-    );
+  async downloadRollSlipPdf(studentId: string, rollNumber?: string, studentObj?: any): Promise<void> {
+    let data = studentObj;
+    if (!data || !data.fullName) {
+      try {
+        data = await this.getStudentById(studentId);
+      } catch {
+        data = { id: studentId, rollNumber };
+      }
+    }
+    printRollNumberSlip(data || { id: studentId, rollNumber });
   },
 
   async downloadRegistrationSlipPdf(studentData: any): Promise<void> {
@@ -1463,6 +1460,144 @@ export function printStudentSlip(student: any) {
         <li>Retain this official confirmation slip for your records.</li>
         <li>Your Roll Number Slip with test center assignment will be issued once payment is verified.</li>
         <li>Helpline / Support: <strong>0305-1755551</strong> / <strong>azmgoc30@gmail.com</strong>.</li>
+      </ul>
+    </div>
+
+    <div class="btn-bar">
+      <button class="btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    };
+  </script>
+</body>
+</html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+/**
+ * High-definition browser printable Roll Number Slip entry pass generator
+ */
+export function printRollNumberSlip(student: any) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Please allow popups to open and print your official Roll Number Slip.');
+    return;
+  }
+
+  const rollNo = student.rollNumber || student.applicationNo || 'AZMVS-2026-0000';
+  const examDate = student.testDate || 'Sunday, 20 November 2026';
+  const reportingTime = student.reportingTime || '09:00 AM';
+  const hall = student.assignedHall || 'Hall A (Main Examination Wing)';
+  const room = student.assignedRoom || 'Room 101';
+  const seat = student.seatNo || 'Seat # 01';
+  const testCenter = student.testCenterName || student.registrationCentre || 'AZM Regional Central Examination Centre, Mansehra';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>AZM Examination Entry Pass - Roll Slip ${rollNo}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; }
+    body { background: #f8fafc; padding: 24px; }
+    .slip-container { max-width: 800px; margin: 0 auto; background: #fff; border: 2px solid #185b9d; border-radius: 16px; padding: 28px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); }
+    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #185b9d; padding-bottom: 14px; margin-bottom: 18px; }
+    .title-area h1 { font-size: 20px; font-weight: 900; color: #185b9d; letter-spacing: -0.5px; }
+    .title-area p { font-size: 11px; font-weight: 600; color: #64748b; margin-top: 2px; }
+    .badge { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 11px; }
+    .candidate-banner { display: flex; gap: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 18px; align-items: center; justify-content: space-between; }
+    .photo-frame { width: 96px; height: 110px; border: 2px dashed #cbd5e1; border-radius: 8px; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .photo-frame img { width: 100%; height: 100%; object-fit: cover; }
+    .meta-title { font-size: 18px; font-weight: 800; color: #0f172a; }
+    .roll-highlight { font-size: 22px; font-weight: 900; color: #185b9d; font-family: monospace; letter-spacing: 1px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+    .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #185b9d; border-radius: 8px; padding: 10px 14px; }
+    .info-label { font-size: 10px; text-transform: uppercase; font-weight: 700; color: #64748b; margin-bottom: 2px; }
+    .info-value { font-size: 13px; font-weight: 700; color: #0f172a; }
+    .exam-box { background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 16px; margin-bottom: 18px; }
+    .exam-title { color: #166534; font-size: 13px; font-weight: 800; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .notice-box { font-size: 11px; color: #475569; border-top: 1px solid #e2e8f0; padding-top: 12px; line-height: 1.6; }
+    .notice-box ul { margin-left: 18px; margin-top: 4px; }
+    .btn-bar { text-align: center; margin-top: 24px; }
+    .btn { background: #185b9d; color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .slip-container { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+      .btn-bar { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="slip-container">
+    <div class="header">
+      <div class="title-area">
+        <h1>AZM.AIO SCHOLARSHIP & EXAMINATION AUTHORITY</h1>
+        <p>Session V (2026) Official Standardized Examination Roll Number Slip & Entry Pass</p>
+      </div>
+      <div style="text-align: right;">
+        <span class="badge">Verified Candidate Entry Pass ✓</span>
+      </div>
+    </div>
+
+    <div class="candidate-banner">
+      <div style="display: flex; gap: 16px; align-items: center;">
+        <div class="photo-frame">
+          ${student.photoUrl ? `<img src="${student.photoUrl}" alt="Photo" />` : '<span style="font-size: 10px; color: #94a3b8; text-align: center; line-height: 1.2;">Candidate<br/>Photo</span>'}
+        </div>
+        <div>
+          <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">OFFICIAL ROLL NUMBER</div>
+          <div class="roll-highlight">${rollNo}</div>
+          <div class="meta-title" style="margin-top: 4px;">${student.fullName || 'Candidate Name'}</div>
+          <div style="font-size: 12px; color: #475569; margin-top: 2px;">Father / Guardian: <strong>${student.fatherName || 'Father Name'}</strong></div>
+          <div style="font-size: 12px; color: #475569; margin-top: 2px;">CNIC / B-Form: <strong style="font-family: monospace;">${student.cnicOrBForm || student.cnicBForm || 'N/A'}</strong></div>
+        </div>
+      </div>
+      <div style="text-align: center; flex-shrink: 0;">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(rollNo)}" alt="QR" style="width: 85px; height: 85px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 2px; background: #fff;" />
+        <div style="font-size: 9px; font-weight: 700; color: #64748b; margin-top: 2px;">BIOMETRIC QR PASS</div>
+      </div>
+    </div>
+
+    <div class="exam-box">
+      <div class="exam-title">🎯 Examination Hall & Venue Assignment</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+        <div>📅 <strong>Exam Date:</strong> ${examDate}</div>
+        <div>⏰ <strong>Reporting Time:</strong> ${reportingTime}</div>
+        <div>🏛️ <strong>Exam Hall:</strong> ${hall}</div>
+        <div>🚪 <strong>Room & Seat:</strong> ${room} — ${seat}</div>
+        <div style="grid-column: 1 / -1; margin-top: 4px;">📍 <strong>Examination Centre:</strong> ${testCenter}</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="info-card">
+        <div class="info-label">Candidate Class / Grade</div>
+        <div class="info-value">${student.currentClass || 'SSC / HSSC'}</div>
+      </div>
+      <div class="info-card">
+        <div class="info-label">Scholarship Stream / Quota</div>
+        <div class="info-value">${(student.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ')}</div>
+      </div>
+    </div>
+
+    <div class="notice-box">
+      <strong>Mandatory Examination Hall Instructions:</strong>
+      <ul>
+        <li>Candidate must bring this printed Roll Number Slip along with original CNIC / B-Form / School ID card.</li>
+        <li>Reach the examination center at least 30 minutes before the scheduled start time.</li>
+        <li>Calculators, mobile phones, and electronic smartwatches are strictly prohibited in the exam hall.</li>
+        <li>Central Directorate Helpline: <strong>0305-1755551</strong> | <strong>azmgoc30@gmail.com</strong></li>
       </ul>
     </div>
 
