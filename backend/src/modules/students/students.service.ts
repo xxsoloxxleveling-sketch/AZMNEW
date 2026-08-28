@@ -863,10 +863,8 @@ export class StudentsService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          academicRecords: true,
-          documents: true,
-          officeUse: true,
-          feeRecords: true,
+          feeRecords: { select: { status: true, amount: true } },
+          officeUse: { select: { eligibility: true, eligibilityRemarks: true } },
         },
       }),
       prisma.student.count({ where }),

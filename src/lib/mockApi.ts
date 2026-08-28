@@ -531,7 +531,7 @@ export const mockApi = {
 
   async getStudents(filters?: { classLevel?: string; gender?: string; status?: string; search?: string }): Promise<MockStudent[]> {
     const params = new URLSearchParams();
-    params.append('limit', '500');
+    params.append('limit', '250');
     if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
     if (filters?.gender && filters?.gender !== 'ALL') params.append('gender', filters.gender);
     if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);

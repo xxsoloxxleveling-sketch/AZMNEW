@@ -46,7 +46,7 @@ export const StudentsListView: React.FC = () => {
 
   const fetchStudents = async (showFullLoading = true) => {
     if (authLoading) return;
-    if (showFullLoading) setIsLoading(true);
+    if (showFullLoading && students.length === 0) setIsLoading(true);
     setIsRefreshing(true);
     setErrorMessage(null);
     try {
@@ -91,17 +91,17 @@ export const StudentsListView: React.FC = () => {
 
   useEffect(() => {
     if (!authLoading) {
-      fetchStudents();
+      fetchStudents(students.length === 0);
     }
 
-    // Auto-refresh when tab gains focus or every 10 seconds for real-time registration sync
+    // Auto-refresh when tab gains focus or every 25 seconds for real-time registration sync
     const handleFocus = () => {
       if (!authLoading) fetchStudents(false);
     };
     window.addEventListener('focus', handleFocus);
     const interval = setInterval(() => {
-      if (!authLoading) fetchStudents(false);
-    }, 10000);
+      if (!authLoading && !isRefreshing) fetchStudents(false);
+    }, 25000);
 
     return () => {
       window.removeEventListener('focus', handleFocus);
