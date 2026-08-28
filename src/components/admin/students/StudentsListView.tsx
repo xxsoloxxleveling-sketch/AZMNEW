@@ -73,12 +73,15 @@ export const StudentsListView: React.FC = () => {
   const handleExportPdf = async () => {
     setIsExportingPdf(true);
     try {
-      await mockApi.downloadStudentsListPdf({
-        classLevel: classFilter,
-        gender: genderFilter,
-        status: statusFilter,
-        search: searchQuery,
-      });
+      await mockApi.downloadStudentsListPdf(
+        {
+          classLevel: classFilter,
+          gender: genderFilter,
+          status: statusFilter,
+          search: searchQuery,
+        },
+        students
+      );
     } catch (err: any) {
       alert(err.message || 'Failed to generate and download filtered candidate roster PDF.');
     } finally {

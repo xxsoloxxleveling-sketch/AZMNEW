@@ -166,20 +166,34 @@ export async function apiFetch<T = any>(
     }
   }
 
-  const data: ApiResponse<T> = await response.json().catch(() => ({
-    success: false,
-    error: {
-      message: `HTTP error ${response.status}: ${response.statusText}`,
-    },
-  }));
+  let data: any;
+  try {
+    data = await response.json();
+  } catch {
+    // If response was 200-299 but not JSON
+    if (response.ok) {
+      return {} as T;
+    }
+    data = {
+      success: false,
+      error: {
+        message: `HTTP error ${response.status}${response.statusText ? `: ${response.statusText}` : ''}`,
+      },
+    };
+  }
 
-  if (!response.ok || !data.success) {
+  // Handle direct API response object without wrapper
+  if (response.ok && data !== null && typeof data === 'object' && data.success === undefined) {
+    return data as T;
+  }
+
+  if (!response.ok || (data && data.success === false)) {
     let errorMsg =
-      data.error?.message ||
-      data.message ||
+      data?.error?.message ||
+      data?.message ||
       `Request failed with status ${response.status}`;
 
-    if (data.error?.details && typeof data.error.details === 'object') {
+    if (data?.error?.details && typeof data.error.details === 'object') {
       const detailsList = Object.entries(data.error.details)
         .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`);
       if (detailsList.length > 0 && !errorMsg.includes(':')) {
@@ -189,12 +203,12 @@ export async function apiFetch<T = any>(
 
     const err: any = new Error(errorMsg);
     err.status = response.status;
-    err.code = data.error?.code;
-    err.details = data.error?.details;
+    err.code = data?.error?.code;
+    err.details = data?.error?.details;
     throw err;
   }
 
-  return (data.data !== undefined ? data.data : (data as any)) as T;
+  return (data?.data !== undefined ? data.data : data) as T;
 }
 
 /**

@@ -735,28 +735,28 @@ export const mockApi = {
     return this.downloadStudentPdf(studentId, rollNumber, studentData);
   },
 
-  async downloadStudentsListPdf(filters?: { classLevel?: string; gender?: string; status?: string; search?: string }): Promise<void> {
-    const params = new URLSearchParams();
-    if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
-    if (filters?.gender && filters?.gender !== 'ALL') params.append('gender', filters.gender);
-    if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
-    if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
+  async downloadStudentsListPdf(
+    filters?: { classLevel?: string; gender?: string; status?: string; search?: string },
+    preloadedStudents?: MockStudent[]
+  ): Promise<void> {
+    try {
+      let list = preloadedStudents;
+      if (!list || list.length === 0) {
+        list = await this.getStudents(filters);
+      }
+      const { exportStudentsRosterPdf } = await import('../utils/pdfExport');
+      exportStudentsRosterPdf({ students: list || [], filters });
+    } catch (clientErr) {
+      console.warn('Client-side PDF generation fallback:', clientErr);
+      const params = new URLSearchParams();
+      if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
+      if (filters?.gender && filters?.gender !== 'ALL') params.append('gender', filters.gender);
+      if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
+      if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
 
-    const parts: string[] = ['AZM', 'Students'];
-    if (filters?.classLevel && filters.classLevel !== 'ALL') {
-      parts.push(filters.classLevel.replace(/[^a-zA-Z0-9]/g, ''));
+      const suggestedFilename = `AZM-Students-${new Date().toISOString().split('T')[0]}.pdf`;
+      await apiDownloadPdf(`/api/students/export-pdf?${params.toString()}`, suggestedFilename);
     }
-    if (filters?.gender && filters.gender !== 'ALL') {
-      parts.push(filters.gender.toLowerCase() === 'female' ? 'Female' : 'Male');
-    }
-    if (filters?.status && filters.status !== 'ALL') {
-      parts.push(filters.status);
-    }
-    const today = new Date().toISOString().split('T')[0];
-    parts.push(today);
-    const suggestedFilename = `${parts.join('-')}.pdf`;
-
-    await apiDownloadPdf(`/api/students/export-pdf?${params.toString()}`, suggestedFilename);
   },
 
 
