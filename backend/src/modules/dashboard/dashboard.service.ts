@@ -134,6 +134,25 @@ export class DashboardService {
       }
     }
 
+    // 6. Partner Institution Aggregations (Coalesced NULL-safe)
+    const [
+      totalPartners,
+      pendingPartners,
+      approvedPartners,
+      rejectedPartners,
+      partnerStrengthAgg,
+      partnerApplicantsAgg,
+    ] = await Promise.all([
+      prisma.partnerInstitution.count(),
+      prisma.partnerInstitution.count({ where: { status: 'PENDING' } }),
+      prisma.partnerInstitution.count({ where: { status: 'APPROVED' } }),
+      prisma.partnerInstitution.count({ where: { status: 'REJECTED' } }),
+      prisma.partnerInstitution.aggregate({ _sum: { studentStrength: true } }),
+      prisma.partnerInstitution.aggregate({ _sum: { expectedApplicants: true } }),
+    ]);
+
+    const totalPartnerStudents = Number(partnerStrengthAgg._sum.studentStrength ?? 0);
+    const totalExpectedApplicants = Number(partnerApplicantsAgg._sum.expectedApplicants ?? 0);
     const netCashFlow = monthFeeIncome + otherIncome - (monthSalaryExpense + otherExpense);
 
     return {
@@ -145,6 +164,19 @@ export class DashboardService {
         totalStudents,
         totalActiveStudents,
         activeStaffCount,
+        totalPartners,
+        pendingPartners,
+        approvedPartners,
+        totalPartnerStudents,
+        totalExpectedApplicants,
+      },
+      partnerStats: {
+        totalPartners,
+        pendingPartners,
+        approvedPartners,
+        rejectedPartners,
+        totalPartnerStudents,
+        totalExpectedApplicants,
       },
       attendanceToday: {
         totalActiveStudents,

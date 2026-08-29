@@ -9,6 +9,9 @@ class MemoryStore {
   documentChecklists: Map<string, any> = new Map();
   officeUseRecords: Map<string, any> = new Map();
   partnerInstitutions: Map<string, any> = new Map();
+  partnerCodeSequences: Map<number, any> = new Map();
+  partnerStatusAudits: Map<string, any> = new Map();
+  idempotencyRecords: Map<string, any> = new Map();
   attendances: Map<string, any> = new Map();
   feeRecords: Map<string, any> = new Map();
   staffs: Map<string, any> = new Map();
@@ -43,6 +46,15 @@ class MemoryStore {
       $connect: async () => {},
       $disconnect: async () => {},
       $queryRaw: async () => [{ result: 1 }],
+      $transaction: async (arg: any) => {
+        if (typeof arg === 'function') {
+          return arg(memoryPrisma || this.createInMemoryPrismaClient());
+        }
+        if (Array.isArray(arg)) {
+          return Promise.all(arg);
+        }
+        return arg;
+      },
       user: {
         findUnique: async ({ where }: { where: { email?: string; id?: string } }) => {
           for (const u of this.users.values()) {
@@ -338,10 +350,39 @@ class MemoryStore {
         },
       },
       partnerInstitution: {
-        findUnique: async ({ where }: { where: { id?: string; partnerCode?: string } }) => {
+        findUnique: async ({ where, include }: { where: { id?: string; partnerCode?: string }; include?: any }) => {
           for (const p of this.partnerInstitutions.values()) {
-            if (where.id && p.id === where.id) return { ...p };
-            if (where.partnerCode && p.partnerCode === where.partnerCode) return { ...p };
+            if (where.id && p.id === where.id) {
+              const audits = Array.from(this.partnerStatusAudits.values())
+                .filter((a) => a.partnerId === p.id)
+                .sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime());
+              return include?.statusAudits ? { ...p, statusAudits: audits } : { ...p };
+            }
+            if (where.partnerCode && p.partnerCode === where.partnerCode) {
+              const audits = Array.from(this.partnerStatusAudits.values())
+                .filter((a) => a.partnerId === p.id)
+                .sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime());
+              return include?.statusAudits ? { ...p, statusAudits: audits } : { ...p };
+            }
+          }
+          return null;
+        },
+        findFirst: async ({ where }: any = {}) => {
+          for (const p of this.partnerInstitutions.values()) {
+            if (!where) return { ...p };
+            if (where.institutionName?.equals) {
+              if (p.institutionName.toLowerCase() !== where.institutionName.equals.toLowerCase()) continue;
+            }
+            if (where.district?.equals) {
+              if (p.district.toLowerCase() !== where.district.equals.toLowerCase()) continue;
+            }
+            if (where.campus?.equals) {
+              if ((p.campus || '').toLowerCase() !== where.campus.equals.toLowerCase()) continue;
+            }
+            if (where.status?.in) {
+              if (!where.status.in.includes(p.status)) continue;
+            }
+            return { ...p };
           }
           return null;
         },
@@ -349,19 +390,46 @@ class MemoryStore {
           let list = Array.from(this.partnerInstitutions.values());
           if (where?.status) list = list.filter((p) => p.status === where.status);
           if (where?.institutionType) list = list.filter((p) => p.institutionType === where.institutionType);
-          if (where?.search) {
-            const s = where.search.toLowerCase();
-            list = list.filter(
-              (p) =>
-                p.institutionName.toLowerCase().includes(s) ||
-                p.contactName.toLowerCase().includes(s) ||
-                p.district.toLowerCase().includes(s)
-            );
+          if (where?.district?.equals) {
+            list = list.filter((p) => p.district.toLowerCase() === where.district.equals.toLowerCase());
+          }
+          if (where?.AND && Array.isArray(where.AND)) {
+            for (const cond of where.AND) {
+              if (cond.status) list = list.filter((p) => p.status === cond.status);
+              if (cond.institutionType) list = list.filter((p) => p.institutionType === cond.institutionType);
+              if (cond.district?.equals) list = list.filter((p) => p.district.toLowerCase() === cond.district.equals.toLowerCase());
+              if (cond.OR && Array.isArray(cond.OR)) {
+                list = list.filter((p) =>
+                  cond.OR.some((sub: any) => {
+                    if (sub.institutionName?.contains) {
+                      return p.institutionName.toLowerCase().includes(sub.institutionName.contains.toLowerCase());
+                    }
+                    if (sub.contactName?.contains) {
+                      return p.contactName.toLowerCase().includes(sub.contactName.contains.toLowerCase());
+                    }
+                    if (sub.partnerCode?.contains) {
+                      return p.partnerCode.toLowerCase().includes(sub.partnerCode.contains.toLowerCase());
+                    }
+                    if (sub.district?.contains) {
+                      return p.district.toLowerCase().includes(sub.district.contains.toLowerCase());
+                    }
+                    if (sub.campus?.contains) {
+                      return (p.campus || '').toLowerCase().includes(sub.campus.contains.toLowerCase());
+                    }
+                    return false;
+                  })
+                );
+              }
+            }
           }
           if (orderBy) {
             const key = Object.keys(orderBy)[0];
-            const dir = orderBy[key] === 'desc' ? -1 : 1;
-            list.sort((a, b) => (a[key] > b[key] ? dir : -dir));
+            const dir = orderBy[key] === 'asc' ? 1 : -1;
+            list.sort((a, b) => {
+              if (a[key] == null) return 1;
+              if (b[key] == null) return -1;
+              return a[key] > b[key] ? dir : -dir;
+            });
           }
           const start = skip;
           const end = take !== undefined ? start + take : list.length;
@@ -392,6 +460,87 @@ class MemoryStore {
           if (!where) return this.partnerInstitutions.size;
           const list = await (this.createInMemoryPrismaClient().partnerInstitution.findMany({ where }));
           return list.length;
+        },
+        aggregate: async ({ _sum, where }: any = {}) => {
+          const list = await (this.createInMemoryPrismaClient().partnerInstitution.findMany({ where }));
+          const strengthSum = list.reduce((acc, curr) => acc + Number(curr.studentStrength || 0), 0);
+          const applicantsSum = list.reduce((acc, curr) => acc + Number(curr.expectedApplicants || 0), 0);
+          return {
+            _sum: {
+              studentStrength: strengthSum,
+              expectedApplicants: applicantsSum,
+            },
+          };
+        },
+      },
+      partnerCodeSequence: {
+        upsert: async ({ where, update, create }: { where: { year: number }; update: any; create: any }) => {
+          const existing = this.partnerCodeSequences.get(where.year);
+          if (existing) {
+            const nextNum = existing.lastNumber + (update?.lastNumber?.increment || 1);
+            const updated = { year: where.year, lastNumber: nextNum };
+            this.partnerCodeSequences.set(where.year, updated);
+            return { ...updated };
+          } else {
+            const initial = { year: where.year, lastNumber: create.lastNumber || 1 };
+            this.partnerCodeSequences.set(where.year, initial);
+            return { ...initial };
+          }
+        },
+        findUnique: async ({ where }: { where: { year: number } }) => {
+          return this.partnerCodeSequences.get(where.year) || null;
+        },
+      },
+      partnerStatusAudit: {
+        create: async ({ data }: { data: any }) => {
+          const id = data.id || generateId();
+          const rec = {
+            id,
+            ...data,
+            changedAt: data.changedAt || new Date(),
+            _seq: idCounter++,
+          };
+          this.partnerStatusAudits.set(id, rec);
+          return { ...rec };
+        },
+        findMany: async ({ where, orderBy }: any = {}) => {
+          let list = Array.from(this.partnerStatusAudits.values());
+          if (where?.partnerId) {
+            list = list.filter((a) => a.partnerId === where.partnerId);
+          }
+          if (orderBy) {
+            const key = Object.keys(orderBy)[0];
+            const dir = orderBy[key] === 'asc' ? 1 : -1;
+            list.sort((a, b) => {
+              const timeA = new Date(a[key]).getTime();
+              const timeB = new Date(b[key]).getTime();
+              if (timeA !== timeB) return dir === 1 ? timeA - timeB : timeB - timeA;
+              return dir === 1 ? a._seq - b._seq : b._seq - a._seq;
+            });
+          }
+          return list.map((a) => ({ ...a }));
+        },
+      },
+      idempotencyRecord: {
+        findUnique: async ({ where }: { where: { key: string } }) => {
+          return this.idempotencyRecords.get(where.key) || null;
+        },
+        create: async ({ data }: { data: any }) => {
+          const rec = { ...data, createdAt: new Date() };
+          this.idempotencyRecords.set(data.key, rec);
+          return { ...rec };
+        },
+        upsert: async ({ where, update, create }: { where: { key: string }; update: any; create: any }) => {
+          const existing = this.idempotencyRecords.get(where.key);
+          if (existing) {
+            const updated = { ...existing, ...update };
+            this.idempotencyRecords.set(where.key, updated);
+            return { ...updated };
+          } else {
+            const rec = { ...create, createdAt: new Date() };
+            this.idempotencyRecords.set(create.key, rec);
+            return { ...rec };
+          }
         },
       },
       attendance: {
@@ -763,6 +912,18 @@ class MemoryStore {
             },
           };
         },
+        groupBy: async ({ by, _sum, where }: any = {}) => {
+          const list = await (this.createInMemoryPrismaClient().transaction.findMany({ where }));
+          const groups: Record<string, number> = {};
+          for (const t of list) {
+            const key = (t as any)[by[0]] || 'UNKNOWN';
+            groups[key] = (groups[key] || 0) + Number(t.amount || 0);
+          }
+          return Object.entries(groups).map(([type, amount]) => ({
+            type,
+            _sum: { amount },
+          }));
+        },
       },
     };
   }
@@ -794,17 +955,20 @@ export const prisma = new Proxy(realPrisma, {
   get(target: any, prop: string | symbol) {
     const isProduction = process.env.NODE_ENV === 'production';
 
-    if (prop === '$queryRaw' || prop === '$connect' || prop === '$disconnect') {
+    if (prop === '$queryRaw' || prop === '$connect' || prop === '$disconnect' || prop === '$transaction') {
       return async (...args: any[]) => {
         try {
-          return await target[prop](...args);
+          if (isDbAvailable !== false) {
+            return await target[prop](...args);
+          }
         } catch (err: any) {
           if (isProduction) {
             logger.error(`🚨 CRITICAL: Database operation "${String(prop)}" failed in production:`, err.message || err);
             throw err;
           }
-          return (memoryPrisma as any)[prop]?.(...args);
+          isDbAvailable = false;
         }
+        return (memoryPrisma as any)[prop]?.(...args);
       };
     }
 

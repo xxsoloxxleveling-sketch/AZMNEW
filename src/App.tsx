@@ -81,6 +81,9 @@ const ExamHallsView = lazy(() =>
 const DocumentVaultView = lazy(() =>
   import('./components/admin/storage/DocumentVaultView').then((m) => ({ default: m.DocumentVaultView }))
 );
+const AdminPartnersListView = lazy(() =>
+  import('./components/admin/partners/AdminPartnersListView').then((m) => ({ default: m.AdminPartnersListView }))
+);
 const AdminWalkInModal = lazy(() =>
   import('./components/admin/students/AdminWalkInModal').then((m) => ({ default: m.AdminWalkInModal }))
 );
@@ -189,8 +192,11 @@ function AppContent() {
         setCurrentRoute('partner-registration');
       } else if (hash === 'scan') {
         setCurrentRoute('scan');
+      } else if (hash === 'admin-partners') {
+        setCurrentRoute('admin');
+        setAdminTab('partners');
       } else if (
-        ['dashboard', 'students', 'attendance', 'fees', 'staff', 'payroll', 'transactions', 'settings'].includes(
+        ['dashboard', 'students', 'halls', 'storage', 'attendance', 'fees', 'staff', 'payroll', 'transactions', 'settings'].includes(
           hash
         )
       ) {
@@ -212,8 +218,13 @@ function AppContent() {
           hash
         )
       ) {
-        setCurrentRoute('public');
-        setActiveTab(hash as PageTab);
+        if (hash === 'partners' && (window.location.pathname.startsWith('/admin') || currentRoute === 'admin')) {
+          setCurrentRoute('admin');
+          setAdminTab('partners');
+        } else {
+          setCurrentRoute('public');
+          setActiveTab(hash as PageTab);
+        }
       }
 
     };
@@ -335,6 +346,8 @@ function AppContent() {
           return { title: 'Executive Overview Dashboard', subtitle: 'Academic Session 2026-2027 Analytics' };
         case 'students':
           return { title: 'Student Management & Admissions', subtitle: 'Candidate profiles, biometric QR tokens, and transcripts' };
+        case 'partners':
+          return { title: 'Partner Institutions Directory', subtitle: 'Manage affiliated schools, colleges, academies, and exam venue accreditations' };
         case 'halls':
           return { title: 'Class-Wise Examination Halls & Attendance', subtitle: 'Live room allocations, capacity limits, and real-time attendance matrix' };
         case 'storage':
@@ -399,6 +412,7 @@ function AppContent() {
             />
           )}
           {adminTab === 'students' && <StudentsListView />}
+          {adminTab === 'partners' && <AdminPartnersListView />}
           {adminTab === 'halls' && <ExamHallsView onOpenQrScanner={() => navigateTo('scan')} />}
           {adminTab === 'storage' && <DocumentVaultView />}
           {adminTab === 'attendance' && <AttendanceHubView />}

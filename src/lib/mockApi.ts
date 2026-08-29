@@ -100,21 +100,35 @@ export interface MockPartner {
   partnerCode: string;
   institutionName: string;
   institutionType: 'SCHOOL' | 'COLLEGE' | 'ACADEMY' | 'UNIVERSITY';
-  campus?: string;
+  campus?: string | null;
   address: string;
   district: string;
   province: string;
   contactName: string;
   contactDesignation: string;
   contactMobile: string;
-  contactWhatsapp?: string;
-  contactEmail?: string;
-  website?: string;
+  contactWhatsapp?: string | null;
+  contactEmail?: string | null;
+  website?: string | null;
   classesOffered: string[];
-  studentStrength?: number;
-  expectedApplicants?: number;
+  studentStrength?: number | null;
+  expectedApplicants?: number | null;
+  agreedToTerms?: boolean;
+  signedAt?: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  createdAt: string;
+  rejectionReason?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  statusAudits?: Array<{
+    id: string;
+    previousStatus: string;
+    newStatus: string;
+    reason?: string | null;
+    changedByName?: string | null;
+    changedAt: string;
+  }>;
 }
 
 export interface MockAttendance {
@@ -758,35 +772,82 @@ export const mockApi = {
 
 
   // 4. Partner Institutions
-  async getPartners(): Promise<MockPartner[]> {
-    try {
-      const res: any = await apiFetch<any>('/api/partners');
-      const list = Array.isArray(res) ? res : Array.isArray(res?.partners) ? res.partners : [];
-      return list;
-    } catch (err) {
-      console.warn('Partners fetch error:', err);
-      return [];
+  async getPartners(query?: {
+    search?: string;
+    status?: string;
+    institutionType?: string;
+    district?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
+  }): Promise<{ data: MockPartner[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
+    const params = new URLSearchParams();
+    if (query?.search) params.set('search', query.search);
+    if (query?.status && query.status !== 'ALL') params.set('status', query.status);
+    if (query?.institutionType && query.institutionType !== 'ALL') params.set('institutionType', query.institutionType);
+    if (query?.district && query.district !== 'ALL' && query.district !== 'all') params.set('district', query.district);
+    if (query?.page) params.set('page', String(query.page));
+    if (query?.limit) params.set('limit', String(query.limit));
+    if (query?.sortBy) params.set('sortBy', query.sortBy);
+    if (query?.sortOrder) params.set('sortOrder', query.sortOrder);
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const res: any = await apiFetch<any>(`/api/partners${queryString}`);
+
+    if (res && res.data && Array.isArray(res.data)) {
+      return {
+        data: res.data,
+        pagination: res.pagination || { page: 1, limit: res.data.length, total: res.data.length, totalPages: 1 },
+      };
+    } else if (Array.isArray(res)) {
+      return {
+        data: res,
+        pagination: { page: 1, limit: res.length, total: res.length, totalPages: 1 },
+      };
     }
+
+    return {
+      data: [],
+      pagination: { page: 1, limit: 25, total: 0, totalPages: 1 },
+    };
   },
 
-  async registerPartner(partnerData: any): Promise<MockPartner> {
+  async getPartnerById(id: string): Promise<MockPartner> {
+    return apiFetch<MockPartner>(`/api/partners/${id}`);
+  },
+
+  async getPartnerStatusHistory(id: string): Promise<any[]> {
+    return apiFetch<any[]>(`/api/partners/${id}/status-history`);
+  },
+
+  async registerPartner(partnerData: any, idempotencyKey?: string): Promise<MockPartner> {
+    const headers: Record<string, string> = {};
+    if (idempotencyKey) {
+      headers['Idempotency-Key'] = idempotencyKey;
+    }
+
     return apiFetch<MockPartner>('/api/partners/register', {
       method: 'POST',
+      headers,
       body: JSON.stringify(partnerData),
     });
   },
 
-  async updatePartnerStatus(id: string, status: 'APPROVED' | 'REJECTED'): Promise<MockPartner> {
+  async updatePartnerStatus(
+    id: string,
+    payload: { status: 'PENDING' | 'APPROVED' | 'REJECTED'; reason?: string; expectedStatus?: string }
+  ): Promise<MockPartner> {
     return apiFetch<MockPartner>(`/api/partners/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(payload),
     });
   },
 
-  async downloadPartnerPdf(partnerId: string, partnerCode: string): Promise<void> {
+  async downloadPartnerPdf(partnerId: string, partnerCode?: string): Promise<void> {
     await apiDownloadPdf(
       `/api/partners/${partnerId}/registration-pdf`,
-      `Partner_Agreement_${partnerCode || partnerId}.pdf`
+      `AZM_Partner_Acknowledgement_${partnerCode || partnerId}.pdf`
     );
   },
 

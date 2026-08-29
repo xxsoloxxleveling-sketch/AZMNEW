@@ -565,183 +565,6 @@ export class PdfService {
   }
 
   /**
-   * Generates filled HTML template for the Partner Institution Registration Form
-   */
-  generatePartnerRegistrationHtml(partner: any): string {
-    const isSchool = partner.institutionType === 'SCHOOL';
-    const isCollege = partner.institutionType === 'COLLEGE';
-    const isAcademy = partner.institutionType === 'ACADEMY';
-    const isUni = partner.institutionType === 'UNIVERSITY';
-
-    const classes = partner.classesOffered || [];
-
-    return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Partner Institution Registration - ${partner.partnerCode || 'Form'}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; font-size: 11.5px; color: #1e293b; }
-    body { background: #fff; padding: 0; }
-    .page { width: 100%; min-height: 277mm; padding: 5mm 0; position: relative; }
-    
-    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; border-bottom: 2.5px solid #1e3a8a; padding-bottom: 8px; }
-    .org-title { font-size: 18px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px; }
-    .form-title { font-size: 14px; font-weight: 700; color: #0f172a; text-transform: uppercase; margin-bottom: 4px; }
-    .sub-title { font-size: 10.5px; color: #475569; }
-
-    .id-ribbon { display: flex; justify-content: space-between; background: #f1f5f9; padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 4px; margin-bottom: 12px; font-weight: 600; font-size: 11px; }
-    .id-ribbon strong { color: #1e3a8a; }
-
-    .section-bar { background: #1e3a8a; color: #ffffff; font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 3px; margin: 12px 0 8px 0; text-transform: uppercase; letter-spacing: 0.3px; }
-    
-    .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
-    .grid-table td { padding: 4.5px 6px; vertical-align: middle; }
-    .label { font-weight: 600; color: #334155; width: 22%; font-size: 10.5px; }
-    .value { border-bottom: 1px solid #94a3b8; font-weight: 500; font-size: 11px; color: #0f172a; padding-left: 4px; }
-
-    .check-item { display: inline-flex; align-items: center; margin-right: 16px; }
-    .check-box { display: inline-block; width: 13px; height: 13px; border: 1.2px solid #334155; text-align: center; line-height: 12px; font-size: 10px; font-weight: 800; border-radius: 2px; margin-right: 4px; background: #fff; }
-    .check-label { font-size: 10.5px; font-weight: 500; }
-
-    .declaration-card { border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px 12px; margin-top: 12px; background: #fdfdfd; }
-    .declaration-text { font-size: 10px; color: #334155; line-height: 1.45; margin-bottom: 14px; text-align: justify; }
-    .sig-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 25px; }
-    .sig-line { width: 40%; border-top: 1px solid #64748b; text-align: center; font-size: 9.5px; padding-top: 4px; font-weight: 600; color: #475569; }
-
-    .office-box { border: 2px solid #1e3a8a; border-radius: 4px; padding: 8px 12px; margin-top: 16px; background: #fafafa; }
-    .office-header { font-weight: 800; font-size: 11.5px; color: #1e3a8a; text-transform: uppercase; text-align: center; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
-  </style>
-</head>
-<body>
-
-  <div class="page">
-    <table class="header-table">
-      <tr>
-        <td>
-          <div class="org-title">AZM SCHOLARSHIP PROGRAM</div>
-          <div class="form-title">Partner Institution Registration Form</div>
-          <div class="sub-title">Institutional Partnership & Examination Centre Agreement</div>
-        </td>
-      </tr>
-    </table>
-
-    <div class="id-ribbon">
-      <span>Partner Code: <strong>${partner.partnerCode || 'PENDING ASSIGNMENT'}</strong></span>
-      <span>Application Date: <strong>${partner.applicationDate ? new Date(partner.applicationDate).toLocaleDateString() : new Date().toLocaleDateString()}</strong></span>
-      <span>Status: <strong>${partner.status || 'PENDING'}</strong></span>
-    </div>
-
-    <!-- Section 1 -->
-    <div class="section-bar">1. Institution Profile</div>
-    <table class="grid-table">
-      <tr>
-        <td class="label">Institution Name:</td>
-        <td class="value" colspan="3"><strong>${(partner.institutionName || '').toUpperCase()}</strong></td>
-      </tr>
-      <tr>
-        <td class="label">Institution Type:</td>
-        <td class="value" colspan="3">
-          ${this.renderCheck(isSchool, 'School')}
-          ${this.renderCheck(isCollege, 'College')}
-          ${this.renderCheck(isAcademy, 'Academy / Tuition Centre')}
-          ${this.renderCheck(isUni, 'University / Institute')}
-        </td>
-      </tr>
-      <tr>
-        <td class="label">Campus / Branch:</td>
-        <td class="value" colspan="3">${partner.campus || 'Main Campus'}</td>
-      </tr>
-      <tr>
-        <td class="label">Physical Address:</td>
-        <td class="value" colspan="3">${partner.address || ''}</td>
-      </tr>
-      <tr>
-        <td class="label">District & Province:</td>
-        <td class="value" colspan="3">${partner.district || ''}, ${partner.province || ''}</td>
-      </tr>
-    </table>
-
-    <!-- Section 2 -->
-    <div class="section-bar">2. Focal Person / Contact Details</div>
-    <table class="grid-table">
-      <tr>
-        <td class="label">Contact Person:</td>
-        <td class="value">${partner.contactName || ''}</td>
-        <td class="label">Designation:</td>
-        <td class="value">${partner.contactDesignation || 'Principal / Director'}</td>
-      </tr>
-      <tr>
-        <td class="label">Mobile Number:</td>
-        <td class="value">${partner.contactMobile || ''}</td>
-        <td class="label">WhatsApp Number:</td>
-        <td class="value">${partner.contactWhatsapp || partner.contactMobile}</td>
-      </tr>
-      <tr>
-        <td class="label">Email Address:</td>
-        <td class="value">${partner.contactEmail || 'N/A'}</td>
-        <td class="label">Official Website:</td>
-        <td class="value">${partner.website || 'N/A'}</td>
-      </tr>
-    </table>
-
-    <!-- Section 3 -->
-    <div class="section-bar">3. Educational Scope & Capacity</div>
-    <table class="grid-table">
-      <tr>
-        <td class="label">Classes Offered:</td>
-        <td class="value" colspan="3">
-          ${this.renderCheck(classes.includes('Class 6-8') || classes.includes('Class 6') || classes.includes('Middle'), 'Class 6 - 8')}
-          ${this.renderCheck(classes.includes('SSC') || classes.includes('Matric'), 'SSC (9th - 10th)')}
-          ${this.renderCheck(classes.includes('HSSC') || classes.includes('FSc/FA'), 'HSSC (11th - 12th)')}
-          ${this.renderCheck(classes.includes('BS') || classes.includes('Undergraduate'), 'BS / Degree')}
-        </td>
-      </tr>
-      <tr>
-        <td class="label">Total Student Strength:</td>
-        <td class="value">${partner.studentStrength || 'N/A'} Students</td>
-        <td class="label">Expected Applicants:</td>
-        <td class="value"><strong>${partner.expectedApplicants || 'N/A'}</strong> Candidates</td>
-      </tr>
-    </table>
-
-    <!-- Section 4 -->
-    <div class="section-bar">4. Partnership Agreement & Authorization</div>
-    <div class="declaration-card">
-      <p class="declaration-text">
-        We hereby apply for institutional partnership under the AZM Scholarship Program. We agree to facilitate candidate awareness, registration support, and exam venue logistics in accordance with AZM policies. We confirm that all information provided above is authentic and certified by the institution management.
-      </p>
-      <div class="sig-row">
-        <div class="sig-line">Date: ${partner.signedAt ? new Date(partner.signedAt).toLocaleDateString() : new Date().toLocaleDateString()}</div>
-        <div class="sig-line">Principal / Head of Institution (Signature & Stamp)</div>
-      </div>
-    </div>
-
-    <!-- Section 5 -->
-    <div class="office-box">
-      <div class="office-header">5. For AZM Program Secretariat Use Only</div>
-      <table class="grid-table">
-        <tr>
-          <td class="label">Assigned Partner Code:</td>
-          <td class="value"><strong>${partner.partnerCode || 'PENDING'}</strong></td>
-          <td class="label">Approval Decision:</td>
-          <td class="value"><strong>${partner.status || 'PENDING'}</strong></td>
-        </tr>
-      </table>
-      <div class="sig-row" style="margin-top: 15px;">
-        <div class="sig-line">Regional Coordinator</div>
-        <div class="sig-line">Program Director (Signature & Seal)</div>
-      </div>
-    </div>
-  </div>
-
-</body>
-</html>
-    `;
-  }
-
-  /**
    * Generates filled HTML template for the official Single-Page A4 Roll Number Slip Exam Entry Pass
    */
   generateRollSlipHtml(student: any, qrDataUrl?: string, photoBase64?: string): string {
@@ -1190,7 +1013,208 @@ export class PdfService {
 </html>
     `;
   }
+
+  /**
+   * Safe HTML escaping helper to prevent XSS / SSRF in PDF rendering
+   */
+  private escapeHtml(str: any): string {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /**
+   * Generates filled HTML template for the official Partner Institution Registration Acknowledgement & MOU
+   */
+  generatePartnerRegistrationHtml(partner: any): string {
+    const isApproved = partner.status === 'APPROVED';
+    const isPending = partner.status === 'PENDING';
+    const isRejected = partner.status === 'REJECTED';
+
+    const partnerCode = this.escapeHtml(partner.partnerCode || 'PENDING ASSIGNMENT');
+    const institutionName = this.escapeHtml(partner.institutionName);
+    const institutionType = this.escapeHtml(partner.institutionType);
+    const campus = this.escapeHtml(partner.campus || 'Main Campus');
+    const address = this.escapeHtml(partner.address);
+    const district = this.escapeHtml(partner.district);
+    const province = this.escapeHtml(partner.province);
+    const contactName = this.escapeHtml(partner.contactName);
+    const contactDesignation = this.escapeHtml(partner.contactDesignation);
+    const contactMobile = this.escapeHtml(partner.contactMobile);
+    const contactWhatsapp = this.escapeHtml(partner.contactWhatsapp || partner.contactMobile);
+    const contactEmail = this.escapeHtml(partner.contactEmail || 'N/A');
+    const website = this.escapeHtml(partner.website || 'N/A');
+    const studentStrength = partner.studentStrength != null ? this.escapeHtml(partner.studentStrength) : '—';
+    const expectedApplicants = partner.expectedApplicants != null ? this.escapeHtml(partner.expectedApplicants) : '—';
+    const classes = Array.isArray(partner.classesOffered) ? partner.classesOffered.map((c: any) => this.escapeHtml(c)).join(', ') : '—';
+
+    const registeredDate = partner.createdAt
+      ? new Date(partner.createdAt).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        })
+      : new Date().toLocaleDateString('en-GB');
+
+    const statusBadge = isApproved
+      ? '<span style="background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 11px;">OFFICIALLY ACCREDITED PARTNER</span>'
+      : isRejected
+      ? '<span style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 11px;">APPLICATION REJECTED</span>'
+      : '<span style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 11px;">PENDING VERIFICATION</span>';
+
+    const docTitle = isApproved
+      ? 'INSTITUTIONAL ACCREDITATION &amp; MEMORANDUM OF UNDERSTANDING'
+      : 'PARTNER REGISTRATION ACKNOWLEDGEMENT &amp; MOU';
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AZM Partner Registration — ${partnerCode}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: #fff; padding: 8mm 10mm; color: #0f172a; font-size: 10.5px; line-height: 1.45; }
+    
+    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; border-bottom: 2.5px solid #1e3a8a; padding-bottom: 8px; }
+    .org-title { font-size: 17px; font-weight: 900; color: #1e3a8a; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px; }
+    .doc-title { font-size: 12px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin-bottom: 2px; }
+    .sub-title { font-size: 9px; color: #64748b; font-weight: 500; }
+    
+    .meta-card { background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .code-label { font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 700; }
+    .code-val { font-size: 15px; font-weight: 900; color: #1e3a8a; font-family: monospace; }
+    
+    .section-title { font-size: 11px; font-weight: 800; color: #1e3a8a; text-transform: uppercase; background: #eff6ff; border-left: 4px solid #1e3a8a; padding: 4px 8px; margin: 12px 0 6px 0; }
+    
+    .info-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 10px; }
+    .info-table td { padding: 4.5px 6px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+    .lbl { width: 28%; font-weight: 700; color: #475569; }
+    .val { width: 72%; font-weight: 600; color: #0f172a; }
+    
+    .mou-box { background: #fafafa; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; font-size: 9px; color: #334155; margin-top: 10px; line-height: 1.4; }
+    .mou-box strong { color: #0f172a; }
+    
+    .sig-section { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 10px; }
+    .sig-box { width: 45%; border-top: 1.5px solid #94a3b8; text-align: center; padding-top: 4px; font-size: 9.5px; font-weight: 700; color: #334155; }
+    
+    .footer-note { margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 6px; font-size: 8px; color: #94a3b8; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+
+  <table class="header-table">
+    <tr>
+      <td style="width: 70%;">
+        <div class="org-title">AZM.AIO SCHOLARSHIP &amp; ACADEMIC DIRECTORY</div>
+        <div class="doc-title">${docTitle}</div>
+        <div class="sub-title">Central Secretariat: Jaddoon Plaza, Karakoram Highway, Mansehra, KP | 0305-1755551</div>
+      </td>
+      <td style="width: 30%; text-align: right; vertical-align: middle;">
+        ${statusBadge}
+      </td>
+    </tr>
+  </table>
+
+  <div class="meta-card">
+    <div>
+      <div class="code-label">Partner Registration Code</div>
+      <div class="code-val">${partnerCode}</div>
+    </div>
+    <div style="text-align: right;">
+      <div class="code-label">Enrolled Date</div>
+      <div style="font-weight: 700; font-size: 11px; color: #0f172a;">${registeredDate}</div>
+    </div>
+  </div>
+
+  <div class="section-title">Part 1: Institutional Identification</div>
+  <table class="info-table">
+    <tr>
+      <td class="lbl">Institution Name:</td>
+      <td class="val" style="font-size: 11.5px; font-weight: 800; color: #1e3a8a;">${institutionName}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Institution Category:</td>
+      <td class="val">${institutionType} &nbsp;|&nbsp; Campus: <strong>${campus}</strong></td>
+    </tr>
+    <tr>
+      <td class="lbl">Campus Location / Address:</td>
+      <td class="val">${address}, District: <strong>${district}</strong>, Province: <strong>${province}</strong></td>
+    </tr>
+    <tr>
+      <td class="lbl">Official Web / Portal:</td>
+      <td class="val">${website}</td>
+    </tr>
+  </table>
+
+  <div class="section-title">Part 2: Administrative &amp; Focal Person Details</div>
+  <table class="info-table">
+    <tr>
+      <td class="lbl">Authorized Focal Person:</td>
+      <td class="val"><strong>${contactName}</strong> (${contactDesignation})</td>
+    </tr>
+    <tr>
+      <td class="lbl">Official Mobile / Contact:</td>
+      <td class="val" style="font-family: monospace; font-weight: 700;">${contactMobile} &nbsp;|&nbsp; WhatsApp: ${contactWhatsapp}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Official Email:</td>
+      <td class="val">${contactEmail}</td>
+    </tr>
+  </table>
+
+  <div class="section-title">Part 3: Academic Scope &amp; Projected Candidacy</div>
+  <table class="info-table">
+    <tr>
+      <td class="lbl">Classes Offered:</td>
+      <td class="val"><strong>${classes}</strong></td>
+    </tr>
+    <tr>
+      <td class="lbl">Total Enrolled Strength:</td>
+      <td class="val">${studentStrength} Students</td>
+    </tr>
+    <tr>
+      <td class="lbl">Projected Session V Applicants:</td>
+      <td class="val" style="color: #166534; font-weight: 800;">${expectedApplicants} Eligible Candidates</td>
+    </tr>
+  </table>
+
+  <div class="section-title">Part 4: Institutional Declaration &amp; Partnership Terms</div>
+  <div class="mou-box">
+    <p>
+      By registering as an AZM.AIO Partner Institution, the institution confirms mutual cooperation in student talent identification, scholarship awareness facilitation, and academic integrity for Session V (2026).
+    </p>
+    <p style="margin-top: 4px;">
+      • <strong>Status Declaration:</strong> ${isApproved ? 'This institution is officially accredited as an authorized AZM.AIO Examination Partner Venue.' : isRejected ? 'This institutional application was reviewed and not shortlisted.' : 'This registration is under verification by the AZM Central Academic Affairs Committee.'}
+    </p>
+  </div>
+
+  <div class="sig-section">
+    <div class="sig-box">
+      Authorized Principal / Focal Person Signature &amp; Seal<br/>
+      <span style="font-size: 8px; color: #64748b; font-weight: normal;">${institutionName}</span>
+    </div>
+    <div class="sig-box">
+      Director of Institutional Accreditation &amp; Scholarships<br/>
+      <span style="font-size: 8px; color: #64748b; font-weight: normal;">AZM.AIO Central Secretariat, Mansehra</span>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <span>Document Ref: <strong>AZM-MOU-${partnerCode}</strong></span>
+    <span>Computer Generated Official Record &copy; 2026 AZM.AIO</span>
+  </div>
+
+</body>
+</html>
+    `;
+  }
 }
 
 export const pdfService = new PdfService();
+
 

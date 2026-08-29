@@ -17,6 +17,7 @@ import {
   Banknote,
   RefreshCw,
   WifiOff,
+  School,
 } from 'lucide-react';
 import { StatCard } from '../shared/StatCard';
 import { StatusBadge } from '../shared/StatusBadge';
@@ -195,10 +196,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 1. Four Core KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      {/* 1. Core KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
-          title="Total Registered Students"
+          title="Registered Students"
           value={stats.totalStudents}
           icon={GraduationCap}
           color="blue"
@@ -208,7 +209,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onClick={() => onNavigate('students')}
         />
         <StatCard
-          title="Today's Attendance Rate"
+          title="Partner Institutions"
+          value={stats.totalPartners ?? data.partnerStats?.totalPartners ?? 0}
+          icon={School}
+          color="sky"
+          subtitle={`${stats.pendingPartners ?? data.partnerStats?.pendingPartners ?? 0} Pending Verification`}
+          trend={`${(stats.totalExpectedApplicants ?? data.partnerStats?.totalExpectedApplicants ?? 0).toLocaleString()} Expected`}
+          trendType="neutral"
+          onClick={() => onNavigate('partners')}
+        />
+        <StatCard
+          title="Today's Attendance"
           value={`${stats.attendancePercentage}%`}
           icon={CalendarCheck}
           color="emerald"

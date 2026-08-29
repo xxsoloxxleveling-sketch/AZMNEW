@@ -140,6 +140,58 @@ export function getStudentWhatsAppContact(student: {
 }
 
 /**
+ * Generates official WhatsApp registration submission link to the AZM Central Secretariat (0305-1755551).
+ */
+export function getPartnerSecretariatWhatsAppUrl(partner: {
+  partnerCode?: string;
+  institutionName: string;
+  district: string;
+  contactName: string;
+  contactMobile: string;
+}): string {
+  const secretariatNumber = '923051755551';
+  const code = partner.partnerCode || 'PENDING ASSIGNMENT';
+  const message = `Hello AZM Central Secretariat,\n\nWe have submitted institutional partnership registration for Session V (2026).\n• Partner Code: ${code}\n• Institution: ${partner.institutionName}\n• District: ${partner.district}\n• Focal Person: ${partner.contactName} (${partner.contactMobile})\n\nPlease find attached our registration acknowledgement for official verification and accreditation.`;
+
+  return `https://wa.me/${secretariatNumber}?text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * Generates WhatsApp deep link for Admin to contact the Partner Institution's Focal Person.
+ */
+export function getPartnerFocalWhatsAppContact(partner: {
+  institutionName: string;
+  partnerCode?: string;
+  contactName: string;
+  contactMobile: string;
+  contactWhatsapp?: string | null;
+  status?: string;
+}): { url: string | null; formattedPhone: string | null; defaultMessage: string } {
+  const phone = partner.contactWhatsapp || partner.contactMobile;
+  const normalized = formatWhatsAppPhone(phone);
+  const status = partner.status || 'PENDING';
+
+  let defaultMessage = `Assalam-o-Alaikum ${partner.contactName} (${partner.institutionName}), this is AZM.AIO Educational Directorate regarding your institutional partnership (Code: ${partner.partnerCode || 'Pending'}).`;
+  if (status === 'APPROVED') {
+    defaultMessage += ` We are pleased to inform you that your institution has been officially approved and accredited as an AZM Partner Venue for Session V.`;
+  } else if (status === 'REJECTED') {
+    defaultMessage += ` We are reaching out regarding the status update on your institutional registration request.`;
+  } else {
+    defaultMessage += ` We are processing your partnership application for verification.`;
+  }
+
+  if (!normalized) {
+    return { url: null, formattedPhone: null, defaultMessage };
+  }
+
+  return {
+    url: `https://wa.me/${normalized}?text=${encodeURIComponent(defaultMessage)}`,
+    formattedPhone: normalized,
+    defaultMessage,
+  };
+}
+
+/**
  * Safely opens WhatsApp deep link in a NEW TAB to ensure the admin never loses
  * their active table filters, pagination state, or scroll position.
  */
@@ -148,7 +200,11 @@ export function openWhatsAppInNewTab(url: string | null, e?: React.MouseEvent): 
     e.stopPropagation();
     e.preventDefault();
   }
+
   if (!url) return;
 
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+  if (newWindow) {
+    newWindow.opener = null;
+  }
 }

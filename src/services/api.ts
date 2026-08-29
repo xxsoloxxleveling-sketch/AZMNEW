@@ -469,10 +469,13 @@ export async function fetchQuestionBankItems(classLevel?: string): Promise<ApiRe
 // -------------------------------------------------------------
 export async function fetchPartnerInstitutions(): Promise<ApiResponse<PartnerSchoolData[]>> {
   try {
-    const response = await fetch(`${API_BASE_URL}/institutions`);
+    const response = await fetch(`${API_BASE_URL}/api/partners`);
     if (response.ok) {
-      const data = await response.json();
-      return { success: true, data };
+      const json = await response.json();
+      const list = json?.data || json?.partners || json;
+      if (Array.isArray(list)) {
+        return { success: true, data: list };
+      }
     }
   } catch (err) {}
 
@@ -481,3 +484,33 @@ export async function fetchPartnerInstitutions(): Promise<ApiResponse<PartnerSch
     data: PARTNER_SCHOOLS
   };
 }
+
+export const api = {
+  partners: {
+    register: async (data: any, idempotencyKey?: string) => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.registerPartner(data, idempotencyKey);
+    },
+    getAll: async (query?: any) => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getPartners(query);
+    },
+    getById: async (id: string) => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getPartnerById(id);
+    },
+    getStatusHistory: async (id: string) => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getPartnerStatusHistory(id);
+    },
+    updateStatus: async (id: string, payload: { status: 'PENDING' | 'APPROVED' | 'REJECTED'; reason?: string; expectedStatus?: string }) => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.updatePartnerStatus(id, payload);
+    },
+    downloadPdf: async (id: string, partnerCode?: string) => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.downloadPartnerPdf(id, partnerCode);
+    }
+  }
+};
+

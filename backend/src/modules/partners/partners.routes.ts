@@ -38,6 +38,12 @@ router.get(
   partnersController.getById
 );
 
+router.get(
+  '/:id/status-history',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  partnersController.getStatusHistory
+);
+
 router.patch(
   '/:id/status',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),

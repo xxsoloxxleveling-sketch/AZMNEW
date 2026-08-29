@@ -24,6 +24,7 @@ import { Role } from '../../../lib/mockApi';
 export type AdminTab =
   | 'dashboard'
   | 'students'
+  | 'partners'
   | 'halls'
   | 'storage'
   | 'attendance'
@@ -62,6 +63,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'students' as AdminTab,
       label: 'Students',
       icon: GraduationCap,
+      roles: ['SUPER_ADMIN', 'ADMIN'],
+    },
+    {
+      id: 'partners' as AdminTab,
+      label: 'Partner Institutions',
+      icon: School,
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
