@@ -242,7 +242,7 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
               >
                 <Receipt className="w-5 h-5 text-emerald-600" />
                 <span>{showVoucher ? 'Hide Payment Details' : 'View Bank Payment Details (PKR 300)'}</span>
-                <span className="text-[10px] text-emerald-700 font-normal">Faysal Bank &amp; Bank Alfalah (IBFT)</span>
+                <span className="text-[10px] text-emerald-700 font-normal">Bank Alfalah (Only Active Channel)</span>
               </button>
             </div>
           </div>
@@ -259,68 +259,47 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
                 </span>
               </div>
 
-              {/* Notice regarding mobile wallets */}
+              {/* Notice regarding closed accounts */}
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px] space-y-1">
-                <strong>⚠️ Notice on Mobile Wallets:</strong>
+                <strong>⚠️ Notice: EasyPaisa, JazzCash &amp; Faysal Bank Limits Reached</strong>
                 <p>
-                  EasyPaisa &amp; JazzCash direct account receiving limits have been reached. <strong>Please use Direct Bank Transfer / IBFT</strong> (Faysal Bank or Bank Alfalah). You can still send from your EasyPaisa/JazzCash app via <em>"Bank Transfer"</em>.
+                  Account limits for EasyPaisa, JazzCash, and Faysal Bank have been reached. <strong>Please deposit PKR 300 strictly into Bank Alfalah</strong>. You can transfer from any mobile banking or wallet app via <em>"Bank Transfer"</em>.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Bank 1: Faysal Bank */}
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                      Faysal Bank (Primary)
-                    </span>
-                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-bold rounded">IBFT</span>
+              {/* Only Active Bank Account: Bank Alfalah */}
+              <div className="p-4 bg-slate-50 rounded-2xl border-2 border-blue-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold text-slate-900">Bank Alfalah</span>
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded-full">Active Account</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold font-mono text-slate-900">3126701000006213</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard('3126701000006213', 'faysal')}
-                      className="px-2 py-1 bg-white border border-slate-200 rounded text-[10px] font-bold"
-                    >
-                      {copiedField === 'faysal' ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                  <span className="text-[11px] text-slate-600 block">Title: Sumama Khan</span>
+                  <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-bold rounded">IBFT</span>
                 </div>
-
-                {/* Bank 2: Bank Alfalah */}
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                      Bank Alfalah
-                    </span>
-                    <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 text-[9px] font-bold rounded">IBFT</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold font-mono text-slate-900">83861010161490</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard('83861010161490', 'alfalah')}
-                      className="px-2 py-1 bg-white border border-slate-200 rounded text-[10px] font-bold"
-                    >
-                      {copiedField === 'alfalah' ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                  <span className="text-[11px] text-slate-600 block">Title: Sumama Khan</span>
+                <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200">
+                  <span className="text-sm font-extrabold font-mono text-slate-900 tracking-wider">83861010161490</span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard('83861010161490', 'alfalah')}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-slate-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedField === 'alfalah' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedField === 'alfalah' ? 'Copied' : 'Copy'}</span>
+                  </button>
                 </div>
+                <span className="text-[11px] text-slate-700 font-semibold block">Account Title: Sumama Khan</span>
               </div>
 
               <a
                 href={`https://wa.me/923051755551?text=${encodeURIComponent(
-                  `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026).\n• Application ID: ${foundStudent.applicationNo || foundStudent.id}\n• Candidate Name: ${foundStudent.fullName}\n• Class: ${foundStudent.currentClass}\n• Fee: PKR 300\n• Paid Via: Bank Transfer (Sumama Khan)\n\nPlease find attached my bank deposit receipt/screenshot for Roll Number activation.`
+                  `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026).\n• Application ID: ${foundStudent.applicationNo || foundStudent.id}\n• Candidate Name: ${foundStudent.fullName}\n• Class: ${foundStudent.currentClass}\n• Fee: PKR 300\n• Paid Via: Bank Transfer (Bank Alfalah: 83861010161490 - Sumama Khan)\n\nPlease find attached my bank deposit receipt for Roll Number activation.`
                 )}`}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full py-2.5 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-4 h-4" />
-                <span>Send Bank Receipt to WhatsApp (0305-1755551)</span>
+                <span>Send Bank Alfalah Receipt to WhatsApp (0305-1755551)</span>
               </a>
             </div>
           )}

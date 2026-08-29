@@ -1443,22 +1443,17 @@ export function printStudentSlip(student: any) {
     <div class="fee-box">
       <div class="fee-title">Official PKR 300 Registration Fee Payment Details</div>
       <p style="font-size: 11px; color: #15803d; line-height: 1.4;">
-        To activate your biometric Roll Number Slip and examination seat for Session V (2026), deposit <strong>PKR 300</strong> via Direct Bank Transfer (IBFT):
+        To activate your biometric Roll Number Slip and examination seat for Session V (2026), deposit <strong>PKR 300</strong> via Bank Transfer (IBFT) strictly to our verified active bank account:
       </p>
       <div class="pay-methods">
-        <div class="pay-card">
-          <strong style="color: #15803d;">🏦 Faysal Bank (Option A):</strong><br/>
-          Account: <strong style="font-family: monospace; color: #0f172a;">3126701000006213</strong><br/>
-          Title: <strong>Sumama Khan</strong>
-        </div>
-        <div class="pay-card">
-          <strong style="color: #15803d;">🏦 Bank Alfalah (Option B):</strong><br/>
-          Account: <strong style="font-family: monospace; color: #0f172a;">83861010161490</strong><br/>
-          Title: <strong>Sumama Khan</strong>
+        <div class="pay-card" style="width: 100%; border: 2px solid #185b9d; background: #f0fdf4;">
+          <strong style="color: #185b9d; font-size: 13px;">🏦 Bank Alfalah (Official Active Account):</strong><br/>
+          Account Number: <strong style="font-family: monospace; font-size: 14px; color: #0f172a;">83861010161490</strong><br/>
+          Account Title: <strong>Sumama Khan</strong>
         </div>
       </div>
       <p style="font-size: 10px; color: #b91c1c; margin-top: 6px; font-weight: 600;">
-        ⚠️ Note: EasyPaisa & JazzCash account limit is reached. Please use Bank Transfer only (via Any Banking App, EasyPaisa App > Bank Transfer, ATM or Branch).
+        ⚠️ Strict Notice: EasyPaisa, JazzCash, and Faysal Bank accounts are closed / receiving limits reached. Deposit PKR 300 only to Bank Alfalah.
       </p>
       <p style="font-size: 10px; color: #166534; margin-top: 4px; font-weight: 600;">
         Send payment screenshot with your Application ID (${appNo}) to WhatsApp <strong>0305-1755551</strong> for clearance.

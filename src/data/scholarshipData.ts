@@ -94,21 +94,25 @@ export const OFFICIAL_DATA = {
       type: 'Mobile Wallet (EasyPaisa & JazzCash)',
       isDisabled: true,
       status: 'LIMIT_REACHED',
-      disabledMessage: 'Account receiving limit reached for this cycle. Please use Direct Bank Transfer.'
+      disabledMessage: 'Account limit reached. Please deposit only to Bank Alfalah.'
     },
     faysalBank: {
       bankName: 'Faysal Bank',
       accountTitle: 'Sumama Khan',
       accountNumber: '3126701000006213',
       type: 'Commercial Bank',
-      isPrimary: true
+      isDisabled: true,
+      status: 'LIMIT_REACHED',
+      disabledMessage: 'Account receiving limit reached. Please deposit only to Bank Alfalah.',
+      isPrimary: false
     },
     bankAlfalah: {
       bankName: 'Bank Alfalah',
       accountTitle: 'Sumama Khan',
       accountNumber: '83861010161490',
-      type: 'Commercial Bank',
-      isPrimary: false
+      type: 'Commercial Bank (Only Active Account)',
+      isPrimary: true,
+      status: 'ACTIVE'
     }
   },
 

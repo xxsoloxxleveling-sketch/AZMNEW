@@ -128,7 +128,7 @@ export async function searchRollNumberSlip(query: string): Promise<ApiResponse<R
       if (!isFeePaid) {
         return {
           success: false,
-          error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Please deposit PKR 300 via Bank Transfer (Faysal Bank: 3126701000006213 or Bank Alfalah: 83861010161490 - Title: Sumama Khan) [Note: EasyPaisa/JazzCash account limit reached] and send receipt to WhatsApp 0305-1755551 to activate your Roll Number Slip.`
+          error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Please deposit PKR 300 via Bank Alfalah (Account: 83861010161490 - Title: Sumama Khan) [Note: EasyPaisa, JazzCash, and Faysal Bank account limits are reached] and send receipt to WhatsApp 0305-1755551 to activate your Roll Number Slip.`
         };
       }
 
