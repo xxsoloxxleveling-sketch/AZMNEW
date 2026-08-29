@@ -91,19 +91,24 @@ export const OFFICIAL_DATA = {
       accountTitle: 'Sumama Khan',
       accountNumber: '03440197194',
       formattedNumber: '0344-0197194',
-      type: 'Mobile Wallet (EasyPaisa & JazzCash)'
+      type: 'Mobile Wallet (EasyPaisa & JazzCash)',
+      isDisabled: true,
+      status: 'LIMIT_REACHED',
+      disabledMessage: 'Account receiving limit reached for this cycle. Please use Direct Bank Transfer.'
     },
     faysalBank: {
       bankName: 'Faysal Bank',
       accountTitle: 'Sumama Khan',
       accountNumber: '3126701000006213',
-      type: 'Commercial Bank'
+      type: 'Commercial Bank',
+      isPrimary: true
     },
     bankAlfalah: {
       bankName: 'Bank Alfalah',
       accountTitle: 'Sumama Khan',
       accountNumber: '83861010161490',
-      type: 'Commercial Bank'
+      type: 'Commercial Bank',
+      isPrimary: false
     }
   },
 

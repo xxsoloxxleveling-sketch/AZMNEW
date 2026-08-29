@@ -1443,21 +1443,24 @@ export function printStudentSlip(student: any) {
     <div class="fee-box">
       <div class="fee-title">Official PKR 300 Registration Fee Payment Details</div>
       <p style="font-size: 11px; color: #15803d; line-height: 1.4;">
-        To activate your biometric Roll Number Slip and examination seat for Session V (2026), deposit <strong>PKR 300</strong> through any of the verified channels:
+        To activate your biometric Roll Number Slip and examination seat for Session V (2026), deposit <strong>PKR 300</strong> via Direct Bank Transfer (IBFT):
       </p>
       <div class="pay-methods">
         <div class="pay-card">
-          <strong style="color: #15803d;">📱 EasyPaisa / JazzCash:</strong><br/>
-          Account: <strong style="font-family: monospace; color: #0f172a;">03440197194</strong><br/>
-          Title: <strong>Sumama Khan</strong>
-        </div>
-        <div class="pay-card">
-          <strong style="color: #15803d;">🏦 Faysal Bank:</strong><br/>
+          <strong style="color: #15803d;">🏦 Faysal Bank (Option A):</strong><br/>
           Account: <strong style="font-family: monospace; color: #0f172a;">3126701000006213</strong><br/>
           Title: <strong>Sumama Khan</strong>
         </div>
+        <div class="pay-card">
+          <strong style="color: #15803d;">🏦 Bank Alfalah (Option B):</strong><br/>
+          Account: <strong style="font-family: monospace; color: #0f172a;">83861010161490</strong><br/>
+          Title: <strong>Sumama Khan</strong>
+        </div>
       </div>
-      <p style="font-size: 10px; color: #166534; margin-top: 8px; font-weight: 600;">
+      <p style="font-size: 10px; color: #b91c1c; margin-top: 6px; font-weight: 600;">
+        ⚠️ Note: EasyPaisa & JazzCash account limit is reached. Please use Bank Transfer only (via Any Banking App, EasyPaisa App > Bank Transfer, ATM or Branch).
+      </p>
+      <p style="font-size: 10px; color: #166534; margin-top: 4px; font-weight: 600;">
         Send payment screenshot with your Application ID (${appNo}) to WhatsApp <strong>0305-1755551</strong> for clearance.
       </p>
     </div>

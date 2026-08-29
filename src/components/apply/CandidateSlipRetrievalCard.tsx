@@ -241,8 +241,8 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
                 className="p-3.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs shadow-xs transition flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center"
               >
                 <Receipt className="w-5 h-5 text-emerald-600" />
-                <span>{showVoucher ? 'Hide Fee Voucher' : 'View Fee Voucher (PKR 300)'}</span>
-                <span className="text-[10px] text-emerald-700 font-normal">EasyPaisa, JazzCash &amp; Bank Details</span>
+                <span>{showVoucher ? 'Hide Payment Details' : 'View Bank Payment Details (PKR 300)'}</span>
+                <span className="text-[10px] text-emerald-700 font-normal">Faysal Bank &amp; Bank Alfalah (IBFT)</span>
               </button>
             </div>
           </div>
@@ -259,36 +259,52 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
                 </span>
               </div>
 
+              {/* Notice regarding mobile wallets */}
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px] space-y-1">
+                <strong>⚠️ Notice on Mobile Wallets:</strong>
+                <p>
+                  EasyPaisa &amp; JazzCash direct account receiving limits have been reached. <strong>Please use Direct Bank Transfer / IBFT</strong> (Faysal Bank or Bank Alfalah). You can still send from your EasyPaisa/JazzCash app via <em>"Bank Transfer"</em>.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Bank 1: Faysal Bank */}
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                    EasyPaisa / JazzCash
-                  </span>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-extrabold font-mono text-slate-900">0344-0197194</span>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                      Faysal Bank (Primary)
+                    </span>
+                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-bold rounded">IBFT</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold font-mono text-slate-900">3126701000006213</span>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard('03440197194', 'jazz')}
+                      onClick={() => copyToClipboard('3126701000006213', 'faysal')}
                       className="px-2 py-1 bg-white border border-slate-200 rounded text-[10px] font-bold"
                     >
-                      {copiedField === 'jazz' ? 'Copied' : 'Copy'}
+                      {copiedField === 'faysal' ? 'Copied' : 'Copy'}
                     </button>
                   </div>
                   <span className="text-[11px] text-slate-600 block">Title: Sumama Khan</span>
                 </div>
 
+                {/* Bank 2: Bank Alfalah */}
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                    Faysal Bank (IBFT)
-                  </span>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold font-mono text-slate-900">3126701000006213</span>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                      Bank Alfalah
+                    </span>
+                    <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 text-[9px] font-bold rounded">IBFT</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold font-mono text-slate-900">83861010161490</span>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard('3126701000006213', 'bank')}
+                      onClick={() => copyToClipboard('83861010161490', 'alfalah')}
                       className="px-2 py-1 bg-white border border-slate-200 rounded text-[10px] font-bold"
                     >
-                      {copiedField === 'bank' ? 'Copied' : 'Copy'}
+                      {copiedField === 'alfalah' ? 'Copied' : 'Copy'}
                     </button>
                   </div>
                   <span className="text-[11px] text-slate-600 block">Title: Sumama Khan</span>
@@ -297,14 +313,14 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
 
               <a
                 href={`https://wa.me/923051755551?text=${encodeURIComponent(
-                  `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026).\n• Application ID: ${foundStudent.applicationNo || foundStudent.id}\n• Candidate Name: ${foundStudent.fullName}\n• Class: ${foundStudent.currentClass}\n• Fee: PKR 300\n\nPlease find attached my payment receipt/screenshot for Roll Number activation.`
+                  `Hello AZM Accounts Desk,\n\nI have registered for Session V (2026).\n• Application ID: ${foundStudent.applicationNo || foundStudent.id}\n• Candidate Name: ${foundStudent.fullName}\n• Class: ${foundStudent.currentClass}\n• Fee: PKR 300\n• Paid Via: Bank Transfer (Sumama Khan)\n\nPlease find attached my bank deposit receipt/screenshot for Roll Number activation.`
                 )}`}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full py-2.5 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-4 h-4" />
-                <span>Send Payment Receipt to WhatsApp (0305-1755551)</span>
+                <span>Send Bank Receipt to WhatsApp (0305-1755551)</span>
               </a>
             </div>
           )}
