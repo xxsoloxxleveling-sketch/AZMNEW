@@ -1,4 +1,4 @@
-﻿/**
+/**
  * WhatsApp integration utility for AZM.AIO student contact.
  * Normalizes diverse Pakistani and international phone formats into valid wa.me links.
  */
@@ -11,6 +11,7 @@ export interface WhatsAppContactInfo {
   isDisabled: boolean;
   disabledReason?: string;
   defaultMessage: string;
+  isPaid: boolean;
 }
 
 /**
@@ -60,10 +61,11 @@ export function formatWhatsAppPhone(phone?: string | null): string | null {
 }
 
 /**
- * Extracts and formats the primary WhatsApp contact number for a student.
+ * Extracts and formats the primary WhatsApp contact number and custom payment-status message for a student.
  * Prioritizes: parentMobile -> studentMobile -> mobile -> whatsapp -> emergencyContact
  */
 export function getStudentWhatsAppContact(student: {
+  id?: string | null;
   parentMobile?: string | null;
   studentMobile?: string | null;
   mobile?: string | null;
@@ -72,6 +74,8 @@ export function getStudentWhatsAppContact(student: {
   applicationNo?: string | null;
   rollNumber?: string | null;
   fullName?: string | null;
+  feeStatus?: string | null;
+  feeRecords?: any[] | null;
 }): WhatsAppContactInfo {
   const sources: Array<{ key: WhatsAppContactInfo['phoneSource']; val?: string | null }> = [
     { key: 'parentMobile', val: student?.parentMobile },
@@ -97,8 +101,17 @@ export function getStudentWhatsAppContact(student: {
     }
   }
 
-  const appIdentifier = student?.applicationNo || student?.rollNumber || 'Candidate';
-  const defaultMessage = `Assalam-o-Alaikum, this is AZM.AIO regarding your Session V scholarship application (${appIdentifier}).`;
+  const isPaid =
+    student?.feeStatus === 'PAID' ||
+    (student?.feeRecords && Array.isArray(student.feeRecords) && student.feeRecords.some((f: any) => f.status === 'PAID')) ||
+    Boolean(student?.rollNumber);
+
+  const candidateName = student?.fullName ? student.fullName.trim() : 'Candidate';
+  const appId = student?.applicationNo || student?.rollNumber || student?.id || 'your application';
+
+  const defaultMessage = isPaid
+    ? `Assalam-o-Alaikum ${candidateName}, this is AZM Examination & Scholarship Authority regarding your Session V scholarship application (${appId}). Your registration fee is paid and verified. Please let us know if you need any assistance with your examination schedule.`
+    : `Assalam-o-Alaikum ${candidateName}, this is AZM Examination & Scholarship Authority. Your application (Application ID: ${appId}) is received, but registration fee is not paid yet. Kindly pay your registration fee to complete with application process.`;
 
   if (!normalizedPhone) {
     return {
@@ -109,6 +122,7 @@ export function getStudentWhatsAppContact(student: {
       isDisabled: true,
       disabledReason: 'No valid mobile phone number available on file for this candidate.',
       defaultMessage,
+      isPaid,
     };
   }
 
@@ -121,6 +135,7 @@ export function getStudentWhatsAppContact(student: {
     phoneSource,
     isDisabled: false,
     defaultMessage,
+    isPaid,
   };
 }
 
