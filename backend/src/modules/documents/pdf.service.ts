@@ -891,6 +891,7 @@ export class PdfService {
             <td class="font-mono text-center font-bold text-navy">${appNo}</td>
             <td><strong>${s.fullName || '—'}</strong></td>
             <td>${s.fatherName || '—'}</td>
+            <td class="school-cell">${this.escapeHtml(s.schoolName || '—')}</td>
             <td class="font-mono text-center">${s.cnicOrBForm || '—'}</td>
             <td><span class="class-tag">${s.currentClass || '—'}</span><br/><small class="text-muted">${cat}</small></td>
             <td class="text-center"><span class="badge ${isPaid ? 'badge-paid' : 'badge-unpaid'}">${feeStatus}</span></td>
@@ -902,7 +903,7 @@ export class PdfService {
             .join('')
         : `
           <tr>
-            <td colspan="10" class="empty-state">
+            <td colspan="11" class="empty-state">
               No students match the selected filter criteria (${classLabel}, ${genderLabel}, ${statusLabel}).
             </td>
           </tr>
@@ -952,6 +953,7 @@ export class PdfService {
     .badge-unpaid { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
     .roster-photo { width: 28px; height: 28px; border-radius: 4px; object-fit: cover; border: 1px solid #cbd5e1; display: block; margin: 0 auto; }
     .photo-placeholder { color: #94a3b8; font-size: 6.5px; font-style: italic; }
+    .school-cell { word-break: break-word; }
 
     .empty-state { text-align: center; padding: 25px; color: #64748b; font-weight: 600; font-size: 10px; background: #fafafa; }
 
@@ -989,16 +991,17 @@ export class PdfService {
   <table class="data-table">
     <thead>
       <tr>
-        <th style="width: 4%;" class="text-center">Sr #</th>
+        <th style="width: 3%;" class="text-center">Sr #</th>
         <th style="width: 5%;" class="text-center">Photo</th>
-        <th style="width: 13%;" class="text-center">Roll / App No</th>
-        <th style="width: 16%;">Candidate Name</th>
-        <th style="width: 14%;">Father's Name</th>
-        <th style="width: 13%;" class="text-center">CNIC / B-Form</th>
-        <th style="width: 13%;">Class &amp; Category</th>
-        <th style="width: 7%;" class="text-center">Fee</th>
+        <th style="width: 11%;" class="text-center">Roll / App No</th>
+        <th style="width: 14%;">Candidate Name</th>
+        <th style="width: 11%;">Father's Name</th>
+        <th style="width: 13%;">Current School / College</th>
+        <th style="width: 11%;" class="text-center">CNIC / B-Form</th>
+        <th style="width: 12%;">Class &amp; Category</th>
+        <th style="width: 6%;" class="text-center">Fee</th>
         <th style="width: 5%;" class="text-center">Att %</th>
-        <th style="width: 10%;" class="text-center">Contact</th>
+        <th style="width: 9%;" class="text-center">Contact</th>
       </tr>
     </thead>
     <tbody>

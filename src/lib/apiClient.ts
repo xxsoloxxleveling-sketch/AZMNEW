@@ -251,6 +251,39 @@ export async function apiDownloadPdf(
   window.URL.revokeObjectURL(blobUrl);
 }
 
+/** Opens an authorized server-generated PDF in a new tab so it can be printed. */
+export async function apiOpenPdfForPrint(endpoint: string): Promise<void> {
+  // Open synchronously from the button click. This avoids browsers blocking the
+  // PDF tab as a popup once the authenticated request has completed.
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    throw new Error('Please allow popups to open the PDF for printing.');
+  }
+
+  printWindow.document.title = 'Preparing registration PDF…';
+  printWindow.document.body.innerHTML = '<p style="font-family: sans-serif; padding: 24px;">Preparing the official registration PDF…</p>';
+
+  const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const token = getToken();
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    printWindow.close();
+    const errJson = await response.json().catch(() => ({}));
+    throw new Error(
+      errJson.error?.message || `Failed to prepare PDF for printing (Status ${response.status})`
+    );
+  }
+
+  const blobUrl = window.URL.createObjectURL(await response.blob());
+  printWindow.location.replace(blobUrl);
+  // Allow the PDF viewer plenty of time to take ownership of the Blob URL.
+  window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 /** Fetches a protected binary only when a user explicitly opens it. */
 export async function apiFetchProtectedObjectUrl(endpoint: string): Promise<string> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;

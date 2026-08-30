@@ -28,7 +28,6 @@ import {
   MockStudentDocument,
   MockTestCenter,
   mockApi,
-  printStudentDossier,
 } from '../../../lib/mockApi';
 import { StatusBadge } from '../shared/StatusBadge';
 import { StudentDossierModal } from '../../common/StudentDossierModal';
@@ -297,7 +296,20 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
   const handleDownloadPdf = async () => {
     setIsDownloading(true);
     try {
-      await mockApi.downloadStudentPdf(student.id, student.rollNumber);
+      await mockApi.downloadStudentPdf(student.id, student.rollNumber, student);
+    } catch (err: any) {
+      alert(err?.message || 'Unable to download the registration PDF.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handlePrintRegistrationPdf = async () => {
+    setIsDownloading(true);
+    try {
+      await mockApi.printStudentRegistrationPdf(student.id, student);
+    } catch (err: any) {
+      alert(err?.message || 'Unable to open the registration PDF for printing.');
     } finally {
       setIsDownloading(false);
     }
@@ -440,11 +452,13 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
 
 
           <button
-            onClick={() => printStudentDossier(student)}
-            className="px-3.5 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+            onClick={handlePrintRegistrationPdf}
+            disabled={isDownloading}
+            title="Open the official registration PDF with the candidate's stored photo, ready to print."
+            className="px-3.5 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
           >
             <Printer className="w-4 h-4 text-slate-500" />
-            <span>Print Dossier (A4)</span>
+            <span>{isDownloading ? 'Preparing PDF...' : 'Print Registration PDF (A4)'}</span>
           </button>
 
           <button

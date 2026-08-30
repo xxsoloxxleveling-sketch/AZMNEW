@@ -1,5 +1,5 @@
 import { setToken, setRefreshToken, setUser, getUser, getToken } from './auth';
-import { apiFetch, apiDownloadPdf, API_BASE_URL } from './apiClient';
+import { apiFetch, apiDownloadPdf, apiOpenPdfForPrint, API_BASE_URL } from './apiClient';
 export { API_BASE_URL };
 
 export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'TEACHER' | 'ACCOUNTANT';
@@ -792,6 +792,13 @@ export const mockApi = {
     await apiDownloadPdf(
       `/api/students/${encodeURIComponent(studentId)}/registration-pdf${studentObj?.cnicOrBForm ? `?cnic=${encodeURIComponent(studentObj.cnicOrBForm)}` : ''}`,
       `AZM-Registration-${rollNumber || studentId}.pdf`
+    );
+  },
+
+  async printStudentRegistrationPdf(studentId: string, studentObj?: any): Promise<void> {
+    if (!studentId) throw new Error('Student identifier is required to print the registration slip.');
+    await apiOpenPdfForPrint(
+      `/api/students/${encodeURIComponent(studentId)}/registration-pdf${studentObj?.cnicOrBForm ? `?cnic=${encodeURIComponent(studentObj.cnicOrBForm)}` : ''}`
     );
   },
 
