@@ -20,7 +20,7 @@ interface RegistrationAlertModalProps {
   onSelectTab: (tab: PageTab, prefillClass?: string) => void;
 }
 
-const REGISTRATION_DEADLINE = new Date('2026-08-30T23:59:59+05:00').getTime();
+const REGISTRATION_DEADLINE = new Date('2026-09-05T23:59:59+05:00').getTime();
 
 const getCountdown = () => {
   const diff = Math.max(0, REGISTRATION_DEADLINE - Date.now());
@@ -117,7 +117,7 @@ export const RegistrationAlertModal: React.FC<RegistrationAlertModalProps> = ({
             <div className="p-3.5 rounded-2xl bg-blue-950/60 border border-blue-800/60 flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-slate-300">
                 <Clock className="w-4 h-4 text-amber-400 flex-shrink-0 animate-spin" style={{ animationDuration: '8s' }} />
-                <span>Registration Closes: <strong>30 August 2026</strong></span>
+                <span>Registration Closes: <strong>5 September 2026</strong></span>
               </div>
               <div className="font-mono text-xs font-bold text-amber-300 bg-amber-400/10 px-2.5 py-1 rounded-lg border border-amber-400/30">
                 {countdown.days}d {countdown.hours}h {countdown.minutes}m {countdown.seconds}s left

@@ -19,7 +19,7 @@ interface HeroSectionProps {
   language?: 'en' | 'ur';
 }
 
-const REGISTRATION_DEADLINE = new Date('2026-08-30T23:59:59+05:00').getTime();
+const REGISTRATION_DEADLINE = new Date('2026-09-05T23:59:59+05:00').getTime();
 
 const getCountdown = () => {
   const diff = Math.max(0, REGISTRATION_DEADLINE - Date.now());
@@ -47,7 +47,7 @@ const HeroCountdown: React.FC = React.memo(() => {
     <div className="mt-6 p-3 sm:p-4 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-700/80 shadow-lg inline-flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
       <div className="flex items-center gap-2 text-xs text-slate-300">
         <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
-        <span>Registration Closes: <strong className="text-white">30 August 2026</strong></span>
+        <span>Registration Closes: <strong className="text-white">5 September 2026</strong></span>
       </div>
 
       <div className="flex items-center gap-1.5 font-mono text-xs">

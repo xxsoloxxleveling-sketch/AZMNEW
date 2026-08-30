@@ -24,7 +24,7 @@ export const WorkflowBento: React.FC<WorkflowBentoProps> = ({ onSelectTab }) => 
       step: 1,
       tag: 'Stage 1',
       title: 'Online or Hub Registration',
-      duration: '16 Aug – 30 Aug 2026',
+      duration: '16 Aug – 05 Sep 2026',
       icon: FileCheck2,
       summary: 'Register online in 3 minutes or visit any of our 3 Mansehra hubs with your B-Form/CNIC.',
       bullets: [

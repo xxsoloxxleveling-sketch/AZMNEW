@@ -22,11 +22,11 @@ export const OFFICIAL_ALERTS: AlertItem[] = [
 
     type: 'registration',
     badge: 'Registration Active',
-    date: 'Deadline: 30 August 2026',
+    date: 'Deadline: 5 September 2026',
     actionText: 'Register for Test Now',
     actionTab: 'apply',
     isPinned: true,
-    deadlineDate: '2026-08-30'
+    deadlineDate: '2026-09-05'
   },
   {
     id: 'alert-2',
@@ -376,8 +376,8 @@ export const SESSION_V_CALENDAR: CalendarEvent[] = [
   },
   {
     id: 'cal-2',
-    date: '2026-08-30',
-    displayDate: '30 Aug 2026',
+    date: '2026-09-05',
+    displayDate: '05 Sep 2026',
     title: 'Registration Closes (23:59 PST)',
     description: 'Strict deadline for online applications, physical form drop-offs, and school lists.',
     status: 'active',
