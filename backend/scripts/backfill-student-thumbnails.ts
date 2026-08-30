@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import puppeteer, { Browser, Page } from 'puppeteer';
+import sharp from 'sharp';
 import { prisma } from '../src/lib/prisma';
 import { supabaseStorage } from '../src/lib/supabaseStorage';
 
@@ -11,6 +11,11 @@ import { supabaseStorage } from '../src/lib/supabaseStorage';
  */
 const batchSize = 25;
 const thumbnailBucket = 'student-photos' as const;
+
+// Render's free instance has a 512 MB ceiling. The job is already sequential;
+// these limits also keep libvips from retaining decoded images between records.
+sharp.concurrency(1);
+sharp.cache({ memory: 8, files: 0, items: 8 });
 
 export type ThumbnailBackfillSummary = {
   mode: 'apply-with-verification' | 'dry-run';
@@ -43,30 +48,15 @@ function thumbnailPath(cnicOrBForm: string) {
   return `${cnicOrBForm.replace(/[^\w-]/g, '_')}/photo_thumbnail.jpg`;
 }
 
-async function makeThumbnail(page: Page, photo: LegacyPhoto) {
-  const source = `data:${photo.mimeType};base64,${photo.buffer.toString('base64')}`;
-  return page.evaluate(async (dataUrl) => {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error('The source file is not a readable image'));
-      element.src = dataUrl;
-    });
-
-    const maxDimension = 160;
-    const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
-    const width = Math.max(1, Math.round(image.width * scale));
-    const height = Math.max(1, Math.round(image.height * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Canvas is unavailable');
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, width, height);
-    context.drawImage(image, 0, 0, width, height);
-    return canvas.toDataURL('image/jpeg', 0.72);
-  }, source);
+async function makeThumbnail(photo: LegacyPhoto): Promise<Buffer> {
+  // Sharp works in-process and avoids launching an additional Chrome browser,
+  // keeping this one-time job within Render's free 512 MB memory limit.
+  return sharp(photo.buffer, { limitInputPixels: 16_000_000 })
+    .rotate()
+    .flatten({ background: '#ffffff' })
+    .resize({ width: 160, height: 160, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 70, mozjpeg: true })
+    .toBuffer();
 }
 
 async function getLegacyPhoto(student: any): Promise<LegacyPhoto | null> {
@@ -88,8 +78,6 @@ async function getLegacyPhoto(student: any): Promise<LegacyPhoto | null> {
 export async function runThumbnailBackfill(options: { apply: boolean; disconnectDatabase?: boolean }): Promise<ThumbnailBackfillSummary> {
   const { apply, disconnectDatabase = false } = options;
   let cursor: string | undefined;
-  let browser: Browser | undefined;
-  let page: Page | undefined;
   const summary: Omit<ThumbnailBackfillSummary, 'legacyDataChanged'> = {
     mode: apply ? 'apply-with-verification' : 'dry-run',
     scanned: 0,
@@ -101,11 +89,6 @@ export async function runThumbnailBackfill(options: { apply: boolean; disconnect
   };
 
   try {
-    if (apply) {
-      browser = await puppeteer.launch({ headless: true });
-      page = await browser.newPage();
-    }
-
     do {
       const students = await prisma.student.findMany({
         take: batchSize,
@@ -139,16 +122,14 @@ export async function runThumbnailBackfill(options: { apply: boolean; disconnect
           continue;
         }
         summary.candidates++;
-        if (!apply || !page) continue;
+        if (!apply) continue;
 
         try {
-          const dataUrl = await makeThumbnail(page, legacyPhoto);
-          const thumbnail = dataUrlToPhoto(dataUrl);
-          if (!thumbnail) throw new Error('Thumbnail encoding failed');
+          const thumbnail = await makeThumbnail(legacyPhoto);
           const path = thumbnailPath(student.cnicOrBForm);
           const preexisting = await supabaseStorage.downloadFile(thumbnailBucket, path);
           if (!preexisting) {
-            const upload = await supabaseStorage.uploadFile(thumbnailBucket, path, thumbnail.buffer, 'image/jpeg');
+            const upload = await supabaseStorage.uploadFile(thumbnailBucket, path, thumbnail, 'image/jpeg');
             if (upload.error) throw new Error(upload.error);
           }
           const verified = await supabaseStorage.downloadFile(thumbnailBucket, path);
@@ -169,7 +150,6 @@ export async function runThumbnailBackfill(options: { apply: boolean; disconnect
       if (students.length < batchSize) break;
     } while (cursor);
   } finally {
-    await browser?.close();
     if (disconnectDatabase) await prisma.$disconnect();
   }
   return { ...summary, legacyDataChanged: false };

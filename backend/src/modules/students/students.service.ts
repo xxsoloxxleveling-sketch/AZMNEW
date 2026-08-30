@@ -1451,6 +1451,17 @@ export class StudentsService {
       } catch (documentError) {
         logger.warn('Protected PDF photo lookup failed:', documentError);
       }
+
+      // A verified private thumbnail is still the candidate's genuine photo.
+      // Use it only if no original can be recovered for this one PDF.
+      try {
+        const thumbnail = await this.getStudentDocument(student.id, 'photoThumbnail');
+        if (thumbnail.buffer.length > 0 && thumbnail.contentType.startsWith('image/') && thumbnail.contentType !== 'image/svg+xml') {
+          return `data:${thumbnail.contentType};base64,${thumbnail.buffer.toString('base64')}`;
+        }
+      } catch (thumbnailError) {
+        logger.warn('PDF thumbnail fallback lookup failed:', thumbnailError);
+      }
     }
 
     return defaultPlaceholder;
