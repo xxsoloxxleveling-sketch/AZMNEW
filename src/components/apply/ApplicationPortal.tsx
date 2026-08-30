@@ -1024,9 +1024,6 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
       case 4: {
         if (!formData.appliedCategory) errs.push('Please select a Scholarship Category.');
-        if (formData.isSpecialNeed && !formData.specialNeedDetails?.trim()) {
-          errs.push('Please describe special need / disability details.');
-        }
         break;
       }
 
@@ -2199,7 +2196,15 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                           type="radio"
                           name="scholarshipCategory"
                           checked={formData.appliedCategory.includes(cat.title)}
-                          onChange={() => setFormData({ ...formData, appliedCategory: `${cat.code} - ${cat.title}` })}
+                          onChange={() => {
+                            const isOrphanCategory = cat.title.includes('Orphan');
+                            setFormData((prev) => ({
+                              ...prev,
+                              appliedCategory: `${cat.code} - ${cat.title}`,
+                              isSpecialNeed: isOrphanCategory,
+                              specialNeedDetails: isOrphanCategory ? prev.specialNeedDetails : '',
+                            }));
+                          }}
                           className="mt-1 text-[#185b9d] focus:ring-[#185b9d]"
                         />
                         <div className="flex-1">
@@ -2220,10 +2225,21 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                       <input
                         type="checkbox"
                         checked={formData.isSpecialNeed}
-                        onChange={(e) => setFormData({ ...formData, isSpecialNeed: e.target.checked })}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          const orphanCategory = BENEFICIARY_CATEGORIES.find((cat) => cat.title.includes('Orphan'));
+                          setFormData((prev) => ({
+                            ...prev,
+                            isSpecialNeed: checked,
+                            appliedCategory: checked && orphanCategory
+                              ? `${orphanCategory.code} - ${orphanCategory.title}`
+                              : 'Category B - Director General Merit Scholarship',
+                            specialNeedDetails: checked ? prev.specialNeedDetails : '',
+                          }));
+                        }}
                         className="rounded text-amber-600 focus:ring-amber-500"
                       />
-                      <span>Apply under Special Quota (Orphan / Persons with Disability / Single-Parent)</span>
+                      <span>Apply under Orphan / Single-Parent Financial Assistance Quota</span>
                     </label>
                   </div>
                 </div>
