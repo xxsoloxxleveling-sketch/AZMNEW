@@ -17,9 +17,12 @@ import {
   User,
   ArrowUpDown,
   FileCheck,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { mockApi, MockStudentDocument } from '../../../lib/mockApi';
 import { useAuth } from '../../../lib/authContext';
+import { apiFetchProtectedObjectUrl } from '../../../lib/apiClient';
 
 export const DocumentVaultView: React.FC = () => {
   const { isLoading: authLoading } = useAuth();
@@ -29,19 +32,38 @@ export const DocumentVaultView: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedDoc, setSelectedDoc] = useState<MockStudentDocument | null>(null);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 24, total: 0, totalPages: 1 });
+
+  const openDocument = async (document: MockStudentDocument) => {
+    try {
+      const fileUrl = document.fileEndpoint
+        ? await apiFetchProtectedObjectUrl(document.fileEndpoint)
+        : document.fileUrl;
+      setSelectedDoc({ ...document, fileUrl });
+    } catch (error: any) {
+      alert(error?.message || 'Unable to load this document.');
+    }
+  };
+
+  const closeDocument = () => {
+    if (selectedDoc?.fileUrl?.startsWith('blob:')) URL.revokeObjectURL(selectedDoc.fileUrl);
+    setSelectedDoc(null);
+  };
 
   useEffect(() => {
     if (!authLoading) {
-      loadDocuments();
+      loadDocuments(page);
     }
-  }, [authLoading]);
+  }, [authLoading, page]);
 
-  const loadDocuments = async () => {
+  const loadDocuments = async (requestedPage = page) => {
     if (authLoading) return;
     setIsLoading(true);
     try {
-      const docs = await mockApi.getStudentDocuments();
-      setDocuments(docs);
+      const result = await mockApi.getStudentDocumentsPage(requestedPage, 24);
+      setDocuments(result.documents);
+      setPagination(result.pagination);
     } finally {
       setIsLoading(false);
     }
@@ -73,7 +95,7 @@ export const DocumentVaultView: React.FC = () => {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const totalCount = documents.length;
+  const totalCount = pagination.total;
   const verifiedCount = documents.filter((d) => d.status === 'VERIFIED').length;
   const pendingCount = documents.filter((d) => d.status === 'PENDING_REVIEW').length;
   const rejectedCount = documents.filter((d) => d.status === 'REJECTED').length;
@@ -122,19 +144,19 @@ export const DocumentVaultView: React.FC = () => {
           <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200">
             <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Verified & Approved</span>
             <span className="text-2xl font-extrabold text-emerald-900 font-display block mt-1">{verifiedCount}</span>
-            <span className="text-[10px] text-emerald-700 font-bold mt-0.5 block">Legally cleared for exam</span>
+            <span className="text-[10px] text-emerald-700 font-bold mt-0.5 block">Shown on this page</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200">
             <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Pending Review</span>
             <span className="text-2xl font-extrabold text-amber-900 font-display block mt-1">{pendingCount}</span>
-            <span className="text-[10px] text-amber-700 font-bold mt-0.5 block">Awaiting admin clearance</span>
+            <span className="text-[10px] text-amber-700 font-bold mt-0.5 block">Shown on this page</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200">
             <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider block">Rejected / Resubmit</span>
             <span className="text-2xl font-extrabold text-rose-900 font-display block mt-1">{rejectedCount}</span>
-            <span className="text-[10px] text-rose-700 font-bold mt-0.5 block">Invalid / blurry scans</span>
+            <span className="text-[10px] text-rose-700 font-bold mt-0.5 block">Shown on this page</span>
           </div>
         </div>
       </div>
@@ -192,15 +214,14 @@ export const DocumentVaultView: React.FC = () => {
             >
               {/* Thumbnail / Preview Area */}
               <div
-                onClick={() => setSelectedDoc(doc)}
+                onClick={() => openDocument(doc)}
                 className="h-44 bg-slate-100 relative cursor-pointer overflow-hidden flex items-center justify-center"
               >
                 {isPhoto ? (
-                  <img
-                    src={doc.fileUrl}
-                    alt={doc.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                  />
+                  <div className="flex flex-col items-center gap-2 text-slate-400">
+                    <Image className="w-12 h-12 text-[#185b9d]" />
+                    <span className="text-[10px] font-mono uppercase font-bold text-slate-500">Private image</span>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-slate-400">
                     <FileText className="w-12 h-12 text-[#185b9d]" />
@@ -276,6 +297,30 @@ export const DocumentVaultView: React.FC = () => {
         })}
       </div>
 
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs">
+        <span className="text-slate-500">
+          Showing page {pagination.page} of {pagination.totalPages} · {pagination.total} private files
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={isLoading || pagination.page <= 1}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft className="h-4 w-4" /> Previous
+          </button>
+          <button
+            type="button"
+            onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))}
+            disabled={isLoading || pagination.page >= pagination.totalPages}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Lightbox / Full Document Inspection Modal */}
       {selectedDoc && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
@@ -289,7 +334,7 @@ export const DocumentVaultView: React.FC = () => {
                 </p>
               </div>
               <button
-                onClick={() => setSelectedDoc(null)}
+              onClick={closeDocument}
                 className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
               >
                 <X className="w-5 h-5" />

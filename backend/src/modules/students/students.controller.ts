@@ -1,7 +1,30 @@
 import { Request, Response, NextFunction } from 'express';
 import { studentsService } from './students.service';
+import { signUploadSessionToken, verifyAccessToken, verifyUploadSessionToken } from '../../lib/jwt';
 
 export class StudentsController {
+  async createUploadSession(req: Request, res: Response, next: NextFunction) {
+    try {
+      const candidateKey = String(req.body?.cnicOrBForm || '').trim();
+      if (!/^[A-Za-z0-9-]{5,30}$/.test(candidateKey)) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Enter a valid CNIC or B-Form before uploading documents.' },
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          token: signUploadSessionToken(candidateKey),
+          expiresInSeconds: 900,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async register(req: Request, res: Response, next: NextFunction) {
     try {
       const student = await studentsService.createStudent(req.body);
@@ -48,6 +71,15 @@ export class StudentsController {
         success: true,
         data: result,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getDocumentMetadata(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await studentsService.getDocumentMetadata(req.query as any);
+      res.status(200).json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -209,10 +241,84 @@ export class StudentsController {
 
   async uploadDocument(req: Request, res: Response, next: NextFunction) {
     try {
+      const candidateKey = String(req.body?.cnicOrBForm || '').trim();
+      const authorization = String(req.headers.authorization || '');
+      let authorizedAdmin = false;
+      if (authorization.startsWith('Bearer ')) {
+        try {
+          verifyAccessToken(authorization.slice(7));
+          authorizedAdmin = true;
+        } catch {}
+      }
+
+      if (!authorizedAdmin) {
+        const token = String(req.headers['x-upload-session'] || req.body?.uploadSessionToken || '');
+        try {
+          const session = verifyUploadSessionToken(token);
+          if (!candidateKey || session.candidateKey !== candidateKey) {
+            throw new Error('Candidate does not match upload session');
+          }
+        } catch {
+          return res.status(401).json({
+            success: false,
+            error: { message: 'A valid, matching upload session is required.' },
+          });
+        }
+      }
+
       const result = await studentsService.uploadStudentDocument(req.body);
       res.status(200).json({
         success: true,
         message: 'Document uploaded to Supabase Storage successfully',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async uploadDocumentBinary(req: Request, res: Response, next: NextFunction) {
+    try {
+      const candidateKey = String(req.headers['x-candidate-key'] || '').trim();
+      const docType = String(req.headers['x-document-type'] || '');
+      const authorization = String(req.headers.authorization || '');
+      let authorizedAdmin = false;
+      if (authorization.startsWith('Bearer ')) {
+        try {
+          verifyAccessToken(authorization.slice(7));
+          authorizedAdmin = true;
+        } catch {}
+      }
+
+      if (!authorizedAdmin) {
+        try {
+          const session = verifyUploadSessionToken(String(req.headers['x-upload-session'] || ''));
+          if (!candidateKey || session.candidateKey !== candidateKey) throw new Error('Session mismatch');
+        } catch {
+          return res.status(401).json({
+            success: false,
+            error: { message: 'A valid, matching upload session is required.' },
+          });
+        }
+      }
+
+      if (!/^(photo|photoThumbnail|bform|fatherCnic|dmc(?:_\d+)?|domicile|paymentReceipt)$/.test(docType)) {
+        return res.status(400).json({ success: false, error: { message: 'Unsupported document type' } });
+      }
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({ success: false, error: { message: 'Binary file body is required.' } });
+      }
+
+      const result = await studentsService.uploadStudentDocument({
+        cnicOrBForm: candidateKey,
+        docType,
+        fileName: decodeURIComponent(String(req.headers['x-file-name'] || `${docType}.bin`)),
+        fileData: req.body.toString('base64'),
+        contentType: String(req.headers['content-type'] || 'application/octet-stream'),
+      });
+      return res.status(200).json({
+        success: true,
+        message: 'Document uploaded to private Storage successfully',
         data: result,
       });
     } catch (error) {
@@ -227,7 +333,8 @@ export class StudentsController {
       
       res.setHeader('Content-Type', doc.contentType || 'image/jpeg');
       res.setHeader('Content-Length', doc.buffer.length);
-      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       return res.send(doc.buffer);
     } catch (error) {
       next(error);

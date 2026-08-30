@@ -22,10 +22,16 @@ export function useAdminQuery<T>(
   options: {
     enabled?: boolean;
     pollIntervalMs?: number;
+    refetchOnFocus?: boolean;
     initialData?: T | null;
   } = {}
 ): UseAdminQueryResult<T> {
-  const { enabled = true, pollIntervalMs = 15000, initialData = null } = options;
+  const {
+    enabled = true,
+    pollIntervalMs = 0,
+    refetchOnFocus = false,
+    initialData = null,
+  } = options;
   const { isLoading: authLoading, isAuthenticated } = useAuth();
 
   const [data, setData] = useState<T | null>(initialData);
@@ -66,7 +72,7 @@ export function useAdminQuery<T>(
 
     if (!authLoading && isAuthenticated && enabled) {
       const handleFocus = () => execute(false);
-      window.addEventListener('focus', handleFocus);
+      if (refetchOnFocus) window.addEventListener('focus', handleFocus);
 
       let interval: NodeJS.Timeout | null = null;
       if (pollIntervalMs > 0) {
@@ -74,11 +80,11 @@ export function useAdminQuery<T>(
       }
 
       return () => {
-        window.removeEventListener('focus', handleFocus);
+        if (refetchOnFocus) window.removeEventListener('focus', handleFocus);
         if (interval) clearInterval(interval);
       };
     }
-  }, [authLoading, isAuthenticated, enabled, execute, ...deps]);
+  }, [authLoading, isAuthenticated, enabled, execute, pollIntervalMs, refetchOnFocus, ...deps]);
 
   return {
     data,

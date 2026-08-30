@@ -2,6 +2,7 @@ import http from 'http';
 import express, { Request, Response } from 'express';
 import app from '../src/app';
 import { errorHandler } from '../src/middleware/error.middleware';
+import { signAccessToken } from '../src/lib/jwt';
 
 async function runTests() {
   console.log('🚀 Starting API Request Protection Tests...\n');
@@ -117,10 +118,22 @@ async function runTests() {
     const validBuffer = Buffer.from('small jpeg content');
     const validBase64 = `data:image/jpeg;base64,${validBuffer.toString('base64')}`;
 
-    const validUploadRes = await fetch(`${baseUrl}/api/students/upload-document`, {
+    const sessionRes = await fetch(`${baseUrl}/api/students/upload-session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cnicOrBForm: '61101-1234567-1' }),
+    });
+    const sessionData = (await sessionRes.json()) as any;
+    assert(sessionRes.status === 201 && Boolean(sessionData.data?.token), 'Candidate receives a short-lived upload session');
+
+    const validUploadRes = await fetch(`${baseUrl}/api/students/upload-document`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Upload-Session': sessionData.data?.token || '',
+      },
       body: JSON.stringify({
+        cnicOrBForm: '61101-1234567-1',
         docType: 'photo',
         fileData: validBase64,
         fileName: 'valid_photo.jpg',
@@ -132,6 +145,59 @@ async function runTests() {
       validUploadRes.status === 200 && validUploadData.success === true,
       'Valid JPEG under 5MB is successfully accepted'
     );
+
+    const binaryUploadRes = await fetch(`${baseUrl}/api/students/upload-document-binary`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'X-Upload-Session': sessionData.data?.token || '',
+        'X-Candidate-Key': '61101-1234567-1',
+        'X-Document-Type': 'bform',
+        'X-File-Name': encodeURIComponent('candidate-bform.jpg'),
+      },
+      body: validBuffer,
+    });
+    const binaryUploadData = (await binaryUploadRes.json()) as any;
+    assert(
+      binaryUploadRes.status === 200 && binaryUploadData.data?.byteSize === validBuffer.length,
+      'Binary upload avoids base64 transport overhead'
+    );
+
+    let uploadRateLimited = false;
+    for (let attempt = 0; attempt < 35; attempt++) {
+      const rateLimitRes = await fetch(`${baseUrl}/api/students/upload-document`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Upload-Session': sessionData.data?.token || '',
+        },
+        body: JSON.stringify({
+          cnicOrBForm: '61101-1234567-1',
+          docType: 'photo',
+          fileData: validBase64,
+          fileName: `rate-limit-${attempt}.jpg`,
+        }),
+      });
+      if (rateLimitRes.status === 429) {
+        uploadRateLimited = true;
+        break;
+      }
+    }
+    assert(uploadRateLimited, 'Candidate document uploads return HTTP 429 after the configured threshold');
+
+    const privateReadRes = await fetch(`${baseUrl}/api/students/missing/document/photo`);
+    assert(privateReadRes.status === 401, 'Unauthenticated private document reads are rejected');
+
+    const teacherToken = signAccessToken({
+      userId: 'teacher-test',
+      email: 'teacher@example.com',
+      role: 'TEACHER',
+      name: 'Teacher Test',
+    });
+    const teacherMetadataRes = await fetch(`${baseUrl}/api/students/documents`, {
+      headers: { Authorization: `Bearer ${teacherToken}` },
+    });
+    assert(teacherMetadataRes.status === 403, 'Non-admin roles cannot list private document metadata');
 
     // -------------------------------------------------------------
     // Test 3: Production Error Masking

@@ -161,7 +161,7 @@ export const studentQuerySchema = z.object({
   limit: z
     .string()
     .optional()
-    .transform((val) => (val ? Math.max(1, Math.min(2000, parseInt(val, 10))) : 500)),
+    .transform((val) => (val ? Math.max(1, Math.min(250, parseInt(val, 10))) : 50)),
 });
 
 export const ALLOWED_FILE_MIME_TYPES = [
@@ -177,10 +177,16 @@ export const uploadDocumentSchema = z
     studentId: z.string().optional(),
     applicationNo: z.string().optional(),
     cnicOrBForm: z.string().optional(),
-    docType: z.string().min(1, 'Document type is required'),
+    docType: z
+      .string()
+      .regex(
+        /^(photo|photoThumbnail|bform|fatherCnic|dmc(?:_\d+)?|domicile|paymentReceipt)$/,
+        'Unsupported document type'
+      ),
     fileName: z.string().optional(),
     fileData: z.string().min(1, 'File data is required'),
     contentType: z.string().optional(),
+    uploadSessionToken: z.string().min(1).optional(),
   })
   .superRefine((data, ctx) => {
     let mimeType = data.contentType?.toLowerCase();

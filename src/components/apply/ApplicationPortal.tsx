@@ -124,12 +124,33 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
 
   // Real Uploaded Document Files State
   const [uploadedDocs, setUploadedDocs] = useState<{
-    [key: string]: { name: string; size: string; dataUrl?: string };
+    [key: string]: {
+      name: string;
+      size: string;
+      dataUrl?: string;
+      publicUrl?: string;
+      supabasePath?: string;
+      bucket?: string;
+      mimeType?: string;
+      byteSize?: number;
+      checksumSha256?: string;
+    };
   }>({});
 
   // Multi-file DMC documents state
   const [dmcFiles, setDmcFiles] = useState<
-    Array<{ id: string; name: string; size: string; dataUrl: string; publicUrl?: string }>
+    Array<{
+      id: string;
+      name: string;
+      size: string;
+      dataUrl: string;
+      publicUrl?: string;
+      supabasePath?: string;
+      bucket?: string;
+      mimeType?: string;
+      byteSize?: number;
+      checksumSha256?: string;
+    }>
   >([]);
 
   // Auto-compressing photo loading indicator state
@@ -605,6 +626,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     setPhotoError('');
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!formData.cnicBForm?.trim()) {
+      setPhotoError('Enter the candidate CNIC or B-Form before uploading a photo.');
+      e.target.value = '';
+      return;
+    }
 
     // Fast client-side format & integrity check
     const validation = await validatePhotoFile(file);
@@ -628,17 +654,55 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         return next;
       });
 
-      // Upload in background to Supabase Storage
-      mockApi.uploadStudentDocument({
-        cnicOrBForm: formData.cnicBForm || 'TEMP_CANDIDATE',
+      const upRes = await mockApi.uploadStudentDocument({
+        cnicOrBForm: formData.cnicBForm,
         docType: 'photo',
         fileName: getFormattedDocName('photo', file.name),
         fileData: dataUrl,
-      }).then((upRes) => {
-        if (upRes?.publicUrl) {
-          setFormData((prev) => ({ ...prev, photoUrl: upRes.publicUrl }));
-        }
-      }).catch(() => {});
+      });
+      if (upRes?.publicUrl) {
+        setFormData((prev) => ({ ...prev, photoUrl: upRes.publicUrl }));
+      }
+      setUploadedDocs((prev) => ({
+        ...prev,
+        photo: {
+          name: getFormattedDocName('photo', file.name),
+          size: `${Math.round(upRes.byteSize / 1024)} KB`,
+          dataUrl: upRes.publicUrl || '',
+          publicUrl: upRes.publicUrl,
+          supabasePath: upRes.path,
+          bucket: upRes.bucket,
+          mimeType: upRes.mimeType,
+          byteSize: upRes.byteSize,
+          checksumSha256: upRes.checksumSha256,
+        },
+      }));
+
+      // Keep a tiny private preview alongside the original for future list/detail use.
+      try {
+        const thumbnail = await autoCompressImageFile(file, 20, 160);
+        const thumbnailUpload = await mockApi.uploadStudentDocument({
+          cnicOrBForm: formData.cnicBForm,
+          docType: 'photoThumbnail',
+          fileName: `${getFormattedDocName('photo', file.name).replace(/\.[^.]+$/, '')}_thumbnail.jpg`,
+          fileData: thumbnail.dataUrl,
+          contentType: 'image/jpeg',
+        });
+        setUploadedDocs((prev) => ({
+          ...prev,
+          photoThumbnail: {
+            name: 'Candidate_Photo_Thumbnail.jpg',
+            size: `${Math.max(1, Math.round(thumbnailUpload.byteSize / 1024))} KB`,
+            supabasePath: thumbnailUpload.path,
+            bucket: thumbnailUpload.bucket,
+            mimeType: thumbnailUpload.mimeType,
+            byteSize: thumbnailUpload.byteSize,
+            checksumSha256: thumbnailUpload.checksumSha256,
+          },
+        }));
+      } catch (thumbnailError) {
+        console.warn('Optional thumbnail upload skipped:', thumbnailError);
+      }
     } catch (err: any) {
       console.warn('Photo compression fallback:', err);
       setPhotoError(err?.message || "We couldn't process this photo — please try a different one.");
@@ -683,6 +747,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const handleDocumentUpload = async (docKey: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!formData.cnicBForm?.trim()) {
+      alert('Enter the candidate CNIC or B-Form before uploading documents.');
+      e.target.value = '';
+      return;
+    }
 
     const validation = validateDocumentFile(file, 5);
     if (!validation.isValid) {
@@ -724,25 +793,27 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           ? 'paymentReceipt'
           : docKey;
 
-      // Upload directly to Supabase Storage
-      mockApi.uploadStudentDocument({
-        cnicOrBForm: formData.cnicBForm || 'TEMP_CANDIDATE',
+      // Finish the private Storage upload before allowing submission metadata to advance.
+      const upRes = await mockApi.uploadStudentDocument({
+        cnicOrBForm: formData.cnicBForm,
         docType: targetField,
         fileName: standardDocName,
         fileData: dataUrl,
-      }).then((upRes) => {
-        if (upRes?.publicUrl) {
-          setUploadedDocs((prev) => ({
-            ...prev,
-            [docKey]: {
-              name: standardDocName,
-              size: sizeFormatted,
-              dataUrl: upRes.publicUrl,
-              publicUrl: upRes.publicUrl,
-            },
-          }));
-        }
-      }).catch(() => {});
+      });
+      setUploadedDocs((prev) => ({
+        ...prev,
+        [docKey]: {
+          name: standardDocName,
+          size: sizeFormatted,
+          dataUrl: upRes.publicUrl || '',
+          publicUrl: upRes.publicUrl,
+          supabasePath: upRes.path,
+          bucket: upRes.bucket,
+          mimeType: upRes.mimeType,
+          byteSize: upRes.byteSize,
+          checksumSha256: upRes.checksumSha256,
+        },
+      }));
     } catch (err) {
       console.warn('Document compression fallback:', err);
     }
@@ -752,6 +823,11 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
   const handleDmcFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    if (!formData.cnicBForm?.trim()) {
+      alert('Enter the candidate CNIC or B-Form before uploading documents.');
+      e.target.value = '';
+      return;
+    }
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -793,15 +869,28 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           dmcUploaded: newDmc,
         }));
 
-        // Upload in background to Supabase
-        mockApi
-          .uploadStudentDocument({
-            cnicOrBForm: formData.cnicBForm || 'TEMP_CANDIDATE',
-            docType: dmcIndex === 1 ? 'dmc' : `dmc_${dmcIndex}`,
-            fileName: standardDocName,
-            fileData: dataUrl,
-          })
-          .catch(() => {});
+        const upRes = await mockApi.uploadStudentDocument({
+          cnicOrBForm: formData.cnicBForm,
+          docType: dmcIndex === 1 ? 'dmc' : `dmc_${dmcIndex}`,
+          fileName: standardDocName,
+          fileData: dataUrl,
+        });
+        setDmcFiles((prev) =>
+          prev.map((item) =>
+            item.id === newDmc.id
+              ? {
+                  ...item,
+                  dataUrl: upRes.publicUrl || '',
+                  publicUrl: upRes.publicUrl,
+                  supabasePath: upRes.path,
+                  bucket: upRes.bucket,
+                  mimeType: upRes.mimeType,
+                  byteSize: upRes.byteSize,
+                  checksumSha256: upRes.checksumSha256,
+                }
+              : item
+          )
+        );
       } catch (err) {
         console.warn('DMC upload error:', err);
       }
@@ -1054,42 +1143,38 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           incomeCertificate: !!cleanData.documents?.incomeCertUploaded,
         },
         uploadedDocuments: {
-          photo: cleanData.photoUrl
+          photo: uploadedDocs.photo
             ? {
-                name: 'Candidate_Passport_Photo.jpg',
-                size: '180 KB',
-                dataUrl: cleanData.photoUrl,
+                ...uploadedDocs.photo,
+                uploadedAt: new Date().toISOString(),
+              }
+            : undefined,
+          photoThumbnail: uploadedDocs.photoThumbnail
+            ? {
+                ...uploadedDocs.photoThumbnail,
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
           bform: uploadedDocs.bformUploaded
             ? {
-                name: uploadedDocs.bformUploaded.name,
-                size: uploadedDocs.bformUploaded.size,
-                dataUrl: uploadedDocs.bformUploaded.dataUrl,
+                ...uploadedDocs.bformUploaded,
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
           fatherCnic: uploadedDocs.fatherCnicUploaded
             ? {
-                name: uploadedDocs.fatherCnicUploaded.name,
-                size: uploadedDocs.fatherCnicUploaded.size,
-                dataUrl: uploadedDocs.fatherCnicUploaded.dataUrl,
+                ...uploadedDocs.fatherCnicUploaded,
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
           dmc: dmcFiles[0]
             ? {
-                name: dmcFiles[0].name,
-                size: dmcFiles[0].size,
-                dataUrl: dmcFiles[0].dataUrl,
+                ...dmcFiles[0],
                 uploadedAt: new Date().toISOString(),
               }
             : uploadedDocs.dmcUploaded
             ? {
-                name: uploadedDocs.dmcUploaded.name,
-                size: uploadedDocs.dmcUploaded.size,
-                dataUrl: uploadedDocs.dmcUploaded.dataUrl,
+                ...uploadedDocs.dmcUploaded,
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
@@ -1104,17 +1189,13 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
             : undefined,
           domicile: uploadedDocs.domicileUploaded
             ? {
-                name: uploadedDocs.domicileUploaded.name,
-                size: uploadedDocs.domicileUploaded.size,
-                dataUrl: uploadedDocs.domicileUploaded.dataUrl,
+                ...uploadedDocs.domicileUploaded,
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
           paymentReceipt: uploadedDocs.incomeCertUploaded
             ? {
-                name: uploadedDocs.incomeCertUploaded.name,
-                size: uploadedDocs.incomeCertUploaded.size,
-                dataUrl: uploadedDocs.incomeCertUploaded.dataUrl,
+                ...uploadedDocs.incomeCertUploaded,
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,

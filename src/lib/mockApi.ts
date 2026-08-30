@@ -49,6 +49,7 @@ export interface MockStudent {
   emergencyRelation: string;
   referralSource?: string;
   photoUrl?: string;
+  hasPhoto?: boolean;
   qrToken: string;
   qrImageUrl?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'PASSED_OUT' | 'EXPELLED';
@@ -231,6 +232,8 @@ export interface MockStudentDocument {
   docType: 'CANDIDATE_PHOTO' | 'CNIC_BFORM' | 'PREVIOUS_DMC' | 'PAYMENT_CHALLAN' | 'DOMICILE' | 'GUARDIAN_CNIC';
   title: string;
   fileUrl: string;
+  fileEndpoint?: string;
+  storageDocType?: string;
   fileSize: string;
   fileType: string;
   uploadedAt: string;
@@ -239,6 +242,7 @@ export interface MockStudentDocument {
 }
 
 let currentUser: CurrentUser | null = getUser<CurrentUser>() || null;
+const candidateUploadSessions = new Map<string, string>();
 
 export const DEFAULT_TEST_CENTERS: MockTestCenter[] = [
   {
@@ -543,9 +547,13 @@ export const mockApi = {
 
   // 3. Students Management
 
-  async getStudents(filters?: { classLevel?: string; gender?: string; status?: string; search?: string }): Promise<MockStudent[]> {
+  async getStudentsPage(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; page?: number; limit?: number }): Promise<{
+    students: MockStudent[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
     const params = new URLSearchParams();
-    params.append('limit', '250');
+    params.append('page', String(filters?.page || 1));
+    params.append('limit', String(filters?.limit || 50));
     if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
     if (filters?.gender && filters?.gender !== 'ALL') params.append('gender', filters.gender);
     if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
@@ -554,12 +562,26 @@ export const mockApi = {
 
     const res: any = await apiFetch<any>(`/api/students${query}`);
     const raw = Array.isArray(res) ? res : Array.isArray(res?.students) ? res.students : [];
-    return raw.map((s: any) => ({
+    const students = raw.map((s: any) => ({
       ...s,
       rollNumber: s.rollNumber || null,
       feeStatus: s.feeStatus || (s.feeRecords?.length ? s.feeRecords[0].status : 'UNPAID'),
       attendancePercentage: s.attendancePercentage ?? 100,
     }));
+    return {
+      students,
+      pagination: res?.pagination || {
+        page: filters?.page || 1,
+        limit: filters?.limit || 50,
+        total: students.length,
+        totalPages: 1,
+      },
+    };
+  },
+
+  async getStudents(filters?: { classLevel?: string; gender?: string; status?: string; search?: string }): Promise<MockStudent[]> {
+    const result = await this.getStudentsPage({ ...filters, page: 1, limit: 250 });
+    return result.students;
   },
 
   async getStudentById(id: string): Promise<MockStudent> {
@@ -587,11 +609,58 @@ export const mockApi = {
     fileName?: string;
     fileData: string;
     contentType?: string;
-  }): Promise<{ publicUrl: string; path: string }> {
-    const res = await apiFetch<any>('/api/students/upload-document', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
+  }): Promise<{
+    publicUrl?: string;
+    path: string;
+    bucket: string;
+    mimeType: string;
+    byteSize: number;
+    checksumSha256: string;
+  }> {
+    const candidateKey = (params.cnicOrBForm || params.applicationNo || params.studentId)?.trim();
+    let uploadSessionToken: string | undefined;
+    if (!getToken()) {
+      if (!candidateKey || candidateKey === 'TEMP_CANDIDATE') {
+        throw new Error('Enter the candidate CNIC or B-Form before uploading documents.');
+      }
+      uploadSessionToken = candidateUploadSessions.get(candidateKey);
+      if (!uploadSessionToken) {
+        const session = await apiFetch<{ token: string; expiresInSeconds: number }>(
+          '/api/students/upload-session',
+          {
+            method: 'POST',
+            body: JSON.stringify({ cnicOrBForm: candidateKey }),
+          }
+        );
+        uploadSessionToken = session.token;
+        candidateUploadSessions.set(candidateKey, uploadSessionToken);
+      }
+    }
+
+    let res: any;
+    const dataUrlMatch = params.fileData.match(/^data:([^;]+);base64,(.*)$/s);
+    if (dataUrlMatch && candidateKey) {
+      const binary = atob(dataUrlMatch[2]);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+      res = await apiFetch<any>('/api/students/upload-document-binary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': params.contentType || dataUrlMatch[1],
+          'X-Candidate-Key': candidateKey,
+          'X-Document-Type': params.docType,
+          'X-File-Name': encodeURIComponent(params.fileName || `${params.docType}.bin`),
+          ...(uploadSessionToken ? { 'X-Upload-Session': uploadSessionToken } : {}),
+        },
+        body: new Blob([bytes], { type: params.contentType || dataUrlMatch[1] }),
+      });
+    } else {
+      res = await apiFetch<any>('/api/students/upload-document', {
+        method: 'POST',
+        headers: uploadSessionToken ? { 'X-Upload-Session': uploadSessionToken } : undefined,
+        body: JSON.stringify(params),
+      });
+    }
     return res?.data || res;
   },
 
@@ -1122,14 +1191,8 @@ export const mockApi = {
   async getTestCenters(): Promise<MockTestCenter[]> {
     const res = await apiFetch<any>('/api/test-centers');
     const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
-    const students = await this.getStudents().catch(() => []);
 
     return list.map((tc: any) => {
-      const assigned = students.filter(
-        (s) =>
-          s.officeUse?.testCentre?.toLowerCase().includes(tc.name.toLowerCase()) ||
-          s.officeUse?.testCentre?.toLowerCase().includes(tc.district.toLowerCase())
-      ).length;
       return {
         id: tc.id,
         name: tc.name,
@@ -1145,7 +1208,7 @@ export const mockApi = {
         contactPhone: tc.contactPhone || '',
         status: tc.status || 'ACTIVE',
         createdAt: tc.createdAt || new Date().toISOString(),
-        assignedCount: assigned,
+        assignedCount: Number(tc.assignedCount) || 0,
       };
     });
   },
@@ -1172,7 +1235,60 @@ export const mockApi = {
   },
 
   // 11. Document Storage Vault & Student Document Inspector
-  async getStudentDocuments(studentId?: string): Promise<MockStudentDocument[]> {
+  async getStudentDocumentsPage(
+    page = 1,
+    limit = 24,
+    studentId?: string
+  ): Promise<{
+    documents: MockStudentDocument[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (studentId) params.set('studentId', studentId);
+    const result = await apiFetch<any>(`/api/students/documents?${params.toString()}`);
+    if (Array.isArray(result?.documents)) {
+      const typeMap: Record<string, MockStudentDocument['docType']> = {
+        photo: 'CANDIDATE_PHOTO',
+        bform: 'CNIC_BFORM',
+        fatherCnic: 'GUARDIAN_CNIC',
+        dmc: 'PREVIOUS_DMC',
+        domicile: 'DOMICILE',
+        paymentReceipt: 'PAYMENT_CHALLAN',
+      };
+      const documents = result.documents.map((document: any) => ({
+        id: document.id,
+        studentId: document.studentId,
+        studentName: document.studentName,
+        rollNumber: document.rollNumber,
+        applicationNo: document.applicationNo,
+        currentClass: document.currentClass,
+        docType: typeMap[document.documentType] || 'PREVIOUS_DMC',
+        storageDocType: document.documentType,
+        title: document.originalFileName || `${document.documentType} document`,
+        fileUrl: '',
+        fileEndpoint: document.fileEndpoint,
+        fileSize: document.byteSize ? `${Math.ceil(document.byteSize / 1024)} KB` : 'Stored attachment',
+        fileType: document.mimeType,
+        uploadedAt: document.uploadedAt,
+        status:
+          document.eligibility === 'ELIGIBLE'
+            ? 'VERIFIED'
+            : document.eligibility === 'NOT_ELIGIBLE'
+            ? 'REJECTED'
+            : 'PENDING_REVIEW',
+        rejectionReason: document.eligibilityRemarks,
+      }));
+      return {
+        documents,
+        pagination: result.pagination || {
+          page,
+          limit,
+          total: documents.length,
+          totalPages: 1,
+        },
+      };
+    }
+
     const students = await this.getStudents();
     const docMap = new Map<string, MockStudentDocument>();
 
@@ -1348,7 +1464,20 @@ export const mockApi = {
       }
     });
 
-    return Array.from(docMap.values());
+    const documents = Array.from(docMap.values());
+    const total = documents.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    return {
+      documents: documents.slice((safePage - 1) * limit, safePage * limit),
+      pagination: { page: safePage, limit, total, totalPages },
+    };
+  },
+
+  // Compatibility helper for existing screens. New list screens should use
+  // getStudentDocumentsPage so that the API never needs to return the full vault.
+  async getStudentDocuments(studentId?: string): Promise<MockStudentDocument[]> {
+    return (await this.getStudentDocumentsPage(1, 50, studentId)).documents;
   },
 
   async updateDocumentStatus(

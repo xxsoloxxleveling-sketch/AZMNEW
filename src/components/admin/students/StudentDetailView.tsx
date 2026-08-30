@@ -21,6 +21,7 @@ import {
   Ticket,
   Loader2,
   MessageSquare,
+  Image,
 } from 'lucide-react';
 import {
   MockStudent,
@@ -32,7 +33,7 @@ import {
 import { StatusBadge } from '../shared/StatusBadge';
 import { StudentDossierModal } from '../../common/StudentDossierModal';
 import { useAuth } from '../../../lib/authContext';
-import { API_BASE_URL } from '../../../lib/apiClient';
+import { apiFetchProtectedObjectUrl } from '../../../lib/apiClient';
 import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/whatsapp';
 
 interface StudentDetailViewProps {
@@ -62,14 +63,23 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
       ? 'REJECTED'
       : 'PENDING_REVIEW';
   const rejectionReason = officeUse?.eligibilityRemarks;
+  const hasDocument = (document: any) =>
+    Boolean(
+      document &&
+        (document.dataUrl ||
+          document.publicUrl ||
+          document.fileUrl ||
+          document.supabasePath ||
+          document.fileEndpoint)
+    );
+  const legacyUrl = (document: any) =>
+    document?.publicUrl || document?.dataUrl || document?.fileUrl || '';
+  const endpoint = (document: any, storageDocType: string) =>
+    document?.fileEndpoint || `/api/students/${s.id}/document/${storageDocType}`;
 
   // 1. Candidate Passport Photo
   const photoFile = up.photo;
-  const photoUrl =
-    photoFile?.publicUrl ||
-    photoFile?.dataUrl ||
-    s.photoUrl ||
-    (s.id ? `${API_BASE_URL}/api/students/${s.applicationNo || s.id}/document/photo` : '');
+  const photoUrl = legacyUrl(photoFile) || s.photoUrl || '';
 
   if (photoFile || s.photoUrl || (photoUrl && photoUrl.length > 5)) {
     docMap.set(`${candKey}_PHOTO`, {
@@ -82,6 +92,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
       docType: 'CANDIDATE_PHOTO',
       title: photoFile?.name || `${s.fullName || 'Candidate'}_Passport_Photo.jpg`,
       fileUrl: photoUrl,
+      fileEndpoint: endpoint(photoFile, 'photo'),
+      storageDocType: 'photo',
       fileSize: photoFile?.size || 'Candidate Photo',
       fileType: 'image/jpeg',
       uploadedAt: photoFile?.uploadedAt || s.createdAt || new Date().toISOString(),
@@ -92,8 +104,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
 
   // 2. Candidate B-Form / CNIC
   const bformFile = up.bform || up.bformUploaded || up.cnic || up.candidateCnic;
-  if (bformFile && (bformFile.dataUrl || bformFile.publicUrl || bformFile.fileUrl)) {
-    const bformUrl = bformFile.publicUrl || bformFile.dataUrl || bformFile.fileUrl;
+  if (hasDocument(bformFile)) {
+    const bformUrl = legacyUrl(bformFile);
     docMap.set(`${candKey}_BFORM`, {
       id: `doc_cnic_${s.id || '2'}`,
       studentId: s.id || '2',
@@ -104,6 +116,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
       docType: 'CNIC_BFORM',
       title: bformFile.name || `${s.fullName || 'Candidate'}_Candidate_BForm_CNIC.jpg`,
       fileUrl: bformUrl,
+      fileEndpoint: endpoint(bformFile, 'bform'),
+      storageDocType: 'bform',
       fileSize: bformFile.size || 'Candidate Attachment',
       fileType: bformUrl.includes('application/pdf') || bformFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
       uploadedAt: bformFile.uploadedAt || s.createdAt || new Date().toISOString(),
@@ -114,8 +128,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
 
   // 3. Father / Guardian CNIC
   const fatherCnicFile = up.fatherCnic || up.fatherCnicUploaded || up.fcnic;
-  if (fatherCnicFile && (fatherCnicFile.dataUrl || fatherCnicFile.publicUrl || fatherCnicFile.fileUrl)) {
-    const fatherCnicUrl = fatherCnicFile.publicUrl || fatherCnicFile.dataUrl || fatherCnicFile.fileUrl;
+  if (hasDocument(fatherCnicFile)) {
+    const fatherCnicUrl = legacyUrl(fatherCnicFile);
     docMap.set(`${candKey}_FATHER_CNIC`, {
       id: `doc_fcnic_${s.id || '3'}`,
       studentId: s.id || '3',
@@ -126,6 +140,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
       docType: 'CNIC_BFORM',
       title: fatherCnicFile.name || `${s.fullName || 'Candidate'}_Father_CNIC.jpg`,
       fileUrl: fatherCnicUrl,
+      fileEndpoint: endpoint(fatherCnicFile, 'fatherCnic'),
+      storageDocType: 'fatherCnic',
       fileSize: fatherCnicFile.size || 'Candidate Attachment',
       fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
       uploadedAt: fatherCnicFile.uploadedAt || s.createdAt || new Date().toISOString(),
@@ -136,8 +152,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
 
   // 4. Academic DMC / Marksheet
   const dmcFile = up.dmc || up.dmcUploaded || up.resultCard || up.previousResult;
-  if (dmcFile && (dmcFile.dataUrl || dmcFile.publicUrl || dmcFile.fileUrl)) {
-    const dmcUrl = dmcFile.publicUrl || dmcFile.dataUrl || dmcFile.fileUrl;
+  if (hasDocument(dmcFile)) {
+    const dmcUrl = legacyUrl(dmcFile);
     docMap.set(`${candKey}_DMC`, {
       id: `doc_dmc_${s.id || '4'}`,
       studentId: s.id || '4',
@@ -148,6 +164,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
       docType: 'PREVIOUS_DMC',
       title: dmcFile.name || `${s.fullName || 'Candidate'}_DMC_Marksheet.jpg`,
       fileUrl: dmcUrl,
+      fileEndpoint: endpoint(dmcFile, 'dmc'),
+      storageDocType: 'dmc',
       fileSize: dmcFile.size || 'Candidate Attachment',
       fileType: dmcUrl.includes('application/pdf') || dmcFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
       uploadedAt: dmcFile.uploadedAt || s.createdAt || new Date().toISOString(),
@@ -158,8 +176,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
 
   // 5. Payment Deposit Slip / Receipt
   const feeFile = up.paymentReceipt || up.incomeCertUploaded || up.receipt || up.challan;
-  if (feeFile && (feeFile.dataUrl || feeFile.publicUrl || feeFile.fileUrl)) {
-    const feeUrl = feeFile.publicUrl || feeFile.dataUrl || feeFile.fileUrl;
+  if (hasDocument(feeFile)) {
+    const feeUrl = legacyUrl(feeFile);
     docMap.set(`${candKey}_FEE`, {
       id: `doc_pay_${s.id || '5'}`,
       studentId: s.id || '5',
@@ -170,6 +188,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
       docType: 'PAYMENT_CHALLAN',
       title: feeFile.name || `${s.fullName || 'Candidate'}_Fee_Payment_Receipt.jpg`,
       fileUrl: feeUrl,
+      fileEndpoint: endpoint(feeFile, 'paymentReceipt'),
+      storageDocType: 'paymentReceipt',
       fileSize: feeFile.size || 'Candidate Attachment',
       fileType: feeUrl.includes('application/pdf') || feeFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
       uploadedAt: feeFile.uploadedAt || s.createdAt || new Date().toISOString(),
@@ -180,8 +200,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
 
   // 6. Domicile Certificate
   const domicileFile = up.domicile || up.domicileUploaded;
-  if (domicileFile && (domicileFile.dataUrl || domicileFile.publicUrl || domicileFile.fileUrl)) {
-    const domicileUrl = domicileFile.publicUrl || domicileFile.dataUrl || domicileFile.fileUrl;
+  if (hasDocument(domicileFile)) {
+    const domicileUrl = legacyUrl(domicileFile);
     docMap.set(`${candKey}_DOMICILE`, {
       id: `doc_dom_${s.id || '6'}`,
       studentId: s.id || '6',
@@ -192,6 +212,8 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
       docType: 'CNIC_BFORM',
       title: domicileFile.name || `${s.fullName || 'Candidate'}_Domicile_Certificate.jpg`,
       fileUrl: domicileUrl,
+      fileEndpoint: endpoint(domicileFile, 'domicile'),
+      storageDocType: 'domicile',
       fileSize: domicileFile.size || 'Candidate Attachment',
       fileType: domicileUrl.includes('application/pdf') || domicileFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
       uploadedAt: domicileFile.uploadedAt || s.createdAt || new Date().toISOString(),
@@ -263,6 +285,22 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
       console.warn('Failed to load full student details:', e);
       if (directDocs.length > 0) setDocuments(directDocs);
     }
+  };
+
+  const openDocument = async (document: MockStudentDocument) => {
+    try {
+      const fileUrl = document.fileEndpoint
+        ? await apiFetchProtectedObjectUrl(document.fileEndpoint)
+        : document.fileUrl;
+      setSelectedDoc({ ...document, fileUrl });
+    } catch (error: any) {
+      alert(error?.message || 'Unable to load this document.');
+    }
+  };
+
+  const closeDocument = () => {
+    if (selectedDoc?.fileUrl?.startsWith('blob:')) URL.revokeObjectURL(selectedDoc.fileUrl);
+    setSelectedDoc(null);
   };
 
   const handleDownloadPdf = async () => {
@@ -801,7 +839,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                     <div className="flex items-start gap-3">
                       {/* Document Preview Thumbnail */}
                       <div
-                        onClick={() => setSelectedDoc(doc)}
+                        onClick={() => openDocument(doc)}
                         className="w-12 h-14 rounded-xl overflow-hidden bg-white border border-slate-200 shadow-2xs flex-shrink-0 cursor-pointer flex items-center justify-center relative group"
                       >
                         {isPdf ? (
@@ -810,11 +848,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                             <span>PDF</span>
                           </div>
                         ) : (
-                          <img
-                            src={doc.fileUrl}
-                            alt={doc.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition"
-                          />
+                          <Image className="w-5 h-5 text-[#185b9d]" aria-label="Image document" />
                         )}
                         <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                           <Eye className="w-4 h-4 text-white" />
@@ -823,7 +857,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
 
                       <div className="min-w-0 flex-1">
                         <h4
-                          onClick={() => setSelectedDoc(doc)}
+                          onClick={() => openDocument(doc)}
                           className="font-bold text-xs text-slate-900 truncate hover:text-[#185b9d] cursor-pointer"
                           title={doc.title}
                         >
@@ -848,7 +882,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                       <button
-                        onClick={() => setSelectedDoc(doc)}
+                        onClick={() => openDocument(doc)}
                         className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer flex items-center gap-1"
                       >
                         <Eye className="w-3 h-3" />
@@ -893,7 +927,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                 </p>
               </div>
               <button
-                onClick={() => setSelectedDoc(null)}
+                onClick={closeDocument}
                 className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
               >
                 ✕
@@ -956,7 +990,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                   <span>Download File</span>
                 </a>
                 <button
-                  onClick={() => setSelectedDoc(null)}
+                  onClick={closeDocument}
                   className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer"
                 >
                   Close

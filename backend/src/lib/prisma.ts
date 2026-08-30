@@ -7,6 +7,7 @@ class MemoryStore {
   students: Map<string, any> = new Map();
   academicRecords: Map<string, any> = new Map();
   documentChecklists: Map<string, any> = new Map();
+  studentDocuments: Map<string, any> = new Map();
   officeUseRecords: Map<string, any> = new Map();
   partnerInstitutions: Map<string, any> = new Map();
   partnerCodeSequences: Map<number, any> = new Map();
@@ -33,12 +34,16 @@ class MemoryStore {
       const office = Array.from(this.officeUseRecords.values()).find(
         (o) => o.studentId === student.id
       ) || null;
+      const studentDocuments = Array.from(this.studentDocuments.values()).filter(
+        (d) => d.studentId === student.id
+      );
 
       return {
         ...student,
         academicRecords: records,
         documents: docs,
         officeUse: office,
+        studentDocuments,
       };
     };
 
@@ -317,6 +322,50 @@ class MemoryStore {
             return { ...record };
           }
         },
+      },
+      studentDocument: {
+        findFirst: async ({ where }: { where?: any } = {}) => {
+          for (const document of this.studentDocuments.values()) {
+            if (where?.studentId && document.studentId !== where.studentId) continue;
+            if (where?.documentType && document.documentType !== where.documentType) continue;
+            return { ...document };
+          }
+          return null;
+        },
+        findMany: async ({ where, skip = 0, take, include }: { where?: any; skip?: number; take?: number; include?: any } = {}) => {
+          let documents = Array.from(this.studentDocuments.values()).filter(
+            (document) => !where?.studentId || document.studentId === where.studentId
+          );
+          documents = documents.slice(skip, take === undefined ? undefined : skip + take);
+          return documents.map((document) => ({
+            ...document,
+            ...(include?.student ? { student: attachRelations(this.students.get(document.studentId)) } : {}),
+          }));
+        },
+        count: async ({ where }: { where?: any } = {}) =>
+          Array.from(this.studentDocuments.values()).filter(
+            (document) => !where?.studentId || document.studentId === where.studentId
+          ).length,
+        upsert: async ({ where, update, create }: { where: any; update: any; create: any }) => {
+          const key = where?.bucket_objectPath;
+          let existing: any = null;
+          for (const document of this.studentDocuments.values()) {
+            if (key && document.bucket === key.bucket && document.objectPath === key.objectPath) {
+              existing = document;
+              break;
+            }
+          }
+          if (existing) {
+            const updated = { ...existing, ...update, updatedAt: new Date() };
+            this.studentDocuments.set(existing.id, updated);
+            return { ...updated };
+          }
+          const id = create.id || generateId();
+          const record = { id, ...create, createdAt: new Date(), updatedAt: new Date() };
+          this.studentDocuments.set(id, record);
+          return { ...record };
+        },
+        deleteMany: async () => ({ count: 0 }),
       },
       officeUseRecord: {
         findUnique: async ({ where }: { where: { studentId?: string; id?: string } }) => {

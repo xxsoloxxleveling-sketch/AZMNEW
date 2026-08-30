@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { studentsController } from './students.controller';
 import { validateBody, validateQuery } from '../../middleware/validate.middleware';
 import {
@@ -10,7 +10,11 @@ import {
 } from './students.schema';
 import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
-import { registrationRateLimiter } from '../../middleware/rateLimit.middleware';
+import {
+  registrationRateLimiter,
+  uploadSessionRateLimiter,
+  documentUploadRateLimiter,
+} from '../../middleware/rateLimit.middleware';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -31,15 +35,23 @@ router.get('/:id/qr', studentsController.getQr);
 
 // Live Supabase Cloud Storage Upload for Candidate Documents
 router.post(
+  '/upload-session',
+  uploadSessionRateLimiter,
+  studentsController.createUploadSession
+);
+
+router.post(
   '/upload-document',
+  documentUploadRateLimiter,
   validateBody(uploadDocumentSchema),
   studentsController.uploadDocument
 );
 
-// Stream / Serve Student Attached Documents & Photos Directly
-router.get(
-  '/:id/document/:docType',
-  studentsController.serveDocument
+router.post(
+  '/upload-document-binary',
+  documentUploadRateLimiter,
+  express.raw({ type: ['image/jpeg', 'image/png', 'application/pdf'], limit: '5mb' }),
+  studentsController.uploadDocumentBinary
 );
 
 // Public Roll Number Release Schedule Config Endpoint
@@ -60,6 +72,13 @@ router.post(
 
 // Protected routes (Admin / Teachers / Super Admin)
 router.use(authenticate);
+
+// Private student files are only streamed to authenticated staff.
+router.get(
+  '/:id/document/:docType',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.serveDocument
+);
 
 // Update Roll Number Release Schedule Config (SUPER_ADMIN, ADMIN)
 router.post(
@@ -94,6 +113,12 @@ router.get(
   '/',
   validateQuery(studentQuerySchema),
   studentsController.getAll
+);
+
+router.get(
+  '/documents',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.getDocumentMetadata
 );
 
 // Export filtered student roster as branded PDF (SUPER_ADMIN, ADMIN)

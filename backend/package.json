@@ -10,6 +10,8 @@
     "postinstall": "prisma generate && npx puppeteer browsers install chrome",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
+    "storage:backfill": "tsx scripts/backfill-student-documents.ts",
+    "test:egress": "tsx tests/egress-remediation.test.ts",
     "seed": "tsx prisma/seed.ts"
   },
   "engines": {

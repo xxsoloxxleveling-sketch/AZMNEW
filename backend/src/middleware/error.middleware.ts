@@ -74,6 +74,11 @@ export function errorHandler(
 
   const isClientError = statusCode >= 400 && statusCode < 500;
 
+  if (process.env.NODE_ENV === 'production' && !isClientError) {
+    clientMessage = 'Internal Server Error';
+    details = undefined;
+  }
+
   // Server-side logging with full diagnostics in all environments
   logger.error(
     `[${req.method} ${req.originalUrl}] Error [${statusCode}]: ${err.message || clientMessage}`,

@@ -45,12 +45,12 @@ enum ScholarshipCategory {
 }
 
 model Student {
-  id                 String              @id @default(cuid())
-  applicationNo      String              @unique
-  studentId          String?             @unique
+  id                 String        @id @default(cuid())
+  applicationNo      String        @unique
+  studentId          String?       @unique
   registrationCentre String?
-  rollNumber         String?             @unique
-  qrToken            String              @unique
+  rollNumber         String?       @unique
+  qrToken            String        @unique
   qrImageUrl         String?
   photoUrl           String?
   uploadedDocsJson   String?
@@ -60,60 +60,79 @@ model Student {
   seatNo             String?
   testScore          Int?
   overallRank        Int?
-  status             StudentStatus       @default(ACTIVE)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @default(now()) @updatedAt
+  status             StudentStatus @default(ACTIVE)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @default(now()) @updatedAt
 
   // Part A: Personal Information
-  fullName           String
-  fatherName         String
-  gender             Gender
-  dateOfBirth        DateTime
-  age                Int?
-  cnicOrBForm        String              @unique
-  nationality        String              @default("Pakistani")
-  religion           String?
+  fullName    String
+  fatherName  String
+  gender      Gender
+  dateOfBirth DateTime
+  age         Int?
+  cnicOrBForm String   @unique
+  nationality String   @default("Pakistani")
+  religion    String?
 
   // Part B: Contact Information
-  address            String
-  district           String
-  province           String
-  studentMobile      String?
-  parentMobile       String
-  whatsapp           String?
-  email              String?
+  address       String
+  district      String
+  province      String
+  studentMobile String?
+  parentMobile  String
+  whatsapp      String?
+  email         String?
 
   // Part C: Educational Information
-  currentClass       String
-  hsscGroup          String?
-  bsDepartment       String?
-  bsSemester         String?
-  schoolName         String
-  boardOrUniversity  String
-  currentRollNo      String?
+  currentClass      String
+  hsscGroup         String?
+  bsDepartment      String?
+  bsSemester        String?
+  schoolName        String
+  boardOrUniversity String
+  currentRollNo     String?
 
   // Part D: Scholarship Category
   scholarshipCategory ScholarshipCategory
 
   // Part E: Emergency & Family Information
-  guardianOccupation   String?
+  guardianOccupation    String?
   guardianMonthlyIncome Decimal?
-  emergencyContact     String
-  emergencyRelation    String
+  emergencyContact      String
+  emergencyRelation     String
 
   // Part F: Declaration
-  applicantSignedAt  DateTime?
-  parentSignedAt     DateTime?
+  applicantSignedAt DateTime?
+  parentSignedAt    DateTime?
 
   // Part I: Referral Source
-  referralSource     String?
+  referralSource String?
 
   // Relations
-  academicRecords    AcademicRecord[]
-  documents          DocumentChecklist?
-  officeUse          OfficeUseRecord?
-  attendance         Attendance[]
-  feeRecords         FeeRecord[]
+  academicRecords  AcademicRecord[]
+  documents        DocumentChecklist?
+  officeUse        OfficeUseRecord?
+  attendance       Attendance[]
+  feeRecords       FeeRecord[]
+  studentDocuments StudentDocument[]
+}
+
+model StudentDocument {
+  id               String   @id @default(cuid())
+  studentId        String
+  student          Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  documentType     String
+  bucket           String
+  objectPath       String
+  originalFileName String?
+  mimeType         String
+  byteSize         Int?
+  checksumSha256   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@unique([bucket, objectPath])
+  @@index([studentId, documentType])
 }
 
 model AcademicRecord {
@@ -186,9 +205,9 @@ enum PartnerStatus {
 }
 
 model PartnerInstitution {
-  id                 String               @id @default(cuid())
-  partnerCode        String               @unique
-  applicationDate    DateTime             @default(now())
+  id                 String          @id @default(cuid())
+  partnerCode        String          @unique
+  applicationDate    DateTime        @default(now())
   institutionName    String
   institutionType    InstitutionType
   campus             String?
@@ -204,16 +223,16 @@ model PartnerInstitution {
   classesOffered     String[]
   studentStrength    Int?
   expectedApplicants Int?
-  agreedToTerms      Boolean              @default(false)
+  agreedToTerms      Boolean         @default(false)
   signedAt           DateTime?
-  status             PartnerStatus        @default(PENDING)
+  status             PartnerStatus   @default(PENDING)
   rejectionReason    String?
   reviewedBy         String?
   reviewedAt         DateTime?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @default(now()) @updatedAt
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @default(now()) @updatedAt
 
-  statusAudits       PartnerStatusAudit[]
+  statusAudits PartnerStatusAudit[]
 
   @@index([status])
   @@index([institutionType])

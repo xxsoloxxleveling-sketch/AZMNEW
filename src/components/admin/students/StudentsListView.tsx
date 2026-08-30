@@ -37,6 +37,8 @@ export const StudentsListView: React.FC = () => {
   const [genderFilter, setGenderFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -51,15 +53,18 @@ export const StudentsListView: React.FC = () => {
     setErrorMessage(null);
     try {
       const [data, statusData] = await Promise.all([
-        mockApi.getStudents({
+        mockApi.getStudentsPage({
           classLevel: classFilter,
           gender: genderFilter,
           status: statusFilter,
           search: searchQuery,
+          page: currentPage,
+          limit: 50,
         }),
         mockApi.getRollNumberStatus().catch(() => null),
       ]);
-      setStudents(Array.isArray(data) ? data : []);
+      setStudents(Array.isArray(data.students) ? data.students : []);
+      setPagination(data.pagination);
       if (statusData) setRollStatus(statusData);
     } catch (err: any) {
       console.warn('Students fetch error:', err);
@@ -94,20 +99,7 @@ export const StudentsListView: React.FC = () => {
       fetchStudents(students.length === 0);
     }
 
-    // Auto-refresh when tab gains focus or every 25 seconds for real-time registration sync
-    const handleFocus = () => {
-      if (!authLoading) fetchStudents(false);
-    };
-    window.addEventListener('focus', handleFocus);
-    const interval = setInterval(() => {
-      if (!authLoading && !isRefreshing) fetchStudents(false);
-    }, 25000);
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      clearInterval(interval);
-    };
-  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage]);
 
   const handleStudentCreated = (newStudent: MockStudent) => {
     setStudents((prev) => [newStudent, ...prev]);
@@ -163,14 +155,9 @@ export const StudentsListView: React.FC = () => {
       sortable: true,
       render: (row) => (
         <div className="flex items-center gap-3">
-          <img
-            src={
-              row.photoUrl ||
-              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80'
-            }
-            alt={row.fullName}
-            className="w-9 h-9 rounded-xl object-cover border border-slate-200"
-          />
+          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-black text-slate-500" aria-label={`${row.fullName} avatar`}>
+            {row.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'}
+          </div>
           <div>
             <span className="font-bold text-slate-900 block">{row.fullName}</span>
             <span className="text-xs text-slate-400">S/D/O {row.fatherName}</span>
@@ -360,10 +347,20 @@ export const StudentsListView: React.FC = () => {
         isLoading={isLoading}
         searchPlaceholder="Search by student name, roll number, or CNIC..."
         searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={(value) => {
+          setSearchQuery(value);
+          setCurrentPage(1);
+        }}
         onRowClick={(row) => setSelectedStudent(row)}
         emptyTitle="No Students Enrolled"
         emptyMessage="Start by adding your first student walk-in registration or sync from online applications."
+        pageSize={50}
+        pagination={{
+          page: pagination.page,
+          total: pagination.total,
+          totalPages: pagination.totalPages,
+          onPageChange: setCurrentPage,
+        }}
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -405,7 +402,7 @@ export const StudentsListView: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={classFilter}
-              onChange={(e) => setClassFilter(e.target.value)}
+              onChange={(e) => { setClassFilter(e.target.value); setCurrentPage(1); }}
               className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
             >
               <option value="ALL">All Classes</option>
@@ -422,7 +419,7 @@ export const StudentsListView: React.FC = () => {
 
             <select
               value={genderFilter}
-              onChange={(e) => setGenderFilter(e.target.value)}
+              onChange={(e) => { setGenderFilter(e.target.value); setCurrentPage(1); }}
               className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
             >
               <option value="ALL">All Genders</option>
@@ -432,7 +429,7 @@ export const StudentsListView: React.FC = () => {
 
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
               className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
             >
               <option value="ALL">All Status</option>

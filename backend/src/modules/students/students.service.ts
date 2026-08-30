@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
+import crypto from 'crypto';
 import { prisma, TransactionType } from '../../lib/prisma';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
@@ -25,6 +26,23 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   } catch {}
 }
 
+const metadataOnlyDocuments = (documents: Record<string, any> | undefined) => {
+  const clean: Record<string, any> = {};
+  for (const [docType, document] of Object.entries(documents || {})) {
+    if (!document || typeof document !== 'object' || !document.supabasePath) continue;
+    clean[docType] = {
+      name: document.name || `${docType} document`,
+      bucket: document.bucket || (docType.startsWith('photo') ? 'student-photos' : 'student-documents'),
+      supabasePath: document.supabasePath,
+      mimeType: document.mimeType || document.fileType || 'application/octet-stream',
+      byteSize: Number(document.byteSize) || undefined,
+      checksumSha256: document.checksumSha256 || undefined,
+      uploadedAt: document.uploadedAt || new Date().toISOString(),
+    };
+  }
+  return clean;
+};
+
 export class StudentsService {
   /**
    * Formats a raw database student and attaches parsed live Supabase documents.
@@ -39,15 +57,42 @@ export class StudentsService {
       } catch {}
     }
 
+    for (const document of student.studentDocuments || []) {
+      uploadedDocuments[document.documentType] = {
+        name: document.originalFileName || `${document.documentType} document`,
+        bucket: document.bucket,
+        supabasePath: document.objectPath,
+        mimeType: document.mimeType,
+        byteSize: document.byteSize,
+        checksumSha256: document.checksumSha256,
+        uploadedAt: document.createdAt,
+      };
+    }
+
     if (student.photoUrl && !uploadedDocuments.photo) {
       uploadedDocuments.photo = {
         name: `${student.fullName}_Passport_Photo.jpg`,
-        size: 'Supabase Cloud Storage',
-        dataUrl: student.photoUrl,
-        publicUrl: student.photoUrl,
+        size: 'Legacy candidate photo',
         uploadedAt: student.createdAt,
       };
     }
+
+    const documentMetadata = Object.fromEntries(
+      Object.entries(uploadedDocuments).map(([docType, document]: [string, any]) => [
+        docType,
+        {
+          name: document?.name || `${docType} document`,
+          size: document?.size || (document?.byteSize ? `${document.byteSize} bytes` : 'Candidate attachment'),
+          bucket: document?.bucket,
+          supabasePath: document?.supabasePath,
+          mimeType: document?.mimeType || document?.fileType,
+          byteSize: document?.byteSize,
+          checksumSha256: document?.checksumSha256,
+          uploadedAt: document?.uploadedAt || student.createdAt,
+          fileEndpoint: student.id ? `/api/students/${student.id}/document/${docType}` : undefined,
+        },
+      ])
+    );
 
     // Determine accurate fee status across feeRecords & rollNumber issuance
     const isPaid =
@@ -60,9 +105,50 @@ export class StudentsService {
 
     return {
       ...cleanStudent,
+      photoUrl: null,
+      // A list query can provide the small metadata relation without retrieving
+      // legacy photo/base64 columns. Legacy records become visible after backfill.
+      hasPhoto: Boolean(
+        student.photoUrl ||
+          uploadedDocuments.photo ||
+          student.studentDocuments?.some((document: any) =>
+            ['photo', 'photoThumbnail'].includes(document.documentType)
+          )
+      ),
       feeStatus,
-      uploadedDocuments: Object.keys(uploadedDocuments).length > 0 ? uploadedDocuments : undefined,
+      uploadedDocuments: Object.keys(documentMetadata).length > 0 ? documentMetadata : undefined,
     };
+  }
+
+  async persistDocumentMetadata(studentId: string, documents: Record<string, any>) {
+    for (const [documentType, document] of Object.entries(metadataOnlyDocuments(documents))) {
+      await prisma.studentDocument.upsert({
+        where: {
+          bucket_objectPath: {
+            bucket: document.bucket,
+            objectPath: document.supabasePath,
+          },
+        },
+        update: {
+          studentId,
+          documentType,
+          originalFileName: document.name,
+          mimeType: document.mimeType,
+          byteSize: document.byteSize,
+          checksumSha256: document.checksumSha256,
+        },
+        create: {
+          studentId,
+          documentType,
+          bucket: document.bucket,
+          objectPath: document.supabasePath,
+          originalFileName: document.name,
+          mimeType: document.mimeType,
+          byteSize: document.byteSize,
+          checksumSha256: document.checksumSha256,
+        },
+      });
+    }
   }
 
   /**
@@ -238,36 +324,23 @@ export class StudentsService {
 
     // Auto-discover pre-uploaded files in Supabase Storage under CNIC folder
     const cnicFolder = input.cnicOrBForm.replace(/[^\w-]/g, '_');
-    const resolvedDocs: Record<string, any> = uploadedDocuments ? { ...uploadedDocuments } : {};
+    const resolvedDocs: Record<string, any> = metadataOnlyDocuments(uploadedDocuments);
     let photoUrl = inputPhotoUrl;
 
     const sigData = signatureDataUrl || signature || (uploadedDocuments as any)?.signature?.dataUrl;
-    if (sigData && !resolvedDocs['signature']) {
-      resolvedDocs['signature'] = {
-        name: `${input.fullName}_Digital_Signature.png`,
-        size: 'Digital Pad Attached',
-        dataUrl: sigData,
-        uploadedAt: new Date().toISOString(),
-      };
-    }
 
     try {
       // 1. Check student-photos under CNIC folder
       const { data: photoFiles } = await (supabaseStorage as any).client?.storage?.from('student-photos')?.list(cnicFolder) || { data: [] };
       if (photoFiles && photoFiles.length > 0) {
-        const latest = photoFiles[photoFiles.length - 1];
+        const latest = photoFiles.find((file: any) => /^photo\.[^.]+$/i.test(file.name)) || photoFiles[photoFiles.length - 1];
         const storagePath = `${cnicFolder}/${latest.name}`;
-        const accessUrl = await supabaseStorage.getFileAccessUrl('student-photos', storagePath);
-        if (!photoUrl) {
-          photoUrl = accessUrl;
-        }
         if (!resolvedDocs['photo']) {
           resolvedDocs['photo'] = {
             name: `${input.fullName}_Passport_Photo.jpg`,
-            size: 'Cloud Storage Attached',
-            publicUrl: accessUrl,
+            bucket: 'student-photos',
             supabasePath: storagePath,
-            dataUrl: accessUrl,
+            mimeType: latest.name.endsWith('.png') ? 'image/png' : 'image/jpeg',
             uploadedAt: latest.created_at || new Date().toISOString(),
           };
         }
@@ -277,16 +350,18 @@ export class StudentsService {
       const { data: docFiles } = await (supabaseStorage as any).client?.storage?.from('student-documents')?.list(cnicFolder) || { data: [] };
       if (docFiles && docFiles.length > 0) {
         for (const file of docFiles) {
-          const docType = file.name.split('_')[0] || 'document';
+          const docType = path.parse(file.name).name.split('_')[0] || 'document';
           const storagePath = `${cnicFolder}/${file.name}`;
-          const accessUrl = await supabaseStorage.getFileAccessUrl('student-documents', storagePath);
           if (!resolvedDocs[docType]) {
             resolvedDocs[docType] = {
               name: `${input.fullName}_${file.name}`,
-              size: 'Cloud Storage Attached',
-              publicUrl: accessUrl,
+              bucket: 'student-documents',
               supabasePath: storagePath,
-              dataUrl: accessUrl,
+              mimeType: file.name.endsWith('.pdf')
+                ? 'application/pdf'
+                : file.name.endsWith('.png')
+                ? 'image/png'
+                : 'image/jpeg',
               uploadedAt: file.created_at || new Date().toISOString(),
             };
           }
@@ -315,17 +390,53 @@ export class StudentsService {
         const applicationNo = await this.generateApplicationNumber();
         const qrToken = `PENDING-FEE-${applicationNo}`;
 
-        // Persist inline base64 photo if provided
+        // Legacy clients may still submit an inline photo. Upload it once, then
+        // retain only metadata so new database rows never contain file bytes.
         if (photoUrl && photoUrl.startsWith('data:')) {
+          const match = photoUrl.match(/^data:([^;]+);base64,(.*)$/s);
+          const mimeType = match?.[1] || 'image/png';
+          const photoBuffer = Buffer.from(match?.[2] || '', 'base64');
+          const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+          const storagePath = `${cnicFolder}/photo.${extension}`;
           const uploadRes = await supabaseStorage.uploadFile(
             'student-photos',
-            `${applicationNo}-photo.png`,
-            photoUrl,
-            'image/png'
+            storagePath,
+            photoBuffer,
+            mimeType
           );
           if (!uploadRes.error) {
-            const signed = await supabaseStorage.getSignedUrl('student-photos', `${applicationNo}-photo.png`, 86400 * 7);
-            if (signed) photoUrl = signed;
+            resolvedDocs.photo = {
+              name: `${input.fullName}_Passport_Photo.${extension}`,
+              bucket: 'student-photos',
+              supabasePath: storagePath,
+              mimeType,
+              byteSize: photoBuffer.length,
+              checksumSha256: crypto.createHash('sha256').update(photoBuffer).digest('hex'),
+              uploadedAt: new Date().toISOString(),
+            };
+          }
+        }
+
+        if (sigData && typeof sigData === 'string' && sigData.startsWith('data:')) {
+          const match = sigData.match(/^data:([^;]+);base64,(.*)$/s);
+          const signatureBuffer = Buffer.from(match?.[2] || '', 'base64');
+          const signaturePath = `${cnicFolder}/signature.png`;
+          const uploadRes = await supabaseStorage.uploadFile(
+            'student-documents',
+            signaturePath,
+            signatureBuffer,
+            match?.[1] || 'image/png'
+          );
+          if (!uploadRes.error) {
+            resolvedDocs.signature = {
+              name: `${input.fullName}_Digital_Signature.png`,
+              bucket: 'student-documents',
+              supabasePath: signaturePath,
+              mimeType: match?.[1] || 'image/png',
+              byteSize: signatureBuffer.length,
+              checksumSha256: crypto.createHash('sha256').update(signatureBuffer).digest('hex'),
+              uploadedAt: new Date().toISOString(),
+            };
           }
         }
 
@@ -333,7 +444,7 @@ export class StudentsService {
           data: {
             ...baseData,
             dateOfBirth: rawDob,
-            photoUrl,
+            photoUrl: null,
             uploadedDocsJson: Object.keys(resolvedDocs).length > 0 ? JSON.stringify(resolvedDocs) : null,
             applicationNo,
             rollNumber: null, // Defer roll number until fee is approved
@@ -382,6 +493,8 @@ export class StudentsService {
     if (!student) {
       throw lastError || new Error('Failed to create student due to unique sequence conflict.');
     }
+
+    await this.persistDocumentMetadata(student.id, resolvedDocs);
 
     // Auto-generate Fixed PKR 300 Registration Fee Challan
     const challanNumber = await this.generateChallanNumber();
@@ -457,6 +570,7 @@ export class StudentsService {
         documents: true,
         officeUse: true,
         feeRecords: true,
+        studentDocuments: true,
       },
     });
 
@@ -812,6 +926,7 @@ export class StudentsService {
           documents: true,
           officeUse: true,
           feeRecords: true,
+          studentDocuments: true,
         },
       });
 
@@ -830,7 +945,7 @@ export class StudentsService {
    */
   async getStudents(query: StudentQueryInput) {
     const page = parseInt(String(query.page || 1), 10) || 1;
-    const limit = parseInt(String(query.limit || 500), 10) || 500;
+    const limit = Math.min(parseInt(String(query.limit || 50), 10) || 50, 250);
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -883,22 +998,78 @@ export class StudentsService {
           scholarshipCategory: true,
           status: true,
           createdAt: true,
-          photoUrl: true,
           feeRecords: { select: { status: true, amountDue: true, amountPaid: true } },
           officeUse: { select: { eligibility: true, eligibilityRemarks: true } },
+          studentDocuments: {
+            where: { documentType: { in: ['photo', 'photoThumbnail'] } },
+            select: { documentType: true },
+            take: 1,
+          },
         },
       }),
       prisma.student.count({ where }),
     ]);
 
     return {
-      students: students.map((s) => this.formatStudentWithDocuments(s)),
+      students: students.map((s) => ({
+        ...this.formatStudentWithDocuments(s),
+        // List responses intentionally never retrieve or serialize file bytes.
+        photoUrl: null,
+      })),
       pagination: {
         page,
         limit,
         total,
         totalPages: Math.ceil(total / limit) || 1,
       },
+    };
+  }
+
+  async getDocumentMetadata(query: { page?: string; limit?: string; studentId?: string }) {
+    const page = Math.max(1, parseInt(String(query.page || 1), 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(String(query.limit || 24), 10) || 24));
+    const where = query.studentId ? { studentId: query.studentId } : {};
+    const [documents, total] = await Promise.all([
+      prisma.studentDocument.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          student: {
+            select: {
+              id: true,
+              fullName: true,
+              rollNumber: true,
+              applicationNo: true,
+              currentClass: true,
+              createdAt: true,
+              officeUse: { select: { eligibility: true, eligibilityRemarks: true } },
+            },
+          },
+        },
+      }),
+      prisma.studentDocument.count({ where }),
+    ]);
+
+    return {
+      documents: documents.map((document) => ({
+        id: document.id,
+        studentId: document.studentId,
+        studentName: document.student.fullName,
+        rollNumber: document.student.rollNumber || 'PENDING',
+        applicationNo: document.student.applicationNo,
+        currentClass: document.student.currentClass,
+        documentType: document.documentType,
+        originalFileName: document.originalFileName,
+        mimeType: document.mimeType,
+        byteSize: document.byteSize,
+        uploadedAt: document.createdAt,
+        fileEndpoint: `/api/students/${document.studentId}/document/${document.documentType}`,
+        eligibility: document.student.officeUse?.eligibility,
+        eligibilityRemarks: document.student.officeUse?.eligibilityRemarks,
+      })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
     };
   }
 
@@ -940,6 +1111,7 @@ export class StudentsService {
         documents: true,
         officeUse: true,
         feeRecords: true,
+        studentDocuments: true,
       },
     });
 
@@ -976,6 +1148,7 @@ export class StudentsService {
         documents: true,
         officeUse: true,
         feeRecords: true,
+        studentDocuments: true,
       },
     });
 
@@ -993,6 +1166,7 @@ export class StudentsService {
           documents: true,
           officeUse: true,
           feeRecords: true,
+          studentDocuments: true,
         },
       });
     }
@@ -1334,23 +1508,28 @@ export class StudentsService {
       throw error;
     }
 
-    const rawApp = (input.applicationNo || input.cnicOrBForm || input.studentId || 'DOC').replace(/[^\w-]/g, '_');
+    const stableIdentifier = input.applicationNo || input.cnicOrBForm || input.studentId;
+    if (!stableIdentifier || stableIdentifier === 'TEMP_CANDIDATE') {
+      const error: AppError = new Error('A stable candidate identifier is required before upload.');
+      error.statusCode = 400;
+      throw error;
+    }
+    const rawApp = stableIdentifier.replace(/[^\w-]/g, '_');
     const ext = input.fileName?.split('.').pop() || (mimeType === 'application/pdf' ? 'pdf' : mimeType === 'image/png' ? 'png' : 'jpg');
-    const bucket: StorageBucket = input.docType === 'photo' ? 'student-photos' : 'student-documents';
-    const pathName = `${rawApp}/${input.docType}_${Date.now()}.${ext}`;
+    const bucket: StorageBucket = input.docType.startsWith('photo') ? 'student-photos' : 'student-documents';
+    const pathName = `${rawApp}/${input.docType}.${ext.toLowerCase()}`;
+
+    const encodedData = input.fileData.startsWith('data:')
+      ? input.fileData.split(',')[1]
+      : input.fileData;
+    const buffer = Buffer.from(encodedData, 'base64');
+    const checksumSha256 = crypto.createHash('sha256').update(buffer).digest('hex');
 
     // 1. Save locally to server uploads directory
     try {
       const candDir = path.join(UPLOADS_DIR, rawApp);
       if (!fs.existsSync(candDir)) {
         fs.mkdirSync(candDir, { recursive: true });
-      }
-      let buffer: Buffer;
-      if (input.fileData.startsWith('data:')) {
-        const b64 = input.fileData.split(',')[1];
-        buffer = Buffer.from(b64, 'base64');
-      } else {
-        buffer = Buffer.from(input.fileData, 'utf-8');
       }
       fs.writeFileSync(path.join(candDir, `${input.docType}.${ext}`), buffer);
     } catch (diskErr) {
@@ -1359,14 +1538,20 @@ export class StudentsService {
 
     // 2. Upload to Supabase Storage if available
     await supabaseStorage.ensureBucketExists(bucket);
-    await supabaseStorage.uploadFile(
+    const storageUpload = await supabaseStorage.uploadFile(
       bucket,
       pathName,
-      input.fileData,
-      input.contentType || (ext === 'pdf' ? 'application/pdf' : 'image/jpeg')
+      buffer,
+      mimeType
     );
+    if (storageUpload.error) {
+      const error: AppError = new Error('Private document storage upload failed. Please retry.');
+      error.statusCode = 502;
+      throw error;
+    }
 
-    const publicUrl = await supabaseStorage.getFileAccessUrl(bucket, pathName, 60 * 60 * 24 * 30);
+    // This URL is for a short-lived upload preview only and is never persisted.
+    const publicUrl = await supabaseStorage.getSignedUrl(bucket, pathName, 15 * 60);
 
     // 3. Find student in PostgreSQL
     const student = await prisma.student.findFirst({
@@ -1386,10 +1571,11 @@ export class StudentsService {
 
     currentDocs[input.docType] = {
       name: input.fileName || `${input.docType}.${ext}`,
-      size: 'Cloud Storage Attached',
-      dataUrl: input.fileData.startsWith('data:') ? input.fileData : publicUrl,
-      publicUrl,
+      bucket,
       supabasePath: pathName,
+      mimeType,
+      byteSize: buffer.length,
+      checksumSha256,
       uploadedAt: new Date().toISOString(),
     };
 
@@ -1399,9 +1585,10 @@ export class StudentsService {
           where: { id: student.id },
           data: {
             uploadedDocsJson: JSON.stringify(currentDocs),
-            ...(input.docType === 'photo' ? { photoUrl: input.fileData.startsWith('data:') ? input.fileData : publicUrl } : {}),
+            ...(input.docType === 'photo' ? { photoUrl: null } : {}),
           },
         });
+        await this.persistDocumentMetadata(student.id, currentDocs);
       } catch (err) {
         logger.warn('Failed to update student document in PostgreSQL:', err);
       }
@@ -1411,7 +1598,10 @@ export class StudentsService {
       success: true,
       bucket,
       path: pathName,
-      publicUrl,
+      publicUrl: publicUrl || undefined,
+      mimeType,
+      byteSize: buffer.length,
+      checksumSha256,
       docType: input.docType,
       fileName: input.fileName || `${input.docType}.${ext}`,
     };
@@ -1447,6 +1637,17 @@ export class StudentsService {
     });
 
     if (student) {
+      const metadata = await prisma.studentDocument.findFirst({
+        where: { studentId: student.id, documentType: docType },
+      });
+      if (metadata) {
+        const buffer = await supabaseStorage.downloadFile(
+          metadata.bucket as StorageBucket,
+          metadata.objectPath
+        );
+        if (buffer) return { buffer, contentType: metadata.mimeType };
+      }
+
       if (docType === 'photo' && student.photoUrl && student.photoUrl.startsWith('data:')) {
         const parts = student.photoUrl.split(',');
         const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
@@ -1473,7 +1674,7 @@ export class StudentsService {
           const docs = JSON.parse(student.uploadedDocsJson);
           const doc = docs[docType] || docs[`${docType}Uploaded`];
           if (doc?.supabasePath) {
-            const bucket: StorageBucket = docType === 'photo' ? 'student-photos' : 'student-documents';
+            const bucket: StorageBucket = docType.startsWith('photo') ? 'student-photos' : 'student-documents';
             const buf = await supabaseStorage.downloadFile(bucket, doc.supabasePath);
             if (buf) {
               const mime = doc.supabasePath.endsWith('.pdf')
@@ -1488,7 +1689,7 @@ export class StudentsService {
       }
 
       // Check storage directly under candidate applicationNo or CNIC
-      const bucket: StorageBucket = docType === 'photo' ? 'student-photos' : 'student-documents';
+      const bucket: StorageBucket = docType.startsWith('photo') ? 'student-photos' : 'student-documents';
       for (const prefix of [student.applicationNo, student.cnicOrBForm].filter(Boolean) as string[]) {
         const cleanPrefix = prefix.replace(/[^\w-]/g, '_');
         try {

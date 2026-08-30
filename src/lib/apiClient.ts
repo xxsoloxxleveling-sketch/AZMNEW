@@ -251,6 +251,21 @@ export async function apiDownloadPdf(
   window.URL.revokeObjectURL(blobUrl);
 }
 
+/** Fetches a protected binary only when a user explicitly opens it. */
+export async function apiFetchProtectedObjectUrl(endpoint: string): Promise<string> {
+  const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const token = getToken();
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.error?.message || `Unable to load document (${response.status})`);
+  }
+  return window.URL.createObjectURL(await response.blob());
+}
+
 /**
  * Fire-and-forget backend health ping to wake up sleeping Render free-tier instances
  * and warm the database connection pool.

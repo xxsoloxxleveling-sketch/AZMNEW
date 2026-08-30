@@ -6,6 +6,7 @@ export type StorageBucket = 'student-photos' | 'qr-codes' | 'registration-pdfs' 
 
 class SupabaseStorageService {
   private client: SupabaseClient | null = null;
+  private ensuredBuckets = new Set<StorageBucket>();
 
   constructor() {
     if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -30,7 +31,7 @@ class SupabaseStorageService {
    * Student photos, documents, and registration PDFs default to private for minor candidate privacy.
    */
   async ensureBucketExists(bucket: StorageBucket): Promise<void> {
-    if (!this.client) return;
+    if (!this.client || this.ensuredBuckets.has(bucket)) return;
     try {
       const { data: buckets } = await this.client.storage.listBuckets();
       const found = (buckets || []).some((b) => b.name === bucket);
@@ -38,6 +39,7 @@ class SupabaseStorageService {
         const isPublic = bucket === 'qr-codes';
         await this.client.storage.createBucket(bucket, { public: isPublic });
       }
+      this.ensuredBuckets.add(bucket);
     } catch (err: any) {
       logger.warn(`Notice on bucket initialization (${bucket}):`, err.message);
     }

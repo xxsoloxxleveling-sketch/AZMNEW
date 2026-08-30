@@ -24,6 +24,12 @@ interface DataTableProps<T> {
   actions?: React.ReactNode;
   filters?: React.ReactNode;
   pageSize?: number;
+  pagination?: {
+    page: number;
+    total: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+  };
 }
 
 export function DataTable<T>({
@@ -41,6 +47,7 @@ export function DataTable<T>({
   actions,
   filters,
   pageSize = 10,
+  pagination,
 }: DataTableProps<T>) {
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const searchQuery = searchValue !== undefined ? searchValue : internalSearchQuery;
@@ -74,11 +81,19 @@ export function DataTable<T>({
   }, [filteredData, sortKey, sortOrder]);
 
   // Pagination
-  const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
+  const totalPages = pagination?.totalPages ?? Math.max(1, Math.ceil(sortedData.length / pageSize));
+  const activePage = pagination?.page ?? currentPage;
   const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
+    if (pagination) return sortedData;
+    const start = (activePage - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
-  }, [sortedData, currentPage, pageSize]);
+  }, [sortedData, activePage, pageSize, pagination]);
+
+  const changePage = (page: number) => {
+    const nextPage = Math.max(1, Math.min(totalPages, page));
+    if (pagination) pagination.onPageChange(nextPage);
+    else setCurrentPage(nextPage);
+  };
 
   const handleSort = (column: Column<T>) => {
     if (!column.sortable || typeof column.accessor !== 'string') return;
@@ -186,29 +201,29 @@ export function DataTable<T>({
         <div>
           Showing{' '}
           <span className="font-semibold text-slate-700">
-            {filteredData.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+            {filteredData.length === 0 ? 0 : (activePage - 1) * pageSize + 1}
           </span>{' '}
           to{' '}
           <span className="font-semibold text-slate-700">
-            {Math.min(currentPage * pageSize, filteredData.length)}
+            {Math.min(activePage * pageSize, pagination?.total ?? filteredData.length)}
           </span>{' '}
-          of <span className="font-semibold text-slate-700">{filteredData.length}</span> records
+          of <span className="font-semibold text-slate-700">{pagination?.total ?? filteredData.length}</span> records
         </div>
 
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
+            onClick={() => changePage(activePage - 1)}
+            disabled={activePage === 1}
             className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <span className="px-3 py-1 font-medium text-slate-700">
-            Page {currentPage} of {totalPages}
+            Page {activePage} of {totalPages}
           </span>
           <button
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
+            onClick={() => changePage(activePage + 1)}
+            disabled={activePage === totalPages}
             className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             <ChevronRight className="w-4 h-4" />
