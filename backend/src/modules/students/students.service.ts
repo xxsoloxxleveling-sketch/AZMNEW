@@ -1438,6 +1438,21 @@ export class StudentsService {
       }
     }
 
+    // The protected document reader knows every historical storage layout
+    // (application-number folders, CNIC folders, metadata records, and inline
+    // legacy photos). Reuse it only for this explicit PDF request so list views
+    // remain metadata-only and do not reintroduce photo egress.
+    if (student.id) {
+      try {
+        const photo = await this.getStudentDocument(student.id, 'photo');
+        if (photo.buffer.length > 0 && photo.contentType.startsWith('image/') && photo.contentType !== 'image/svg+xml') {
+          return `data:${photo.contentType};base64,${photo.buffer.toString('base64')}`;
+        }
+      } catch (documentError) {
+        logger.warn('Protected PDF photo lookup failed:', documentError);
+      }
+    }
+
     return defaultPlaceholder;
   }
 
