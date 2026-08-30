@@ -186,11 +186,11 @@ export class PdfService {
       try {
         const page = await browser.newPage();
 
-        page.on('console', (msg) => {
+        page.on('console', (msg: any) => {
           logger.debug(`Puppeteer [${msg.type()}]: ${msg.text()}`);
         });
 
-        page.on('requestfailed', (req) => {
+        page.on('requestfailed', (req: any) => {
           logger.warn(`Puppeteer request failed: ${req.url()} (${req.failure()?.errorText || 'Unknown Error'})`);
         });
 
