@@ -33,7 +33,7 @@ import {
 import { StatusBadge } from '../shared/StatusBadge';
 import { StudentDossierModal } from '../../common/StudentDossierModal';
 import { useAuth } from '../../../lib/authContext';
-import { apiFetchProtectedObjectUrl } from '../../../lib/apiClient';
+import { apiFetchProtectedObjectUrl, API_BASE_URL } from '../../../lib/apiClient';
 import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/whatsapp';
 
 interface StudentDetailViewProps {
