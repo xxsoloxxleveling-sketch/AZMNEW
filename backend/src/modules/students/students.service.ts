@@ -844,7 +844,7 @@ export class StudentsService {
     if (!isFeePaid) {
       return {
         success: false,
-        error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Please deposit PKR 300 via Bank Alfalah (Account: 83861010161490 - Title: Sumama Khan) [Note: EasyPaisa, JazzCash, and Faysal Bank account limits are reached] and send receipt to WhatsApp 0305-1755551 to activate your Roll Number Slip.`,
+        error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Please deposit PKR 300 via EasyPaisa / JazzCash (03440197194 - Sumama Khan) or Bank Alfalah (83861010161490 - Sumama Khan) and send receipt to WhatsApp 0305-1755551 to activate your Roll Number Slip.`,
       };
     }
 

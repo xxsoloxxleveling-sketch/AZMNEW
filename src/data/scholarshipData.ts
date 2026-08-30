@@ -86,32 +86,41 @@ export const OFFICIAL_DATA = {
   registrationFee: 'PKR 300 (Nominal Entry Fee for Session V)',
 
   paymentAccounts: {
-    jazzcash: {
-      accountName: 'EasyPaisa / JazzCash',
+    easypaisa: {
+      accountName: 'EasyPaisa',
       accountTitle: 'Sumama Khan',
       accountNumber: '03440197194',
       formattedNumber: '0344-0197194',
-      type: 'Mobile Wallet (EasyPaisa & JazzCash)',
-      isDisabled: true,
-      status: 'LIMIT_REACHED',
-      disabledMessage: 'Account limit reached. Please deposit only to Bank Alfalah.'
+      type: 'Mobile Wallet (EasyPaisa)',
+      isDisabled: false,
+      isPrimary: true,
+      status: 'ACTIVE'
+    },
+    jazzcash: {
+      accountName: 'JazzCash',
+      accountTitle: 'Sumama Khan',
+      accountNumber: '03440197194',
+      formattedNumber: '0344-0197194',
+      type: 'Mobile Wallet (JazzCash)',
+      isDisabled: false,
+      isPrimary: true,
+      status: 'ACTIVE'
+    },
+    bankAlfalah: {
+      bankName: 'Bank Alfalah',
+      accountTitle: 'Sumama Khan',
+      accountNumber: '83861010161490',
+      type: 'Commercial Bank (IBFT / Online)',
+      isPrimary: true,
+      status: 'ACTIVE'
     },
     faysalBank: {
       bankName: 'Faysal Bank',
       accountTitle: 'Sumama Khan',
       accountNumber: '3126701000006213',
       type: 'Commercial Bank',
-      isDisabled: true,
-      status: 'LIMIT_REACHED',
-      disabledMessage: 'Account receiving limit reached. Please deposit only to Bank Alfalah.',
-      isPrimary: false
-    },
-    bankAlfalah: {
-      bankName: 'Bank Alfalah',
-      accountTitle: 'Sumama Khan',
-      accountNumber: '83861010161490',
-      type: 'Commercial Bank (Only Active Account)',
-      isPrimary: true,
+      isDisabled: false,
+      isPrimary: false,
       status: 'ACTIVE'
     }
   },
