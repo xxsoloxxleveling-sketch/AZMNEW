@@ -879,10 +879,15 @@ export class PdfService {
               const feeStatus = isPaid ? 'PAID' : (s.feeRecords?.[0]?.status || 'UNPAID');
               const att = s.attendancePercentage != null ? `${s.attendancePercentage}%` : '—';
               const cat = (s.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ');
+              const photo = this.escapeHtml(s.rosterPhotoDataUrl || '');
+              const photoCell = photo
+                ? `<img class="roster-photo" src="${photo}" alt="Candidate photo" />`
+                : `<span class="photo-placeholder">No photo</span>`;
 
               return `
           <tr class="${idx % 2 === 1 ? 'even-row' : ''}">
             <td class="text-center font-bold">${idx + 1}</td>
+            <td class="text-center">${photoCell}</td>
             <td class="font-mono text-center font-bold text-navy">${appNo}</td>
             <td><strong>${s.fullName || '—'}</strong></td>
             <td>${s.fatherName || '—'}</td>
@@ -897,7 +902,7 @@ export class PdfService {
             .join('')
         : `
           <tr>
-            <td colspan="9" class="empty-state">
+            <td colspan="10" class="empty-state">
               No students match the selected filter criteria (${classLabel}, ${genderLabel}, ${statusLabel}).
             </td>
           </tr>
@@ -929,7 +934,7 @@ export class PdfService {
     .counts-summary { font-size: 9.5px; font-weight: 600; color: #334155; }
     .counts-summary strong { color: #0f172a; }
 
-    .data-table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 15px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 8px; margin-bottom: 15px; }
     .data-table th, .data-table td { border: 1px solid #cbd5e1; padding: 4.5px 6px; vertical-align: middle; }
     .data-table th { background: #1e3a8a; color: #ffffff; font-weight: 700; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.3px; }
     .even-row { background: #f8fafc; }
@@ -945,6 +950,8 @@ export class PdfService {
     .badge { display: inline-block; padding: 1.5px 5px; border-radius: 3px; font-size: 7.5px; font-weight: 800; text-transform: uppercase; }
     .badge-paid { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
     .badge-unpaid { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .roster-photo { width: 28px; height: 28px; border-radius: 4px; object-fit: cover; border: 1px solid #cbd5e1; display: block; margin: 0 auto; }
+    .photo-placeholder { color: #94a3b8; font-size: 6.5px; font-style: italic; }
 
     .empty-state { text-align: center; padding: 25px; color: #64748b; font-weight: 600; font-size: 10px; background: #fafafa; }
 
@@ -983,11 +990,12 @@ export class PdfService {
     <thead>
       <tr>
         <th style="width: 4%;" class="text-center">Sr #</th>
-        <th style="width: 14%;" class="text-center">Roll / App No</th>
-        <th style="width: 17%;">Candidate Name</th>
-        <th style="width: 15%;">Father's Name</th>
-        <th style="width: 14%;" class="text-center">CNIC / B-Form</th>
-        <th style="width: 14%;">Class &amp; Category</th>
+        <th style="width: 5%;" class="text-center">Photo</th>
+        <th style="width: 13%;" class="text-center">Roll / App No</th>
+        <th style="width: 16%;">Candidate Name</th>
+        <th style="width: 14%;">Father's Name</th>
+        <th style="width: 13%;" class="text-center">CNIC / B-Form</th>
+        <th style="width: 13%;">Class &amp; Category</th>
         <th style="width: 7%;" class="text-center">Fee</th>
         <th style="width: 5%;" class="text-center">Att %</th>
         <th style="width: 10%;" class="text-center">Contact</th>

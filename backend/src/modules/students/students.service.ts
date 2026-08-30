@@ -1229,9 +1229,11 @@ export class StudentsService {
       ];
     }
 
+    // A roster with embedded portrait thumbnails is intentionally capped. This
+    // keeps a single administrative export within the Render memory budget.
     const students = await prisma.student.findMany({
       where,
-      take: 2000,
+      take: 250,
       orderBy: [{ currentClass: 'asc' }, { fullName: 'asc' }],
       include: {
         academicRecords: true,
@@ -1243,6 +1245,29 @@ export class StudentsService {
     });
 
     const formattedStudents = students.map((s) => this.formatStudentWithDocuments(s));
+
+    // Fetch only the already-created 160px private thumbnail.  Do not fetch
+    // originals or create images while exporting: that was the source of the
+    // Render memory spikes. Three downloads at a time keeps the export stable.
+    let nextIndex = 0;
+    const addPortraitWorker = async () => {
+      while (nextIndex < students.length) {
+        const index = nextIndex++;
+        const source = students[index];
+        const thumbnail = source.studentDocuments.find((document) => document.documentType === 'photoThumbnail');
+        if (!thumbnail) continue;
+        try {
+          const buffer = await supabaseStorage.downloadFile(thumbnail.bucket as StorageBucket, thumbnail.objectPath);
+          if (buffer?.length) {
+            formattedStudents[index].rosterPhotoDataUrl = `data:${thumbnail.mimeType};base64,${buffer.toString('base64')}`;
+          }
+        } catch (error) {
+          logger.warn(`Roster portrait skipped for ${source.applicationNo || source.id}:`, error);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, students.length) }, addPortraitWorker));
+
     const html = pdfService.generateStudentsListHtml(formattedStudents, query, formattedStudents.length);
     const buffer = await pdfService.generatePdfFromHtml(html, { landscape: true });
 

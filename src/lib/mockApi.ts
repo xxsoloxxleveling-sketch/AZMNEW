@@ -821,24 +821,15 @@ export const mockApi = {
     filters?: { classLevel?: string; gender?: string; status?: string; search?: string },
     preloadedStudents?: MockStudent[]
   ): Promise<void> {
-    try {
-      let list = preloadedStudents;
-      if (!list || list.length === 0) {
-        list = await this.getStudents(filters);
-      }
-      const { exportStudentsRosterPdf } = await import('../utils/pdfExport');
-      exportStudentsRosterPdf({ students: list || [], filters });
-    } catch (clientErr) {
-      console.warn('Client-side PDF generation fallback:', clientErr);
-      const params = new URLSearchParams();
-      if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
-      if (filters?.gender && filters?.gender !== 'ALL') params.append('gender', filters.gender);
-      if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
-      if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
+    void preloadedStudents;
+    const params = new URLSearchParams();
+    if (filters?.classLevel && filters.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
+    if (filters?.gender && filters.gender !== 'ALL') params.append('gender', filters.gender);
+    if (filters?.status && filters.status !== 'ALL') params.append('status', filters.status);
+    if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
 
-      const suggestedFilename = `AZM-Students-${new Date().toISOString().split('T')[0]}.pdf`;
-      await apiDownloadPdf(`/api/students/export-pdf?${params.toString()}`, suggestedFilename);
-    }
+    const suggestedFilename = `AZM-Students-${new Date().toISOString().split('T')[0]}.pdf`;
+    await apiDownloadPdf(`/api/students/export-pdf?${params.toString()}`, suggestedFilename);
   },
 
 
