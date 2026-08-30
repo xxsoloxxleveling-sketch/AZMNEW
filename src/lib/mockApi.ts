@@ -785,16 +785,14 @@ export const mockApi = {
 
 
 
-  async downloadStudentPdf(studentId: string, rollNumber?: string, studentObj?: any): Promise<void> {
-    let data = studentObj;
-    if (!data || !data.fullName) {
-      try {
-        data = await this.getStudentById(studentId);
-      } catch {
-        data = { id: studentId, rollNumber };
-      }
-    }
-    printStudentSlip(data || { id: studentId, rollNumber });
+  async downloadStudentPdf(studentId: string, rollNumber?: string, _studentObj?: any): Promise<void> {
+    if (!studentId) throw new Error('Student identifier is required to download the registration slip.');
+    // Registration PDFs are generated server-side so the private original photo
+    // is fetched only for this explicit download, never from a roster response.
+    await apiDownloadPdf(
+      `/api/students/${encodeURIComponent(studentId)}/registration-pdf`,
+      `AZM-Registration-${rollNumber || studentId}.pdf`
+    );
   },
 
   async downloadRollSlipPdf(studentId: string, rollNumber?: string, studentObj?: any): Promise<void> {

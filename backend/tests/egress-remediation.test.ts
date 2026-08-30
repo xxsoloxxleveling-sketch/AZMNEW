@@ -57,6 +57,8 @@ async function run() {
   assert.equal(detail.photoUrl, null);
   assert.equal(detail.hasPhoto, true);
   assert.ok(detail.uploadedDocuments?.photo?.fileEndpoint);
+  const pdfPhoto = await studentsService.resolveStudentPhotoBase64(detail);
+  assert.ok(pdfPhoto.startsWith('data:image/jpeg;base64,'));
 
   console.log('Egress remediation checks passed: 100-record lightweight roster and metadata-only detail responses.');
 }

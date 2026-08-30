@@ -1411,6 +1411,33 @@ export class StudentsService {
       }
     }
 
+    // Legacy records may still hold an embedded photo. Read it only for this
+    // explicitly requested PDF; it is never included in normal API responses.
+    if (student.id) {
+      try {
+        const legacyStudent = await prisma.student.findUnique({
+          where: { id: student.id },
+          select: { photoUrl: true, uploadedDocsJson: true },
+        });
+        const legacyPhoto = legacyStudent?.photoUrl;
+        if (legacyPhoto?.startsWith('data:image/')) return legacyPhoto;
+
+        const legacyDocuments = legacyStudent?.uploadedDocsJson
+          ? JSON.parse(legacyStudent.uploadedDocsJson)
+          : {};
+        const legacyPath = legacyDocuments?.photo?.supabasePath;
+        if (legacyPath) {
+          const buffer = await supabaseStorage.downloadFile('student-photos', legacyPath);
+          if (buffer?.length) {
+            const mime = buffer[0] === 0x89 && buffer[1] === 0x50 ? 'image/png' : 'image/jpeg';
+            return `data:${mime};base64,${buffer.toString('base64')}`;
+          }
+        }
+      } catch (legacyError) {
+        logger.warn('Legacy PDF photo lookup failed:', legacyError);
+      }
+    }
+
     return defaultPlaceholder;
   }
 
