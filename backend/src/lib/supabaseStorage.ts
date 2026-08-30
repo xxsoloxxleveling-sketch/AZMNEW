@@ -169,6 +169,28 @@ class SupabaseStorageService {
   }
 
   /**
+   * Confirms that an expected private object exists without downloading its
+   * contents. Used to prevent a registration record from referencing a file
+   * that never reached Storage.
+   */
+  async fileExists(bucket: StorageBucket, filePath: string): Promise<boolean> {
+    if (!this.client || !filePath) return false;
+    const normalized = filePath.replace(/^\/+/, '');
+    const lastSlash = normalized.lastIndexOf('/');
+    const folder = lastSlash >= 0 ? normalized.slice(0, lastSlash) : '';
+    const name = lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized;
+    try {
+      const { data, error } = await this.client.storage.from(bucket).list(folder, {
+        limit: 100,
+        search: name,
+      });
+      return !error && Boolean(data?.some((item) => item.name === name));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Deletes specified files from a bucket.
    */
   async deleteFile(bucket: StorageBucket, paths: string[]): Promise<boolean> {

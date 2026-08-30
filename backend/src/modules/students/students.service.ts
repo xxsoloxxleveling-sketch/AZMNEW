@@ -331,6 +331,7 @@ export class StudentsService {
       uploadedDocuments,
       signatureDataUrl,
       signature,
+      requireCompleteDocuments,
       ...baseData
     } = input as any;
 
@@ -516,6 +517,35 @@ export class StudentsService {
                   };
                 }
               }
+            }
+          }
+        }
+
+        if (requireCompleteDocuments) {
+          const requiredDocumentTypes = ['photo', 'bform', 'fatherCnic', 'dmc', 'signature'];
+          const missing = requiredDocumentTypes.filter((docType) => !resolvedDocs[docType]?.supabasePath);
+          if (missing.length > 0) {
+            const error: AppError = new Error(
+              `Registration was not saved because these required documents are not safely stored: ${missing.join(', ')}. Please upload them again.`
+            );
+            error.statusCode = 502;
+            throw error;
+          }
+
+          for (const docType of requiredDocumentTypes) {
+            const document = resolvedDocs[docType];
+            const bucket: StorageBucket = docType === 'photo' ? 'student-photos' : 'student-documents';
+            const objectPath = String(document.supabasePath || '');
+            if (
+              document.bucket !== bucket ||
+              !objectPath.startsWith(`${cnicFolder}/`) ||
+              !(await supabaseStorage.fileExists(bucket, objectPath))
+            ) {
+              const error: AppError = new Error(
+                `Registration was not saved because the ${docType} upload could not be verified. Please upload it again.`
+              );
+              error.statusCode = 502;
+              throw error;
             }
           }
         }

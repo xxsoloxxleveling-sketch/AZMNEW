@@ -705,6 +705,13 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       }
     } catch (err: any) {
       console.warn('Photo compression fallback:', err);
+      setFormData((prev) => ({ ...prev, photoUrl: '' }));
+      setUploadedDocs((prev) => {
+        const next = { ...prev };
+        delete next.photo;
+        delete next.photoThumbnail;
+        return next;
+      });
       setPhotoError(err?.message || "We couldn't process this photo — please try a different one.");
     } finally {
       setIsCompressingPhoto(false);
@@ -786,22 +793,6 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         }
       }
 
-      setUploadedDocs((prev) => ({
-        ...prev,
-        [docKey]: {
-          name: standardDocName,
-          size: sizeFormatted,
-          dataUrl,
-        },
-      }));
-      setFormData((prev) => ({
-        ...prev,
-        documents: {
-          ...prev.documents,
-          [docKey]: true,
-        },
-      }));
-
       // Map docKey to candidate documents model
       const targetField =
         docKey === 'bformUploaded'
@@ -837,8 +828,25 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           checksumSha256: upRes.checksumSha256,
         },
       }));
+      setFormData((prev) => ({
+        ...prev,
+        documents: {
+          ...prev.documents,
+          [docKey]: true,
+        },
+      }));
     } catch (err) {
       console.warn('Document compression fallback:', err);
+      setUploadedDocs((prev) => {
+        const next = { ...prev };
+        delete next[docKey];
+        return next;
+      });
+      setFormData((prev) => ({
+        ...prev,
+        documents: { ...prev.documents, [docKey]: false },
+      }));
+      alert('This document was not uploaded. Please try again before submitting the application.');
     }
   };
 
@@ -898,44 +906,31 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
           dataUrl,
         };
 
-        setDmcFiles((prev) => [...prev, newDmc]);
-        setFormData((prev) => ({
-          ...prev,
-          documents: {
-            ...prev.documents,
-            dmcUploaded: true,
-          },
-        }));
-
-        setUploadedDocs((prev) => ({
-          ...prev,
-          dmcUploaded: newDmc,
-        }));
-
         const upRes = await mockApi.uploadStudentDocument({
           cnicOrBForm: formData.cnicBForm,
           docType: dmcIndex === 1 ? 'dmc' : `dmc_${dmcIndex}`,
           fileName: standardDocName,
           fileData: dataUrl,
         });
-        setDmcFiles((prev) =>
-          prev.map((item) =>
-            item.id === newDmc.id
-              ? {
-                  ...item,
-                  dataUrl: upRes.publicUrl || '',
-                  publicUrl: upRes.publicUrl,
-                  supabasePath: upRes.path,
-                  bucket: upRes.bucket,
-                  mimeType: upRes.mimeType,
-                  byteSize: upRes.byteSize,
-                  checksumSha256: upRes.checksumSha256,
-                }
-              : item
-          )
-        );
+        const savedDmc = {
+          ...newDmc,
+          dataUrl: upRes.publicUrl || '',
+          publicUrl: upRes.publicUrl,
+          supabasePath: upRes.path,
+          bucket: upRes.bucket,
+          mimeType: upRes.mimeType,
+          byteSize: upRes.byteSize,
+          checksumSha256: upRes.checksumSha256,
+        };
+        setDmcFiles((prev) => [...prev, savedDmc]);
+        setUploadedDocs((prev) => ({ ...prev, dmcUploaded: savedDmc }));
+        setFormData((prev) => ({
+          ...prev,
+          documents: { ...prev.documents, dmcUploaded: true },
+        }));
       } catch (err) {
         console.warn('DMC upload error:', err);
+        alert(`The DMC file "${file.name}" was not uploaded. Please try again.`);
       }
     }
     e.target.value = '';

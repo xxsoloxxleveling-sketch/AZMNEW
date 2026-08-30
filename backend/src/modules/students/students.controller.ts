@@ -91,7 +91,9 @@ export class StudentsController {
 
   async register(req: Request, res: Response, next: NextFunction) {
     try {
-      const student = await studentsService.createStudent(req.body);
+      // Online registration must never create a record unless every required
+      // attachment is confirmed in private Storage.
+      const student = await studentsService.createStudent({ ...req.body, requireCompleteDocuments: true });
       res.status(201).json({
         success: true,
         message: 'Candidate registration submitted successfully',
