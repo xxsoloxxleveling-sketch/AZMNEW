@@ -529,6 +529,11 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
             <p className="text-xs text-slate-500 font-medium">
               S/D of <strong className="text-slate-700">{student.fatherName}</strong> • {student.currentClass}
             </p>
+            <div className="inline-flex max-w-full items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-950">
+              <Building2 className="h-4 w-4 shrink-0 text-indigo-600" />
+              <span className="text-indigo-600 font-bold">Current School / College:</span>
+              <strong className="truncate">{student.schoolName || 'Not provided'}</strong>
+            </div>
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 pt-1 text-xs text-slate-600 font-mono">
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg">App: {student.applicationNo || student.id}</span>
               <span className="bg-blue-50 text-[#185b9d] font-bold px-2.5 py-1 rounded-lg">
@@ -600,6 +605,20 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
             </div>
 
             <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 text-xs">
+                <div className="flex items-start gap-2">
+                  <Building2 className="w-4 h-4 shrink-0 text-indigo-600 mt-0.5" />
+                  <div>
+                    <span className="block text-[11px] text-slate-500">Current School / College</span>
+                    <strong className="text-slate-900">{student.schoolName || 'Not provided'}</strong>
+                  </div>
+                </div>
+                <div>
+                  <span className="block text-[11px] text-slate-500">Current Class &amp; Board</span>
+                  <strong className="text-slate-900">{student.currentClass || 'Not provided'}</strong>
+                  {student.boardOrUniversity && <span className="text-slate-600"> • {student.boardOrUniversity}</span>}
+                </div>
+              </div>
               {student.academicRecords && student.academicRecords.length > 0 ? (
                 <div className="border border-slate-100 rounded-2xl overflow-hidden">
                   <table className="w-full text-left text-xs">
