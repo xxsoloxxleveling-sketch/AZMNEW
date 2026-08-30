@@ -101,6 +101,37 @@ export class PdfService {
       }
     }
 
+    const launchServerlessChromium = async () => {
+      // Sparticuz Chromium is substantially smaller than the full Puppeteer
+      // browser and is the reliable option on Render's 512 MB free service.
+      const chromiumModule: any = await import('@sparticuz/chromium');
+      const chromium = chromiumModule.default || chromiumModule;
+      const puppeteerCoreModule: any = await import('puppeteer-core');
+      const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
+      const executablePath = await chromium.executablePath();
+
+      if (!executablePath) {
+        throw new Error('Serverless Chromium did not provide an executable path.');
+      }
+
+      return puppeteerCore.launch({
+        args: [...chromium.args, ...memoryOptimizedArgs],
+        defaultViewport: chromium.defaultViewport || { width: 1280, height: 800 },
+        executablePath,
+        headless: chromium.headless ?? true,
+      });
+    };
+
+    const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID);
+    if (isRender) {
+      try {
+        logger.info('Using memory-efficient serverless Chromium on Render for PDF generation.');
+        return await launchServerlessChromium();
+      } catch (serverlessErr: any) {
+        logger.warn('Serverless Chromium launch failed; trying the bundled browser:', serverlessErr.message);
+      }
+    }
+
     const puppeteerModule = await import('puppeteer');
     const puppeteer = puppeteerModule.default || puppeteerModule;
 
@@ -131,20 +162,7 @@ export class PdfService {
 
     // Fallback: @sparticuz/chromium + puppeteer-core (if running in AWS Lambda style environment)
     try {
-      const chromiumModule = await import('@sparticuz/chromium');
-      const chromium = chromiumModule.default || chromiumModule;
-      const puppeteerCoreModule = await import('puppeteer-core');
-      const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
-
-      const executablePath = await chromium.executablePath();
-      if (executablePath) {
-        return await puppeteerCore.launch({
-          args: [...chromium.args, ...memoryOptimizedArgs],
-          defaultViewport: (chromium as any).defaultViewport || { width: 1280, height: 800 },
-          executablePath,
-          headless: (chromium as any).headless ?? true,
-        });
-      }
+      return await launchServerlessChromium();
     } catch (coreErr: any) {
       logger.error('All Chromium launch strategies exhausted:', coreErr.message);
       throw coreErr;
