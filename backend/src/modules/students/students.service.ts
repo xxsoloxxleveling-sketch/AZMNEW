@@ -43,6 +43,9 @@ const metadataOnlyDocuments = (documents: Record<string, any> | undefined) => {
   return clean;
 };
 
+const isMissingStudentDocumentTable = (error: any) =>
+  error?.code === 'P2021' && String(error?.meta?.table || error?.message || '').includes('StudentDocument');
+
 export class StudentsService {
   /**
    * Formats a raw database student and attaches parsed live Supabase documents.
@@ -973,7 +976,7 @@ export class StudentsService {
       ];
     }
 
-    const [students, total] = await Promise.all([
+    const listStudents = (includeDocumentMetadata: boolean) =>
       prisma.student.findMany({
         where,
         skip,
@@ -1000,15 +1003,29 @@ export class StudentsService {
           createdAt: true,
           feeRecords: { select: { status: true, amountDue: true, amountPaid: true } },
           officeUse: { select: { eligibility: true, eligibilityRemarks: true } },
-          studentDocuments: {
-            where: { documentType: { in: ['photo', 'photoThumbnail'] } },
-            select: { documentType: true },
-            take: 1,
-          },
+          ...(includeDocumentMetadata
+            ? {
+                studentDocuments: {
+                  where: { documentType: { in: ['photo', 'photoThumbnail'] } },
+                  select: { documentType: true },
+                  take: 1,
+                },
+              }
+            : {}),
         },
-      }),
-      prisma.student.count({ where }),
-    ]);
+      });
+
+    let students: any[];
+    let total: number;
+    try {
+      [students, total] = await Promise.all([listStudents(true), prisma.student.count({ where })]);
+    } catch (error) {
+      if (!isMissingStudentDocumentTable(error)) throw error;
+      // Keep the roster operational during a rolling deployment. This fallback
+      // deliberately does not retrieve legacy photo/blob columns.
+      logger.warn('StudentDocument migration is pending; serving lightweight compatibility roster.');
+      [students, total] = await Promise.all([listStudents(false), prisma.student.count({ where })]);
+    }
 
     return {
       students: students.map((s) => ({
