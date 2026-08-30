@@ -404,7 +404,7 @@ export const StudentsListView: React.FC = () => {
         onRowClick={(row) => setSelectedStudent(row)}
         emptyTitle="No Students Enrolled"
         emptyMessage="Start by adding your first student walk-in registration or sync from online applications."
-        pageSize={50}
+        pageSize={STUDENTS_PER_PAGE}
         pagination={{
           page: pagination.page,
           total: pagination.total,
