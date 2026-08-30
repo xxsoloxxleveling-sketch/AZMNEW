@@ -279,7 +279,7 @@ export class StudentsController {
     }
   }
 
-  async getRegistrationPdf(req: Request, res: Response, next: NextFunction) {
+  getRegistrationPdf = async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!(await this.hasCandidateOrStaffAccess(req, req.params.id))) {
         return res.status(401).json({ success: false, error: { message: 'Enter the matching CNIC / B-Form to download this slip.' } });
@@ -344,7 +344,7 @@ export class StudentsController {
     } catch (error) {
       next(error);
     }
-  }
+  };
 
   async uploadDocumentBinary(req: Request, res: Response, next: NextFunction) {
     try {
@@ -456,7 +456,7 @@ export class StudentsController {
     }
   }
 
-  async serveCandidatePhoto(req: Request, res: Response, next: NextFunction) {
+  serveCandidatePhoto = async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!(await this.hasCandidateOrStaffAccess(req, req.params.id))) {
         return res.status(401).json({ success: false, error: { message: 'Enter the matching CNIC / B-Form to view this photo.' } });
@@ -466,7 +466,7 @@ export class StudentsController {
     } catch (error) {
       next(error);
     }
-  }
+  };
 
   async purgeAll(_req: Request, res: Response, next: NextFunction) {
     try {
