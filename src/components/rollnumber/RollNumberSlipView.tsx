@@ -31,6 +31,7 @@ interface RollNumberSlipViewProps {
 
 export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelectTab }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [cnicOrBForm, setCnicOrBForm] = useState<string>('');
   const [selectedSlip, setSelectedSlip] = useState<RollNumberSlip | null>(null);
   const [isDossierOpen, setIsDossierOpen] = useState<boolean>(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
@@ -73,16 +74,21 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
     if (e) e.preventDefault();
     setErrorMsg('');
     const cleanQuery = searchQuery.trim();
+    const cleanIdentity = cnicOrBForm.trim();
 
     if (!cleanQuery) {
-      setErrorMsg('Please enter a valid Roll Number, CNIC / B-Form, or Application ID.');
+      setErrorMsg('Enter your application ID or roll number.');
+      return;
+    }
+    if (cleanIdentity.replace(/\D/g, '').length < 5) {
+      setErrorMsg('Enter the complete CNIC / B-Form used for registration.');
       return;
     }
 
     setIsLoading(true);
     setHasSearched(true);
 
-    const res = await searchRollNumberSlip(cleanQuery);
+    const res = await searchRollNumberSlip(cleanQuery, cleanIdentity);
     setIsLoading(false);
 
     if (res.success && res.data) {
@@ -126,10 +132,22 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
             <input
               type="text"
               id="input-roll-search"
-              placeholder="Enter CNIC (e.g. 13501-XXXXXXX-X), Roll No, or Application ID"
+              placeholder="Application ID or Roll No."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-3 text-xs sm:text-sm font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:ring-1 focus:ring-[#185b9d] focus:outline-hidden"
+            />
+          </div>
+          <div className="relative flex-1">
+            <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              id="input-slip-cnic"
+              placeholder="CNIC / B-Form used at registration"
+              value={cnicOrBForm}
+              onChange={(e) => setCnicOrBForm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 text-xs sm:text-sm font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:ring-1 focus:ring-[#185b9d] focus:outline-hidden"
+              autoComplete="off"
             />
           </div>
 

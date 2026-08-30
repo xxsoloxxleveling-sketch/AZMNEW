@@ -164,6 +164,29 @@ export const studentQuerySchema = z.object({
     .transform((val) => (val ? Math.max(1, Math.min(250, parseInt(val, 10))) : 50)),
 });
 
+const hasUploadedFile = (value: unknown) => {
+  if (typeof value === 'string') return value.startsWith('data:') || value.length > 0;
+  return Boolean(value && typeof value === 'object' && ((value as any).dataUrl || (value as any).supabasePath || (value as any).path));
+};
+
+// Only public online registration is strict. Admin walk-ins remain supported and
+// can be completed later by staff without pretending their documents exist.
+export const publicRegistrationSchema = createStudentSchema.superRefine((data, ctx) => {
+  const docs: Record<string, unknown> = data.uploadedDocuments || {};
+  const required: Array<[string, unknown]> = [
+    ['Candidate photo', docs.photo || data.photoUrl],
+    ['Candidate B-Form / CNIC', docs.bform || docs.bformUploaded],
+    ['Father / guardian CNIC', docs.fatherCnic || docs.fatherCnicUploaded],
+    ['DMC / result card', docs.dmc || docs.dmcUploaded || docs.dmc_1],
+    ['Digital signature', docs.signature || data.signatureDataUrl],
+  ];
+  for (const [label, value] of required) {
+    if (!hasUploadedFile(value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} is required for online registration.`, path: ['uploadedDocuments'] });
+    }
+  }
+});
+
 export const ALLOWED_FILE_MIME_TYPES = [
   'image/jpeg',
   'image/png',

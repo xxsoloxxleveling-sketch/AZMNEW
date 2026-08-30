@@ -41,6 +41,55 @@ interface StudentDetailViewProps {
   onBack: () => void;
 }
 
+function getDocTypeInfo(docKey: string, doc: any) {
+  const k = docKey.toLowerCase();
+  if (k.includes('photo') || k.includes('passport') || k.includes('picture')) {
+    return {
+      docType: 'CANDIDATE_PHOTO' as const,
+      defaultTitle: 'Candidate Passport Photo',
+    };
+  }
+  if ((k.includes('bform') || k.includes('cnic')) && !k.includes('father') && !k.includes('guardian') && !k.includes('parent')) {
+    return {
+      docType: 'CNIC_BFORM' as const,
+      defaultTitle: 'Candidate B-Form / CNIC Copy',
+    };
+  }
+  if (k.includes('father') || k.includes('guardian') || k.includes('fcnic') || k.includes('parent')) {
+    return {
+      docType: 'CNIC_BFORM' as const,
+      defaultTitle: 'Father / Guardian CNIC Copy',
+    };
+  }
+  if (k.includes('dmc') || k.includes('result') || k.includes('marksheet') || k.includes('transcript')) {
+    return {
+      docType: 'PREVIOUS_DMC' as const,
+      defaultTitle: 'Academic DMC / Result Card',
+    };
+  }
+  if (k.includes('payment') || k.includes('challan') || k.includes('receipt') || k.includes('fee')) {
+    return {
+      docType: 'PAYMENT_CHALLAN' as const,
+      defaultTitle: 'Fee Deposit Receipt',
+    };
+  }
+  if (k.includes('domicile')) {
+    return {
+      docType: 'CNIC_BFORM' as const,
+      defaultTitle: 'Domicile Certificate',
+    };
+  }
+  const formattedName = docKey
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+  return {
+    docType: 'CNIC_BFORM' as const,
+    defaultTitle: `${formattedName} Attachment`,
+  };
+}
+
 function extractStudentDocuments(s: any): MockStudentDocument[] {
   if (!s) return [];
   const docMap = new Map<string, MockStudentDocument>();
@@ -63,25 +112,71 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
       ? 'REJECTED'
       : 'PENDING_REVIEW';
   const rejectionReason = officeUse?.eligibilityRemarks;
-  const hasDocument = (document: any) =>
-    Boolean(
-      document &&
-        (document.dataUrl ||
-          document.publicUrl ||
-          document.fileUrl ||
-          document.supabasePath ||
-          document.fileEndpoint)
-    );
-  const legacyUrl = (document: any) =>
-    document?.publicUrl || document?.dataUrl || document?.fileUrl || '';
-  const endpoint = (document: any, storageDocType: string) =>
-    document?.fileEndpoint || `/api/students/${s.id}/document/${storageDocType}`;
 
-  // 1. Candidate Passport Photo
-  const photoFile = up.photo;
-  const photoUrl = legacyUrl(photoFile) || s.photoUrl || '';
+  // Add all documents from uploadedDocuments / uploadedDocsJson
+  for (const [key, value] of Object.entries(up)) {
+    if (!value || key === 'photoThumbnail') continue;
+    const docObj: any = typeof value === 'object' ? value : { dataUrl: String(value) };
+    const { docType, defaultTitle } = getDocTypeInfo(key, docObj);
+    const legacyUrl = docObj.fileUrl || docObj.publicUrl || docObj.dataUrl || (typeof value === 'string' && value.startsWith('data:') ? value : '');
+    const isPdf =
+      docObj.mimeType === 'application/pdf' ||
+      docObj.name?.endsWith('.pdf') ||
+      legacyUrl.startsWith('data:application/pdf') ||
+      docObj.supabasePath?.endsWith('.pdf');
 
-  if (photoFile || s.photoUrl || (photoUrl && photoUrl.length > 5)) {
+    docMap.set(`${candKey}_${key.toUpperCase()}`, {
+      id: `doc_${key}_${s.id || '1'}`,
+      studentId: s.id || '1',
+      studentName: s.fullName || 'Candidate',
+      rollNumber: s.rollNumber || 'PENDING',
+      applicationNo: s.applicationNo || 'APP-2026',
+      currentClass: s.currentClass || 'SSC',
+      docType,
+      title: docObj.name || docObj.originalFileName || `${s.fullName || 'Candidate'}_${defaultTitle.replace(/\s+/g, '_')}${isPdf ? '.pdf' : '.jpg'}`,
+      fileUrl: legacyUrl,
+      fileEndpoint: docObj.fileEndpoint || `/api/students/${s.id}/document/${key}`,
+      storageDocType: key,
+      fileSize: docObj.size || (docObj.byteSize ? `${Math.ceil(docObj.byteSize / 1024)} KB` : 'Candidate Attachment'),
+      fileType: isPdf ? 'application/pdf' : (docObj.mimeType || 'image/jpeg'),
+      uploadedAt: docObj.uploadedAt || s.createdAt || new Date().toISOString(),
+      status: docStatus,
+      rejectionReason,
+    });
+  }
+
+  // Include relations from studentDocuments table if present
+  if (Array.isArray(s.studentDocuments)) {
+    for (const doc of s.studentDocuments) {
+      if (!doc || doc.documentType === 'photoThumbnail') continue;
+      const key = doc.documentType;
+      const { docType, defaultTitle } = getDocTypeInfo(key, doc);
+      const isPdf = doc.mimeType === 'application/pdf' || doc.originalFileName?.endsWith('.pdf') || doc.objectPath?.endsWith('.pdf');
+
+      docMap.set(`${candKey}_${key.toUpperCase()}`, {
+        id: doc.id || `doc_${key}_${s.id}`,
+        studentId: s.id || '1',
+        studentName: s.fullName || 'Candidate',
+        rollNumber: s.rollNumber || 'PENDING',
+        applicationNo: s.applicationNo || 'APP-2026',
+        currentClass: s.currentClass || 'SSC',
+        docType,
+        title: doc.originalFileName || `${s.fullName || 'Candidate'}_${defaultTitle.replace(/\s+/g, '_')}${isPdf ? '.pdf' : '.jpg'}`,
+        fileUrl: '',
+        fileEndpoint: `/api/students/${s.id}/document/${key}`,
+        storageDocType: key,
+        fileSize: doc.byteSize ? `${Math.ceil(doc.byteSize / 1024)} KB` : 'Candidate Attachment',
+        fileType: isPdf ? 'application/pdf' : (doc.mimeType || 'image/jpeg'),
+        uploadedAt: doc.createdAt || s.createdAt || new Date().toISOString(),
+        status: docStatus,
+        rejectionReason,
+      });
+    }
+  }
+
+  // If photo was on student model but not in up:
+  if (s.photoUrl && !docMap.has(`${candKey}_PHOTO`)) {
+    const isBase64 = s.photoUrl.startsWith('data:');
     docMap.set(`${candKey}_PHOTO`, {
       id: `doc_photo_${s.id || '1'}`,
       studentId: s.id || '1',
@@ -90,133 +185,13 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
       applicationNo: s.applicationNo || 'APP-2026',
       currentClass: s.currentClass || 'SSC',
       docType: 'CANDIDATE_PHOTO',
-      title: photoFile?.name || `${s.fullName || 'Candidate'}_Passport_Photo.jpg`,
-      fileUrl: photoUrl,
-      fileEndpoint: endpoint(photoFile, 'photo'),
+      title: `${s.fullName || 'Candidate'}_Passport_Photo.jpg`,
+      fileUrl: isBase64 ? s.photoUrl : '',
+      fileEndpoint: `/api/students/${s.id}/document/photo`,
       storageDocType: 'photo',
-      fileSize: photoFile?.size || 'Candidate Photo',
+      fileSize: 'Candidate Photo',
       fileType: 'image/jpeg',
-      uploadedAt: photoFile?.uploadedAt || s.createdAt || new Date().toISOString(),
-      status: docStatus,
-      rejectionReason,
-    });
-  }
-
-  // 2. Candidate B-Form / CNIC
-  const bformFile = up.bform || up.bformUploaded || up.cnic || up.candidateCnic;
-  if (hasDocument(bformFile)) {
-    const bformUrl = legacyUrl(bformFile);
-    docMap.set(`${candKey}_BFORM`, {
-      id: `doc_cnic_${s.id || '2'}`,
-      studentId: s.id || '2',
-      studentName: s.fullName || 'Candidate',
-      rollNumber: s.rollNumber || 'PENDING',
-      applicationNo: s.applicationNo || 'APP-2026',
-      currentClass: s.currentClass || 'SSC',
-      docType: 'CNIC_BFORM',
-      title: bformFile.name || `${s.fullName || 'Candidate'}_Candidate_BForm_CNIC.jpg`,
-      fileUrl: bformUrl,
-      fileEndpoint: endpoint(bformFile, 'bform'),
-      storageDocType: 'bform',
-      fileSize: bformFile.size || 'Candidate Attachment',
-      fileType: bformUrl.includes('application/pdf') || bformFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-      uploadedAt: bformFile.uploadedAt || s.createdAt || new Date().toISOString(),
-      status: docStatus,
-      rejectionReason,
-    });
-  }
-
-  // 3. Father / Guardian CNIC
-  const fatherCnicFile = up.fatherCnic || up.fatherCnicUploaded || up.fcnic;
-  if (hasDocument(fatherCnicFile)) {
-    const fatherCnicUrl = legacyUrl(fatherCnicFile);
-    docMap.set(`${candKey}_FATHER_CNIC`, {
-      id: `doc_fcnic_${s.id || '3'}`,
-      studentId: s.id || '3',
-      studentName: s.fullName || 'Candidate',
-      rollNumber: s.rollNumber || 'PENDING',
-      applicationNo: s.applicationNo || 'APP-2026',
-      currentClass: s.currentClass || 'SSC',
-      docType: 'CNIC_BFORM',
-      title: fatherCnicFile.name || `${s.fullName || 'Candidate'}_Father_CNIC.jpg`,
-      fileUrl: fatherCnicUrl,
-      fileEndpoint: endpoint(fatherCnicFile, 'fatherCnic'),
-      storageDocType: 'fatherCnic',
-      fileSize: fatherCnicFile.size || 'Candidate Attachment',
-      fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-      uploadedAt: fatherCnicFile.uploadedAt || s.createdAt || new Date().toISOString(),
-      status: docStatus,
-      rejectionReason,
-    });
-  }
-
-  // 4. Academic DMC / Marksheet
-  const dmcFile = up.dmc || up.dmcUploaded || up.resultCard || up.previousResult;
-  if (hasDocument(dmcFile)) {
-    const dmcUrl = legacyUrl(dmcFile);
-    docMap.set(`${candKey}_DMC`, {
-      id: `doc_dmc_${s.id || '4'}`,
-      studentId: s.id || '4',
-      studentName: s.fullName || 'Candidate',
-      rollNumber: s.rollNumber || 'PENDING',
-      applicationNo: s.applicationNo || 'APP-2026',
-      currentClass: s.currentClass || 'SSC',
-      docType: 'PREVIOUS_DMC',
-      title: dmcFile.name || `${s.fullName || 'Candidate'}_DMC_Marksheet.jpg`,
-      fileUrl: dmcUrl,
-      fileEndpoint: endpoint(dmcFile, 'dmc'),
-      storageDocType: 'dmc',
-      fileSize: dmcFile.size || 'Candidate Attachment',
-      fileType: dmcUrl.includes('application/pdf') || dmcFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-      uploadedAt: dmcFile.uploadedAt || s.createdAt || new Date().toISOString(),
-      status: docStatus,
-      rejectionReason,
-    });
-  }
-
-  // 5. Payment Deposit Slip / Receipt
-  const feeFile = up.paymentReceipt || up.incomeCertUploaded || up.receipt || up.challan;
-  if (hasDocument(feeFile)) {
-    const feeUrl = legacyUrl(feeFile);
-    docMap.set(`${candKey}_FEE`, {
-      id: `doc_pay_${s.id || '5'}`,
-      studentId: s.id || '5',
-      studentName: s.fullName || 'Candidate',
-      rollNumber: s.rollNumber || 'PENDING',
-      applicationNo: s.applicationNo || 'APP-2026',
-      currentClass: s.currentClass || 'SSC',
-      docType: 'PAYMENT_CHALLAN',
-      title: feeFile.name || `${s.fullName || 'Candidate'}_Fee_Payment_Receipt.jpg`,
-      fileUrl: feeUrl,
-      fileEndpoint: endpoint(feeFile, 'paymentReceipt'),
-      storageDocType: 'paymentReceipt',
-      fileSize: feeFile.size || 'Candidate Attachment',
-      fileType: feeUrl.includes('application/pdf') || feeFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
-      uploadedAt: feeFile.uploadedAt || s.createdAt || new Date().toISOString(),
-      status: docStatus,
-      rejectionReason,
-    });
-  }
-
-  // 6. Domicile Certificate
-  const domicileFile = up.domicile || up.domicileUploaded;
-  if (hasDocument(domicileFile)) {
-    const domicileUrl = legacyUrl(domicileFile);
-    docMap.set(`${candKey}_DOMICILE`, {
-      id: `doc_dom_${s.id || '6'}`,
-      studentId: s.id || '6',
-      studentName: s.fullName || 'Candidate',
-      rollNumber: s.rollNumber || 'PENDING',
-      applicationNo: s.applicationNo || 'APP-2026',
-      currentClass: s.currentClass || 'SSC',
-      docType: 'CNIC_BFORM',
-      title: domicileFile.name || `${s.fullName || 'Candidate'}_Domicile_Certificate.jpg`,
-      fileUrl: domicileUrl,
-      fileEndpoint: endpoint(domicileFile, 'domicile'),
-      storageDocType: 'domicile',
-      fileSize: domicileFile.size || 'Candidate Attachment',
-      fileType: domicileUrl.includes('application/pdf') || domicileFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-      uploadedAt: domicileFile.uploadedAt || s.createdAt || new Date().toISOString(),
+      uploadedAt: s.createdAt || new Date().toISOString(),
       status: docStatus,
       rejectionReason,
     });
@@ -228,6 +203,7 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: initialStudent, onBack }) => {
   const { role } = useAuth();
   const [student, setStudent] = useState<MockStudent>(initialStudent);
+  const [profilePhotoBlobUrl, setProfilePhotoBlobUrl] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingSlip, setIsDownloadingSlip] = useState(false);
   const [isDossierOpen, setIsDossierOpen] = useState(false);
@@ -235,23 +211,38 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
   const [selectedDoc, setSelectedDoc] = useState<MockStudentDocument | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // Test Center & Hall Allocation State
   const [testCenters, setTestCenters] = useState<MockTestCenter[]>([]);
-  const [assignedCenter, setAssignedCenter] = useState<string>(
-    initialStudent.testCenterName || initialStudent.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra'
-  );
-  const [assignedHall, setAssignedHall] = useState<string>(
-    initialStudent.assignedHall || 'Hall E (Matric SSC-II Main Examination Hall)'
-  );
-  const [assignedRoom, setAssignedRoom] = useState<string>(initialStudent.assignedRoom || 'Hall 301-E');
-  const [seatNo, setSeatNo] = useState<string>(initialStudent.seatNo || 'Seat #01');
-  const [isSavingAllocation, setIsSavingAllocation] = useState<boolean>(false);
-  const [allocationSuccess, setAllocationSuccess] = useState<boolean>(false);
+  const [assignedCenter, setAssignedCenter] = useState(initialStudent.testCenterName || initialStudent.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra');
+  const [assignedHall, setAssignedHall] = useState(initialStudent.assignedHall || 'Hall E (Matric SSC-II Main Examination Hall)');
+  const [assignedRoom, setAssignedRoom] = useState(initialStudent.assignedRoom || 'Hall 301-E');
+  const [seatNo, setSeatNo] = useState(initialStudent.seatNo || 'Seat #01');
+  const [isSavingAllocation, setIsSavingAllocation] = useState(false);
+  const [allocationSuccess, setAllocationSuccess] = useState(false);
 
   useEffect(() => {
     loadFullStudent();
     loadCenters();
+  }, [initialStudent.id, initialStudent.applicationNo]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let blobUrl: string | null = null;
+    const studentId = initialStudent.id || initialStudent.applicationNo;
+    if (!studentId) return;
+    apiFetchProtectedObjectUrl(`/api/students/${studentId}/document/photo`)
+      .catch(() => apiFetchProtectedObjectUrl(`/api/students/${studentId}/document/photoThumbnail`))
+      .then((url) => {
+        if (cancelled) URL.revokeObjectURL(url);
+        else {
+          blobUrl = url;
+          setProfilePhotoBlobUrl(url);
+        }
+      })
+      .catch(() => { if (!cancelled) setProfilePhotoBlobUrl(null); });
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
   }, [initialStudent.id, initialStudent.applicationNo]);
 
   const loadCenters = async () => {
@@ -329,7 +320,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
 
   const handleUpdateStatus = async (docId: string, status: 'VERIFIED' | 'REJECTED') => {
     await mockApi.updateDocumentStatus(docId, status, undefined, student.id);
-    loadDocuments();
+    loadFullStudent();
     if (selectedDoc && selectedDoc.id === docId) {
       setSelectedDoc((prev) => (prev ? { ...prev, status } : null));
     }
@@ -376,7 +367,6 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
     }
   };
 
-
   return (
     <div className="space-y-6">
       {/* Top Action Bar */}
@@ -396,9 +386,9 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                 if (confirm(`Approve PKR 300 fee payment and verify registration for ${student.fullName}?`)) {
                   try {
                     setStudent((prev: any) => ({ ...prev, feeStatus: 'PAID' }));
-                    await mockApi.approveStudentPayment(student.id, student);
+                    await mockApi.approveStudentPayment(student.id);
                     alert(`Fee payment verified for ${student.fullName}. Candidate registration confirmed in database!`);
-                    fetchStudentData();
+                    loadFullStudent();
                   } catch (err: any) {
                     alert(err.message || 'Failed to approve payment');
                   }
@@ -504,24 +494,20 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
       {/* Header Profile Card with Biometric QR */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
-          <img
-            src={
-              student.uploadedDocuments?.photo?.dataUrl ||
-              (student.photoUrl && !student.photoUrl.includes('supabase.co/storage') ? student.photoUrl : null) ||
-              `${API_BASE_URL}/api/students/${student.applicationNo || student.id}/document/photo`
-            }
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = `data:image/svg+xml;utf8,${encodeURIComponent(
-                `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-                  <rect width="200" height="200" fill="#e2e8f0"/>
-                  <circle cx="100" cy="80" r="40" fill="#94a3b8"/>
-                  <path d="M30 180 C30 130, 170 130, 170 180 Z" fill="#64748b"/>
-                </svg>`
-              )}`;
-            }}
-            alt={student.fullName}
-            className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 border-slate-200 shadow-sm"
-          />
+          {profilePhotoBlobUrl ? (
+            <img
+              src={profilePhotoBlobUrl}
+              alt={student.fullName}
+              className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 border-slate-200 shadow-sm"
+            />
+          ) : (
+            <div
+              className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-slate-100 border-2 border-slate-200 shadow-sm flex items-center justify-center text-3xl font-black text-slate-500"
+              aria-label={`${student.fullName} avatar`}
+            >
+              {student.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'}
+            </div>
+          )}
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
               <h2 className="text-2xl font-black text-slate-900">{student.fullName}</h2>

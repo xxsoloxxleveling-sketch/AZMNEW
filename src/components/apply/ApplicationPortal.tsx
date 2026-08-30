@@ -763,6 +763,29 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     try {
       const standardDocName = getFormattedDocName(docKey, file.name);
       const { dataUrl, sizeFormatted } = await autoCompressImageFile(file, 600, 1400);
+
+      // Check if user selected the identical image that was already uploaded for another document
+      for (const [existingKey, existingDoc] of Object.entries(uploadedDocs)) {
+        if (existingKey === docKey || !existingDoc) continue;
+        if ((existingDoc as any)?.dataUrl && (existingDoc as any).dataUrl.length > 50 && (existingDoc as any).dataUrl === dataUrl) {
+          const friendlyExisting =
+            existingKey === 'bformUploaded'
+              ? 'Candidate B-Form'
+              : existingKey === 'fatherCnicUploaded'
+              ? 'Father / Guardian CNIC'
+              : existingKey === 'dmcUploaded'
+              ? 'DMC / Result Card'
+              : existingKey === 'photo'
+              ? 'Candidate Passport Photo'
+              : existingKey;
+          alert(
+            `⚠️ Notice: You have chosen the same image that was already uploaded for "${friendlyExisting}". Please make sure to attach the genuine document for each field.`
+          );
+          e.target.value = '';
+          return;
+        }
+      }
+
       setUploadedDocs((prev) => ({
         ...prev,
         [docKey]: {
@@ -847,6 +870,26 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         const standardDocName = `${cleanName}_DMC_${dmcIndex}.${ext}`;
 
         const { dataUrl, sizeFormatted } = await autoCompressImageFile(file, 600, 1400);
+
+        // Check if user selected identical image for DMC that was already uploaded
+        for (const [existingKey, existingDoc] of Object.entries(uploadedDocs)) {
+          if (existingKey === 'dmcUploaded' || !existingDoc) continue;
+          if ((existingDoc as any)?.dataUrl && (existingDoc as any).dataUrl.length > 50 && (existingDoc as any).dataUrl === dataUrl) {
+            const friendlyExisting =
+              existingKey === 'bformUploaded'
+                ? 'Candidate B-Form'
+                : existingKey === 'fatherCnicUploaded'
+                ? 'Father / Guardian CNIC'
+                : existingKey === 'photo'
+                ? 'Candidate Passport Photo'
+                : existingKey;
+            alert(
+              `⚠️ Notice: You have chosen the same image that was already uploaded for "${friendlyExisting}". Please make sure to attach the genuine DMC / Marksheet for this field.`
+            );
+            e.target.value = '';
+            return;
+          }
+        }
 
         const newDmc = {
           id: `dmc_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`,

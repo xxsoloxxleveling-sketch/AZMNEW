@@ -10,6 +10,16 @@ let thumbnailBackfillJob: {
 } = { status: 'idle' };
 
 export class StudentsController {
+  private async hasCandidateOrStaffAccess(req: Request, studentIdentifier: string): Promise<boolean> {
+    const authorization = String(req.headers.authorization || '');
+    if (authorization.startsWith('Bearer ')) {
+      try {
+        verifyAccessToken(authorization.slice(7));
+        return true;
+      } catch {}
+    }
+    return studentsService.verifyCandidateIdentity(studentIdentifier, String(req.query.cnic || req.body?.cnic || ''));
+  }
   async startThumbnailBackfill(_req: Request, res: Response, next: NextFunction) {
     try {
       if (thumbnailBackfillJob.status === 'running') {
@@ -269,6 +279,9 @@ export class StudentsController {
 
   async getRegistrationPdf(req: Request, res: Response, next: NextFunction) {
     try {
+      if (!(await this.hasCandidateOrStaffAccess(req, req.params.id))) {
+        return res.status(401).json({ success: false, error: { message: 'Enter the matching CNIC / B-Form to download this slip.' } });
+      }
       const { buffer, filename } = await studentsService.generateRegistrationPdf(req.params.id);
 
       res.setHeader('Content-Type', 'application/pdf');
@@ -423,8 +436,31 @@ export class StudentsController {
   async searchPublicSlip(req: Request, res: Response, next: NextFunction) {
     try {
       const query = String(req.query.query || req.body?.query || '');
-      const result = await studentsService.searchPublicSlip(query);
+      const cnic = String(req.query.cnic || req.body?.cnic || query);
+      const result = await studentsService.searchPublicSlip(query, cnic);
       return res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async findPublicRegistration(req: Request, res: Response, next: NextFunction) {
+    try {
+      const applicationNo = String(req.query.applicationNo || req.body?.applicationNo || '');
+      const cnic = String(req.query.cnic || req.body?.cnic || '');
+      return res.status(200).json(await studentsService.findPublicRegistration(applicationNo, cnic));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async serveCandidatePhoto(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!(await this.hasCandidateOrStaffAccess(req, req.params.id))) {
+        return res.status(401).json({ success: false, error: { message: 'Enter the matching CNIC / B-Form to view this photo.' } });
+      }
+      req.params.docType = 'photoThumbnail';
+      return this.serveDocument(req, res, next);
     } catch (error) {
       next(error);
     }

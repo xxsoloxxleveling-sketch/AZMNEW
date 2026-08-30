@@ -8,9 +8,14 @@ import {
   BookOpen,
   Award,
   MessageSquare,
+  FileCheck,
+  Eye,
+  FileText,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { MockStudent, printStudentDossier } from '../../lib/mockApi';
 import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../utils/whatsapp';
+import { apiFetchProtectedObjectUrl } from '../../lib/apiClient';
 
 interface StudentDossierModalProps {
   isOpen: boolean;
@@ -20,6 +25,54 @@ interface StudentDossierModalProps {
 
 export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen, onClose, student }) => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [photoBlobUrl, setPhotoBlobUrl] = useState<string | null>(null);
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
+  const [previewDocTitle, setPreviewDocTitle] = useState<string | null>(null);
+  const [previewIsPdf, setPreviewIsPdf] = useState(false);
+
+  useEffect(() => {
+    let isCancelled = false;
+    let createdUrl: string | null = null;
+
+    const loadPhoto = async () => {
+      const studentId = student?.id || student?.applicationNo;
+      if (!studentId) return;
+
+      if (student?.photoUrl && student.photoUrl.startsWith('data:')) {
+        setPhotoBlobUrl(student.photoUrl);
+        return;
+      }
+
+      try {
+        const url = await apiFetchProtectedObjectUrl(`/api/students/${studentId}/document/photo`);
+        if (!isCancelled) {
+          createdUrl = url;
+          setPhotoBlobUrl(url);
+        }
+      } catch {
+        try {
+          const thumbUrl = await apiFetchProtectedObjectUrl(`/api/students/${studentId}/document/photoThumbnail`);
+          if (!isCancelled) {
+            createdUrl = thumbUrl;
+            setPhotoBlobUrl(thumbUrl);
+          }
+        } catch {}
+      }
+    };
+
+    if (isOpen && student) {
+      loadPhoto();
+    } else {
+      setPhotoBlobUrl(null);
+    }
+
+    return () => {
+      isCancelled = true;
+      if (createdUrl && createdUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [isOpen, student?.id, student?.applicationNo, student?.photoUrl]);
 
   useEffect(() => {
     if (student?.rollNumber || student?.applicationNo) {
@@ -33,6 +86,19 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
         .catch(() => {});
     }
   }, [student]);
+
+  const handleInspectDoc = async (docType: string, docName: string) => {
+    const studentId = student?.id || student?.applicationNo;
+    if (!studentId) return;
+    try {
+      const url = await apiFetchProtectedObjectUrl(`/api/students/${studentId}/document/${docType}`);
+      setPreviewDocTitle(docName);
+      setPreviewIsPdf(docType.toLowerCase().includes('pdf') || docName.toLowerCase().endsWith('.pdf'));
+      setPreviewDocUrl(url);
+    } catch (err: any) {
+      alert(err?.message || 'Unable to open attached document.');
+    }
+  };
 
   if (!isOpen || !student) return null;
 
@@ -129,14 +195,17 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
           {/* Header Banner */}
           <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6 p-6 rounded-2xl bg-slate-50 border border-slate-200">
             <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
-              <img
-                src={
-                  student.photoUrl ||
-                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80'
-                }
-                alt={student.fullName}
-                className="w-24 h-28 rounded-xl object-cover border-2 border-slate-900 shadow-md bg-white shrink-0"
-              />
+              {photoBlobUrl ? (
+                <img
+                  src={photoBlobUrl}
+                  alt={student.fullName}
+                  className="w-24 h-28 rounded-xl object-cover border-2 border-slate-900 shadow-md bg-white shrink-0"
+                />
+              ) : (
+                <div className="w-24 h-28 rounded-xl bg-slate-200 border-2 border-slate-900 shadow-md flex items-center justify-center text-3xl font-black text-slate-600 shrink-0">
+                  {student.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+              )}
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                   <h3 className="text-xl font-extrabold text-slate-900 font-display">{student.fullName}</h3>
@@ -288,6 +357,41 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
               </div>
             </div>
           </div>
+
+          {/* Section 5: Submitted Candidate Documents */}
+          {student.uploadedDocuments && Object.keys(student.uploadedDocuments).length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-200 font-bold text-slate-900">
+                <FileCheck className="w-4 h-4 text-[#185b9d]" />
+                <span>Section 5: Submitted Candidate Documents & Verification Attachments</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {Object.entries(student.uploadedDocuments).map(([docType, doc]: [string, any]) => {
+                  if (docType === 'photoThumbnail') return null;
+                  const docTitle = doc?.name || `${docType} Document`;
+                  return (
+                    <div
+                      key={docType}
+                      className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between hover:bg-slate-100/80 transition"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <span className="font-bold text-slate-800 text-xs truncate block">{docTitle}</span>
+                        <span className="text-[10px] text-slate-500 font-mono block">{doc?.size || 'Attached File'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleInspectDoc(docType, docTitle)}
+                        className="px-2.5 py-1 rounded-lg bg-[#185b9d] hover:bg-[#13497d] text-white text-[10px] font-bold transition flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>View</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modal Footer */}
@@ -336,6 +440,34 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
           </div>
         </div>
       </div>
+
+      {/* Embedded Document Preview Lightbox */}
+      {previewDocUrl && (
+        <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
+            <div className="px-5 py-3 bg-slate-900 text-white flex items-center justify-between">
+              <span className="font-bold text-xs truncate">{previewDocTitle || 'Attached Document'}</span>
+              <button
+                onClick={() => {
+                  if (previewDocUrl.startsWith('blob:')) URL.revokeObjectURL(previewDocUrl);
+                  setPreviewDocUrl(null);
+                  setPreviewIsPdf(false);
+                }}
+                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-slate-100">
+              {previewIsPdf || previewDocUrl.startsWith('data:application/pdf') ? (
+                <iframe src={previewDocUrl} title="Document Preview" className="w-full h-[70vh] rounded-lg border border-slate-300" />
+              ) : (
+                <img src={previewDocUrl} alt="Document Preview" className="max-h-[70vh] object-contain rounded-lg shadow-sm" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

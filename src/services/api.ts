@@ -41,163 +41,34 @@ export interface ApiResponse<T> {
 // -------------------------------------------------------------
 // 1. Roll Number Slips API
 // -------------------------------------------------------------
-export async function searchRollNumberSlip(query: string): Promise<ApiResponse<RollNumberSlip>> {
+export async function searchRollNumberSlip(query: string, cnicOrBForm: string): Promise<ApiResponse<RollNumberSlip>> {
   const clean = query.trim();
-  const cleanDigits = query.replace(/\D/g, '');
+  const identity = cnicOrBForm.trim();
+  const identityDigits = identity.replace(/\D/g, '');
 
-  if (!clean || (clean.length < 3 && cleanDigits.length < 3)) {
-    return { success: false, error: 'Please enter at least 3 characters or digits (e.g. 0002, CNIC, or Roll Number) to search.' };
+  if (!clean) {
+    return { success: false, error: 'Enter your application ID or roll number.' };
+  }
+  if (identityDigits.length < 5) {
+    return { success: false, error: 'Enter the complete CNIC / B-Form used for registration.' };
   }
 
   try {
-    const url = `${API_BASE_URL}/api/students/search-slip?query=${encodeURIComponent(clean)}`;
+    const url = `${API_BASE_URL}/api/students/search-slip?query=${encodeURIComponent(clean)}&cnic=${encodeURIComponent(identity)}`;
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
       },
     });
     const json: any = await response.json();
-    if (json && typeof json.success === 'boolean') {
-      return json;
-    }
+    return json && typeof json.success === 'boolean'
+      ? json
+      : { success: false, error: 'Unable to verify this application. Please try again.' };
   } catch (err: any) {
     console.warn('Live search-slip endpoint error:', err);
-  }
-
-  try {
-    const { mockApi, fetchRollNumberReleaseConfig } = await import('../lib/mockApi');
-    const [students, releaseConfig] = await Promise.all([
-      mockApi.getStudents().catch(() => []),
-      fetchRollNumberReleaseConfig().catch(() => mockApi.getRollNumberReleaseConfig()),
-    ]);
-
-    const cleanLower = clean.toLowerCase();
-
-    const formattedCnic =
-      cleanDigits.length === 13
-        ? `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 12)}-${cleanDigits.slice(12)}`
-        : null;
-
-    // 1. Attempt exact match
-    let student = students.find((s: any) => {
-      const matchRoll = s.rollNumber && s.rollNumber.toLowerCase() === cleanLower;
-      const matchApp = s.applicationNo && s.applicationNo.toLowerCase() === cleanLower;
-      const matchId = s.id && s.id.toLowerCase() === cleanLower;
-      const sDigits = s.cnicOrBForm ? s.cnicOrBForm.replace(/\D/g, '') : '';
-      const matchCnic =
-        (s.cnicOrBForm && s.cnicOrBForm.toLowerCase() === cleanLower) ||
-        (formattedCnic && s.cnicOrBForm && s.cnicOrBForm.toLowerCase() === formattedCnic.toLowerCase()) ||
-        (cleanDigits.length >= 11 && sDigits === cleanDigits);
-      return matchRoll || matchApp || matchId || matchCnic;
-    });
-
-    // 2. Attempt partial match if no exact match
-    if (!student) {
-      const partialMatches = students.filter((s: any) => {
-        const matchRoll = s.rollNumber && s.rollNumber.toLowerCase().includes(cleanLower);
-        const matchApp = s.applicationNo && s.applicationNo.toLowerCase().includes(cleanLower);
-        const sDigits = s.cnicOrBForm ? s.cnicOrBForm.replace(/\D/g, '') : '';
-        const matchCnic =
-          (s.cnicOrBForm && s.cnicOrBForm.toLowerCase().includes(cleanLower)) ||
-          (formattedCnic && s.cnicOrBForm && s.cnicOrBForm.toLowerCase().includes(formattedCnic.toLowerCase())) ||
-          (cleanDigits.length >= 3 && sDigits.includes(cleanDigits));
-        const matchName = clean.length >= 3 && s.fullName && s.fullName.toLowerCase().includes(cleanLower);
-        return matchRoll || matchApp || matchCnic || matchName;
-      });
-
-      if (partialMatches.length > 1) {
-        return {
-          success: false,
-          error: `Multiple records match "${clean}". To protect candidate privacy, please enter your full Roll Number (e.g. AZMVS-2026-0002), 13-digit CNIC, or Application ID.`
-        };
-      }
-
-      if (partialMatches.length === 1) {
-        student = partialMatches[0];
-      }
-    }
-
-    if (student) {
-      // Check if fee is paid or roll number issued
-      const isFeePaid =
-        student.feeStatus === 'PAID' ||
-        (student.feeRecords && student.feeRecords.some((f: any) => f.status === 'PAID')) ||
-        (student.feeChallan && student.feeChallan.status === 'PAID') ||
-        Boolean(student.rollNumber && (student.rollNumber.startsWith('AZMVS') || student.rollNumber.startsWith('JPS')));
-
-      if (!isFeePaid) {
-        return {
-          success: false,
-          error: `Application Found (${student.fullName} - ${student.applicationNo}): Registration fee payment of PKR 300 is pending verification. Please deposit PKR 300 via Bank Alfalah (Account: 83861010161490 - Title: Sumama Khan) [Note: EasyPaisa, JazzCash, and Faysal Bank account limits are reached] and send receipt to WhatsApp 0305-1755551 to activate your Roll Number Slip.`
-        };
-      }
-
-      // Check if roll number is released (Immediate mode = released; Scheduled mode = released if releaseDateTime is reached)
-      const isReleased =
-        !releaseConfig.isScheduled ||
-        !releaseConfig.releaseDateTime ||
-        Date.now() >= new Date(releaseConfig.releaseDateTime).getTime();
-
-      if (!student.rollNumber || !isReleased) {
-        const dateFormatted = releaseConfig.releaseDateTime
-          ? new Date(releaseConfig.releaseDateTime).toLocaleString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })
-          : 'Official Release Schedule';
-        const msg = !student.rollNumber
-          ? `Registration fee payment of PKR 300 is confirmed! Official Roll Numbers and examination hall seating plans are scheduled for batch release on ${dateFormatted}. Please return on the release date to download your slip.`
-          : releaseConfig.announcementMessage || 'Official Roll Number Slips are scheduled for release.';
-
-        return {
-          success: false,
-          error: `SCHEDULED_RELEASE:::${student.fullName}:::${student.applicationNo}:::${dateFormatted}:::${msg}`,
-        };
-      }
-
-      const rollNo = student.rollNumber;
-
-      const slip: RollNumberSlip = {
-        rollNo: rollNo,
-        applicationId: student.applicationNo || student.id || 'APP-2026',
-        candidateName: student.fullName,
-        fatherName: student.fatherName,
-        cnicBForm: student.cnicOrBForm,
-        classLevel: student.currentClass || 'SSC-II (Class 10th)',
-        candidatePhoto: student.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
-        testCenter: student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra',
-        centerAddress: 'Main College Road, Mansehra / Abbottabad Regional Center, KP',
-        examDate: student.officeUse?.testDate || 'Sunday, 15 November 2026',
-        reportingTime: student.officeUse?.testReportingTime || '09:00 AM',
-        examStartTime: '10:00 AM - 12:00 PM (120 Mins)',
-        roomNo: student.assignedRoom || 'HALL-01',
-        seatIndex: student.seatNo || `SEAT-${rollNo.split('-').pop() || '0101'}`,
-        securityHash: `AZMVS-SHA256-${rollNo}`,
-        qrPayload: student.qrToken || `https://azmaio.com/verify?rollNo=${rollNo}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`,
-        barcode: `||| |||| || ||||| ${rollNo}`,
-        specialInstructions: [
-          'Bring your original CNIC / B-Form along with this printed entry slip to the examination centre.',
-          'Entry gate closes strictly 15 minutes before the reporting time (08:45 AM).',
-          'Biometric verification will be carried out at the entry desk using your QR code.',
-          'Mobile phones, smartwatches, and programmable calculators are strictly prohibited inside the hall.'
-        ],
-      };
-
-      return { success: true, data: slip };
-    }
-
     return {
       success: false,
-      error: 'No matching candidate record found in examination registry.'
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err?.message || 'Failed to search examination registry.'
+      error: 'The verification service is temporarily unavailable. Please try again shortly.'
     };
   }
 }

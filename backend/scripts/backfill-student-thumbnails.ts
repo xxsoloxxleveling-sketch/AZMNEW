@@ -36,16 +36,28 @@ type LegacyPhoto = {
 
 function dataUrlToPhoto(value: unknown): LegacyPhoto | null {
   if (typeof value !== 'string') return null;
-  const match = value.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.*)$/s);
-  if (!match) return null;
-  return {
-    mimeType: match[1] === 'image/jpg' ? 'image/jpeg' : match[1],
-    buffer: Buffer.from(match[2], 'base64'),
-  };
+  const match = value.match(/^data:(?:image\/(?:jpeg|jpg|png|webp)|application\/octet-stream)?;base64,(.*)$/s);
+  if (match) {
+    const buffer = Buffer.from(match[1], 'base64');
+    const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+    return {
+      mimeType: isPng ? 'image/png' : 'image/jpeg',
+      buffer,
+    };
+  }
+  return null;
 }
 
 function thumbnailPath(cnicOrBForm: string) {
   return `${cnicOrBForm.replace(/[^\w-]/g, '_')}/photo_thumbnail.jpg`;
+}
+
+async function fetchRemoteImage(url: string): Promise<Buffer | null> {
+  // Never fetch a URL stored in a legacy student record: it could target an
+  // internal service or download an unbounded file. Backfills use the verified
+  // private Storage object, embedded legacy data, or skip the record safely.
+  void url;
+  return null;
 }
 
 async function makeThumbnail(photo: LegacyPhoto): Promise<Buffer> {
@@ -60,19 +72,93 @@ async function makeThumbnail(photo: LegacyPhoto): Promise<Buffer> {
 }
 
 async function getLegacyPhoto(student: any): Promise<LegacyPhoto | null> {
-  const documents = student.uploadedDocsJson ? JSON.parse(student.uploadedDocsJson) : {};
-  const inline = dataUrlToPhoto(student.photoUrl) || dataUrlToPhoto(documents?.photo?.dataUrl);
-  if (inline) return { ...inline, originalFileName: documents?.photo?.name };
+  let documents: Record<string, any> = {};
+  if (student.uploadedDocsJson) {
+    try {
+      documents = JSON.parse(student.uploadedDocsJson);
+    } catch {}
+  }
 
-  const photoMetadata = student.studentDocuments.find((document: any) => document.documentType === 'photo');
-  const sourceBucket = photoMetadata?.bucket || documents?.photo?.bucket;
-  const sourcePath = photoMetadata?.objectPath || documents?.photo?.supabasePath;
-  if (!sourceBucket || !sourcePath) return null;
-  const buffer = await supabaseStorage.downloadFile(sourceBucket, sourcePath);
-  if (!buffer) return null;
-  const mimeType = photoMetadata?.mimeType || documents?.photo?.mimeType || 'image/jpeg';
-  if (!/^image\/(jpeg|jpg|png|webp)$/.test(mimeType)) return null;
-  return { buffer, mimeType: mimeType === 'image/jpg' ? 'image/jpeg' : mimeType, originalFileName: photoMetadata?.originalFileName || documents?.photo?.name };
+  const photoDoc =
+    documents?.photo ||
+    documents?.photoUploaded ||
+    documents?.passportPhoto ||
+    documents?.candidatePhoto ||
+    documents?.profilePhoto ||
+    documents?.picture;
+
+  // 1. Check inline base64
+  const inline =
+    dataUrlToPhoto(student.photoUrl) ||
+    dataUrlToPhoto(photoDoc?.dataUrl) ||
+    (typeof photoDoc === 'string' ? dataUrlToPhoto(photoDoc) : null);
+  if (inline) return { ...inline, originalFileName: photoDoc?.name || photoDoc?.originalFileName || 'Candidate_Photo.jpg' };
+
+  // 2. Check remote URL in photoUrl
+  if (typeof student.photoUrl === 'string' && student.photoUrl.startsWith('http')) {
+    const buffer = await fetchRemoteImage(student.photoUrl);
+    if (buffer && buffer.length > 0) {
+      const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+      return {
+        buffer,
+        mimeType: isPng ? 'image/png' : 'image/jpeg',
+        originalFileName: 'Candidate_Photo.jpg',
+      };
+    }
+  }
+
+  // 3. Check studentDocuments table
+  const photoMetadata = (student.studentDocuments || []).find((d: any) =>
+    ['photo', 'candidatePhoto', 'passportPhoto'].includes(d.documentType)
+  );
+  const sourceBucket = (photoMetadata?.bucket || photoDoc?.bucket || 'student-photos') as any;
+  const sourcePath =
+    photoMetadata?.objectPath ||
+    photoDoc?.supabasePath ||
+    photoDoc?.path ||
+    (typeof photoDoc === 'string' && !photoDoc.startsWith('data:') ? photoDoc : null);
+
+  if (sourceBucket && sourcePath) {
+    const buffer = await supabaseStorage.downloadFile(sourceBucket, sourcePath);
+    if (buffer && buffer.length > 0) {
+      const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+      const mimeType = photoMetadata?.mimeType || photoDoc?.mimeType || (isPng ? 'image/png' : 'image/jpeg');
+      return {
+        buffer,
+        mimeType: mimeType === 'image/jpg' ? 'image/jpeg' : mimeType,
+        originalFileName: photoMetadata?.originalFileName || photoDoc?.name || 'Candidate_Photo.jpg',
+      };
+    }
+  }
+
+  // 4. Supabase Storage listing by candidate CNIC or Application Number
+  for (const prefix of [student.cnicOrBForm, student.applicationNo].filter(Boolean) as string[]) {
+    const cleanPrefix = prefix.replace(/[^\w-]/g, '_');
+    try {
+      const { data: files } = (await (supabaseStorage as any).client?.storage
+        ?.from('student-photos')
+        ?.list(cleanPrefix)) || { data: [] };
+      const match = (files || []).find(
+        (f: any) =>
+          !f.name.includes('thumbnail') &&
+          (f.name.startsWith('photo') || f.name.startsWith('passport') || /\.(jpg|jpeg|png|webp)$/i.test(f.name))
+      );
+      if (match) {
+        const storagePath = `${cleanPrefix}/${match.name}`;
+        const buffer = await supabaseStorage.downloadFile('student-photos', storagePath);
+        if (buffer && buffer.length > 0) {
+          const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+          return {
+            buffer,
+            mimeType: isPng ? 'image/png' : 'image/jpeg',
+            originalFileName: match.name,
+          };
+        }
+      }
+    } catch {}
+  }
+
+  return null;
 }
 
 export async function runThumbnailBackfill(options: { apply: boolean; disconnectDatabase?: boolean }): Promise<ThumbnailBackfillSummary> {
@@ -135,7 +221,10 @@ export async function runThumbnailBackfill(options: { apply: boolean; disconnect
           continue;
         }
         summary.candidates++;
-        if (!apply) continue;
+        if (!apply) {
+          console.log(`[PREVIEW] Found photo candidate for student ${student.id} (${student.cnicOrBForm})`);
+          continue;
+        }
 
         try {
           const thumbnail = await makeThumbnail(legacyPhoto);
@@ -154,11 +243,13 @@ export async function runThumbnailBackfill(options: { apply: boolean; disconnect
             create: { studentId: student.id, documentType: 'photoThumbnail', bucket: thumbnailBucket, objectPath: path, originalFileName: legacyPhoto.originalFileName || 'Candidate_Photo_Thumbnail.jpg', mimeType: 'image/jpeg', byteSize: verified.length, checksumSha256 },
           });
           summary.created++;
+          console.log(`[CREATED] Thumbnail generated and saved for student ${student.id} (${student.cnicOrBForm}) -> ${path}`);
         } catch (error) {
           summary.failed++;
           console.error(`Thumbnail failed for ${student.id}:`, error instanceof Error ? error.message : error);
         }
       }
+      console.log(`[PROGRESS] Scanned: ${summary.scanned}, Existing: ${summary.alreadyPresent}, Candidates: ${summary.candidates}, Created: ${summary.created}, Skipped: ${summary.skipped}`);
       cursor = students.at(-1)?.id;
       if (students.length < batchSize) break;
     } while (cursor);

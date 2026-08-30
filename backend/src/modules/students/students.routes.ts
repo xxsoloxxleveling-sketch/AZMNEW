@@ -3,6 +3,7 @@ import { studentsController } from './students.controller';
 import { validateBody, validateQuery } from '../../middleware/validate.middleware';
 import {
   createStudentSchema,
+  publicRegistrationSchema,
   updateStudentSchema,
   officeUseUpdateSchema,
   studentQuerySchema,
@@ -23,11 +24,11 @@ const router = Router();
 router.post(
   '/register',
   registrationRateLimiter,
-  validateBody(createStudentSchema),
+  validateBody(publicRegistrationSchema),
   studentsController.register
 );
 
-// Registration PDF export (accessible publicly or authenticated with candidate ID / App No)
+// Registration PDF export (authenticated staff or a candidate with matching CNIC/B-Form)
 router.get('/:id/registration-pdf', studentsController.getRegistrationPdf);
 
 // QR image retrieval
@@ -70,13 +71,20 @@ router.post(
   studentsController.searchPublicSlip
 );
 
-// Protected routes (Admin / Teachers / Super Admin)
+router.get('/search-registration', studentsController.findPublicRegistration);
+router.post('/search-registration', studentsController.findPublicRegistration);
+
+// Candidate self-service uses the matching CNIC / B-Form as the verification
+// secret. Private staff routes below remain authenticated.
+router.get('/:id/photo-thumbnail', studentsController.serveCandidatePhoto);
+
+// Protected routes (Admin / Teachers / Super Admin / Accountants)
 router.use(authenticate);
 
-// Private student files are only streamed to authenticated staff.
+// Private student files are streamed to authenticated staff.
 router.get(
   '/:id/document/:docType',
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER, Role.ACCOUNTANT),
   studentsController.serveDocument
 );
 

@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import https from 'https';
-import http from 'http';
 import crypto from 'crypto';
+import sharp from 'sharp';
 import { prisma, TransactionType } from '../../lib/prisma';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
@@ -47,6 +46,21 @@ const isMissingStudentDocumentTable = (error: any) =>
   error?.code === 'P2021' && String(error?.meta?.table || error?.message || '').includes('StudentDocument');
 
 export class StudentsService {
+  async verifyCandidateIdentity(studentIdentifier: string, cnicOrBForm: string): Promise<boolean> {
+    const normalized = cnicOrBForm.replace(/\D/g, '');
+    if (normalized.length < 5) return false;
+    const student = await prisma.student.findFirst({
+      where: {
+        OR: [
+          { id: studentIdentifier },
+          { applicationNo: studentIdentifier },
+        ],
+      },
+      select: { cnicOrBForm: true },
+    });
+    return Boolean(student && student.cnicOrBForm.replace(/\D/g, '') === normalized);
+  }
+
   /**
    * Formats a raw database student and attaches parsed live Supabase documents.
    */
@@ -80,22 +94,22 @@ export class StudentsService {
       };
     }
 
-    const documentMetadata = Object.fromEntries(
-      Object.entries(uploadedDocuments).map(([docType, document]: [string, any]) => [
-        docType,
-        {
-          name: document?.name || `${docType} document`,
-          size: document?.size || (document?.byteSize ? `${document.byteSize} bytes` : 'Candidate attachment'),
-          bucket: document?.bucket,
-          supabasePath: document?.supabasePath,
-          mimeType: document?.mimeType || document?.fileType,
-          byteSize: document?.byteSize,
-          checksumSha256: document?.checksumSha256,
-          uploadedAt: document?.uploadedAt || student.createdAt,
-          fileEndpoint: student.id ? `/api/students/${student.id}/document/${docType}` : undefined,
-        },
-      ])
-    );
+    const documentMetadata: Record<string, any> = {};
+    for (const [docType, document] of Object.entries(uploadedDocuments)) {
+      if (docType === 'photoThumbnail') continue;
+      const doc: any = typeof document === 'object' && document !== null ? document : { name: `${docType} document` };
+      documentMetadata[docType] = {
+        name: doc?.name || `${docType} document`,
+        size: doc?.size || (doc?.byteSize ? `${Math.ceil(doc.byteSize / 1024)} KB` : 'Candidate attachment'),
+        bucket: doc?.bucket || (docType.startsWith('photo') ? 'student-photos' : 'student-documents'),
+        supabasePath: doc?.supabasePath,
+        mimeType: doc?.mimeType || doc?.fileType || 'application/octet-stream',
+        byteSize: doc?.byteSize,
+        checksumSha256: doc?.checksumSha256,
+        uploadedAt: doc?.uploadedAt || student.createdAt,
+        fileEndpoint: student.id ? `/api/students/${student.id}/document/${docType}` : undefined,
+      };
+    }
 
     // Determine accurate fee status across feeRecords & rollNumber issuance
     const isPaid =
@@ -417,6 +431,34 @@ export class StudentsService {
               checksumSha256: crypto.createHash('sha256').update(photoBuffer).digest('hex'),
               uploadedAt: new Date().toISOString(),
             };
+
+            // Auto-generate 160x160 MozJPEG thumbnail immediately on registration
+            try {
+              const thumbBuffer = await sharp(photoBuffer)
+                .resize(160, 160, { fit: 'cover', position: 'center' })
+                .jpeg({ quality: 80, mozjpeg: true })
+                .toBuffer();
+              const thumbPath = `${cnicFolder}/photo_thumbnail.jpg`;
+              const thumbRes = await supabaseStorage.uploadFile(
+                'student-photos',
+                thumbPath,
+                thumbBuffer,
+                'image/jpeg'
+              );
+              if (!thumbRes.error) {
+                resolvedDocs.photoThumbnail = {
+                  name: 'photo_thumbnail.jpg',
+                  bucket: 'student-photos',
+                  supabasePath: thumbPath,
+                  mimeType: 'image/jpeg',
+                  byteSize: thumbBuffer.length,
+                  checksumSha256: crypto.createHash('sha256').update(thumbBuffer).digest('hex'),
+                  uploadedAt: new Date().toISOString(),
+                };
+              }
+            } catch (thumbErr) {
+              logger.warn('Failed to auto-generate thumbnail during registration:', thumbErr);
+            }
           }
         }
 
@@ -440,6 +482,41 @@ export class StudentsService {
               checksumSha256: crypto.createHash('sha256').update(signatureBuffer).digest('hex'),
               uploadedAt: new Date().toISOString(),
             };
+          }
+        }
+
+        // Upload any other documents provided as inline dataUrls that do not have a supabasePath yet
+        for (const [docKey, docVal] of Object.entries(uploadedDocuments || {})) {
+          if (docKey === 'photo' || docKey === 'photoThumbnail' || docKey === 'signature') continue;
+          if (resolvedDocs[docKey]?.supabasePath) continue;
+          if (docVal && typeof docVal === 'object') {
+            const rawDataUrl = (docVal as any).dataUrl || (docVal as any).fileData;
+            if (rawDataUrl && typeof rawDataUrl === 'string' && rawDataUrl.startsWith('data:')) {
+              const match = rawDataUrl.match(/^data:([^;]+);base64,(.*)$/s);
+              if (match) {
+                const mimeType = match[1] || 'image/jpeg';
+                const buffer = Buffer.from(match[2], 'base64');
+                const ext = mimeType === 'application/pdf' ? 'pdf' : mimeType === 'image/png' ? 'png' : 'jpg';
+                const storagePath = `${cnicFolder}/${docKey}.${ext}`;
+                const uploadRes = await supabaseStorage.uploadFile(
+                  'student-documents',
+                  storagePath,
+                  buffer,
+                  mimeType
+                );
+                if (!uploadRes.error) {
+                  resolvedDocs[docKey] = {
+                    name: (docVal as any).name || `${input.fullName}_${docKey}.${ext}`,
+                    bucket: 'student-documents',
+                    supabasePath: storagePath,
+                    mimeType,
+                    byteSize: buffer.length,
+                    checksumSha256: crypto.createHash('sha256').update(buffer).digest('hex'),
+                    uploadedAt: new Date().toISOString(),
+                  };
+                }
+              }
+            }
           }
         }
 
@@ -677,40 +754,45 @@ export class StudentsService {
   /**
    * Public Candidate Roll Number Slip search method with exact priority, partial matching, and multi-match safeguards.
    */
-  async searchPublicSlip(searchQuery: string) {
+  async searchPublicSlip(searchQuery: string, cnicOrBForm: string) {
     const rawQuery = searchQuery.trim();
     const clean = rawQuery.toLowerCase();
-    const cleanDigits = rawQuery.replace(/\D/g, '');
+    const cnicDigits = cnicOrBForm.replace(/\D/g, '');
 
-    if (!clean || (clean.length < 3 && cleanDigits.length < 3)) {
+    if (!clean || cnicDigits.length < 5) {
       return {
         success: false,
-        error: 'Please enter at least 3 characters or digits (e.g. 0002, CNIC, or Roll Number) to search.',
+        error: 'Enter your complete CNIC / B-Form exactly as registered to access your slip.',
       };
     }
 
     // Step 1: Attempt exact match first
-    const exactClauses: any[] = [
-      { rollNumber: { equals: clean, mode: 'insensitive' } },
-      { applicationNo: { equals: clean, mode: 'insensitive' } },
-      { id: { equals: rawQuery } },
-      { cnicOrBForm: { equals: clean, mode: 'insensitive' } },
-    ];
-
     const formattedCnic =
-      cleanDigits.length === 13
-        ? `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 12)}-${cleanDigits.slice(12)}`
+      cnicDigits.length === 13
+        ? `${cnicDigits.slice(0, 5)}-${cnicDigits.slice(5, 12)}-${cnicDigits.slice(12)}`
         : null;
 
-    if (formattedCnic) {
-      exactClauses.push({ cnicOrBForm: { equals: formattedCnic, mode: 'insensitive' } });
-    } else if (cleanDigits.length >= 11) {
-      exactClauses.push({ cnicOrBForm: { equals: cleanDigits } });
-    }
+    // A slip is personal information.  Never fall back to partial identifiers or
+    // candidate names here: both the requested identifier and the CNIC/B-form
+    // must match the same record exactly.
+    const registeredIdentity = [
+      { cnicOrBForm: { equals: cnicOrBForm } },
+      ...(formattedCnic ? [{ cnicOrBForm: { equals: formattedCnic } }] : []),
+    ];
 
-    let student = await prisma.student.findFirst({
+    const student = await prisma.student.findFirst({
       where: {
-        OR: exactClauses,
+        AND: [
+          {
+            OR: [
+              { rollNumber: { equals: clean, mode: 'insensitive' } },
+              { applicationNo: { equals: clean, mode: 'insensitive' } },
+              { id: { equals: rawQuery } },
+              ...registeredIdentity,
+            ],
+          },
+          { OR: registeredIdentity },
+        ],
       },
       include: {
         feeRecords: true,
@@ -719,63 +801,8 @@ export class StudentsService {
       },
     });
 
-    // Step 2: If no exact match, perform safe partial matching
     if (!student) {
-      const partialClauses: any[] = [
-        { rollNumber: { contains: clean, mode: 'insensitive' } },
-        { applicationNo: { contains: clean, mode: 'insensitive' } },
-        { cnicOrBForm: { contains: clean, mode: 'insensitive' } },
-      ];
-
-      if (formattedCnic) {
-        partialClauses.push({ cnicOrBForm: { contains: formattedCnic, mode: 'insensitive' } });
-      }
-
-      if (cleanDigits.length >= 3) {
-        partialClauses.push({ rollNumber: { contains: cleanDigits, mode: 'insensitive' } });
-        partialClauses.push({ applicationNo: { contains: cleanDigits, mode: 'insensitive' } });
-        partialClauses.push({ cnicOrBForm: { contains: cleanDigits, mode: 'insensitive' } });
-      }
-
-      if (clean.length >= 3) {
-        partialClauses.push({ fullName: { contains: clean, mode: 'insensitive' } });
-      }
-
-      const matchingStudents = await prisma.student.findMany({
-        where: {
-          OR: partialClauses,
-        },
-        include: {
-          feeRecords: true,
-          officeUse: true,
-          documents: true,
-        },
-        take: 5,
-      });
-
-      if (matchingStudents.length === 0) {
-        return {
-          success: false,
-          error: `No matching candidate record found in examination registry for "${rawQuery}".`,
-        };
-      }
-
-      // Safeguard: Multiple matches requires user to be more specific
-      if (matchingStudents.length > 1) {
-        return {
-          success: false,
-          error: `Multiple records match "${rawQuery}". To protect candidate privacy, please enter your full Roll Number (e.g. AZMVS-2026-0002), 13-digit CNIC, or Application ID.`,
-        };
-      }
-
-      student = matchingStudents[0];
-    }
-
-    if (!student) {
-      return {
-        success: false,
-        error: `No matching candidate record found in examination registry for "${rawQuery}".`,
-      };
+      return { success: false, error: 'No matching application was found. Check the application number and CNIC / B-Form.' };
     }
 
     // Determine fee payment status
@@ -831,8 +858,8 @@ export class StudentsService {
         cnicBForm: student.cnicOrBForm,
         classLevel: student.currentClass || 'SSC-II (Class 10th)',
         candidatePhoto:
-          student.photoUrl ||
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
+          (student.photoUrl && !student.photoUrl.includes('unsplash') ? student.photoUrl : null) ||
+          `/api/students/${student.id}/photo-thumbnail?cnic=${encodeURIComponent(student.cnicOrBForm)}`,
         testCenter: student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra',
         centerAddress: 'Main College Road, Mansehra / Abbottabad Regional Center, KP',
         examDate: student.officeUse?.testDate || 'Sunday, 15 November 2026',
@@ -849,6 +876,59 @@ export class StudentsService {
         ],
         issuedAt: student.updatedAt.toISOString(),
         qrPayload: `https://azmaio.com/verify?rollNo=${rollNo}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`,
+      },
+    };
+  }
+
+  /**
+   * Candidate self-service lookup. The response deliberately contains only the
+   * minimum details needed to identify a verified application and download its
+   * registration PDF.
+   */
+  async findPublicRegistration(applicationIdentifier: string, cnicOrBForm: string) {
+    const identifier = applicationIdentifier.trim();
+    const cnicDigits = cnicOrBForm.replace(/\D/g, '');
+    if (!identifier || cnicDigits.length < 5) {
+      return { success: false, error: 'Enter your application ID and complete CNIC / B-Form.' };
+    }
+
+    const formattedCnic = cnicDigits.length === 13
+      ? `${cnicDigits.slice(0, 5)}-${cnicDigits.slice(5, 12)}-${cnicDigits.slice(12)}`
+      : null;
+    const student = await prisma.student.findFirst({
+      where: {
+        AND: [
+          {
+            OR: [
+              { applicationNo: { equals: identifier, mode: 'insensitive' } },
+              { id: { equals: identifier } },
+            ],
+          },
+          {
+            OR: [
+              { cnicOrBForm: { equals: cnicOrBForm } },
+              ...(formattedCnic ? [{ cnicOrBForm: { equals: formattedCnic } }] : []),
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        applicationNo: true,
+        fullName: true,
+        fatherName: true,
+        currentClass: true,
+        status: true,
+        feeRecords: { select: { status: true } },
+      },
+    });
+
+    if (!student) return { success: false, error: 'No matching application was found. Check both entries and try again.' };
+    return {
+      success: true,
+      data: {
+        ...student,
+        feeStatus: student.feeRecords.some((fee) => fee.status === 'PAID') ? 'PAID' : 'UNPAID',
       },
     };
   }
@@ -1351,30 +1431,9 @@ export class StudentsService {
         }
       }
 
-      // If it is an HTTP or HTTPS URL, fetch server-side
-      if (raw.startsWith('http://') || raw.startsWith('https://')) {
-        try {
-          const client = raw.startsWith('https') ? https : http;
-          const buffer = await new Promise<Buffer | null>((resolve) => {
-            client.get(raw, (res: any) => {
-              if (res.statusCode !== 200) {
-                return resolve(null);
-              }
-              const chunks: Buffer[] = [];
-              res.on('data', (c: Buffer) => chunks.push(c));
-              res.on('end', () => resolve(Buffer.concat(chunks)));
-            }).on('error', () => resolve(null));
-          });
-
-          if (buffer && buffer.length > 0) {
-            const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
-            const mime = isPng ? 'image/png' : 'image/jpeg';
-            return `data:${mime};base64,${buffer.toString('base64')}`;
-          }
-        } catch (fetchErr) {
-          logger.warn('Failed to fetch photo from external URL server-side:', fetchErr);
-        }
-      }
+      // Do not fetch arbitrary legacy HTTP URLs. They can be attacker-controlled
+      // and can exhaust the Render instance or reach internal services. Existing
+      // photos should be migrated into the private student-photos bucket instead.
     }
 
     // Direct supabasePath in uploadedDocuments
@@ -1649,6 +1708,29 @@ export class StudentsService {
       uploadedAt: new Date().toISOString(),
     };
 
+    // If a candidate photo is uploaded, immediately generate and store 160x160 MozJPEG thumbnail
+    if (input.docType.startsWith('photo') || input.docType === 'passportPhotos') {
+      try {
+        const thumbBuffer = await sharp(buffer)
+          .resize(160, 160, { fit: 'cover', position: 'center' })
+          .jpeg({ quality: 80, mozjpeg: true })
+          .toBuffer();
+        const thumbPath = `${rawApp}/photo_thumbnail.jpg`;
+        await supabaseStorage.uploadFile('student-photos', thumbPath, thumbBuffer, 'image/jpeg');
+        currentDocs.photoThumbnail = {
+          name: 'photo_thumbnail.jpg',
+          bucket: 'student-photos',
+          supabasePath: thumbPath,
+          mimeType: 'image/jpeg',
+          byteSize: thumbBuffer.length,
+          checksumSha256: crypto.createHash('sha256').update(thumbBuffer).digest('hex'),
+          uploadedAt: new Date().toISOString(),
+        };
+      } catch (thumbErr) {
+        logger.warn('Failed to auto-generate thumbnail during document upload:', thumbErr);
+      }
+    }
+
     if (student) {
       try {
         await prisma.student.update({
@@ -1677,21 +1759,64 @@ export class StudentsService {
     };
   }
 
+  private getDocumentAliases(docType: string): string[] {
+  const clean = docType.toLowerCase();
+  if (clean === 'photo' || clean === 'passport' || clean === 'profile') {
+    return ['photo', 'passportPhotos', 'passportPhoto', 'studentPhoto', 'photoUrl'];
+  }
+  if (clean === 'photothumbnail' || clean === 'thumbnail' || clean === 'photo_thumbnail') {
+    return ['photoThumbnail', 'thumbnail', 'photo_thumbnail'];
+  }
+  if (clean === 'bform' || clean === 'cnic' || clean === 'bformcnic') {
+    return ['bform', 'cnic', 'bformCnicCopy', 'bformUploaded', 'bform_copy', 'cnic_copy'];
+  }
+  if (clean === 'fathercnic' || clean === 'fcnic' || clean === 'guardiancnic') {
+    return ['fatherCnic', 'fatherCnicCopy', 'fatherCnicUploaded', 'guardianCnic', 'fcnic'];
+  }
+  if (clean === 'dmc' || clean === 'resultcard' || clean === 'marksheet') {
+    return ['dmc', 'previousResultCard', 'dmcUploaded', 'resultCard', 'marksheet', 'dmc_1', 'dmc_2'];
+  }
+  if (clean === 'paymentreceipt' || clean === 'challan' || clean === 'receipt' || clean === 'fee') {
+    return ['paymentReceipt', 'challan', 'feeReceipt', 'receipt', 'depositSlip'];
+  }
+  if (clean === 'signature' || clean === 'applicantsignature') {
+    return ['signature', 'applicantSignature', 'candidateSignature', 'digitalSignature'];
+  }
+  if (clean === 'domicile') {
+    return ['domicile', 'domicileCertificate', 'domicileUploaded'];
+  }
+  if (clean === 'incomecertificate' || clean === 'income') {
+    return ['incomeCertificate', 'incomeCertUploaded', 'incomeSlip'];
+  }
+  return [docType, `${docType}Uploaded`, `${docType}Copy`];
+}
+
+  private async fetchRemoteBuffer(url: string): Promise<Buffer | null> {
+    // Student-controlled legacy values must never make the server request an
+    // arbitrary URL. Documents are resolved only from private Storage, the
+    // database metadata, or existing inline legacy data.
+    logger.warn(`Skipping unsupported remote document URL: ${url.slice(0, 80)}`);
+    return null;
+  }
+
   /**
    * Retrieves a student's document or photo as a direct binary buffer for image streaming.
    */
   async getStudentDocument(studentIdentifier: string, docType: string): Promise<{ buffer: Buffer; contentType: string }> {
     const rawApp = studentIdentifier.replace(/[^\w-]/g, '_');
+    const aliases = this.getDocumentAliases(docType);
 
     // 1. Check server disk storage first
     const candDir = path.join(UPLOADS_DIR, rawApp);
     const possibleExts = ['jpg', 'jpeg', 'png', 'pdf', 'webp'];
-    for (const ext of possibleExts) {
-      const p = path.join(candDir, `${docType}.${ext}`);
-      if (fs.existsSync(p)) {
-        const buffer = fs.readFileSync(p);
-        const mime = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
-        return { buffer, contentType: mime };
+    for (const alias of aliases) {
+      for (const ext of possibleExts) {
+        const p = path.join(candDir, `${alias}.${ext}`);
+        if (fs.existsSync(p)) {
+          const buffer = fs.readFileSync(p);
+          const mime = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
+          return { buffer, contentType: mime };
+        }
       }
     }
 
@@ -1708,67 +1833,116 @@ export class StudentsService {
 
     if (student) {
       const metadata = await prisma.studentDocument.findFirst({
-        where: { studentId: student.id, documentType: docType },
+        where: {
+          studentId: student.id,
+          documentType: { in: aliases },
+        },
       });
       if (metadata) {
         const buffer = await supabaseStorage.downloadFile(
           metadata.bucket as StorageBucket,
           metadata.objectPath
         );
-        if (buffer) return { buffer, contentType: metadata.mimeType };
-      }
-
-      if (docType === 'photo' && student.photoUrl && student.photoUrl.startsWith('data:')) {
-        const parts = student.photoUrl.split(',');
-        const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
-        return { buffer: Buffer.from(parts[1], 'base64'), contentType: mime };
-      }
-
-      if (student.uploadedDocsJson) {
-        try {
-          const docs = JSON.parse(student.uploadedDocsJson);
-          const doc = docs[docType] || docs[`${docType}Uploaded`];
-          if (doc && doc.dataUrl && doc.dataUrl.startsWith('data:')) {
-            const parts = doc.dataUrl.split(',');
-            const mime = parts[0].match(/:(.*?);/)?.[1] || doc.fileType || 'image/jpeg';
-            return { buffer: Buffer.from(parts[1], 'base64'), contentType: mime };
-          }
-        } catch (e) {}
+        if (buffer && buffer.length > 0) return { buffer, contentType: metadata.mimeType };
       }
     }
 
-    // 3. Check Supabase Cloud Storage
-    if (student) {
-      if (student.uploadedDocsJson) {
-        try {
-          const docs = JSON.parse(student.uploadedDocsJson);
-          const doc = docs[docType] || docs[`${docType}Uploaded`];
-          if (doc?.supabasePath) {
-            const bucket: StorageBucket = docType.startsWith('photo') ? 'student-photos' : 'student-documents';
+    // 3. Check photoUrl if photo requested
+    if (student && aliases.includes('photo') && student.photoUrl) {
+      if (student.photoUrl.startsWith('data:')) {
+        const match = student.photoUrl.match(/^data:(?:([^;]+))?;base64,(.*)$/s);
+        if (match) {
+          const mime = match[1] || 'image/jpeg';
+          return { buffer: Buffer.from(match[2], 'base64'), contentType: mime };
+        }
+      } else if (student.photoUrl.startsWith('http')) {
+        const buffer = await this.fetchRemoteBuffer(student.photoUrl);
+        if (buffer && buffer.length > 0) {
+          const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+          return { buffer, contentType: isPng ? 'image/png' : 'image/jpeg' };
+        }
+      }
+    }
+
+    // 5. Check uploadedDocsJson across all aliases
+    if (student && student.uploadedDocsJson) {
+      try {
+        const docs = JSON.parse(student.uploadedDocsJson);
+        for (const alias of aliases) {
+          const doc = docs[alias];
+          if (!doc) continue;
+
+          // Object format with dataUrl
+          if (doc.dataUrl && typeof doc.dataUrl === 'string' && doc.dataUrl.startsWith('data:')) {
+            const match = doc.dataUrl.match(/^data:(?:([^;]+))?;base64,(.*)$/s);
+            if (match) {
+              const mime = match[1] || doc.fileType || doc.mimeType || 'image/jpeg';
+              return { buffer: Buffer.from(match[2], 'base64'), contentType: mime };
+            }
+          }
+
+          // String format dataUrl
+          if (typeof doc === 'string' && doc.startsWith('data:')) {
+            const match = doc.match(/^data:(?:([^;]+))?;base64,(.*)$/s);
+            if (match) {
+              const mime = match[1] || (doc.includes('application/pdf') ? 'application/pdf' : 'image/jpeg');
+              return { buffer: Buffer.from(match[2], 'base64'), contentType: mime };
+            }
+          }
+
+          // Object format with supabasePath
+          if (doc.supabasePath) {
+            const bucket: StorageBucket =
+              doc.bucket || (docType.startsWith('photo') ? 'student-photos' : 'student-documents');
             const buf = await supabaseStorage.downloadFile(bucket, doc.supabasePath);
-            if (buf) {
-              const mime = doc.supabasePath.endsWith('.pdf')
+            if (buf && buf.length > 0) {
+              const mime = doc.mimeType || (doc.supabasePath.endsWith('.pdf')
                 ? 'application/pdf'
                 : doc.supabasePath.endsWith('.png')
                 ? 'image/png'
-                : 'image/jpeg';
+                : 'image/jpeg');
               return { buffer: buf, contentType: mime };
             }
           }
-        } catch (e) {}
-      }
 
-      // Check storage directly under candidate applicationNo or CNIC
+          // String format with supabasePath
+          if (typeof doc === 'string' && !doc.startsWith('data:') && !doc.startsWith('http')) {
+            const bucket: StorageBucket = docType.startsWith('photo') ? 'student-photos' : 'student-documents';
+            const buf = await supabaseStorage.downloadFile(bucket, doc);
+            if (buf && buf.length > 0) {
+              const mime = doc.endsWith('.pdf') ? 'application/pdf' : doc.endsWith('.png') ? 'image/png' : 'image/jpeg';
+              return { buffer: buf, contentType: mime };
+            }
+          }
+
+          // Remote URL
+          if (typeof doc === 'string' && doc.startsWith('http')) {
+            const buf = await this.fetchRemoteBuffer(doc);
+            if (buf && buf.length > 0) {
+              const isPdf = doc.endsWith('.pdf') || buf.slice(0, 5).toString() === '%PDF-';
+              const isPng = buf[0] === 0x89 && buf[1] === 0x50;
+              return { buffer: buf, contentType: isPdf ? 'application/pdf' : isPng ? 'image/png' : 'image/jpeg' };
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 6. Check Supabase Cloud Storage bucket directly under candidate folder
+    if (student) {
       const bucket: StorageBucket = docType.startsWith('photo') ? 'student-photos' : 'student-documents';
       for (const prefix of [student.applicationNo, student.cnicOrBForm].filter(Boolean) as string[]) {
         const cleanPrefix = prefix.replace(/[^\w-]/g, '_');
         try {
-          const { data: files } = await (supabaseStorage as any).client?.storage?.from(bucket)?.list(cleanPrefix) || { data: [] };
-          const match = (files || []).find((f: any) => f.name.startsWith(`${docType}_`) || f.name.startsWith(docType));
+          const { data: files } = (await (supabaseStorage as any).client?.storage?.from(bucket)?.list(cleanPrefix)) || { data: [] };
+          const match = (files || []).find((f: any) => {
+            const fname = f.name.toLowerCase();
+            return aliases.some((a) => fname.includes(a.toLowerCase()));
+          });
           if (match) {
             const storagePath = `${cleanPrefix}/${match.name}`;
             const buf = await supabaseStorage.downloadFile(bucket, storagePath);
-            if (buf) {
+            if (buf && buf.length > 0) {
               const mime = match.name.endsWith('.pdf')
                 ? 'application/pdf'
                 : match.name.endsWith('.png')
@@ -1781,17 +1955,10 @@ export class StudentsService {
       }
     }
 
-    // 4. Fallback placeholder SVG (genuine last resort)
-    logger.warn(
-      `Document "${docType}" not found on disk or Supabase Storage for student "${studentIdentifier}". Returning fallback placeholder.`
-    );
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
-      <rect width="400" height="400" fill="#f8fafc"/>
-      <circle cx="200" cy="160" r="70" fill="#cbd5e1"/>
-      <path d="M60 360 C60 260, 340 260, 340 360 Z" fill="#94a3b8"/>
-      <text x="200" y="385" font-family="sans-serif" font-size="16" font-weight="bold" fill="#64748b" text-anchor="middle">Official Document Record</text>
-    </svg>`;
-    return { buffer: Buffer.from(svg, 'utf-8'), contentType: 'image/svg+xml' };
+    // Document truly not found
+    const error: AppError = new Error(`Document "${docType}" not found for student "${studentIdentifier}".`);
+    error.statusCode = 404;
+    throw error;
   }
 
   /**

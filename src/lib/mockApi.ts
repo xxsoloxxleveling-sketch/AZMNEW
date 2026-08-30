@@ -785,12 +785,12 @@ export const mockApi = {
 
 
 
-  async downloadStudentPdf(studentId: string, rollNumber?: string, _studentObj?: any): Promise<void> {
+  async downloadStudentPdf(studentId: string, rollNumber?: string, studentObj?: any): Promise<void> {
     if (!studentId) throw new Error('Student identifier is required to download the registration slip.');
     // Registration PDFs are generated server-side so the private original photo
     // is fetched only for this explicit download, never from a roster response.
     await apiDownloadPdf(
-      `/api/students/${encodeURIComponent(studentId)}/registration-pdf`,
+      `/api/students/${encodeURIComponent(studentId)}/registration-pdf${studentObj?.cnicOrBForm ? `?cnic=${encodeURIComponent(studentObj.cnicOrBForm)}` : ''}`,
       `AZM-Registration-${rollNumber || studentId}.pdf`
     );
   },
@@ -1326,14 +1326,9 @@ export const mockApi = {
       const rejectionReason = officeUse?.eligibilityRemarks;
 
       // 1. Candidate Photo
-      const photoFile = up.photo;
-      const photoUrl =
-        photoFile?.publicUrl ||
-        photoFile?.dataUrl ||
-        s.photoUrl ||
-        `${API_BASE_URL}/api/students/${s.applicationNo || s.id}/document/photo`;
-
+      const photoFile = up.photo || up.photoUploaded || up.passportPhoto || up.candidatePhoto || up.profilePhoto;
       if (photoFile || s.photoUrl) {
+        const isBase64 = photoFile?.dataUrl?.startsWith('data:') || s.photoUrl?.startsWith('data:');
         docMap.set(`${candKey}_PHOTO`, {
           id: `doc_photo_${s.id}`,
           studentId: s.id,
@@ -1342,9 +1337,11 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CANDIDATE_PHOTO',
+          storageDocType: 'photo',
           title: photoFile?.name || `${s.fullName}_Passport_Photo.jpg`,
-          fileUrl: photoUrl,
-          fileSize: photoFile?.size || 'Candidate Photo',
+          fileUrl: isBase64 ? (photoFile?.dataUrl || s.photoUrl) : '',
+          fileEndpoint: `/api/students/${s.id}/document/photo`,
+          fileSize: photoFile?.size || (photoFile?.byteSize ? `${Math.ceil(photoFile.byteSize / 1024)} KB` : 'Candidate Photo'),
           fileType: 'image/jpeg',
           uploadedAt: photoFile?.uploadedAt || s.createdAt || new Date().toISOString(),
           status: docStatus,
@@ -1354,8 +1351,8 @@ export const mockApi = {
 
       // 2. CNIC / B-Form Document
       const bformFile = up.bform || up.bformUploaded || up.cnic || up.candidateCnic;
-      if (bformFile && (bformFile.dataUrl || bformFile.publicUrl || bformFile.fileUrl)) {
-        const bformUrl = bformFile.publicUrl || bformFile.dataUrl || bformFile.fileUrl;
+      if (bformFile) {
+        const isPdf = bformFile.name?.endsWith('.pdf') || bformFile.mimeType === 'application/pdf' || bformFile.dataUrl?.includes('application/pdf');
         docMap.set(`${candKey}_BFORM`, {
           id: `doc_cnic_${s.id}`,
           studentId: s.id,
@@ -1364,10 +1361,12 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
+          storageDocType: 'bform',
           title: bformFile.name || `${s.fullName}_Candidate_BForm_CNIC.jpg`,
-          fileUrl: bformUrl,
-          fileSize: bformFile.size || 'Candidate Attachment',
-          fileType: bformUrl.includes('application/pdf') || bformFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          fileUrl: bformFile.dataUrl?.startsWith('data:') ? bformFile.dataUrl : '',
+          fileEndpoint: `/api/students/${s.id}/document/bform`,
+          fileSize: bformFile.size || (bformFile.byteSize ? `${Math.ceil(bformFile.byteSize / 1024)} KB` : 'Candidate Attachment'),
+          fileType: isPdf ? 'application/pdf' : 'image/jpeg',
           uploadedAt: bformFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: docStatus,
           rejectionReason,
@@ -1376,8 +1375,8 @@ export const mockApi = {
 
       // 3. Father / Guardian CNIC
       const fatherCnicFile = up.fatherCnic || up.fatherCnicUploaded || up.fcnic;
-      if (fatherCnicFile && (fatherCnicFile.dataUrl || fatherCnicFile.publicUrl || fatherCnicFile.fileUrl)) {
-        const fatherCnicUrl = fatherCnicFile.publicUrl || fatherCnicFile.dataUrl || fatherCnicFile.fileUrl;
+      if (fatherCnicFile) {
+        const isPdf = fatherCnicFile.name?.endsWith('.pdf') || fatherCnicFile.mimeType === 'application/pdf' || fatherCnicFile.dataUrl?.includes('application/pdf');
         docMap.set(`${candKey}_FATHER_CNIC`, {
           id: `doc_fcnic_${s.id}`,
           studentId: s.id,
@@ -1386,10 +1385,12 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
+          storageDocType: 'fatherCnic',
           title: fatherCnicFile.name || `${s.fullName}_Father_CNIC.jpg`,
-          fileUrl: fatherCnicUrl,
-          fileSize: fatherCnicFile.size || 'Candidate Attachment',
-          fileType: fatherCnicUrl.includes('application/pdf') || fatherCnicFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          fileUrl: fatherCnicFile.dataUrl?.startsWith('data:') ? fatherCnicFile.dataUrl : '',
+          fileEndpoint: `/api/students/${s.id}/document/fatherCnic`,
+          fileSize: fatherCnicFile.size || (fatherCnicFile.byteSize ? `${Math.ceil(fatherCnicFile.byteSize / 1024)} KB` : 'Candidate Attachment'),
+          fileType: isPdf ? 'application/pdf' : 'image/jpeg',
           uploadedAt: fatherCnicFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: docStatus,
           rejectionReason,
@@ -1398,8 +1399,8 @@ export const mockApi = {
 
       // 4. Academic Transcript / DMC
       const dmcFile = up.dmc || up.dmcUploaded || up.resultCard || up.previousResult;
-      if (dmcFile && (dmcFile.dataUrl || dmcFile.publicUrl || dmcFile.fileUrl)) {
-        const dmcUrl = dmcFile.publicUrl || dmcFile.dataUrl || dmcFile.fileUrl;
+      if (dmcFile) {
+        const isPdf = dmcFile.name?.endsWith('.pdf') || dmcFile.mimeType === 'application/pdf' || dmcFile.dataUrl?.includes('application/pdf');
         docMap.set(`${candKey}_DMC`, {
           id: `doc_dmc_${s.id}`,
           studentId: s.id,
@@ -1408,10 +1409,12 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'PREVIOUS_DMC',
+          storageDocType: 'dmc',
           title: dmcFile.name || `${s.fullName}_DMC_Marksheet.jpg`,
-          fileUrl: dmcUrl,
-          fileSize: dmcFile.size || 'Candidate Attachment',
-          fileType: dmcUrl.includes('application/pdf') || dmcFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+          fileUrl: dmcFile.dataUrl?.startsWith('data:') ? dmcFile.dataUrl : '',
+          fileEndpoint: `/api/students/${s.id}/document/dmc`,
+          fileSize: dmcFile.size || (dmcFile.byteSize ? `${Math.ceil(dmcFile.byteSize / 1024)} KB` : 'Candidate Attachment'),
+          fileType: isPdf ? 'application/pdf' : 'image/jpeg',
           uploadedAt: dmcFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: docStatus,
           rejectionReason,
@@ -1420,8 +1423,8 @@ export const mockApi = {
 
       // 5. Payment Deposit Receipt
       const feeFile = up.paymentReceipt || up.incomeCertUploaded || up.receipt || up.challan;
-      if (feeFile && (feeFile.dataUrl || feeFile.publicUrl || feeFile.fileUrl)) {
-        const feeUrl = feeFile.publicUrl || feeFile.dataUrl || feeFile.fileUrl;
+      if (feeFile) {
+        const isPdf = feeFile.name?.endsWith('.pdf') || feeFile.mimeType === 'application/pdf' || feeFile.dataUrl?.includes('application/pdf');
         docMap.set(`${candKey}_FEE`, {
           id: `doc_pay_${s.id}`,
           studentId: s.id,
@@ -1430,10 +1433,12 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'PAYMENT_CHALLAN',
+          storageDocType: 'paymentReceipt',
           title: feeFile.name || `${s.fullName}_Fee_Payment_Receipt.jpg`,
-          fileUrl: feeUrl,
-          fileSize: feeFile.size || 'Candidate Attachment',
-          fileType: feeUrl.includes('application/pdf') || feeFile.name?.endsWith('.pdf') ? 'application/pdf' : 'image/png',
+          fileUrl: feeFile.dataUrl?.startsWith('data:') ? feeFile.dataUrl : '',
+          fileEndpoint: `/api/students/${s.id}/document/paymentReceipt`,
+          fileSize: feeFile.size || (feeFile.byteSize ? `${Math.ceil(feeFile.byteSize / 1024)} KB` : 'Candidate Attachment'),
+          fileType: isPdf ? 'application/pdf' : 'image/jpeg',
           uploadedAt: feeFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: docStatus,
           rejectionReason,
@@ -1442,8 +1447,8 @@ export const mockApi = {
 
       // 6. Domicile Certificate
       const domicileFile = up.domicile || up.domicileUploaded;
-      if (domicileFile && (domicileFile.dataUrl || domicileFile.publicUrl || domicileFile.fileUrl)) {
-        const domicileUrl = domicileFile.publicUrl || domicileFile.dataUrl || domicileFile.fileUrl;
+      if (domicileFile) {
+        const isPdf = domicileFile.name?.endsWith('.pdf') || domicileFile.mimeType === 'application/pdf' || domicileFile.dataUrl?.includes('application/pdf');
         docMap.set(`${candKey}_DOMICILE`, {
           id: `doc_dom_${s.id}`,
           studentId: s.id,
@@ -1452,13 +1457,12 @@ export const mockApi = {
           applicationNo: s.applicationNo || 'APP-2026',
           currentClass: s.currentClass || 'SSC',
           docType: 'CNIC_BFORM',
+          storageDocType: 'domicile',
           title: domicileFile.name || `${s.fullName}_Domicile_Certificate.jpg`,
-          fileUrl: domicileUrl,
-          fileSize: domicileFile.size || 'Candidate Attachment',
-          fileType:
-            domicileUrl.includes('application/pdf') || domicileFile.name?.endsWith('.pdf')
-              ? 'application/pdf'
-              : 'image/jpeg',
+          fileUrl: domicileFile.dataUrl?.startsWith('data:') ? domicileFile.dataUrl : '',
+          fileEndpoint: `/api/students/${s.id}/document/domicile`,
+          fileSize: domicileFile.size || (domicileFile.byteSize ? `${Math.ceil(domicileFile.byteSize / 1024)} KB` : 'Candidate Attachment'),
+          fileType: isPdf ? 'application/pdf' : 'image/jpeg',
           uploadedAt: domicileFile.uploadedAt || s.createdAt || new Date().toISOString(),
           status: docStatus,
           rejectionReason,

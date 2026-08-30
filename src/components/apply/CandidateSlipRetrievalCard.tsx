@@ -17,8 +17,8 @@ import {
   User,
   Loader2,
 } from 'lucide-react';
-import { mockApi, MockStudent, printStudentDossier } from '../../lib/mockApi';
-import { wakeUpBackend } from '../../lib/apiClient';
+import { mockApi, MockStudent } from '../../lib/mockApi';
+import { API_BASE_URL, wakeUpBackend } from '../../lib/apiClient';
 
 interface CandidateSlipRetrievalCardProps {
   onBackToApply?: () => void;
@@ -28,6 +28,7 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
   onBackToApply,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [cnicOrBForm, setCnicOrBForm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [foundStudent, setFoundStudent] = useState<MockStudent | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -45,11 +46,11 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
     if (e) e.preventDefault();
     setSearchError('');
     setFoundStudent(null);
-    const clean = searchQuery.trim().toLowerCase();
-    const cleanDigits = searchQuery.replace(/\D/g, '');
+    const applicationNo = searchQuery.trim();
+    const cnic = cnicOrBForm.trim();
 
-    if (!clean && cleanDigits.length < 4) {
-      setSearchError('Please enter a valid Application ID (e.g. APP-2026-XXXX) or 13-digit CNIC / B-Form.');
+    if (!applicationNo || cnic.replace(/\D/g, '').length < 5) {
+      setSearchError('Enter your application ID and the complete CNIC / B-Form used at registration.');
       return;
     }
 
@@ -57,24 +58,15 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
     setHasSearched(true);
 
     try {
-      const students = await mockApi.getStudents();
-      const match = students.find((s) => {
-        const matchApp = s.applicationNo && s.applicationNo.toLowerCase().includes(clean);
-        const matchId = s.id && s.id.toLowerCase() === clean;
-        const matchRoll = s.rollNumber && s.rollNumber.toLowerCase().includes(clean);
-        const sDigits = s.cnicOrBForm ? s.cnicOrBForm.replace(/\D/g, '') : '';
-        const matchCnic = cleanDigits.length >= 5 && sDigits && (sDigits === cleanDigits || sDigits.includes(cleanDigits));
-        const matchName = s.fullName && s.fullName.toLowerCase() === clean;
-
-        return matchApp || matchId || matchRoll || matchCnic || matchName;
-      });
-
-      if (match) {
-        setFoundStudent(match);
+      const response = await fetch(
+        `${API_BASE_URL}/api/students/search-registration?applicationNo=${encodeURIComponent(applicationNo)}&cnic=${encodeURIComponent(cnic)}`,
+        { headers: { Accept: 'application/json' } }
+      );
+      const result = await response.json();
+      if (response.ok && result?.success && result.data) {
+        setFoundStudent({ ...result.data, cnicOrBForm: cnic } as MockStudent);
       } else {
-        setSearchError(
-          `No registered application found matching "${searchQuery}". Please check your CNIC or Application ID and try again.`
-        );
+        setSearchError(result?.error || 'No matching application was found. Check both entries and try again.');
       }
     } catch (err: any) {
       setSearchError(err.message || 'Failed to search candidate registration.');
@@ -125,7 +117,19 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Enter Application Tracking ID (APP-2026-...) or CNIC / B-Form"
+              placeholder="Application Tracking ID (APP-2026-...)"
+              className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-2xl text-xs sm:text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none"
+            />
+          </div>
+
+          <div className="relative flex-1 w-full">
+            <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={cnicOrBForm}
+              onChange={(e) => setCnicOrBForm(e.target.value)}
+              placeholder="CNIC / B-Form used at registration"
+              autoComplete="off"
               className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-2xl text-xs sm:text-sm font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none"
             />
           </div>
@@ -227,12 +231,12 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
 
               <button
                 type="button"
-                onClick={() => printStudentDossier(foundStudent)}
+                onClick={handleDownloadPdf}
                 className="p-3.5 rounded-2xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-bold text-xs shadow-xs transition flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center"
               >
                 <Printer className="w-5 h-5 text-slate-600" />
-                <span>Print Application Form</span>
-                <span className="text-[10px] text-slate-500 font-normal">A4 Printable Slip</span>
+                <span>Print Registration Slip</span>
+                <span className="text-[10px] text-slate-500 font-normal">Official A4 PDF</span>
               </button>
 
               <button
