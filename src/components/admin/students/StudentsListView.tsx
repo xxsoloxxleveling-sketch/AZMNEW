@@ -23,7 +23,10 @@ import { mockApi, MockStudent } from '../../../lib/mockApi';
 import { AdminWalkInModal } from './AdminWalkInModal';
 import { StudentDetailView } from './StudentDetailView';
 import { useAuth } from '../../../lib/authContext';
+import { apiFetchProtectedObjectUrl } from '../../../lib/apiClient';
 import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/whatsapp';
+
+const STUDENTS_PER_PAGE = 10;
 
 export const StudentsListView: React.FC = () => {
   const { role, isLoading: authLoading } = useAuth();
@@ -38,7 +41,8 @@ export const StudentsListView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
+  const [pagination, setPagination] = useState({ page: 1, limit: STUDENTS_PER_PAGE, total: 0, totalPages: 1 });
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -59,7 +63,7 @@ export const StudentsListView: React.FC = () => {
           status: statusFilter,
           search: searchQuery,
           page: currentPage,
-          limit: 50,
+          limit: STUDENTS_PER_PAGE,
         }),
         mockApi.getRollNumberStatus().catch(() => null),
       ]);
@@ -100,6 +104,44 @@ export const StudentsListView: React.FC = () => {
     }
 
   }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage]);
+
+  // Fetch private thumbnail files only for the ten rows currently displayed.
+  // The list API stays metadata-only and full-size photos are never requested here.
+  useEffect(() => {
+    let cancelled = false;
+    const loadedUrls: string[] = [];
+
+    const loadThumbnails = async () => {
+      const results = await Promise.all(
+        students
+          .filter((student) => student.hasPhoto)
+          .map(async (student) => {
+            try {
+              const url = await apiFetchProtectedObjectUrl(
+                `/api/students/${student.id}/document/photoThumbnail`
+              );
+              loadedUrls.push(url);
+              return [student.id, url] as const;
+            } catch {
+              // Older records without a generated thumbnail keep their initials.
+              return null;
+            }
+          })
+      );
+
+      if (cancelled) {
+        loadedUrls.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+      setThumbnailUrls(Object.fromEntries(results.filter(Boolean) as [string, string][]));
+    };
+
+    void loadThumbnails();
+    return () => {
+      cancelled = true;
+      loadedUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [students]);
 
   const handleStudentCreated = (newStudent: MockStudent) => {
     setStudents((prev) => [newStudent, ...prev]);
@@ -155,8 +197,16 @@ export const StudentsListView: React.FC = () => {
       sortable: true,
       render: (row) => (
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-black text-slate-500" aria-label={`${row.fullName} avatar`}>
-            {row.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'}
+          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-black text-slate-500" aria-label={`${row.fullName} avatar`}>
+            {thumbnailUrls[row.id] ? (
+              <img
+                src={thumbnailUrls[row.id]}
+                alt={`${row.fullName} profile thumbnail`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              row.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'
+            )}
           </div>
           <div>
             <span className="font-bold text-slate-900 block">{row.fullName}</span>
