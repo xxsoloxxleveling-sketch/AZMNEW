@@ -1835,6 +1835,10 @@ export function printStudentDossier(student: any) {
   const appNo = student.applicationNo || student.studentId || student.id || `APP-2026-0101`;
   const rollNo = student.rollNumber || `AZMVS-2026-0101`;
   const dateStr = student.createdAt ? new Date(student.createdAt).toLocaleDateString() : new Date().toLocaleDateString();
+  const photoMarkup = student.photoUrl
+    ? `<img src="${student.photoUrl}" alt="${student.fullName || 'Candidate'} photo" style="width: 100%; height: 100%; object-fit: cover;" />`
+    : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #e2e8f0; color: #64748b; font-size: 10px; font-weight: 800; text-align: center;">NO PHOTO<br/>AVAILABLE</div>`;
+  const qrImageUrl = student.qrImageUrl || `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(rollNo)}`;
 
   // Parse or synthesize full multi-class academic records
   const academic = student.academicRecords || [
@@ -1932,14 +1936,14 @@ export function printStudentDossier(student: any) {
         <p>Session V (2026) Official Student Application Profile & Academic Dossier</p>
       </div>
       <div style="text-align: right;">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(rollNo)}" alt="QR" style="width: 70px; height: 70px; border-radius: 6px; border: 1px solid #cbd5e1; padding: 2px;" />
+        <img src="${qrImageUrl}" alt="QR" style="width: 70px; height: 70px; border-radius: 6px; border: 1px solid #cbd5e1; padding: 2px;" />
         <div style="font-size: 9px; font-family: monospace; font-weight: bold; margin-top: 2px;">${rollNo}</div>
       </div>
     </div>
 
     <div style="display: flex; gap: 18px; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 12px;">
       <div style="width: 90px; height: 100px; border-radius: 8px; border: 2px solid #0f172a; overflow: hidden; background: #fff; flex-shrink: 0;">
-        <img src="${student.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300'}" alt="Photo" style="width: 100%; height: 100%; object-fit: cover;" />
+        ${photoMarkup}
       </div>
       <div style="flex: 1;">
         <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${student.fullName || 'Candidate Name'}</div>
@@ -2026,9 +2030,20 @@ export function printStudentDossier(student: any) {
 
   <script>
     window.onload = function() {
-      setTimeout(function() {
-        window.print();
-      }, 500);
+      var images = Array.prototype.slice.call(document.images);
+      var imageLoads = images.map(function(image) {
+        if (image.complete) return Promise.resolve();
+        return new Promise(function(resolve) {
+          image.addEventListener('load', resolve, { once: true });
+          image.addEventListener('error', resolve, { once: true });
+        });
+      });
+
+      Promise.all(imageLoads).then(function() {
+        setTimeout(function() {
+          window.print();
+        }, 150);
+      });
     };
   </script>
 </body>

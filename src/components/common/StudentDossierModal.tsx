@@ -100,6 +100,16 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
     }
   };
 
+  const handlePrintDossier = () => {
+    if (!student) return;
+
+    printStudentDossier({
+      ...student,
+      photoUrl: photoBlobUrl || student.photoUrl,
+      qrImageUrl: qrCodeUrl || undefined,
+    });
+  };
+
   if (!isOpen || !student) return null;
 
   const appNo = student.applicationNo || student.studentId || student.id;
@@ -175,7 +185,7 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => printStudentDossier(student)}
+              onClick={handlePrintDossier}
               className="px-3.5 py-1.5 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -425,7 +435,7 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
             })()}
 
             <button
-              onClick={() => printStudentDossier(student)}
+              onClick={handlePrintDossier}
               className="px-4 py-2 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               <Printer className="w-4 h-4" />
