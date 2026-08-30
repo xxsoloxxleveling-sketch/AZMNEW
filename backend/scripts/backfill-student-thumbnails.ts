@@ -90,6 +90,11 @@ export async function runThumbnailBackfill(options: { apply: boolean; disconnect
 
   try {
     do {
+      // Do not select legacy photoUrl/uploadedDocsJson here. Those columns can
+      // contain full base64 images; fetching 25 of them in one result made this
+      // query take ~20 seconds and could drop a pooled connection. Read the
+      // small index first, then fetch a single candidate's legacy payload only
+      // when we actually need to make its thumbnail.
       const students = await prisma.student.findMany({
         take: batchSize,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -97,8 +102,6 @@ export async function runThumbnailBackfill(options: { apply: boolean; disconnect
         select: {
           id: true,
           cnicOrBForm: true,
-          photoUrl: true,
-          uploadedDocsJson: true,
           studentDocuments: { select: { documentType: true, bucket: true, objectPath: true, mimeType: true, originalFileName: true } },
         },
       });
@@ -112,7 +115,17 @@ export async function runThumbnailBackfill(options: { apply: boolean; disconnect
         }
         let legacyPhoto: LegacyPhoto | null = null;
         try {
-          legacyPhoto = await getLegacyPhoto(student);
+          const studentWithPhoto = await prisma.student.findUnique({
+            where: { id: student.id },
+            select: {
+              id: true,
+              cnicOrBForm: true,
+              photoUrl: true,
+              uploadedDocsJson: true,
+              studentDocuments: { select: { documentType: true, bucket: true, objectPath: true, mimeType: true, originalFileName: true } },
+            },
+          });
+          legacyPhoto = studentWithPhoto ? await getLegacyPhoto(studentWithPhoto) : null;
         } catch {
           summary.failed++;
           continue;
