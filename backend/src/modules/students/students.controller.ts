@@ -1,8 +1,62 @@
 import { Request, Response, NextFunction } from 'express';
+import { spawn } from 'child_process';
 import { studentsService } from './students.service';
 import { signUploadSessionToken, verifyAccessToken, verifyUploadSessionToken } from '../../lib/jwt';
 
+let thumbnailBackfillJob: {
+  status: 'idle' | 'running' | 'completed' | 'failed';
+  summary?: Record<string, unknown>;
+  error?: string;
+} = { status: 'idle' };
+
 export class StudentsController {
+  async startThumbnailBackfill(_req: Request, res: Response, next: NextFunction) {
+    try {
+      if (thumbnailBackfillJob.status === 'running') {
+        return res.status(409).json({ success: false, error: { message: 'Thumbnail generation is already running.' } });
+      }
+
+      thumbnailBackfillJob = { status: 'running' };
+      const child = spawn('npx', ['tsx', 'scripts/backfill-student-thumbnails.ts', '--apply'], {
+        cwd: process.cwd(),
+        env: process.env,
+        shell: process.platform === 'win32',
+      });
+      let output = '';
+      let errorOutput = '';
+      child.stdout.on('data', (chunk) => { output += chunk.toString(); });
+      child.stderr.on('data', (chunk) => { errorOutput += chunk.toString(); });
+      child.on('error', (error) => {
+        thumbnailBackfillJob = { status: 'failed', error: error.message };
+      });
+      child.on('close', (code) => {
+        const summaryMatch = output.match(/\{[\s\S]*\}\s*$/);
+        let summary: Record<string, unknown> | undefined;
+        try {
+          summary = summaryMatch ? JSON.parse(summaryMatch[0]) : undefined;
+        } catch {}
+        thumbnailBackfillJob = code === 0
+          ? { status: 'completed', summary }
+          : { status: 'failed', summary, error: errorOutput.trim() || 'Thumbnail generation did not complete.' };
+      });
+      return res.status(202).json({
+        success: true,
+        message: 'Private profile thumbnail generation has started. You can keep using the portal.',
+        data: thumbnailBackfillJob,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getThumbnailBackfillStatus(_req: Request, res: Response, next: NextFunction) {
+    try {
+      return res.status(200).json({ success: true, data: thumbnailBackfillJob });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async createUploadSession(req: Request, res: Response, next: NextFunction) {
     try {
       const candidateKey = String(req.body?.cnicOrBForm || '').trim();

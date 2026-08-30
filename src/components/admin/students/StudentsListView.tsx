@@ -49,6 +49,7 @@ export const StudentsListView: React.FC = () => {
   const [rollStatus, setRollStatus] = useState<{ readyCount: number; issuedCount: number; totalPaidCount: number; scheduledDate?: string } | null>(null);
   const [showBatchRollModal, setShowBatchRollModal] = useState(false);
   const [isIssuingBatch, setIsIssuingBatch] = useState(false);
+  const [isGeneratingThumbnails, setIsGeneratingThumbnails] = useState(false);
 
   const fetchStudents = async (showFullLoading = true) => {
     if (authLoading) return;
@@ -95,6 +96,19 @@ export const StudentsListView: React.FC = () => {
       alert(err.message || 'Failed to generate and download filtered candidate roster PDF.');
     } finally {
       setIsExportingPdf(false);
+    }
+  };
+
+  const handleGenerateThumbnails = async () => {
+    if (!window.confirm('Create small private thumbnails for existing student profile photos? Original photos and student data will not be changed.')) return;
+    setIsGeneratingThumbnails(true);
+    try {
+      await mockApi.startProfileThumbnailBackfill();
+      alert('Thumbnail generation has started. Keep this page open for a minute, then press Sync Live to see the photos.');
+    } catch (err: any) {
+      alert(err?.message || 'Unable to start thumbnail generation.');
+    } finally {
+      setIsGeneratingThumbnails(false);
     }
   };
 
@@ -436,6 +450,18 @@ export const StudentsListView: React.FC = () => {
                     {rollStatus.readyCount}
                   </span>
                 )}
+              </button>
+            )}
+
+            {role === 'SUPER_ADMIN' && (
+              <button
+                onClick={handleGenerateThumbnails}
+                disabled={isGeneratingThumbnails}
+                className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Create small private thumbnails for older profile photos"
+              >
+                <Loader2 className={`w-3.5 h-3.5 text-[#185b9d] ${isGeneratingThumbnails ? 'animate-spin' : ''}`} />
+                <span>{isGeneratingThumbnails ? 'Starting...' : 'Generate Photo Thumbnails'}</span>
               </button>
             )}
 

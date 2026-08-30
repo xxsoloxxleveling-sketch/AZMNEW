@@ -795,6 +795,10 @@ export const mockApi = {
     );
   },
 
+  async startProfileThumbnailBackfill(): Promise<void> {
+    await apiFetch('/api/students/backfill-profile-thumbnails', { method: 'POST' });
+  },
+
   async downloadRollSlipPdf(studentId: string, rollNumber?: string, studentObj?: any): Promise<void> {
     let data = studentObj;
     if (!data || !data.fullName) {

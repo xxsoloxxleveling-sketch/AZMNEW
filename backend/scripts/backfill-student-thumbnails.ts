@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import puppeteer from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer';
 import { prisma } from '../src/lib/prisma';
 import { supabaseStorage } from '../src/lib/supabaseStorage';
 
@@ -9,9 +9,19 @@ import { supabaseStorage } from '../src/lib/supabaseStorage';
  * This is intentionally additive: it never changes Student.photoUrl, uploadedDocsJson,
  * or an existing photo/photoThumbnail file. Run without --apply first to preview.
  */
-const apply = process.argv.includes('--apply');
 const batchSize = 25;
 const thumbnailBucket = 'student-photos' as const;
+
+export type ThumbnailBackfillSummary = {
+  mode: 'apply-with-verification' | 'dry-run';
+  scanned: number;
+  alreadyPresent: number;
+  candidates: number;
+  created: number;
+  skipped: number;
+  failed: number;
+  legacyDataChanged: false;
+};
 
 type LegacyPhoto = {
   buffer: Buffer;
@@ -33,7 +43,7 @@ function thumbnailPath(cnicOrBForm: string) {
   return `${cnicOrBForm.replace(/[^\w-]/g, '_')}/photo_thumbnail.jpg`;
 }
 
-async function makeThumbnail(page: Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>['newPage']>>, photo: LegacyPhoto) {
+async function makeThumbnail(page: Page, photo: LegacyPhoto) {
   const source = `data:${photo.mimeType};base64,${photo.buffer.toString('base64')}`;
   return page.evaluate(async (dataUrl) => {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -75,11 +85,20 @@ async function getLegacyPhoto(student: any): Promise<LegacyPhoto | null> {
   return { buffer, mimeType: mimeType === 'image/jpg' ? 'image/jpeg' : mimeType, originalFileName: photoMetadata?.originalFileName || documents?.photo?.name };
 }
 
-async function run() {
+export async function runThumbnailBackfill(options: { apply: boolean; disconnectDatabase?: boolean }): Promise<ThumbnailBackfillSummary> {
+  const { apply, disconnectDatabase = false } = options;
   let cursor: string | undefined;
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
-  let page: Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>['newPage']>> | undefined;
-  const summary = { mode: apply ? 'apply-with-verification' : 'dry-run', scanned: 0, alreadyPresent: 0, candidates: 0, created: 0, skipped: 0, failed: 0 };
+  let browser: Browser | undefined;
+  let page: Page | undefined;
+  const summary: Omit<ThumbnailBackfillSummary, 'legacyDataChanged'> = {
+    mode: apply ? 'apply-with-verification' : 'dry-run',
+    scanned: 0,
+    alreadyPresent: 0,
+    candidates: 0,
+    created: 0,
+    skipped: 0,
+    failed: 0,
+  };
 
   try {
     if (apply) {
@@ -151,13 +170,19 @@ async function run() {
     } while (cursor);
   } finally {
     await browser?.close();
-    await prisma.$disconnect();
+    if (disconnectDatabase) await prisma.$disconnect();
   }
-  console.log(JSON.stringify({ ...summary, legacyDataChanged: false }, null, 2));
-  if (summary.failed) process.exitCode = 1;
+  return { ...summary, legacyDataChanged: false };
 }
 
-run().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  runThumbnailBackfill({ apply: process.argv.includes('--apply'), disconnectDatabase: true })
+    .then((summary) => {
+      console.log(JSON.stringify(summary, null, 2));
+      if (summary.failed) process.exitCode = 1;
+    })
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+}

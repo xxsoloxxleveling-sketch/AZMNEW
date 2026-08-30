@@ -121,6 +121,18 @@ router.get(
   studentsController.getDocumentMetadata
 );
 
+// One-time, additive migration of legacy profile photos into small private thumbnails.
+router.post(
+  '/backfill-profile-thumbnails',
+  authorizeRoles(Role.SUPER_ADMIN),
+  studentsController.startThumbnailBackfill
+);
+router.get(
+  '/backfill-profile-thumbnails/status',
+  authorizeRoles(Role.SUPER_ADMIN),
+  studentsController.getThumbnailBackfillStatus
+);
+
 // Export filtered student roster as branded PDF (SUPER_ADMIN, ADMIN)
 router.get(
   '/export-pdf',
