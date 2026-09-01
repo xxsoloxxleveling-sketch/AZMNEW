@@ -29,10 +29,19 @@ jobs:
         env:
           VITE_API_URL: https://azmnew.onrender.com
 
+      - name: Build AZM Study Notes
+        run: npm run build:notes
+
+      - name: Combine sites for Hostinger
+        run: |
+          mkdir -p deploy-output/notes
+          cp -R dist/. deploy-output/
+          cp -R dist-notes/. deploy-output/notes/
+
       - name: Deploy to Deploy Branch for Hostinger
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: deploy
-          publish_dir: ./dist
+          publish_dir: ./deploy-output
           force_orphan: true
