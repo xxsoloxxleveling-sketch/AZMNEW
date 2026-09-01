@@ -125,20 +125,26 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(({
 
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex-1 flex flex-col justify-center items-center">
         
-        {/* Top Feature Pill Badge (Interactive Live Alert Trigger) */}
-        <button
-          type="button"
-          onClick={() => {
-            if (onOpenAlerts) onOpenAlerts();
-          }}
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800/95 border border-amber-400/40 hover:border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)] backdrop-blur-md mb-6 transition-all cursor-pointer group focus:outline-hidden"
-        >
-          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-          <span className="text-xs sm:text-sm font-semibold text-amber-300 group-hover:text-amber-200">
-            {language === 'ur' ? 'سیشن 5 ٹیسٹ رجسٹریشن جاری ہے • فیس 300 روپے' : 'Session V Scholarship Test Registration is Open (PKR 300 Fee)'}
-          </span>
-          <ChevronRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
-        </button>
+        {/* Top announcements */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 mb-6">
+          <a
+            href="https://notes.azmaio.com"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-300/60 hover:border-emerald-200 shadow-[0_0_20px_rgba(52,211,153,0.18)] backdrop-blur-md transition-all cursor-pointer group focus:outline-hidden"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+            <span className="text-xs sm:text-sm font-semibold text-emerald-100 group-hover:text-white">
+              Free Session 5 Notes are now available by Director Sumama Khan
+            </span>
+            <ChevronRight className="w-3.5 h-3.5 text-emerald-200 group-hover:translate-x-0.5 transition-transform" />
+          </a>
+          <button
+            type="button"
+            onClick={() => onOpenAlerts?.()}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800/95 border border-amber-400/40 hover:border-amber-400 backdrop-blur-md transition-all cursor-pointer group focus:outline-hidden"
+          >
+            <span className="text-xs font-semibold text-amber-300">Registration open</span>
+          </button>
+        </div>
 
         {/* Centered Hero Title */}
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-display font-extrabold tracking-tight leading-[1.15] sm:leading-[1.12]">
@@ -176,6 +182,16 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(({
           >
             <span>View 100 MCQs Syllabus</span>
           </button>
+
+          <a
+            id="hero-access-free-notes-btn"
+            href="https://notes.azmaio.com"
+            className="px-6 py-3.5 text-sm font-bold text-emerald-50 bg-emerald-600/90 hover:bg-emerald-500 rounded-xl border border-emerald-300/50 shadow-[0_0_24px_rgba(16,185,129,0.28)] transition-all transform hover:-translate-y-0.5 flex items-center gap-2 focus:outline-hidden"
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Access Free Notes</span>
+            <ArrowRight className="w-4 h-4" />
+          </a>
         </div>
 
         {/* Fast Candidate Lookup Input */}
