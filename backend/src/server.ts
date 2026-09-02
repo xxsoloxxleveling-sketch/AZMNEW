@@ -2,15 +2,9 @@ import app from './app';
 import { env } from './config/env';
 import { logger } from './lib/logger';
 import { prisma } from './lib/prisma';
-import { bootstrapAccounts } from './lib/bootstrapAccounts';
-
 async function bootstrap() {
   // STAGING SAFETY: preserve imported production users.
-  if (process.env.BOOTSTRAP_ACCOUNTS === 'true') {
-    bootstrapAccounts().catch((e) => logger.warn('Bootstrap accounts error:', e));
-  } else {
-    logger.info('Bootstrap accounts disabled for staging.');
-  }
+
 
   const server = app.listen(env.PORT, '127.0.0.1', () => {
     logger.info(`🚀 Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);
