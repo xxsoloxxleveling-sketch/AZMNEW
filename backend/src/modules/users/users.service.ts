@@ -53,7 +53,7 @@ export class UsersService {
       throw error;
     }
 
-    const passwordHash = await hashPassword(input.password || 'Azm@Staff#2026!');
+    const passwordHash = await hashPassword(input.password);
 
     const user = await prisma.user.create({
       data: {
