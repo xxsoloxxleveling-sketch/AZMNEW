@@ -1,10 +1,8 @@
 import { getToken, setToken, clearToken, getRefreshToken, setRefreshToken, clearRefreshToken } from './auth';
 
 export const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_URL ||
-  ((import.meta as any).env?.PROD
-    ? window.location.origin
-    : "http://localhost:5000");
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? window.location.origin : "http://localhost:5000");
 
 export interface ApiResponse<T = any> {
   success: boolean;
