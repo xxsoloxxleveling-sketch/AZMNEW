@@ -5,10 +5,14 @@ import { prisma } from './lib/prisma';
 import { bootstrapAccounts } from './lib/bootstrapAccounts';
 
 async function bootstrap() {
-  // Synchronize new credentials and purge legacy accounts
-  bootstrapAccounts().catch((e) => logger.warn('Bootstrap accounts error:', e));
+  // STAGING SAFETY: preserve imported production users.
+  if (process.env.BOOTSTRAP_ACCOUNTS === 'true') {
+    bootstrapAccounts().catch((e) => logger.warn('Bootstrap accounts error:', e));
+  } else {
+    logger.info('Bootstrap accounts disabled for staging.');
+  }
 
-  const server = app.listen(env.PORT, () => {
+  const server = app.listen(env.PORT, '127.0.0.1', () => {
     logger.info(`🚀 Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);
     logger.info(`🩺 Health check available at http://localhost:${env.PORT}/api/health`);
     logger.info(`🔐 Auth endpoints available at http://localhost:${env.PORT}/api/auth`);

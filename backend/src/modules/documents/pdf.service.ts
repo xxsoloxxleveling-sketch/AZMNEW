@@ -101,34 +101,80 @@ export class PdfService {
       }
     }
 
+    const isArm64 = process.arch === 'arm64';
+
     const launchServerlessChromium = async () => {
-      // Sparticuz Chromium is substantially smaller than the full Puppeteer
-      // browser and is the reliable option on Render's 512 MB free service.
-      const chromiumModule: any = await import('@sparticuz/chromium');
+      // Keep the normal Sparticuz package for Render/x64.
+      // Oracle ARM64 uses chromium-min with a remote ARM64 pack.
+      if (isArm64) {
+        process.env.FONTCONFIG_PATH = '/tmp/fonts';
+      }
+
+      const chromiumModule: any = isArm64
+        ? await import('@sparticuz/chromium-min')
+        : await import('@sparticuz/chromium');
+
       const chromium = chromiumModule.default || chromiumModule;
+
+      if (isArm64) {
+        chromium.setGraphicsMode = false;
+      }
+
       const puppeteerCoreModule: any = await import('puppeteer-core');
-      const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
-      const executablePath = await chromium.executablePath();
+      const puppeteerCore =
+        puppeteerCoreModule.default || puppeteerCoreModule;
+
+      const arm64PackUrl = process.env.CHROMIUM_ARM64_PACK_URL;
+
+      if (isArm64 && !arm64PackUrl) {
+        throw new Error(
+          'CHROMIUM_ARM64_PACK_URL is required on ARM64.'
+        );
+      }
+
+      const executablePath = isArm64
+        ? await chromium.executablePath(arm64PackUrl)
+        : await chromium.executablePath();
 
       if (!executablePath) {
-        throw new Error('Serverless Chromium did not provide an executable path.');
+        throw new Error(
+          'Serverless Chromium did not provide an executable path.'
+        );
       }
+
+      logger.info(
+        isArm64
+          ? `Using ARM64 Chromium binary at: ${executablePath}`
+          : `Using serverless Chromium binary at: ${executablePath}`
+      );
 
       return puppeteerCore.launch({
         args: [...chromium.args, ...memoryOptimizedArgs],
-        defaultViewport: chromium.defaultViewport || { width: 1280, height: 800 },
+        defaultViewport:
+          chromium.defaultViewport || { width: 1280, height: 800 },
         executablePath,
         headless: chromium.headless ?? true,
       });
     };
 
-    const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID);
-    if (isRender) {
+    const isRender = Boolean(
+      process.env.RENDER || process.env.RENDER_SERVICE_ID
+    );
+
+    if (isRender || isArm64) {
       try {
-        logger.info('Using memory-efficient serverless Chromium on Render for PDF generation.');
+        logger.info(
+          isArm64
+            ? 'Using ARM64 serverless Chromium pack for PDF generation.'
+            : 'Using memory-efficient serverless Chromium on Render for PDF generation.'
+        );
+
         return await launchServerlessChromium();
       } catch (serverlessErr: any) {
-        logger.warn('Serverless Chromium launch failed; trying the bundled browser:', serverlessErr.message);
+        logger.warn(
+          'Serverless Chromium launch failed; trying the bundled browser:',
+          serverlessErr.message
+        );
       }
     }
 
@@ -242,7 +288,7 @@ export class PdfService {
    * Helper for checkmark box
    */
   private renderCheck(checked: boolean, label: string): string {
-    return `<span class="check-item"><span class="check-box">${checked ? '&#10003;' : '&nbsp;'}</span> <span class="check-label">${label}</span></span>`;
+    return `<span class="check-item"><span class="check-box${checked ? ' checked' : ''}"></span><span class="check-label">${label}</span></span>`;
   }
 
   /**
@@ -313,7 +359,8 @@ export class PdfService {
     .hyphen { font-weight: 700; margin: 0 1px; font-size: 11px; }
 
     .check-item { display: inline-flex; align-items: center; margin-right: 14px; }
-    .check-box { display: inline-block; width: 13px; height: 13px; border: 1.2px solid #334155; text-align: center; line-height: 12px; font-size: 10px; font-weight: 800; border-radius: 2px; margin-right: 4px; background: #fff; }
+    .check-box { display: inline-block; position: relative; width: 13px; height: 13px; border: 1.2px solid #334155; border-radius: 2px; margin-right: 4px; background: #fff; flex-shrink: 0; }
+    .check-box.checked::after { content: ''; position: absolute; left: 3px; top: 0px; width: 4px; height: 8px; border: solid #334155; border-width: 0 2px 2px 0; transform: rotate(45deg); }
     .check-label { font-size: 10px; font-weight: 500; }
 
     .data-table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 10px; }
@@ -494,7 +541,7 @@ export class PdfService {
             <td>${r.yearOfPassing || ''}</td>
             <td>${r.totalMarks || ''}</td>
             <td>${r.obtainedMarks || ''}</td>
-            <td>${r.percentage ? `${r.percentage}%` : ''}</td>
+            <td>${r.percentage != null ? `${Number(r.percentage).toFixed(2)}%` : ''}</td>
           </tr>`
                 )
                 .join('')
