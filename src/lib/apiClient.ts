@@ -1,8 +1,10 @@
 import { getToken, setToken, clearToken, getRefreshToken, setRefreshToken, clearRefreshToken } from './auth';
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? window.location.origin : "http://localhost:5000");
+const isLocalViteDev = window.location.hostname === "localhost" && window.location.port === "3000";
+
+export const API_BASE_URL = isLocalViteDev
+  ? "http://localhost:5000"
+  : window.location.origin;
 
 export interface ApiResponse<T = any> {
   success: boolean;
