@@ -1,0 +1,25 @@
+.zoom-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: #53677d;
+  font-size: .78rem;
+}
+
+.zoom-toolbar > span { min-width: 70px; font-weight: 800; }
+.zoom-toolbar button { min-width: 31px; padding: 6px 9px; border: 1px solid #cdd8e5; border-radius: 5px; color: #17436f; background: white; font-weight: 800; cursor: pointer; }
+.zoom-toolbar button:disabled { opacity: .4; cursor: default; }
+.zoom-toolbar button:last-of-type { margin-left: 3px; }
+.zoom-toolbar small { margin-left: auto; color: #78879a; }
+
+.page-frame { background: #eef3f8; touch-action: pan-y; }
+.page-frame.is-zoomed { cursor: grab; }
+.page-frame.is-zoomed:active { cursor: grabbing; }
+.page-canvas { position: relative; z-index: 1; width: 100%; transform-origin: center center; transition: transform 120ms ease-out; }
+.page-canvas img { display: block; width: 100%; user-select: none; -webkit-user-drag: none; }
+
+@media (max-width: 520px) {
+  .zoom-toolbar { flex-wrap: wrap; }
+  .zoom-toolbar small { width: 100%; margin: 0; }
+}
