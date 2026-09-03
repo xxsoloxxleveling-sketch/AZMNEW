@@ -17,7 +17,7 @@ const pagePath = (collection: Collection, page: number) => `/library/${collectio
 function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const zoom = 1.5;
+  const zoom = 2;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [notice, setNotice] = useState('');
   const dragStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
@@ -63,7 +63,7 @@ function App() {
     <main className="viewer-main">
       <div className="reader-top"><div><p className="eyebrow">{selected.classes}</p><h1>{selected.title}</h1></div><div className="reader-actions"><button disabled={page === 1} onClick={() => changePage(page - 1)}>Previous</button><span>Page {page} of {selected.pages}</span><button disabled={page === selected.pages} onClick={() => changePage(page + 1)}>Next</button></div></div>
       <aside className="free-banner"><strong>NOT FOR SALE</strong><span>These notes are free of cost. If anyone charges you for these AZM notes, AZM will take strict action.</span></aside>
-      <p className="reader-instruction">This page is shown at 150%. Drag it to read different areas.</p>
+      <p className="reader-instruction">This page is shown at 200%. Drag it to read different areas.</p>
       <section ref={pageFrame} className={`page-frame ${zoom > 1 ? 'is-zoomed' : ''}`} style={{ '--collection-colour': selected.colour } as React.CSSProperties} onPointerDown={beginDrag} onPointerMove={dragPage} onPointerUp={endDrag} onPointerCancel={endDrag}>
         <div className="page-canvas" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}><img src={pagePath(selected, page)} alt={`${selected.classes} study notes, page ${page}`} draggable={false} /></div>
         <div className="page-watermark" aria-hidden="true">AZM · NOT FOR SALE · FREE OF COST</div>
