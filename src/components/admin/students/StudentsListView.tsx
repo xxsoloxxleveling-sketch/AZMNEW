@@ -105,6 +105,12 @@ export const StudentsListView: React.FC = () => {
 
   }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage]);
 
+  useEffect(() => {
+    const refresh = () => { void fetchStudents(); };
+    window.addEventListener('students-updated', refresh);
+    return () => window.removeEventListener('students-updated', refresh);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage]);
+
   // Fetch private thumbnail files only for the ten rows currently displayed.
   // The list API stays metadata-only and full-size photos are never requested here.
   useEffect(() => {
@@ -142,10 +148,6 @@ export const StudentsListView: React.FC = () => {
       loadedUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [students]);
-
-  const handleStudentCreated = (newStudent: MockStudent) => {
-    setStudents((prev) => [newStudent, ...prev]);
-  };
 
   const handleConfirmDelete = async () => {
     if (!studentToDelete) return;
@@ -511,7 +513,7 @@ export const StudentsListView: React.FC = () => {
       <AdminWalkInModal
         isOpen={isWalkInOpen}
         onClose={() => setIsWalkInOpen(false)}
-        onSuccess={handleStudentCreated}
+        onSuccess={() => { /* Refreshed by the students-updated event. */ }}
       />
 
       {/* Super Admin Delete Confirmation Modal */}

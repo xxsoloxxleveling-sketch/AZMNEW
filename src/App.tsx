@@ -440,12 +440,7 @@ function AppContent() {
           <AdminWalkInModal
             isOpen={isGlobalAddStudentOpen}
             onClose={() => setIsGlobalAddStudentOpen(false)}
-            onSuccess={() => {
-              alert('Student walk-in admission enrolled successfully.');
-              if (adminTab === 'students') {
-                window.location.reload();
-              }
-            }}
+            onSuccess={() => { /* The form shows confirmation and refreshes the roster. */ }}
           />
 
           <GenerateChallanModal
