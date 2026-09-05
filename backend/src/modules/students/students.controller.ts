@@ -371,7 +371,7 @@ export class StudentsController {
         }
       }
 
-      if (!/^(photo|photoThumbnail|bform|fatherCnic|dmc(?:_\d+)?|domicile|paymentReceipt)$/.test(docType)) {
+      if (!/^(photo|photoThumbnail|bform|fatherCnic|dmc(?:_\d+)?|domicile|paymentReceipt|income|signature)$/.test(docType)) {
         return res.status(400).json({ success: false, error: { message: 'Unsupported document type' } });
       }
       if (!Buffer.isBuffer(req.body) || req.body.length === 0) {

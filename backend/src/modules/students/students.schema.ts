@@ -203,7 +203,7 @@ export const uploadDocumentSchema = z
     docType: z
       .string()
       .regex(
-        /^(photo|photoThumbnail|bform|fatherCnic|dmc(?:_\d+)?|domicile|paymentReceipt)$/,
+        /^(photo|photoThumbnail|bform|fatherCnic|dmc(?:_\d+)?|domicile|paymentReceipt|income|signature)$/,
         'Unsupported document type'
       ),
     fileName: z.string().optional(),
