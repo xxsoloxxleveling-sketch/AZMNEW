@@ -95,9 +95,9 @@ const GenerateChallanModal = lazy(() =>
 const LoginPage = lazy(() =>
   import('./components/public/auth/LoginPage').then((m) => ({ default: m.LoginPage }))
 );
-const PublicCandidateRegistrationWizard = lazy(() =>
-  import('./components/public/register/PublicCandidateRegistrationWizard').then((m) => ({
-    default: m.PublicCandidateRegistrationWizard,
+const RegistrationSuspendedNotice = lazy(() =>
+  import('./components/public/register/RegistrationSuspendedNotice').then((m) => ({
+    default: m.RegistrationSuspendedNotice,
   }))
 );
 const PublicPartnerRegistrationPage = lazy(() =>
@@ -276,11 +276,11 @@ function AppContent() {
     );
   }
 
-  // Route 2: Public Candidate 8-Stage Registration Wizard
+  // Route 2: Public candidate registration (temporarily suspended)
   if (currentRoute === 'register') {
     return (
       <Suspense fallback={<ViewLoadingFallback />}>
-        <PublicCandidateRegistrationWizard
+        <RegistrationSuspendedNotice
           onNavigateHome={() => navigateTo('public')}
           onNavigateLogin={() => navigateTo('login')}
         />
