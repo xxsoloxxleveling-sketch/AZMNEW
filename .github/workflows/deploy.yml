@@ -32,18 +32,20 @@ jobs:
       - name: Build Production Frontend
         run: npm run build
         env:
-          VITE_API_URL: https://azmnew.onrender.com
+          # Empty override uses the same-origin Oracle API in production.
+          VITE_API_URL: ''
 
       - name: Build AZM Study Notes
         run: npm run build:notes
 
-      - name: Combine sites for Hostinger
+      - name: Combine sites for Oracle
         run: |
           mkdir -p deploy-output/notes
           cp -R dist/. deploy-output/
           cp -R dist-notes/. deploy-output/notes/
+          printf '%s\n' "$GITHUB_SHA" > deploy-output/deployment-version.txt
 
-      - name: Deploy to Deploy Branch for Hostinger
+      - name: Publish built files to deploy branch
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
