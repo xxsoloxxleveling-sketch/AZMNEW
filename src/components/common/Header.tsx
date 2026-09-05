@@ -65,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'home', label: 'Home', labelUr: 'صفحۂ اول' },
     { id: 'about', label: 'About AZM', labelUr: 'ہمارے بارے میں' },
     { id: 'scholarship', label: 'Scholarships', labelUr: 'وظائف کی تفصیل' },
-    { id: 'apply', label: 'Apply Portal', labelUr: 'آن لائن داخلہ' },
+    { id: 'apply', label: 'Registration Closed', labelUr: 'رجسٹریشن بند ہے' },
     { id: 'roll-number', label: 'Roll No Slip', labelUr: 'رول نمبر سلپ' },
     { id: 'results', label: 'Results & Merit', labelUr: 'نتائج اور میرٹ' },
   ];
@@ -88,9 +88,9 @@ export const Header: React.FC<HeaderProps> = ({
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2 text-emerald-400 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>{language === 'ur' ? 'سیشن 5 (2026) رجسٹریشن جاری ہے • فیس 300 روپے' : 'Session V (2026) Registration Open • PKR 300 Fee'}</span>
+          <div className="flex items-center gap-2 text-amber-300 font-medium">
+            <span className="w-2 h-2 rounded-full bg-amber-300" />
+            <span>{language === 'ur' ? 'سیشن 5 (2026) کی رجسٹریشن بند ہو چکی ہے' : 'Session V (2026) Registration Closed'}</span>
 
           </div>
           
@@ -246,7 +246,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="relative group overflow-hidden px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-[#185b9d] via-[#1d63a8] to-[#0f4477] hover:from-[#1d6bb8] hover:to-[#124d85] rounded-xl border border-[#38bdf8]/50 shadow-[0_0_20px_rgba(24,91,157,0.5)] hover:shadow-[0_0_30px_rgba(56,189,248,0.7)] transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2 focus:outline-hidden"
               >
                 <Sparkles className="w-4 h-4 text-sky-300 animate-pulse" />
-                <span>{language === 'ur' ? 'آن لائن درخواست دیں' : 'Apply Online'}</span>
+                <span>{language === 'ur' ? 'رجسٹریشن بند ہے' : 'Registration Closed'}</span>
                 <ArrowRight className="w-4 h-4 text-sky-200 group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>
@@ -258,7 +258,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => onSelectTab('apply')}
                 className="sm:hidden px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-[#185b9d] to-[#0f4477] rounded-lg border border-blue-500/40 shadow-xs"
               >
-                Apply
+                Closed
               </button>
               <button
                 id="btn-mobile-menu-toggle"
@@ -360,7 +360,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="w-full flex items-center justify-center gap-2 py-3 text-xs sm:text-sm font-bold bg-gradient-to-r from-[#185b9d] via-[#1d63a8] to-[#0f4477] text-white rounded-xl shadow-lg border border-[#38bdf8]/50"
             >
               <Sparkles className="w-4 h-4 text-sky-300 animate-pulse" />
-              <span>Apply Online (Session V 2026)</span>
+              <span>Registration Closed — View Notice</span>
               <ArrowRight className="w-4 h-4 text-sky-200" />
             </button>
           </div>

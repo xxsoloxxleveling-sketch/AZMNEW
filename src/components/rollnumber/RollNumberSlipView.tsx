@@ -260,7 +260,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
               onClick={() => onSelectTab('apply')}
               className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors"
             >
-              Not Registered Yet? Apply Online
+              Registration Closed — Contact Us
             </button>
           </div>
         </div>

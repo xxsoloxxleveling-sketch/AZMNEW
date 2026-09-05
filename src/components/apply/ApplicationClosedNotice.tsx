@@ -1,116 +1,107 @@
 import React from 'react';
-import { Wrench, Clock, Phone, ArrowLeft, Search, MessageCircle, ShieldAlert, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarX2,
+  Clock3,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Phone,
+  Search,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react';
+import { OFFICIAL_DATA } from '../../data/scholarshipData';
 import { PageTab } from '../../types';
-import { CandidateSlipRetrievalCard } from './CandidateSlipRetrievalCard';
-
 
 interface ApplicationClosedNoticeProps {
   onSelectTab: (tab: PageTab) => void;
 }
 
 export const ApplicationClosedNotice: React.FC<ApplicationClosedNoticeProps> = ({ onSelectTab }) => {
-  return (
-    <div className="py-12 sm:py-16 max-w-4xl mx-auto px-4 sm:px-6">
-      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden">
-        {/* Top Gradient Banner */}
-        <div className="bg-gradient-to-r from-slate-900 via-[#185b9d] to-slate-900 px-6 sm:px-10 py-8 text-white text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="space-y-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
-              <Clock className="w-3.5 h-3.5" />
-              <span>Online Application Paused for System Upgrades</span>
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black font-display tracking-tight">
-              Portal Maintenance in Progress
-            </h1>
-            <p className="text-xs sm:text-sm text-blue-100/80 max-w-xl">
-              We are currently upgrading the online candidate registration system for Session V (2026-2027).
-            </p>
-          </div>
+  const whatsappNumber = OFFICIAL_DATA.helpline.replace(/\D/g, '').replace(/^0/, '92');
+  const whatsappMessage = encodeURIComponent(
+    'Assalam-o-Alaikum Sumama Khan, Session V online registration is closed, but I would still like to register. Please guide me through the registration process.'
+  );
 
-          <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center flex-shrink-0 text-amber-300">
-            <Wrench className="w-8 h-8 animate-bounce" />
+  return (
+    <section className="bg-slate-50 px-4 sm:px-6 py-10 sm:py-16">
+      <div className="max-w-4xl mx-auto overflow-hidden rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-200/60">
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#071426] via-[#0f3f70] to-[#185b9d] px-6 sm:px-12 py-10 sm:py-12 text-center text-white">
+          <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-sky-400/10 blur-2xl" />
+          <div className="relative">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center">
+              <CalendarX2 className="w-8 h-8 text-amber-300" />
+            </div>
+            <span className="inline-flex px-3 py-1 mb-4 rounded-full bg-amber-300 text-amber-950 text-[11px] font-black uppercase tracking-wider">
+              Registration Closed
+            </span>
+            <h1 className="text-3xl sm:text-4xl font-black font-display tracking-tight">
+              Session V online registration has closed
+            </h1>
+            <p className="mt-3 max-w-2xl mx-auto text-sm sm:text-base leading-relaxed text-blue-100">
+              The online application form is no longer accepting submissions. If you still want to register, contact Sumama Khan directly for assistance.
+            </p>
           </div>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 sm:p-10 space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Info Box 1 */}
-            <div className="p-5 rounded-2xl bg-blue-50/70 border border-blue-100 space-y-2">
-              <div className="flex items-center gap-2 text-[#185b9d] font-bold text-sm">
-                <Sparkles className="w-4 h-4" />
-                <span>When Will Registrations Reopen?</span>
+        <div className="p-6 sm:p-10 space-y-7">
+          <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-5 sm:p-6">
+            <div className="flex items-start gap-4">
+              <span className="w-12 h-12 shrink-0 rounded-xl bg-[#185b9d] text-white flex items-center justify-center shadow-sm">
+                <UserRound className="w-6 h-6" />
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#185b9d]">Registration Assistance</p>
+                <h2 className="mt-1 text-xl font-black text-slate-900">Sumama Khan</h2>
+                <p className="text-sm text-slate-600">Founder &amp; Director General, AZM Group of Companies (Pvt.) Ltd.</p>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Public online candidate submissions will resume shortly once new system enhancements, automated challan generation, and biometric verification workflows are deployed.
-              </p>
             </div>
 
-            {/* Info Box 2 */}
-            <div className="p-5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2">
-              <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
-                <ShieldAlert className="w-4 h-4" />
-                <span>Already Submitted Your Application?</span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                All previously submitted applications and fee receipts are safely recorded in our database. You can track your verification and search your Roll Number Slip anytime.
-              </p>
-            </div>
-          </div>
-
-          {/* Action CTAs */}
-          <div className="space-y-3 pt-2">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider text-center">
-              Quick Assistance &amp; Tracking Options
-            </h4>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <a
-                href="https://wa.me/923051755551?text=Hello%20AZM.AIO%20Helpline%2C%20I%20want%20to%20inquire%20about%20online%20candidate%20registration."
-                target="_blank"
-                rel="noreferrer"
-                className="px-5 py-3 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold shadow-md transition flex items-center gap-2 cursor-pointer"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>Inquire on WhatsApp (0305-1755551)</span>
+            <div className="mt-6 grid sm:grid-cols-2 gap-3">
+              <a href={`tel:${OFFICIAL_DATA.helpline}`} className="flex items-center gap-3 rounded-xl bg-white border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 hover:border-blue-300 hover:text-[#185b9d] transition">
+                <Phone className="w-4 h-4 text-[#185b9d]" />
+                {OFFICIAL_DATA.helpline}
               </a>
-
-
-              <button
-                onClick={() => onSelectTab('roll-number')}
-                className="px-5 py-3 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white text-xs font-bold shadow-md transition flex items-center gap-2 cursor-pointer"
-              >
-                <Search className="w-4 h-4" />
-                <span>Search Roll Number Slip</span>
-              </button>
-
-              <button
-                onClick={() => onSelectTab('home')}
-                className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-2 cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Return to Home</span>
-              </button>
+              <a href={`mailto:${OFFICIAL_DATA.email}`} className="flex items-center gap-3 rounded-xl bg-white border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 hover:border-blue-300 hover:text-[#185b9d] transition">
+                <Mail className="w-4 h-4 text-[#185b9d]" />
+                {OFFICIAL_DATA.email}
+              </a>
+              <div className="sm:col-span-2 flex items-start gap-3 rounded-xl bg-white border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[#185b9d]" />
+                {OFFICIAL_DATA.headOffice}
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-3 px-1 pt-1 text-xs text-slate-500">
+                <Clock3 className="w-4 h-4 text-[#185b9d]" />
+                Contact hours: {OFFICIAL_DATA.helplineHours}
+              </div>
             </div>
           </div>
 
-          {/* Candidate Profile Slip & Fee Voucher Self-Service Re-Download Tool */}
-          <div className="pt-2">
-            <CandidateSlipRetrievalCard />
+          <a href={`https://wa.me/${whatsappNumber}?text=${whatsappMessage}`} target="_blank" rel="noreferrer" className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-4 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition">
+            <MessageCircle className="w-5 h-5" />
+            Contact Sumama Khan on WhatsApp
+          </a>
+
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 mt-0.5 shrink-0 text-emerald-600" />
+            <p className="text-xs sm:text-sm leading-relaxed text-slate-700">
+              Already registered? Your submitted application remains safely recorded and you can continue checking your roll number slip.
+            </p>
           </div>
 
-          {/* Internal Testing Notice */}
-          <div className="pt-6 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-            <span>AZM Educational Network • Admissions Directorate</span>
-            <button
-              onClick={() => onSelectTab('apply-test')}
-              className="text-slate-400 hover:text-slate-600 transition underline font-mono"
-            >
-              Developer Testing Sandbox
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button type="button" onClick={() => onSelectTab('roll-number')} className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#185b9d] hover:bg-[#13497d] px-5 py-3 text-sm font-bold text-white transition">
+              <Search className="w-4 h-4" />
+              Search Roll Number Slip
+            </button>
+            <button type="button" onClick={() => onSelectTab('home')} className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 hover:bg-slate-200 px-5 py-3 text-sm font-bold text-slate-700 transition">
+              <ArrowLeft className="w-4 h-4" />
+              Return to Homepage
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
-

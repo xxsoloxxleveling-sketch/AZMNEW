@@ -16,14 +16,14 @@ import {
 export const OFFICIAL_ALERTS: AlertItem[] = [
   {
     id: 'alert-1',
-    title: 'Session V (2026) Online Test Registration Active',
-    subtitle: 'Standardized Merit Entry • PKR 300 Registration Fee',
-    message: 'Registrations are open for students from Class 6th to BS Level. Over 500 scholarship seats with PKR 5.2M+ in direct educational grants, Umrah tickets, laptops, and fee subsidies.',
+    title: 'Session V (2026) Registration Closed',
+    subtitle: 'Online applications are no longer being accepted',
+    message: 'Registration for Session V has closed. If you still want to register, contact Sumama Khan directly at 0305-1755551 for assistance.',
 
     type: 'registration',
-    badge: 'Registration Active',
-    date: 'Deadline: 5 September 2026',
-    actionText: 'Register for Test Now',
+    badge: 'Registration Closed',
+    date: 'Closed: 5 September 2026',
+    actionText: 'View Registration Notice',
     actionTab: 'apply',
     isPinned: true,
     deadlineDate: '2026-09-05'
@@ -389,8 +389,8 @@ export const SESSION_V_CALENDAR: CalendarEvent[] = [
     displayDate: '05 Sep 2026',
     title: 'Registration Closes (23:59 PST)',
     description: 'Strict deadline for online applications, physical form drop-offs, and school lists.',
-    status: 'active',
-    badge: 'Registration Active'
+    status: 'completed',
+    badge: 'Registration Closed'
   },
   {
     id: 'cal-3',

@@ -74,7 +74,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
                   onClick={() => onSelectTab('apply')}
                   className="hover:text-emerald-400 transition-colors flex items-center gap-1.5"
                 >
-                  <span className="text-[#70a9db]">›</span> Online Student Registration
+                  <span className="text-[#70a9db]">›</span> Registration Closed — Contact Notice
                 </button>
               </li>
               <li>

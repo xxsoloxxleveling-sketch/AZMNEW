@@ -23,17 +23,17 @@ export const WorkflowBento: React.FC<WorkflowBentoProps> = ({ onSelectTab }) => 
     {
       step: 1,
       tag: 'Stage 1',
-      title: 'Online or Hub Registration',
+      title: 'Registration Closed',
       duration: '16 Aug – 05 Sep 2026',
       icon: FileCheck2,
-      summary: 'Register online in 3 minutes or visit any of our 3 Mansehra hubs with your B-Form/CNIC.',
+      summary: 'Session V registration has closed. Contact Sumama Khan at 0305-1755551 if you still need registration assistance.',
       bullets: [
         'Nominal PKR 300 registration & processing fee',
 
         'Immediate Application Tracking ID',
         'Official ~1,000 MCQs course book download'
       ],
-      actionLabel: 'Register for Test',
+      actionLabel: 'View Closed Notice',
       tabTarget: 'apply' as PageTab
     },
     {

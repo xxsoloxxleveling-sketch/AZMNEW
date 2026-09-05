@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { PageTab } from '../../types';
 import { CosmicBackground } from './CosmicBackground';
 import { 
@@ -19,57 +19,13 @@ interface HeroSectionProps {
   language?: 'en' | 'ur';
 }
 
-const REGISTRATION_DEADLINE = new Date('2026-09-05T23:59:59+05:00').getTime();
-
-const getCountdown = () => {
-  const diff = Math.max(0, REGISTRATION_DEADLINE - Date.now());
-  return {
-    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-    minutes: Math.floor((diff / (1000 * 60)) % 60),
-    seconds: Math.floor((diff / 1000) % 60)
-  };
-};
-
-// Memoized isolated countdown timer component so timer ticks do NOT re-render HeroSection
-const HeroCountdown: React.FC = React.memo(() => {
-  const [timeLeft, setTimeLeft] = useState(getCountdown);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(getCountdown());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
+const RegistrationClosedBanner: React.FC = React.memo(() => {
   return (
-    <div className="mt-6 p-3 sm:p-4 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-700/80 shadow-lg inline-flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
-      <div className="flex items-center gap-2 text-xs text-slate-300">
-        <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
-        <span>Registration Closes: <strong className="text-white">5 September 2026</strong></span>
-      </div>
-
-      <div className="flex items-center gap-1.5 font-mono text-xs">
-        <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center min-w-[44px]">
-          <span className="font-bold text-amber-300 text-sm">{timeLeft.days}</span>
-          <span className="text-[10px] text-slate-400 block font-sans">Days</span>
-        </div>
-        <span className="text-slate-500 font-bold">:</span>
-        <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center min-w-[44px]">
-          <span className="font-bold text-white text-sm">{timeLeft.hours}</span>
-          <span className="text-[10px] text-slate-400 block font-sans">Hours</span>
-        </div>
-        <span className="text-slate-500 font-bold">:</span>
-        <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center min-w-[44px]">
-          <span className="font-bold text-white text-sm">{timeLeft.minutes}</span>
-          <span className="text-[10px] text-slate-400 block font-sans">Mins</span>
-        </div>
-        <span className="text-slate-500 font-bold">:</span>
-        <div className="bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center min-w-[44px]">
-          <span className="font-bold text-emerald-400 text-sm">{timeLeft.seconds}</span>
-          <span className="text-[10px] text-slate-400 block font-sans">Secs</span>
-        </div>
+    <div className="mt-6 p-4 rounded-2xl bg-amber-400/10 backdrop-blur-md border border-amber-300/50 shadow-lg inline-flex items-center gap-3 text-left">
+      <Clock className="w-5 h-5 text-amber-300 shrink-0" />
+      <div>
+        <strong className="block text-sm text-amber-200">Session V registration is closed</strong>
+        <span className="block mt-0.5 text-xs text-slate-300">Contact Sumama Khan at 0305-1755551 for registration assistance.</span>
       </div>
     </div>
   );
@@ -142,7 +98,7 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(({
             onClick={() => onOpenAlerts?.()}
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800/95 border border-amber-400/40 hover:border-amber-400 backdrop-blur-md transition-all cursor-pointer group focus:outline-hidden"
           >
-            <span className="text-xs font-semibold text-amber-300">Registration open</span>
+            <span className="text-xs font-semibold text-amber-300">Registration closed</span>
           </button>
         </div>
 
@@ -160,8 +116,7 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(({
           No favoritism, no hidden scoring — just a test, an optical scan, and a verified interview. Merit-based testing conducted across schools and colleges in Khyber Pakhtunkhwa.
         </p>
 
-        {/* Prominent Live Urgency Countdown Timer */}
-        <HeroCountdown />
+        <RegistrationClosedBanner />
 
         {/* Primary CTA Buttons */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
@@ -171,7 +126,7 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(({
             className="px-7 py-3.5 text-sm font-bold text-white bg-gradient-to-r from-[#185b9d] via-[#1d63a8] to-[#0f4477] hover:from-[#1d6bb8] hover:to-[#124d85] rounded-xl border border-[#3b82f6]/40 shadow-[0_0_25px_rgba(24,91,157,0.45)] hover:shadow-[0_0_35px_rgba(56,189,248,0.6)] transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2 focus:outline-hidden cursor-pointer"
           >
             <Sparkles className="w-4 h-4 text-sky-300" />
-            <span>Apply Online for Test</span>
+            <span>View Registration Notice</span>
             <ArrowRight className="w-4 h-4 text-sky-200" />
           </button>
 

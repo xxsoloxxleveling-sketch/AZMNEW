@@ -185,7 +185,7 @@ export const ScholarshipView: React.FC<ScholarshipViewProps> = ({ onSelectTab, o
                       onClick={() => onSelectTab('apply')}
                       className="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 focus:outline-hidden"
                     >
-                      <span>Register to Compete for {cat.code}</span>
+                      <span>Registration Closed — View Notice</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>

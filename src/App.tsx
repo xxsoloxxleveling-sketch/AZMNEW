@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from './lib/authContext';
 import { AdminTab } from './components/admin/layout/AdminSidebar';
 import type { MockStudent } from './lib/mockApi';
 import { wakeUpBackend } from './lib/apiClient';
+import { PUBLIC_REGISTRATION_OPEN } from './config/registration';
 
 // Lazy Loaded Below-The-Fold Public Components
 const Footer = lazy(() =>
@@ -98,6 +99,11 @@ const LoginPage = lazy(() =>
 const RegistrationSuspendedNotice = lazy(() =>
   import('./components/public/register/RegistrationSuspendedNotice').then((m) => ({
     default: m.RegistrationSuspendedNotice,
+  }))
+);
+const PublicCandidateRegistrationWizard = lazy(() =>
+  import('./components/public/register/PublicCandidateRegistrationWizard').then((m) => ({
+    default: m.PublicCandidateRegistrationWizard,
   }))
 );
 const PublicPartnerRegistrationPage = lazy(() =>
@@ -280,10 +286,17 @@ function AppContent() {
   if (currentRoute === 'register') {
     return (
       <Suspense fallback={<ViewLoadingFallback />}>
-        <RegistrationSuspendedNotice
-          onNavigateHome={() => navigateTo('public')}
-          onNavigateLogin={() => navigateTo('login')}
-        />
+        {PUBLIC_REGISTRATION_OPEN ? (
+          <PublicCandidateRegistrationWizard
+            onNavigateHome={() => navigateTo('public')}
+            onNavigateLogin={() => navigateTo('login')}
+          />
+        ) : (
+          <RegistrationSuspendedNotice
+            onNavigateHome={() => navigateTo('public')}
+            onNavigateLogin={() => navigateTo('login')}
+          />
+        )}
       </Suspense>
     );
   }
@@ -511,30 +524,34 @@ function AppContent() {
         {activeTab === 'apply' && (
           <div key="apply" className="animate-in fade-in duration-200">
             <Suspense fallback={<ViewLoadingFallback />}>
-              <ApplicationPortal
-                initialClass={prefillClass}
-                onSelectTab={handleSelectTab}
-              />
+              {PUBLIC_REGISTRATION_OPEN ? (
+                <ApplicationPortal
+                  initialClass={prefillClass}
+                  onSelectTab={handleSelectTab}
+                />
+              ) : (
+                <ApplicationClosedNotice onSelectTab={handleSelectTab} />
+              )}
             </Suspense>
           </div>
         )}
 
         {activeTab === 'apply-test' && (
           <div key="apply-test" className="animate-in fade-in duration-200">
-            {/* Sandbox Header Banner for Team Testing */}
-            <div className="bg-amber-400 text-slate-950 px-4 py-2.5 text-xs font-black text-center border-b border-amber-500 shadow-xs flex items-center justify-center gap-2">
-              <span className="px-2 py-0.5 rounded-md bg-slate-950 text-amber-300 font-mono text-[10px] uppercase tracking-wider">
-                Internal Test Sandbox
-              </span>
-              <span>
-                You are viewing the test duplicate application form (URL: <code className="bg-amber-300/80 px-1 py-0.5 rounded text-[11px]">#apply-test</code>). Candidate submissions save directly to the testing registry.
-              </span>
-            </div>
             <Suspense fallback={<ViewLoadingFallback />}>
-              <ApplicationPortal
-                initialClass={prefillClass}
-                onSelectTab={handleSelectTab}
-              />
+              {PUBLIC_REGISTRATION_OPEN ? (
+                <>
+                  <div className="bg-amber-400 text-slate-950 px-4 py-2.5 text-xs font-black text-center border-b border-amber-500 shadow-xs">
+                    Internal registration testing sandbox
+                  </div>
+                  <ApplicationPortal
+                    initialClass={prefillClass}
+                    onSelectTab={handleSelectTab}
+                  />
+                </>
+              ) : (
+                <ApplicationClosedNotice onSelectTab={handleSelectTab} />
+              )}
             </Suspense>
           </div>
         )}

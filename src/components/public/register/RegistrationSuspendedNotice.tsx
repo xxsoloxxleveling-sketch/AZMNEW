@@ -45,11 +45,11 @@ export const RegistrationSuspendedNotice: React.FC<RegistrationSuspendedNoticePr
               <Clock3 className="w-8 h-8" />
             </div>
             <span className="inline-flex px-3 py-1 mb-4 rounded-full bg-amber-300 text-amber-950 text-[11px] font-extrabold uppercase tracking-wider">
-              Registration Suspended
+              Registration Closed
             </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold">Online registration is currently unavailable</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold">Session V registration is closed</h1>
             <p className="mt-3 text-sm sm:text-base text-blue-100 max-w-xl mx-auto leading-relaxed">
-              If you want to register for the AZM.AIO Scholarship Examination, please contact Sumama Khan directly for assistance.
+              Online applications are no longer being accepted. If you still want to register, please contact Sumama Khan directly for assistance.
             </p>
           </div>
 

@@ -162,7 +162,7 @@ export const FeeCalculator: React.FC<FeeCalculatorProps> = ({ onSelectTab }) => 
                   className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 focus:outline-hidden"
                 >
                   <Sparkles className="w-4 h-4" />
-                  <span>Apply for {selected.classLevel}</span>
+                  <span>Registration Closed — View Notice</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <p className="text-[10px] text-center text-slate-400 mt-2">
