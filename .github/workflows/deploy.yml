@@ -1,12 +1,17 @@
 ﻿name: Build and Deploy Frontend to Deploy Branch
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
 
 permissions:
   contents: write
+
+concurrency:
+  group: frontend-deploy
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -44,4 +49,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: deploy
           publish_dir: ./deploy-output
-          force_orphan: true
+          # Connected hosting can pull successive deployments without rewritten history.
+          force_orphan: false
+          allow_empty_commit: true
