@@ -57,19 +57,26 @@ export const RegistrationAlertModal: React.FC<RegistrationAlertModalProps> = ({
             </span>
             <h2 className="mt-4 text-2xl sm:text-3xl font-black font-display">Session V registration has closed</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-300">
-              Online applications are no longer being accepted. If you still want to register, contact <strong className="text-white">Sumama Khan</strong> directly.
+              Online applications are no longer being accepted. If you still want to register, contact <strong className="text-white">Khaqan Afridi</strong> directly.
             </p>
 
             <div className="mt-6 rounded-2xl border border-blue-800/60 bg-blue-950/50 p-4 text-left space-y-2">
-              <p className="font-bold text-white">Sumama Khan</p>
+              <p className="font-bold text-white">Khaqan Afridi</p>
+              <p className="text-xs text-slate-300">Personal Assistant to Deputy Director and Public Relations Head, AZM</p>
               <a href={`tel:${OFFICIAL_DATA.helpline}`} className="flex items-center gap-2 text-sm text-blue-100 hover:text-white">
                 <Phone className="w-4 h-4 text-amber-300" /> {OFFICIAL_DATA.helpline}
               </a>
               <p className="text-xs text-slate-400">{OFFICIAL_DATA.helplineHours}</p>
             </div>
 
+            <div className="mt-4 rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-left">
+              <p className="text-xs sm:text-sm leading-relaxed text-amber-100">
+                Candidates whose fees are still due must pay before 5:00 PM. If payment is not completed by then, the registration may be cancelled.
+              </p>
+            </div>
+
             <div className="mt-5 grid sm:grid-cols-2 gap-3">
-              <a href="https://wa.me/923051755551?text=Assalam-o-Alaikum%20Sumama%20Khan%2C%20I%20would%20still%20like%20to%20register%20for%20Session%20V.%20Please%20guide%20me." target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-3 text-sm font-bold transition">
+              <a href="https://wa.me/923051755551?text=Assalam-o-Alaikum%20Khaqan%20Afridi%2C%20I%20would%20still%20like%20to%20register%20for%20Session%20V.%20Please%20guide%20me." target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-3 text-sm font-bold transition">
                 <MessageCircle className="w-4 h-4" /> Contact on WhatsApp
               </a>
               <button onClick={() => openTab('roll-number')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-3 text-sm font-bold transition">

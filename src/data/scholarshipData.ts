@@ -18,7 +18,7 @@ export const OFFICIAL_ALERTS: AlertItem[] = [
     id: 'alert-1',
     title: 'Session V (2026) Registration Closed',
     subtitle: 'Online applications are no longer being accepted',
-    message: 'Registration for Session V has closed. If you still want to register, contact Sumama Khan directly at 0305-1755551 for assistance.',
+    message: 'Registration for Session V has closed. If you still want to register, contact Khaqan Afridi directly at 0305-1755551 for assistance. Candidates whose fees are still due must pay before 5:00 PM, otherwise their registration may be cancelled.',
 
     type: 'registration',
     badge: 'Registration Closed',

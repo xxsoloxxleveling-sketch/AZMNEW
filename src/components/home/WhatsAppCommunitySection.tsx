@@ -139,7 +139,7 @@ export const WhatsAppCommunitySection: React.FC = () => {
                     <span className="text-slate-400 font-normal">Just now</span>
                   </div>
                   <p className="text-[11px] leading-relaxed text-slate-100">
-                    📢 <strong>Session V Registration Closed:</strong> Contact Sumama Khan at 0305-1755551 if you still need registration assistance.
+                    📢 <strong>Session V Registration Closed:</strong> Contact Khaqan Afridi at 0305-1755551 for assistance. Pending fee dues must be paid before 5:00 PM.
                   </p>
                 </div>
 

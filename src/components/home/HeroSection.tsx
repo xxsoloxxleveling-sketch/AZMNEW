@@ -25,7 +25,7 @@ const RegistrationClosedBanner: React.FC = React.memo(() => {
       <Clock className="w-5 h-5 text-amber-300 shrink-0" />
       <div>
         <strong className="block text-sm text-amber-200">Session V registration is closed</strong>
-        <span className="block mt-0.5 text-xs text-slate-300">Contact Sumama Khan at 0305-1755551 for registration assistance.</span>
+        <span className="block mt-0.5 text-xs text-slate-300">Contact Khaqan Afridi at 0305-1755551 for registration assistance. Pending dues must be paid before 5:00 PM.</span>
       </div>
     </div>
   );

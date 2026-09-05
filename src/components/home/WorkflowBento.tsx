@@ -26,7 +26,7 @@ export const WorkflowBento: React.FC<WorkflowBentoProps> = ({ onSelectTab }) => 
       title: 'Registration Closed',
       duration: '16 Aug – 05 Sep 2026',
       icon: FileCheck2,
-      summary: 'Session V registration has closed. Contact Sumama Khan at 0305-1755551 if you still need registration assistance.',
+      summary: 'Session V registration has closed. Contact Khaqan Afridi at 0305-1755551 if you still need registration assistance. Pending fee dues must be paid before 5:00 PM.',
       bullets: [
         'Nominal PKR 300 registration & processing fee',
 

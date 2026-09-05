@@ -21,7 +21,7 @@ interface ApplicationClosedNoticeProps {
 export const ApplicationClosedNotice: React.FC<ApplicationClosedNoticeProps> = ({ onSelectTab }) => {
   const whatsappNumber = OFFICIAL_DATA.helpline.replace(/\D/g, '').replace(/^0/, '92');
   const whatsappMessage = encodeURIComponent(
-    'Assalam-o-Alaikum Sumama Khan, Session V online registration is closed, but I would still like to register. Please guide me through the registration process.'
+    'Assalam-o-Alaikum Khaqan Afridi, Session V online registration is closed, but I would still like to register. Please guide me through the registration process.'
   );
 
   return (
@@ -40,7 +40,7 @@ export const ApplicationClosedNotice: React.FC<ApplicationClosedNoticeProps> = (
               Session V online registration has closed
             </h1>
             <p className="mt-3 max-w-2xl mx-auto text-sm sm:text-base leading-relaxed text-blue-100">
-              The online application form is no longer accepting submissions. If you still want to register, contact Sumama Khan directly for assistance.
+              The online application form is no longer accepting submissions. If you still want to register, contact Khaqan Afridi directly for assistance.
             </p>
           </div>
         </div>
@@ -53,8 +53,8 @@ export const ApplicationClosedNotice: React.FC<ApplicationClosedNoticeProps> = (
               </span>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-[#185b9d]">Registration Assistance</p>
-                <h2 className="mt-1 text-xl font-black text-slate-900">Sumama Khan</h2>
-                <p className="text-sm text-slate-600">Founder &amp; Director General, AZM Group of Companies (Pvt.) Ltd.</p>
+                <h2 className="mt-1 text-xl font-black text-slate-900">Khaqan Afridi</h2>
+                <p className="text-sm text-slate-600">Personal Assistant to Deputy Director and Public Relations Head, AZM</p>
               </div>
             </div>
 
@@ -80,8 +80,15 @@ export const ApplicationClosedNotice: React.FC<ApplicationClosedNoticeProps> = (
 
           <a href={`https://wa.me/${whatsappNumber}?text=${whatsappMessage}`} target="_blank" rel="noreferrer" className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-4 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition">
             <MessageCircle className="w-5 h-5" />
-            Contact Sumama Khan on WhatsApp
+            Contact Khaqan Afridi on WhatsApp
           </a>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+            <Clock3 className="w-5 h-5 mt-0.5 shrink-0 text-amber-600" />
+            <p className="text-xs sm:text-sm leading-relaxed text-slate-800">
+              Candidates whose fees are still due must pay before 5:00 PM. If payment is not completed by then, the registration may be cancelled.
+            </p>
+          </div>
 
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 flex items-start gap-3">
             <ShieldCheck className="w-5 h-5 mt-0.5 shrink-0 text-emerald-600" />

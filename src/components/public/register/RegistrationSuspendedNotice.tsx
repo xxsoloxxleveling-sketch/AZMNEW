@@ -13,7 +13,7 @@ export const RegistrationSuspendedNotice: React.FC<RegistrationSuspendedNoticePr
 }) => {
   const whatsappNumber = OFFICIAL_DATA.helpline.replace(/\D/g, '').replace(/^0/, '92');
   const whatsappMessage = encodeURIComponent(
-    'Assalam-o-Alaikum Sumama Khan, I would like to register for the AZM.AIO Scholarship Examination. Please guide me through the registration process.'
+    'Assalam-o-Alaikum Khaqan Afridi, I would like to register for the AZM.AIO Scholarship Examination. Please guide me through the registration process.'
   );
 
   return (
@@ -49,7 +49,7 @@ export const RegistrationSuspendedNotice: React.FC<RegistrationSuspendedNoticePr
             </span>
             <h1 className="text-2xl sm:text-3xl font-extrabold">Session V registration is closed</h1>
             <p className="mt-3 text-sm sm:text-base text-blue-100 max-w-xl mx-auto leading-relaxed">
-              Online applications are no longer being accepted. If you still want to register, please contact Sumama Khan directly for assistance.
+              Online applications are no longer being accepted. If you still want to register, please contact Khaqan Afridi directly for assistance.
             </p>
           </div>
 
@@ -61,8 +61,8 @@ export const RegistrationSuspendedNotice: React.FC<RegistrationSuspendedNoticePr
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-[#185b9d]">Registration Contact</p>
-                  <h2 className="mt-1 text-xl font-extrabold text-slate-900">Sumama Khan</h2>
-                  <p className="text-sm text-slate-600">Founder &amp; Director General, AZM Group of Companies (Pvt.) Ltd.</p>
+                  <h2 className="mt-1 text-xl font-extrabold text-slate-900">Khaqan Afridi</h2>
+                  <p className="text-sm text-slate-600">Personal Assistant to Deputy Director and Public Relations Head, AZM</p>
                 </div>
               </div>
 
@@ -90,6 +90,13 @@ export const RegistrationSuspendedNotice: React.FC<RegistrationSuspendedNoticePr
                   <span>Contact hours: {OFFICIAL_DATA.helplineHours}</span>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+              <Clock3 className="w-5 h-5 mt-0.5 shrink-0 text-amber-600" />
+              <p className="text-xs sm:text-sm leading-relaxed text-slate-800">
+                Candidates whose fees are still due must pay before 5:00 PM. If payment is not completed by then, the registration may be cancelled.
+              </p>
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
