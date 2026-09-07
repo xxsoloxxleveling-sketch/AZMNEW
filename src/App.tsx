@@ -20,6 +20,9 @@ const AlertsSection = lazy(() =>
 const WhatsAppButton = lazy(() =>
   import('./components/common/WhatsAppButton').then((m) => ({ default: m.WhatsAppButton }))
 );
+const PolicyButton = lazy(() =>
+  import('./components/common/PolicyButton').then((m) => ({ default: m.PolicyButton }))
+);
 const WhatsAppCommunitySection = lazy(() =>
   import('./components/home/WhatsAppCommunitySection').then((m) => ({ default: m.WhatsAppCommunitySection }))
 );
@@ -604,6 +607,7 @@ function AppContent() {
           />
         )}
         <WhatsAppButton />
+        <PolicyButton />
       </Suspense>
 
       <Suspense fallback={<div className="h-32" />}>

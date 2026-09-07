@@ -657,6 +657,21 @@ export const PARTNER_SCHOOLS: PartnerSchoolData[] = [
     totalStudentStrength: 720,
     expectedApplicants: 165,
     stampUploaded: true
+  },
+  {
+    id: 'ps-12',
+    institutionName: 'Pakistan Public School Kotkay Mansehra',
+    category: 'School',
+    campus: 'Kotkay Campus',
+    address: 'Kotkay, Mansehra, Khyber Pakhtunkhwa',
+    district: 'Mansehra',
+    contactPerson: 'Aqeel Khan',
+    designation: 'Principal; President, Private Education Network Mansehra',
+    whatsapp: 'Not provided',
+    email: 'Not provided',
+    totalStudentStrength: 0,
+    expectedApplicants: 0,
+    stampUploaded: true
   }
 ];
 

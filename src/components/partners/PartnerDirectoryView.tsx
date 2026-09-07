@@ -173,7 +173,9 @@ export const PartnerDirectoryView: React.FC<PartnerDirectoryViewProps> = ({ onSe
                 </div>
                 <div className="flex justify-between text-slate-600">
                   <span>Student Body:</span>
-                  <span className="font-mono">{school.totalStudentStrength} Students</span>
+                  <span className="font-mono">
+                    {school.totalStudentStrength ? `${school.totalStudentStrength} Students` : 'Not provided'}
+                  </span>
                 </div>
               </div>
             </div>
