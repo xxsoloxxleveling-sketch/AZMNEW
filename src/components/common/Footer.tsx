@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PageTab } from '../../types';
 import { Logo } from './Logo';
 import { OFFICIAL_DATA } from '../../data/scholarshipData';
@@ -19,8 +19,11 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) => {
+  const [isPolicyOpen, setIsPolicyOpen] = useState(false);
+
   return (
-    <footer className="mt-20 bg-gradient-to-b from-slate-900 to-[#071a2e] text-white border-t border-slate-800">
+    <>
+      <footer className="mt-20 bg-gradient-to-b from-slate-900 to-[#071a2e] text-white border-t border-slate-800">
       {/* Top Banner with Trust Mandate */}
       <div className="border-b border-slate-800/80 bg-slate-950/60 py-6 px-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
@@ -186,16 +189,15 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
               <CheckCircle2 className="w-3.5 h-3.5" />
               SECP Registered Company (CUIN Verified)
             </span>
-            <a
-              href="/AZM-Scholarship-Policy.pdf"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() => setIsPolicyOpen(true)}
               className="flex items-center gap-1 text-[#70a9db] hover:text-white transition-colors"
-              title="Open AZM Scholarship Policy"
+              title="Read AZM Scholarship Policy"
             >
               <FileText className="w-3.5 h-3.5" />
               Scholarship Policy
-            </a>
+            </button>
             <button
               onClick={() => onSelectTab('contact')}
               className="hover:text-white transition-colors"
@@ -205,6 +207,47 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
           </div>
         </div>
       </div>
-    </footer>
+      </footer>
+
+      {isPolicyOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="scholarship-policy-title"
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div className="flex h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <div>
+                <h2 id="scholarship-policy-title" className="text-sm font-bold text-slate-900">
+                  AZM Scholarship Policy
+                </h2>
+                <p className="text-xs text-slate-500">Read-only document viewer</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPolicyOpen(false)}
+                className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
+                aria-label="Close scholarship policy"
+              >
+                <span className="sr-only">Close scholarship policy</span>
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <div
+              className="min-h-0 flex-1 select-none"
+              onContextMenu={(event) => event.preventDefault()}
+            >
+              <iframe
+                title="AZM Scholarship Policy document"
+                src="/AZM-Scholarship-Policy.pdf#toolbar=0&navpanes=0&scrollbar=1&view=FitH"
+                className="h-full w-full border-0"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
