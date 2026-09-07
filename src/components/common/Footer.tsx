@@ -9,7 +9,8 @@ import {
   Clock, 
   ShieldCheck, 
   MessageCircle,
-  CheckCircle2
+  CheckCircle2,
+  FileText
 } from 'lucide-react';
 
 interface FooterProps {
@@ -185,6 +186,16 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
               <CheckCircle2 className="w-3.5 h-3.5" />
               SECP Registered Company (CUIN Verified)
             </span>
+            <a
+              href="/AZM-Scholarship-Policy.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[#70a9db] hover:text-white transition-colors"
+              title="Open AZM Scholarship Policy"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Scholarship Policy
+            </a>
             <button
               onClick={() => onSelectTab('contact')}
               className="hover:text-white transition-colors"
