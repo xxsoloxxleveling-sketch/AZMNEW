@@ -308,6 +308,12 @@ export class StudentsController {
     }
   }
 
+  async preparePrint(req: Request, res: Response, next: NextFunction) {
+    try {
+      res.json({ success: true, data: await studentsService.preparePrintStudent(req.params.id) });
+    } catch (error) { next(error); }
+  }
+
   async getOmrSheetPdf(req: Request, res: Response, next: NextFunction) {
     try {
       const { buffer, filename } = await studentsService.getOmrSheetPdf(req.params.id);

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Printer, Download, Users, FileText, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { apiOpenPdfForPrint } from '../../../lib/apiClient';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
 
 interface BulkPrintModalProps {
@@ -40,8 +41,14 @@ export const BulkPrintModal: React.FC<BulkPrintModalProps> = ({
     }
   };
 
-  const handleBrowserPrint = () => {
-    window.print();
+  const handleBrowserPrint = async () => {
+    setIsDownloading(true);
+    setErrorMsg(null);
+    try {
+      await apiOpenPdfForPrint(isOmr ? '/api/students/bulk-omr-pdf' : '/api/students/bulk-roll-slips-pdf',
+        { method: 'POST', body: { studentIds } });
+    } catch (error: any) { setErrorMsg(error.message || 'Unable to print documents.'); }
+    finally { setIsDownloading(false); }
   };
 
   const unissuedCount = students.filter(
@@ -91,8 +98,7 @@ export const BulkPrintModal: React.FC<BulkPrintModalProps> = ({
                   {unissuedCount} candidate{unissuedCount > 1 ? 's do' : ' does'} not have an official roll number yet.
                 </strong>{' '}
                 Their sheets will include the pre-issue warning banner (
-                <em>PRE-ISSUE COPY — OFFICIAL ROLL NUMBER NOT YET ISSUED</em>) and provisional identifier (
-                <code>PROV-&lt;appNo&gt;</code>).
+                <em>PRE-ISSUE COPY — OFFICIAL ROLL NUMBER NOT YET ISSUED</em>) and a reserved roll number that stays the same after release.
               </div>
             </div>
           )}

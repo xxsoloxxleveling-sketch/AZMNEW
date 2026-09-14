@@ -41,11 +41,7 @@ export class PdfService {
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--disable-software-rasterizer',
-      '--single-process',
-      '--no-zygote',
       '--no-first-run',
-      '--renderer-process-limit=1',
-      '--js-flags=--max-old-space-size=64',
       '--disable-extensions',
       '--disable-background-networking',
       '--disable-default-apps',
@@ -54,7 +50,6 @@ export class PdfService {
       '--hide-scrollbars',
       '--metrics-recording-only',
       '--mute-audio',
-      '--disable-features=IsolateOrigins,site-per-process,AudioServiceOutOfProcess',
     ];
 
     // Check known system executable paths if in container / Linux
@@ -195,7 +190,7 @@ export class PdfService {
         });
 
         await page.setContent(html, {
-          waitUntil: 'domcontentloaded',
+          waitUntil: 'load',
           timeout: 45000,
         });
 
@@ -203,16 +198,17 @@ export class PdfService {
           format: options?.format || 'A4',
           landscape: options?.landscape ?? false,
           printBackground: true,
-          displayHeaderFooter: true,
+          preferCSSPageSize: true,
+          displayHeaderFooter: !html.includes('omr-page'),
           headerTemplate: '<span></span>',
           footerTemplate:
             '<div style="width: 100%; font-size: 8px; color: #94a3b8; font-family: Segoe UI, Arial, sans-serif; display: flex; justify-content: space-between; padding: 0 10mm;"><span>AZM.AIO Examination Authority &copy; 2026</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>',
-          margin: options?.margin || {
+          margin: options?.margin || (html.includes('omr-page') ? { top: '0mm', bottom: '0mm', left: '0mm', right: '0mm' } : {
             top: '8mm',
             bottom: '12mm',
             left: '8mm',
             right: '8mm',
-          },
+          }),
         });
 
         await page.close();
@@ -587,16 +583,16 @@ export class PdfService {
    */
   generateRollSlipHtml(student: any, qrDataUrl?: string, photoBase64?: string): string {
     const isProvisional = !student.rollNumber;
-    const rollNo = student.rollNumber || (student.applicationNo ? `PROV-${student.applicationNo}` : 'PROVISIONAL');
+    const rollNo = student.rollNumber || student.displayRollNumber || student.officeUse?.testRollNo || (student.applicationNo ? `PROV-${student.applicationNo}` : 'PROVISIONAL');
     const appNo = student.applicationNo || student.id || 'APP-2026';
     const candName = (student.fullName || '').toUpperCase();
     const fatherName = (student.fatherName || '').toUpperCase();
     const cnic = student.cnicOrBForm || 'N/A';
     const classLevel = student.currentClass || 'SSC-II (Class 10th)';
-    const testCenter = student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra';
-    const centerAddress = 'Main College Road, Mansehra / Abbottabad Regional Center, KP';
-    const roomNo = student.assignedRoom || 'Hall 301-E';
-    const seatNo = student.seatNo || `Seat #${rollNo.split('-').pop() || '01'}`;
+    const testCenter = student.officeUse?.testCentre || student.testCenterName || 'To be assigned';
+    const centerAddress = student.testCenterAddress || '';
+    const roomNo = student.assignedRoom || 'To be assigned';
+    const seatNo = student.seatNo || 'To be assigned';
 
     const examDate = student.officeUse?.testDate
       ? new Date(student.officeUse.testDate).toLocaleDateString('en-US', {
@@ -605,9 +601,9 @@ export class PdfService {
           month: 'long',
           day: 'numeric',
         })
-      : 'Sunday, 15 November 2026';
-    const reportingTime = student.officeUse?.testReportingTime || '09:00 AM (Strict)';
-    const examTiming = '10:00 AM - 12:00 PM (120 Mins / 100 MCQs)';
+      : student.testDate || 'To be announced';
+    const reportingTime = student.officeUse?.testReportingTime || student.reportingTime || 'To be announced';
+    const examTiming = student.examStartTime || 'To be announced (100 MCQs)';
 
     const defaultPhoto = `data:image/svg+xml;utf8,${encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
@@ -1252,18 +1248,18 @@ export class PdfService {
    * Generates filled HTML template for the official 100-Question Single-Page A4 OMR Bubble Sheet.
    * Uses exact mm-based fixed geometry (210mm x 297mm) matching browser print and scanner coordinates.
    */
-  generateOmrSheetHtml(student: any, qrDataUrl: string, photoBase64?: string): string {
+  generateOmrSheetHtml(student: any, qrDataUrl = '', photoBase64?: string): string {
     const isProvisional = !student.rollNumber;
-    const rollNo = student.rollNumber || (student.applicationNo ? `PROV-${student.applicationNo}` : 'PROVISIONAL');
+    const rollNo = student.rollNumber || student.displayRollNumber || student.officeUse?.testRollNo || (student.applicationNo ? `PROV-${student.applicationNo}` : 'PROVISIONAL');
     const appNo = student.applicationNo || student.id || 'APP-2026';
     const candName = (student.fullName || '').toUpperCase();
     const fatherName = (student.fatherName || '').toUpperCase();
     const cnic = student.cnicOrBForm || 'N/A';
     const classLevel = student.currentClass || 'SSC-II (Class 10th)';
     const groupOrSubject = student.hsscGroup || student.bsDepartment || 'General Merit / Science';
-    const testCenter = student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra';
-    const roomNo = student.assignedRoom || 'Hall 301-E';
-    const seatNo = student.seatNo || `Seat #${rollNo.split('-').pop() || '01'}`;
+    const testCenter = student.officeUse?.testCentre || student.testCenterName || 'To be assigned';
+    const roomNo = student.assignedRoom || 'To be assigned';
+    const seatNo = student.seatNo || 'To be assigned';
 
     const defaultPhoto = `data:image/svg+xml;utf8,${encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
@@ -1359,10 +1355,14 @@ export class PdfService {
     /* Corner Alignment Markers for Scanning */
     .corner-mark {
       position: absolute;
-      width: 6.5mm;
-      height: 6.5mm;
+      width: 6mm;
+      height: 6mm;
       background: #000000;
     }
+    .timing-track { position: absolute; top: 70mm; display: flex; flex-direction: column; gap: 3mm; }
+    .timing-track.left { left: 2.5mm; }
+    .timing-track.right { right: 2.5mm; }
+    .timing-block { width: 2mm; height: 2mm; background: #000; }
     .corner-tl { top: 2.5mm; left: 2.5mm; }
     .corner-tr { top: 2.5mm; right: 2.5mm; }
     .corner-bl { bottom: 2.5mm; left: 2.5mm; }
@@ -1650,6 +1650,8 @@ export class PdfService {
 <body>
 
   <div class="omr-page">
+    <div class="timing-track left">${'<i class="timing-block"></i>'.repeat(25)}</div>
+    <div class="timing-track right">${'<i class="timing-block"></i>'.repeat(25)}</div>
     <!-- Corner Alignment Markers for Scanning -->
     <div class="corner-mark corner-tl"></div>
     <div class="corner-mark corner-tr"></div>

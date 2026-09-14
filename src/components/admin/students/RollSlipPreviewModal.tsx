@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, Download, AlertTriangle, ShieldCheck, User, Calendar, MapPin, CheckCircle2, Loader2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
-import { apiFetchProtectedObjectUrl } from '../../../lib/apiClient';
+import { apiFetchProtectedObjectUrl, apiFetch } from '../../../lib/apiClient';
 
 interface RollSlipPreviewModalProps {
   student: MockStudent | null;
@@ -11,17 +11,28 @@ interface RollSlipPreviewModalProps {
 }
 
 export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
-  student,
+  student: initialStudent,
   isOpen,
   onClose,
 }) => {
+  const [prepared, setPrepared] = useState<MockStudent | null>(null);
+  const student = prepared?.id === initialStudent?.id ? prepared : initialStudent;
+  useEffect(() => {
+    if (!isOpen || !initialStudent) return;
+    let active = true;
+    setPrepared(null);
+    apiFetch<MockStudent>(`/api/students/${initialStudent.id}/prepare-print`, { method: 'POST' })
+      .then(value => { if (active) setPrepared(value); })
+      .catch(error => { if (active) alert(error.message || 'Unable to reserve roll number.'); });
+    return () => { active = false; };
+  }, [initialStudent?.id, isOpen]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   const isProvisional = !student?.rollNumber || student?.rollNumberStatus === 'PROVISIONAL';
-  const displayRoll = student?.displayRollNumber || (student?.rollNumber ? student.rollNumber : `PROV-${student?.applicationNo || 'PENDING'}`);
+  const displayRoll = prepared?.displayRollNumber || student?.rollNumber || 'Reserving…';
 
   // Load photo
   useEffect(() => {
@@ -60,7 +71,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
 
   // Generate verification QR code
   useEffect(() => {
-    if (!student || !isOpen) return;
+    if (!student || !isOpen || !prepared) return;
 
     const qrPayload = JSON.stringify({
       type: 'AZM_SLIP',
@@ -79,12 +90,13 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
     })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(''));
-  }, [student, isOpen, displayRoll, isProvisional]);
+  }, [student, isOpen, displayRoll, isProvisional, prepared]);
 
   if (!isOpen || !student) return null;
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    try { await mockApi.printStudentRollSlipPdf(student.id); }
+    catch (error: any) { alert(error.message || 'Unable to print document.'); }
   };
 
   const handleDownloadPdf = async () => {
@@ -98,13 +110,13 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
     }
   };
 
-  const examDate = (student as any).testDate || 'Sunday, 20 November 2026';
-  const reportingTime = (student as any).reportingTime || '08:30 AM';
-  const startTime = (student as any).examStartTime || '09:30 AM';
-  const testCenter = student.testCenterName || (student as any).registrationCentre || 'AZM Central Examination Center';
-  const hall = student.assignedHall || 'Main Examination Wing';
-  const room = student.assignedRoom || 'Hall-A';
-  const seat = student.seatNo || 'Seat Allocated';
+  const examDate = ((student.officeUse as any)?.testDate ? new Date((student.officeUse as any).testDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : (student as any).testDate || 'To be announced');
+  const reportingTime = (student.officeUse as any)?.testReportingTime || (student as any).reportingTime || 'To be announced';
+  const startTime = (student as any).examStartTime || 'To be announced';
+  const testCenter = student.officeUse?.testCentre || student.testCenterName || 'To be assigned';
+  const hall = student.assignedHall || 'To be assigned';
+  const room = student.assignedRoom || 'To be assigned';
+  const seat = student.seatNo || 'To be assigned';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
@@ -199,7 +211,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
                   </div>
                   <div className="text-[11px] text-amber-800 mt-0.5 leading-relaxed font-medium">
                     This document is a provisional pre-issue admit copy generated for verification and preliminary hall arrangement.
-                    The official sequential roll number will be assigned during the scheduled batch release.
+                    The reserved roll number will remain the same when officially released.
                   </div>
                 </div>
               </div>
@@ -236,7 +248,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
               <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200">
                 <div className="text-left sm:text-right">
                   <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    {isProvisional ? 'Provisional Identifier' : 'Examination Roll No.'}
+                    {isProvisional ? 'Reserved Roll Number' : 'Examination Roll No.'}
                   </div>
                   <div className="text-xl font-black font-mono text-[#185b9d] tracking-wide">
                     {displayRoll}

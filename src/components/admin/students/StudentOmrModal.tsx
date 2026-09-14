@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, Download, AlertTriangle, User, Loader2, CheckCircle2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
-import { apiFetchProtectedObjectUrl } from '../../../lib/apiClient';
+import { apiFetchProtectedObjectUrl, apiFetch } from '../../../lib/apiClient';
 
 interface StudentOmrModalProps {
   student: MockStudent | null;
@@ -11,17 +11,28 @@ interface StudentOmrModalProps {
 }
 
 export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
-  student,
+  student: initialStudent,
   isOpen,
   onClose,
 }) => {
+  const [prepared, setPrepared] = useState<MockStudent | null>(null);
+  const student = prepared?.id === initialStudent?.id ? prepared : initialStudent;
+  useEffect(() => {
+    if (!isOpen || !initialStudent) return;
+    let active = true;
+    setPrepared(null);
+    apiFetch<MockStudent>(`/api/students/${initialStudent.id}/prepare-print`, { method: 'POST' })
+      .then(value => { if (active) setPrepared(value); })
+      .catch(error => { if (active) alert(error.message || 'Unable to reserve roll number.'); });
+    return () => { active = false; };
+  }, [initialStudent?.id, isOpen]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
 
   const isProvisional = !student?.rollNumber || student?.rollNumberStatus === 'PROVISIONAL';
-  const displayRoll = student?.displayRollNumber || (student?.rollNumber ? student.rollNumber : `PROV-${student?.applicationNo || 'PENDING'}`);
+  const displayRoll = prepared?.displayRollNumber || student?.rollNumber || 'Reserving…';
 
   // Load photo
   useEffect(() => {
@@ -60,7 +71,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
 
   // Generate structured OMR candidate verification QR code
   useEffect(() => {
-    if (!student || !isOpen) return;
+    if (!student || !isOpen || !prepared) return;
 
     const omrPayload = JSON.stringify({
       type: 'AZM_OMR',
@@ -79,12 +90,13 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
     })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(''));
-  }, [student, isOpen, displayRoll, isProvisional]);
+  }, [student, isOpen, displayRoll, isProvisional, prepared]);
 
   if (!isOpen || !student) return null;
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    try { await mockApi.printStudentOmrPdf(student.id); }
+    catch (error: any) { alert(error.message || 'Unable to print document.'); }
   };
 
   const handleDownloadPdf = async () => {

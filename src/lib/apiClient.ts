@@ -215,6 +215,19 @@ export async function apiFetch<T = any>(
  * Binary stream downloader for Puppeteer PDF endpoints.
  * Triggers a browser file download from Blob buffer.
  */
+async function fetchProtectedBinary(url: string, options: RequestInit = {}): Promise<Response> {
+  const send = (token: string | null) => fetch(url, {
+    ...options,
+    headers: { ...options.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  let response = await send(getToken());
+  if (response.status === 401) {
+    const token = await refreshAccessToken();
+    if (token) response = await send(token);
+  }
+  return response;
+}
+
 export async function apiDownloadPdf(
   endpoint: string,
   suggestedFilename: string,
@@ -231,7 +244,7 @@ export async function apiDownloadPdf(
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(url, {
+  const response = await fetchProtectedBinary(url, {
     method: options?.method || 'GET',
     headers,
     body: options?.body ? JSON.stringify(options.body) : undefined,
@@ -253,7 +266,7 @@ export async function apiDownloadPdf(
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
-  window.URL.revokeObjectURL(blobUrl);
+  window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
 }
 
 /** Opens an authorized server-generated PDF in a new tab so it can be printed. */
@@ -278,7 +291,7 @@ export async function apiOpenPdfForPrint(
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(url, {
+  const response = await fetchProtectedBinary(url, {
     method: options?.method || 'GET',
     headers,
     body: options?.body ? JSON.stringify(options.body) : undefined,
@@ -302,7 +315,7 @@ export async function apiOpenPdfForPrint(
 export async function apiFetchProtectedObjectUrl(endpoint: string): Promise<string> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const token = getToken();
-  const response = await fetch(url, {
+  const response = await fetchProtectedBinary(url, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     cache: 'no-store',
   });

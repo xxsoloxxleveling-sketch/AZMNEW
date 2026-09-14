@@ -45,7 +45,7 @@ const metadataOnlyDocuments = (documents: Record<string, any> | undefined) => {
 const isMissingStudentDocumentTable = (error: any) =>
   error?.code === 'P2021' && String(error?.meta?.table || error?.message || '').includes('StudentDocument');
 
-export function getCandidateNumber(student: { rollNumber?: string | null; applicationNo?: string | null; id?: string }) {
+export function getCandidateNumber(student: { rollNumber?: string | null; applicationNo?: string | null; id?: string; officeUse?: { testRollNo?: string | null } | null }) {
   if (student?.rollNumber) {
     return {
       value: student.rollNumber,
@@ -54,13 +54,38 @@ export function getCandidateNumber(student: { rollNumber?: string | null; applic
   }
   const appNo = student?.applicationNo || student?.id || 'N/A';
   return {
-    value: `PROV-${appNo}`,
+    value: student.officeUse?.testRollNo || `PROV-${appNo}`,
     type: 'PROVISIONAL' as const,
   };
 }
 
 export class StudentsService {
-  private activeThumbnailJobs = new Map<string, Promise<{ buffer: Buffer; contentType: string }>>();
+  private activeThumbnailJobs = new Map<string, Promise<{ buffer: Buffer; contentType: string } | null>>();
+
+  // Reserve without issuing: public access still requires student.rollNumber and
+  // the release schedule. All preview and issuance workers share this DB lock.
+  async reserveCandidateNumber(id: string): Promise<string> {
+    return prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(73921, 1)`;
+      const student = await tx.student.findUniqueOrThrow({ where: { id }, include: { officeUse: true } });
+      if (student.rollNumber) return student.rollNumber;
+      if (student.officeUse?.testRollNo) return student.officeUse.testRollNo;
+      const prefix = `AZMVS-${new Date().getFullYear()}-`;
+      const official = await tx.student.findMany({ where: { rollNumber: { startsWith: prefix } }, select: { rollNumber: true } });
+      const reserved = await tx.officeUseRecord.findMany({ where: { testRollNo: { startsWith: prefix } }, select: { testRollNo: true } });
+      const numbers = [...official.map(s => s.rollNumber), ...reserved.map(s => s.testRollNo)];
+      const next = numbers.reduce((max, value) => Math.max(max, Number(value?.slice(prefix.length)) || 0), 0) + 1;
+      const value = `${prefix}${String(next).padStart(4, '0')}`;
+      await tx.officeUseRecord.upsert({ where: { studentId: id }, create: { studentId: id, testRollNo: value }, update: { testRollNo: value } });
+      return value;
+    }, { timeout: 15000 });
+  }
+
+  async preparePrintStudent(id: string) {
+    const student = await this.getStudentById(id);
+    await this.reserveCandidateNumber(student.id);
+    return this.getStudentById(student.id);
+  }
 
   async verifyCandidateIdentity(studentIdentifier: string, cnicOrBForm: string): Promise<boolean> {
     const normalized = cnicOrBForm.replace(/\D/g, '');
@@ -1046,7 +1071,7 @@ export class StudentsService {
     const updatedStudents = [];
 
     for (const student of eligibleStudents) {
-      const rollNumber = await this.generateRollNumber();
+      const rollNumber = await this.reserveCandidateNumber(student.id);
       const qrToken = qrService.generateSignedQrToken(rollNumber);
       const qrPayload = `https://azmaio.com/attend?token=${qrToken}`;
       const qrImageUrl = await qrService.generateQrDataUrl(qrPayload);
@@ -1156,7 +1181,7 @@ export class StudentsService {
           status: true,
           createdAt: true,
           feeRecords: { select: { status: true, amountDue: true, amountPaid: true } },
-          officeUse: { select: { eligibility: true, eligibilityRemarks: true } },
+          officeUse: { select: { eligibility: true, eligibilityRemarks: true, testRollNo: true } },
           ...(includeDocumentMetadata
             ? {
                 studentDocuments: {
@@ -1215,7 +1240,7 @@ export class StudentsService {
               applicationNo: true,
               currentClass: true,
               createdAt: true,
-              officeUse: { select: { eligibility: true, eligibilityRemarks: true } },
+              officeUse: { select: { eligibility: true, eligibilityRemarks: true, testRollNo: true } },
             },
           },
         },
@@ -1337,7 +1362,15 @@ export class StudentsService {
    * Retrieves a student by unique ID including all relations.
    */
   async getStudentById(id: string) {
-    let student = await prisma.student.findUnique({
+    const find = async (method: 'findUnique' | 'findFirst', args: any): Promise<any> => {
+      try { return await (prisma.student[method] as any)(args); }
+      catch (error) {
+        if (!isMissingStudentDocumentTable(error)) throw error;
+        const { studentDocuments, ...include } = args.include;
+        return (prisma.student[method] as any)({ ...args, include });
+      }
+    };
+    let student = await find('findUnique', {
       where: { id },
       include: {
         academicRecords: true,
@@ -1349,7 +1382,7 @@ export class StudentsService {
     });
 
     if (!student) {
-      student = await prisma.student.findFirst({
+      student = await find('findFirst', {
         where: {
           OR: [
             { applicationNo: id },
@@ -1402,17 +1435,23 @@ export class StudentsService {
    * Admin updates Part L: Office Use Record.
    */
   async updateOfficeUse(studentId: string, input: OfficeUseUpdateInput) {
-    await this.getStudentById(studentId);
+    const student = await this.getStudentById(studentId);
+    if (input.testRollNo && input.testRollNo !== student.officeUse?.testRollNo) {
+      const error: AppError = new Error('Roll numbers are reserved automatically and cannot be changed manually.');
+      error.statusCode = 400;
+      throw error;
+    }
 
+    const { testRollNo, ...officeInput } = input;
     const officeRecord = await prisma.officeUseRecord.upsert({
       where: { studentId },
       update: {
-        ...input,
+        ...officeInput,
         documentVerifiedAt: input.documentVerifiedAt || new Date(),
       },
       create: {
         studentId,
-        ...input,
+        ...officeInput,
         documentVerifiedAt: input.documentVerifiedAt || new Date(),
       },
     });
@@ -1643,7 +1682,7 @@ export class StudentsService {
    * Supports both official issued roll numbers and pre-issue provisional slips.
    */
   async getRollSlipPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
-    const student = await this.getStudentById(id);
+    const student = await this.preparePrintStudent(id);
     if (!student) {
       const err: AppError = new Error('Candidate record not found in database.');
       err.statusCode = 404;
@@ -1678,7 +1717,7 @@ export class StudentsService {
    * Encodes machine-readable JSON Candidate Identity QR code and passport photo.
    */
   async getOmrSheetPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
-    const student = await this.getStudentById(id);
+    const student = await this.preparePrintStudent(id);
     if (!student) {
       const err: AppError = new Error('Candidate record not found in database.');
       err.statusCode = 404;
@@ -1728,7 +1767,7 @@ export class StudentsService {
     const sheets: Array<{ student: any; qrDataUrl: string; photoBase64?: string }> = [];
 
     for (const id of studentIds) {
-      const student = await this.getStudentById(id);
+      const student = await this.preparePrintStudent(id);
       if (!student) continue;
       const candNum = getCandidateNumber(student);
       let qrDataUrl = '';
@@ -1778,7 +1817,7 @@ export class StudentsService {
     const slips: Array<{ student: any; qrDataUrl: string; photoBase64?: string }> = [];
 
     for (const id of studentIds) {
-      const student = await this.getStudentById(id);
+      const student = await this.preparePrintStudent(id);
       if (!student) continue;
       const candNum = getCandidateNumber(student);
       let qrDataUrl = '';
@@ -2070,18 +2109,28 @@ export class StudentsService {
     });
 
     if (student) {
-      const metadata = await prisma.studentDocument.findFirst({
-        where: {
-          studentId: student.id,
-          documentType: { in: aliases },
-        },
-      });
-      if (metadata) {
-        const buffer = await supabaseStorage.downloadFile(
-          metadata.bucket as StorageBucket,
-          metadata.objectPath
-        );
-        if (buffer && buffer.length > 0) return { buffer, contentType: metadata.mimeType };
+      // Pre-registration uploads use CNIC; roster requests use UUID.
+      for (const key of [student.id, student.applicationNo, student.cnicOrBForm].filter(Boolean)) {
+        for (const alias of aliases) {
+          for (const ext of possibleExts) {
+            const file = path.join(UPLOADS_DIR, key!.replace(/[^\w-]/g, '_'), alias + '.' + ext);
+            if (fs.existsSync(file)) return {
+              buffer: fs.readFileSync(file),
+              contentType: ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg',
+            };
+          }
+        }
+      }
+      try {
+        const metadata = await prisma.studentDocument.findFirst({
+          where: { studentId: student.id, documentType: { in: aliases } },
+        });
+        if (metadata) {
+          const buffer = await supabaseStorage.downloadFile(metadata.bucket as StorageBucket, metadata.objectPath);
+          if (buffer?.length) return { buffer, contentType: metadata.mimeType };
+        }
+      } catch {
+        logger.warn('Document metadata unavailable; trying legacy recovery.');
       }
     }
 
@@ -2214,9 +2263,11 @@ export class StudentsService {
             const cleanPrefix = (student.cnicOrBForm || student.applicationNo || student.id).replace(/[^\w-]/g, '_');
             const thumbPath = `${cleanPrefix}/photo_thumbnail.jpg`;
 
-            // Non-fatal upload to Supabase Storage
+            // Do not persist bucket metadata for a failed upload.
+            let uploaded = false;
             try {
-              await supabaseStorage.uploadFile('student-photos', thumbPath, thumbBuffer, 'image/jpeg');
+              const result = await supabaseStorage.uploadFile('student-photos', thumbPath, thumbBuffer, 'image/jpeg');
+              uploaded = !result.error;
             } catch (upErr) {
               logger.warn('On-demand thumbnail storage upload note:', upErr);
             }
@@ -2232,7 +2283,7 @@ export class StudentsService {
 
             // Non-fatal DB metadata persistence
             try {
-              await prisma.studentDocument.upsert({
+              if (uploaded) await prisma.studentDocument.upsert({
                 where: {
                   bucket_objectPath: {
                     bucket: 'student-photos',
@@ -2270,7 +2321,7 @@ export class StudentsService {
         return null;
       })();
 
-      this.activeThumbnailJobs.set(jobId, job as any);
+      this.activeThumbnailJobs.set(jobId, job);
       const res = await job;
       if (res) return res;
     }

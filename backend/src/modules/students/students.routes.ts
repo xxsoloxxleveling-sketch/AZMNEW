@@ -169,6 +169,12 @@ router.get(
 );
 
 // Candidate Roll Number Slip PDF export (SUPER_ADMIN, ADMIN)
+router.post(
+  '/:id/prepare-print',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.preparePrint
+);
+
 router.get(
   '/:id/roll-slip-pdf',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),

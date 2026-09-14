@@ -133,11 +133,11 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({ isOpen, onCl
             mimeType: result.mimeType, byteSize: result.byteSize, checksumSha256: result.checksumSha256,
             uploadedAt: new Date().toISOString(), candidateKey: data.cnicOrBForm };
           setAttachments(prev => ({ ...prev, [key]: { ...prev[key], stored } }));
-          if (key === 'photo' && (result as any).thumbnail?.path) {
+          if (key === 'photo' && (result as any).thumbnail?.supabasePath) {
             uploadedDocuments['photoThumbnail'] = {
               name: `thumb-${attachment.file.name}`,
               bucket: result.bucket,
-              supabasePath: (result as any).thumbnail.path,
+              supabasePath: (result as any).thumbnail.supabasePath,
               mimeType: (result as any).thumbnail.mimeType || 'image/jpeg',
               byteSize: (result as any).thumbnail.byteSize,
               uploadedAt: new Date().toISOString(),
@@ -156,8 +156,6 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({ isOpen, onCl
         bsDepartment: data.currentClass === 'BS' ? data.bsDepartment : undefined,
         bsSemester: data.currentClass === 'BS' ? data.bsSemester : undefined,
         referralSource: data.referralSource.trim() || 'Admin walk-in registration',
-        hasPhoto: !!attachments.photo || !!uploadedDocuments.photo,
-        photoUrl: (uploadedDocuments.photo as any)?.supabasePath || undefined,
         academicRecords: records.map(r => ({ ...r, totalMarks: Number(r.totalMarks), obtainedMarks: Number(r.obtainedMarks),
           percentage: Number(((Number(r.obtainedMarks) / Number(r.totalMarks)) * 100).toFixed(2)) })),
         uploadedDocuments,

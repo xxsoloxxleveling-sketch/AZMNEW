@@ -121,7 +121,7 @@ export const StudentsListView: React.FC = () => {
   }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage]);
 
   // Fetch private thumbnail files only for the ten rows currently displayed.
-  // The list API stays metadata-only and full-size photos are never requested here.
+  // Probe visible rows even when legacy records have no document metadata.
   // Fallback gracefully from photoThumbnail to photo document if pending.
   useEffect(() => {
     let cancelled = false;
@@ -130,7 +130,6 @@ export const StudentsListView: React.FC = () => {
     const loadThumbnails = async () => {
       const results = await Promise.all(
         students
-          .filter((student) => student.hasPhoto)
           .map(async (student) => {
             try {
               let url: string;
