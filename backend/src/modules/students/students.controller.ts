@@ -308,6 +308,53 @@ export class StudentsController {
     }
   }
 
+  async preparePrint(req: Request, res: Response, next: NextFunction) {
+    try {
+      res.json({ success: true, data: await studentsService.preparePrintStudent(req.params.id) });
+    } catch (error) { next(error); }
+  }
+
+  async getOmrSheetPdf(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { buffer, filename } = await studentsService.getOmrSheetPdf(req.params.id);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getBulkOmrPdf(req: Request, res: Response, next: NextFunction) {
+    try {
+      const studentIds = Array.isArray(req.body?.studentIds) ? req.body.studentIds : [];
+      const { buffer, filename } = await studentsService.getBulkOmrPdf(studentIds);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getBulkRollSlipsPdf(req: Request, res: Response, next: NextFunction) {
+    try {
+      const studentIds = Array.isArray(req.body?.studentIds) ? req.body.studentIds : [];
+      const { buffer, filename } = await studentsService.getBulkRollSlipsPdf(studentIds);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async uploadDocument(req: Request, res: Response, next: NextFunction) {
     try {
       const candidateKey = String(req.body?.cnicOrBForm || '').trim();

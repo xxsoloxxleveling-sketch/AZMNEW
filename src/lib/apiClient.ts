@@ -1,10 +1,8 @@
 import { getToken, setToken, clearToken, getRefreshToken, setRefreshToken, clearRefreshToken } from './auth';
 
-const isLocalViteDev = window.location.hostname === "localhost" && window.location.port === "3000";
-
-export const API_BASE_URL = isLocalViteDev
-  ? "http://localhost:5000"
-  : window.location.origin;
+export const API_BASE_URL =
+  (import.meta as any).env?.VITE_API_URL ||
+  ((import.meta as any).env?.PROD ? window.location.origin : 'http://localhost:5000');
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -217,9 +215,23 @@ export async function apiFetch<T = any>(
  * Binary stream downloader for Puppeteer PDF endpoints.
  * Triggers a browser file download from Blob buffer.
  */
+async function fetchProtectedBinary(url: string, options: RequestInit = {}): Promise<Response> {
+  const send = (token: string | null) => fetch(url, {
+    ...options,
+    headers: { ...options.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  let response = await send(getToken());
+  if (response.status === 401) {
+    const token = await refreshAccessToken();
+    if (token) response = await send(token);
+  }
+  return response;
+}
+
 export async function apiDownloadPdf(
   endpoint: string,
-  suggestedFilename: string
+  suggestedFilename: string,
+  options?: { method?: 'GET' | 'POST'; body?: any }
 ): Promise<void> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const token = getToken();
@@ -228,10 +240,14 @@ export async function apiDownloadPdf(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  if (options?.body) {
+    headers['Content-Type'] = 'application/json';
+  }
 
-  const response = await fetch(url, {
-    method: 'GET',
+  const response = await fetchProtectedBinary(url, {
+    method: options?.method || 'GET',
     headers,
+    body: options?.body ? JSON.stringify(options.body) : undefined,
   });
 
   if (!response.ok) {
@@ -250,11 +266,14 @@ export async function apiDownloadPdf(
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
-  window.URL.revokeObjectURL(blobUrl);
+  window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
 }
 
 /** Opens an authorized server-generated PDF in a new tab so it can be printed. */
-export async function apiOpenPdfForPrint(endpoint: string): Promise<void> {
+export async function apiOpenPdfForPrint(
+  endpoint: string,
+  options?: { method?: 'GET' | 'POST'; body?: any; title?: string }
+): Promise<void> {
   // Open synchronously from the button click. This avoids browsers blocking the
   // PDF tab as a popup once the authenticated request has completed.
   const printWindow = window.open('', '_blank');
@@ -262,14 +281,20 @@ export async function apiOpenPdfForPrint(endpoint: string): Promise<void> {
     throw new Error('Please allow popups to open the PDF for printing.');
   }
 
-  printWindow.document.title = 'Preparing registration PDF…';
-  printWindow.document.body.innerHTML = '<p style="font-family: sans-serif; padding: 24px;">Preparing the official registration PDF…</p>';
+  printWindow.document.title = options?.title || 'Preparing document…';
+  printWindow.document.body.innerHTML = '<p style="font-family: sans-serif; padding: 24px;">Preparing the PDF…</p>';
 
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const token = getToken();
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  if (options?.body) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const response = await fetchProtectedBinary(url, {
+    method: options?.method || 'GET',
+    headers,
+    body: options?.body ? JSON.stringify(options.body) : undefined,
   });
 
   if (!response.ok) {
@@ -290,7 +315,7 @@ export async function apiOpenPdfForPrint(endpoint: string): Promise<void> {
 export async function apiFetchProtectedObjectUrl(endpoint: string): Promise<string> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const token = getToken();
-  const response = await fetch(url, {
+  const response = await fetchProtectedBinary(url, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     cache: 'no-store',
   });
