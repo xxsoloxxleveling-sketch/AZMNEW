@@ -103,7 +103,12 @@ export class PdfService {
       const chromium = chromiumModule.default || chromiumModule;
       const puppeteerCoreModule: any = await import('puppeteer-core');
       const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
-      const executablePath = await chromium.executablePath();
+      // The npm package ships x64 binaries. Oracle ARM hosts install the
+      // matching official arm64 pack separately under this cache directory.
+      const armPack = path.join(process.cwd(), '.cache', 'chromium-arm64');
+      const executablePath = await chromium.executablePath(
+        process.arch === 'arm64' && fs.existsSync(armPack) ? armPack : undefined
+      );
 
       if (!executablePath) {
         throw new Error('Serverless Chromium did not provide an executable path.');

@@ -47,9 +47,9 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
       try {
         let url: string;
         try {
-          url = await apiFetchProtectedObjectUrl(`/api/students/${student.id}/document/photo`);
-        } catch {
           url = await apiFetchProtectedObjectUrl(`/api/students/${student.id}/document/photoThumbnail`);
+        } catch {
+          url = await apiFetchProtectedObjectUrl(`/api/students/${student.id}/document/photo`);
         }
         if (active) {
           createdUrl = url;
@@ -67,7 +67,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
       active = false;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [student, isOpen]);
+  }, [student?.id, isOpen]);
 
   // Generate structured OMR candidate verification QR code
   useEffect(() => {
