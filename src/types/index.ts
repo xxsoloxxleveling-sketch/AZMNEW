@@ -235,3 +235,5 @@ export interface GalleryItem {
   description: string;
 }
 
+export type { MockStudent } from '../lib/mockApi';
+

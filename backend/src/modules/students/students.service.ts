@@ -45,7 +45,23 @@ const metadataOnlyDocuments = (documents: Record<string, any> | undefined) => {
 const isMissingStudentDocumentTable = (error: any) =>
   error?.code === 'P2021' && String(error?.meta?.table || error?.message || '').includes('StudentDocument');
 
+export function getCandidateNumber(student: { rollNumber?: string | null; applicationNo?: string | null; id?: string }) {
+  if (student?.rollNumber) {
+    return {
+      value: student.rollNumber,
+      type: 'OFFICIAL' as const,
+    };
+  }
+  const appNo = student?.applicationNo || student?.id || 'N/A';
+  return {
+    value: `PROV-${appNo}`,
+    type: 'PROVISIONAL' as const,
+  };
+}
+
 export class StudentsService {
+  private activeThumbnailJobs = new Map<string, Promise<{ buffer: Buffer; contentType: string }>>();
+
   async verifyCandidateIdentity(studentIdentifier: string, cnicOrBForm: string): Promise<boolean> {
     const normalized = cnicOrBForm.replace(/\D/g, '');
     if (normalized.length < 5) return false;
@@ -66,6 +82,7 @@ export class StudentsService {
    */
   formatStudentWithDocuments(student: any) {
     if (!student) return null;
+    const candNum = getCandidateNumber(student);
     let uploadedDocuments: Record<string, any> = {};
 
     if (student.uploadedDocsJson) {
@@ -122,6 +139,8 @@ export class StudentsService {
 
     return {
       ...cleanStudent,
+      displayRollNumber: candNum.value,
+      rollNumberStatus: candNum.type,
       photoUrl: null,
       // A list query can provide the small metadata relation without retrieving
       // legacy photo/base64 columns. Legacy records become visible after backfill.
@@ -362,6 +381,16 @@ export class StudentsService {
             uploadedAt: latest.created_at || new Date().toISOString(),
           };
         }
+        const thumbFile = photoFiles.find((file: any) => /photo_thumbnail/i.test(file.name));
+        if (thumbFile && !resolvedDocs['photoThumbnail']) {
+          resolvedDocs['photoThumbnail'] = {
+            name: 'photo_thumbnail.jpg',
+            bucket: 'student-photos',
+            supabasePath: `${cnicFolder}/${thumbFile.name}`,
+            mimeType: 'image/jpeg',
+            uploadedAt: thumbFile.created_at || new Date().toISOString(),
+          };
+        }
       }
 
       // 2. Check student-documents under CNIC folder
@@ -387,6 +416,21 @@ export class StudentsService {
       }
     } catch (discoveryErr) {
       logger.warn('Supabase storage pre-upload discovery note:', discoveryErr);
+    }
+
+    // Ensure photoThumbnail exists if photo is present (check disk backup)
+    if (resolvedDocs.photo && !resolvedDocs.photoThumbnail) {
+      const candDir = path.join(UPLOADS_DIR, cnicFolder);
+      const diskThumb = path.join(candDir, 'photoThumbnail.jpg');
+      if (fs.existsSync(diskThumb)) {
+        resolvedDocs.photoThumbnail = {
+          name: 'photo_thumbnail.jpg',
+          bucket: 'student-photos',
+          supabasePath: `${cnicFolder}/photo_thumbnail.jpg`,
+          mimeType: 'image/jpeg',
+          uploadedAt: new Date().toISOString(),
+        };
+      }
     }
 
     const checklistData = {
@@ -1596,6 +1640,7 @@ export class StudentsService {
 
   /**
    * Generates Roll Number Slip Exam Entry Pass PDF buffer for downloading.
+   * Supports both official issued roll numbers and pre-issue provisional slips.
    */
   async getRollSlipPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
     const student = await this.getStudentById(id);
@@ -1605,18 +1650,12 @@ export class StudentsService {
       throw err;
     }
 
-    if (!student.rollNumber) {
-      const err: AppError = new Error(
-        'Roll number has not been issued yet for this candidate. Candidate must have a verified fee payment and issued roll number before downloading the exam entry pass.'
-      );
-      err.statusCode = 400;
-      throw err;
-    }
+    const candNum = getCandidateNumber(student);
 
     let qrDataUrl = '';
     try {
       const QRCode = await import('qrcode');
-      const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${student.rollNumber}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`;
+      const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${candNum.value}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`;
       qrDataUrl = await QRCode.toDataURL(qrPayload, {
         width: 300,
         margin: 1,
@@ -1629,7 +1668,141 @@ export class StudentsService {
     const photoBase64 = await this.resolveStudentPhotoBase64(student);
     const html = pdfService.generateRollSlipHtml(student, qrDataUrl, photoBase64);
     const buffer = await pdfService.generatePdfFromHtml(html);
-    const filename = `RollNoSlip-${student.rollNumber}.pdf`;
+    const filename = `RollNoSlip-${candNum.value}.pdf`;
+
+    return { buffer, filename };
+  }
+
+  /**
+   * Generates 100-Question OMR Bubble Sheet PDF buffer for downloading.
+   * Encodes machine-readable JSON Candidate Identity QR code and passport photo.
+   */
+  async getOmrSheetPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
+    const student = await this.getStudentById(id);
+    if (!student) {
+      const err: AppError = new Error('Candidate record not found in database.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const candNum = getCandidateNumber(student);
+    let qrDataUrl = '';
+    try {
+      const QRCode = await import('qrcode');
+      const omrPayloadObj = {
+        type: 'AZM_OMR',
+        session: '2026-V',
+        studentId: student.id,
+        applicationNo: student.applicationNo,
+        rollNumber: candNum.value,
+        rollType: candNum.type,
+        sheetVersion: 1,
+      };
+      qrDataUrl = await QRCode.toDataURL(JSON.stringify(omrPayloadObj), {
+        width: 300,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+    } catch (qrErr) {
+      logger.warn('QRCode generation note for OMR:', qrErr);
+    }
+
+    const photoBase64 = await this.resolveStudentPhotoBase64(student);
+    const html = pdfService.generateOmrSheetHtml(student, qrDataUrl, photoBase64);
+    const buffer = await pdfService.generatePdfFromHtml(html);
+    const filename = `OMRSheet-${candNum.value}.pdf`;
+
+    return { buffer, filename };
+  }
+
+  /**
+   * Generates a multi-page PDF containing OMR sheets for multiple selected candidates.
+   */
+  async getBulkOmrPdf(studentIds: string[]): Promise<{ buffer: Buffer; filename: string }> {
+    if (!studentIds || studentIds.length === 0) {
+      const err: AppError = new Error('No student IDs provided for bulk OMR generation.');
+      err.statusCode = 400;
+      throw err;
+    }
+    const QRCode = await import('qrcode');
+    const sheets: Array<{ student: any; qrDataUrl: string; photoBase64?: string }> = [];
+
+    for (const id of studentIds) {
+      const student = await this.getStudentById(id);
+      if (!student) continue;
+      const candNum = getCandidateNumber(student);
+      let qrDataUrl = '';
+      try {
+        const omrPayloadObj = {
+          type: 'AZM_OMR',
+          session: '2026-V',
+          studentId: student.id,
+          applicationNo: student.applicationNo,
+          rollNumber: candNum.value,
+          rollType: candNum.type,
+          sheetVersion: 1,
+        };
+        qrDataUrl = await QRCode.toDataURL(JSON.stringify(omrPayloadObj), {
+          width: 300,
+          margin: 1,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+      } catch {}
+      const photoBase64 = await this.resolveStudentPhotoBase64(student);
+      sheets.push({ student, qrDataUrl, photoBase64 });
+    }
+
+    if (sheets.length === 0) {
+      const err: AppError = new Error('No valid candidates found for bulk OMR generation.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const html = pdfService.generateBulkOmrSheetsHtml(sheets);
+    const buffer = await pdfService.generatePdfFromHtml(html);
+    const filename = `Bulk-OMR-Sheets-${sheets.length}-Candidates.pdf`;
+
+    return { buffer, filename };
+  }
+
+  /**
+   * Generates a multi-page PDF containing Roll Number Slips for multiple selected candidates.
+   */
+  async getBulkRollSlipsPdf(studentIds: string[]): Promise<{ buffer: Buffer; filename: string }> {
+    if (!studentIds || studentIds.length === 0) {
+      const err: AppError = new Error('No student IDs provided for bulk Roll Slip generation.');
+      err.statusCode = 400;
+      throw err;
+    }
+    const QRCode = await import('qrcode');
+    const slips: Array<{ student: any; qrDataUrl: string; photoBase64?: string }> = [];
+
+    for (const id of studentIds) {
+      const student = await this.getStudentById(id);
+      if (!student) continue;
+      const candNum = getCandidateNumber(student);
+      let qrDataUrl = '';
+      try {
+        const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${candNum.value}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`;
+        qrDataUrl = await QRCode.toDataURL(qrPayload, {
+          width: 300,
+          margin: 1,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+      } catch {}
+      const photoBase64 = await this.resolveStudentPhotoBase64(student);
+      slips.push({ student, qrDataUrl, photoBase64 });
+    }
+
+    if (slips.length === 0) {
+      const err: AppError = new Error('No valid candidates found for bulk Roll Slip generation.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const html = pdfService.generateBulkRollSlipsHtml(slips);
+    const buffer = await pdfService.generatePdfFromHtml(html);
+    const filename = `Bulk-RollSlips-${slips.length}-Candidates.pdf`;
 
     return { buffer, filename };
   }
@@ -1763,6 +1936,7 @@ export class StudentsService {
       uploadedAt: new Date().toISOString(),
     };
 
+    let thumbnailInfo: any = undefined;
     // If a candidate photo is uploaded, immediately generate and store 160x160 MozJPEG thumbnail
     if (input.docType.startsWith('photo') || input.docType === 'passportPhotos') {
       try {
@@ -1772,7 +1946,14 @@ export class StudentsService {
           .toBuffer();
         const thumbPath = `${rawApp}/photo_thumbnail.jpg`;
         await supabaseStorage.uploadFile('student-photos', thumbPath, thumbBuffer, 'image/jpeg');
-        currentDocs.photoThumbnail = {
+
+        try {
+          const candDir = path.join(UPLOADS_DIR, rawApp);
+          if (!fs.existsSync(candDir)) fs.mkdirSync(candDir, { recursive: true });
+          fs.writeFileSync(path.join(candDir, 'photoThumbnail.jpg'), thumbBuffer);
+        } catch {}
+
+        thumbnailInfo = {
           name: 'photo_thumbnail.jpg',
           bucket: 'student-photos',
           supabasePath: thumbPath,
@@ -1781,6 +1962,7 @@ export class StudentsService {
           checksumSha256: crypto.createHash('sha256').update(thumbBuffer).digest('hex'),
           uploadedAt: new Date().toISOString(),
         };
+        currentDocs.photoThumbnail = thumbnailInfo;
       } catch (thumbErr) {
         logger.warn('Failed to auto-generate thumbnail during document upload:', thumbErr);
       }
@@ -1811,6 +1993,7 @@ export class StudentsService {
       checksumSha256,
       docType: input.docType,
       fileName: input.fileName || `${input.docType}.${ext}`,
+      thumbnail: thumbnailInfo,
     };
   }
 
@@ -2008,6 +2191,88 @@ export class StudentsService {
           }
         } catch {}
       }
+    }
+
+    // 7. Self-healing on-demand thumbnail generation from full candidate photo
+    if (student && aliases.some((a) => ['photoThumbnail', 'thumbnail', 'photo_thumbnail'].includes(a))) {
+      const jobId = student.id;
+      if (this.activeThumbnailJobs.has(jobId)) {
+        const existing = await this.activeThumbnailJobs.get(jobId);
+        if (existing) return existing;
+      }
+
+      const job = (async (): Promise<{ buffer: Buffer; contentType: string } | null> => {
+        try {
+          // Attempt to retrieve the full candidate photo
+          const fullPhoto = await this.getStudentDocument(studentIdentifier, 'photo');
+          if (fullPhoto && fullPhoto.buffer && fullPhoto.buffer.length > 0) {
+            const thumbBuffer = await sharp(fullPhoto.buffer)
+              .resize(160, 160, { fit: 'cover', position: 'center' })
+              .jpeg({ quality: 80, mozjpeg: true })
+              .toBuffer();
+
+            const cleanPrefix = (student.cnicOrBForm || student.applicationNo || student.id).replace(/[^\w-]/g, '_');
+            const thumbPath = `${cleanPrefix}/photo_thumbnail.jpg`;
+
+            // Non-fatal upload to Supabase Storage
+            try {
+              await supabaseStorage.uploadFile('student-photos', thumbPath, thumbBuffer, 'image/jpeg');
+            } catch (upErr) {
+              logger.warn('On-demand thumbnail storage upload note:', upErr);
+            }
+
+            // Non-fatal disk backup
+            try {
+              const candDir = path.join(UPLOADS_DIR, cleanPrefix);
+              if (!fs.existsSync(candDir)) fs.mkdirSync(candDir, { recursive: true });
+              fs.writeFileSync(path.join(candDir, 'photoThumbnail.jpg'), thumbBuffer);
+            } catch (diskErr) {
+              logger.warn('On-demand thumbnail disk save note:', diskErr);
+            }
+
+            // Non-fatal DB metadata persistence
+            try {
+              await prisma.studentDocument.upsert({
+                where: {
+                  bucket_objectPath: {
+                    bucket: 'student-photos',
+                    objectPath: thumbPath,
+                  },
+                },
+                update: {
+                  studentId: student.id,
+                  documentType: 'photoThumbnail',
+                  originalFileName: 'photo_thumbnail.jpg',
+                  mimeType: 'image/jpeg',
+                  byteSize: thumbBuffer.length,
+                },
+                create: {
+                  studentId: student.id,
+                  documentType: 'photoThumbnail',
+                  bucket: 'student-photos',
+                  objectPath: thumbPath,
+                  originalFileName: 'photo_thumbnail.jpg',
+                  mimeType: 'image/jpeg',
+                  byteSize: thumbBuffer.length,
+                },
+              });
+            } catch (dbErr) {
+              logger.warn('On-demand thumbnail DB upsert note:', dbErr);
+            }
+
+            return { buffer: thumbBuffer, contentType: 'image/jpeg' };
+          }
+        } catch (healErr) {
+          logger.warn('Self-healing thumbnail generation note:', healErr);
+        } finally {
+          this.activeThumbnailJobs.delete(jobId);
+        }
+        return null;
+      })();
+
+      this.activeThumbnailJobs.set(jobId, job as any);
+      const res = await job;
+      if (res) return res;
     }
 
     // Document truly not found

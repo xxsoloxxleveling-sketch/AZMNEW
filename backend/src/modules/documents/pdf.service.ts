@@ -586,7 +586,8 @@ export class PdfService {
    * Generates filled HTML template for the official Single-Page A4 Roll Number Slip Exam Entry Pass
    */
   generateRollSlipHtml(student: any, qrDataUrl?: string, photoBase64?: string): string {
-    const rollNo = student.rollNumber || 'PENDING';
+    const isProvisional = !student.rollNumber;
+    const rollNo = student.rollNumber || (student.applicationNo ? `PROV-${student.applicationNo}` : 'PROVISIONAL');
     const appNo = student.applicationNo || student.id || 'APP-2026';
     const candName = (student.fullName || '').toUpperCase();
     const fatherName = (student.fatherName || '').toUpperCase();
@@ -707,6 +708,10 @@ export class PdfService {
 <body>
 
   <div class="slip-page">
+    ${isProvisional ? `
+    <div style="background: #fffbeb; border: 1.5px dashed #d97706; color: #92400e; font-size: 8.5pt; font-weight: 800; text-align: center; padding: 4px 8px; margin-bottom: 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">
+      PRE-ISSUE COPY — OFFICIAL ROLL NUMBER NOT YET ISSUED
+    </div>` : ''}
     <!-- Header -->
     <table class="header-table">
       <tr>
@@ -716,8 +721,8 @@ export class PdfService {
           <div class="motto-text">Official Examination Entry Pass & Roll Number Slip</div>
         </td>
         <td class="header-right">
-          <div class="doc-badge">Official Entry Pass</div>
-          <div style="font-size: 9px; font-weight: 700; color: #059669; margin-top: 2px;">✓ Verified Candidate</div>
+          <div class="doc-badge" style="${isProvisional ? 'background: #d97706;' : ''}">${isProvisional ? 'Pre-Issue Copy' : 'Official Entry Pass'}</div>
+          <div style="font-size: 9px; font-weight: 700; color: ${isProvisional ? '#b45309' : '#059669'}; margin-top: 2px;">${isProvisional ? '⚠️ PROVISIONAL COPY' : '✓ Verified Candidate'}</div>
           <div style="font-size: 8px; color: #64748b;">Issued: ${new Date().toLocaleDateString('en-GB')}</div>
         </td>
       </tr>
@@ -769,7 +774,7 @@ export class PdfService {
         <!-- Col 3: Roll Number & Biometric QR -->
         <td class="badge-col">
           <div class="roll-box">
-            <div class="roll-box-label">Official Roll No</div>
+            <div class="roll-box-label">${isProvisional ? 'Provisional Admit No' : 'Official Roll No'}</div>
             <div class="roll-box-number">${rollNo}</div>
             <div class="roll-box-seat">${roomNo} | ${seatNo}</div>
           </div>
@@ -1238,6 +1243,594 @@ export class PdfService {
     <span>Computer Generated Official Record &copy; 2026 AZM.AIO</span>
   </div>
 
+</body>
+</html>
+    `;
+  }
+
+  /**
+   * Generates filled HTML template for the official 100-Question Single-Page A4 OMR Bubble Sheet.
+   * Uses exact mm-based fixed geometry (210mm x 297mm) matching browser print and scanner coordinates.
+   */
+  generateOmrSheetHtml(student: any, qrDataUrl: string, photoBase64?: string): string {
+    const isProvisional = !student.rollNumber;
+    const rollNo = student.rollNumber || (student.applicationNo ? `PROV-${student.applicationNo}` : 'PROVISIONAL');
+    const appNo = student.applicationNo || student.id || 'APP-2026';
+    const candName = (student.fullName || '').toUpperCase();
+    const fatherName = (student.fatherName || '').toUpperCase();
+    const cnic = student.cnicOrBForm || 'N/A';
+    const classLevel = student.currentClass || 'SSC-II (Class 10th)';
+    const groupOrSubject = student.hsscGroup || student.bsDepartment || 'General Merit / Science';
+    const testCenter = student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra';
+    const roomNo = student.assignedRoom || 'Hall 301-E';
+    const seatNo = student.seatNo || `Seat #${rollNo.split('-').pop() || '01'}`;
+
+    const defaultPhoto = `data:image/svg+xml;utf8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
+        <rect width="120" height="150" fill="#f8fafc"/>
+        <circle cx="60" cy="50" r="25" fill="#94a3b8"/>
+        <path d="M20 125 C20 90, 100 90, 100 125 Z" fill="#64748b"/>
+        <text x="60" y="142" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#475569" text-anchor="middle">PHOTO</text>
+      </svg>`
+    )}`;
+
+    const photoSrc =
+      photoBase64 ||
+      (student.photoUrl && student.photoUrl.startsWith('data:') ? student.photoUrl : null) ||
+      (student.uploadedDocuments?.photo?.dataUrl && student.uploadedDocuments.photo.dataUrl.startsWith('data:') ? student.uploadedDocuments.photo.dataUrl : null) ||
+      defaultPhoto;
+
+    const columns = [
+      { start: 1, end: 25 },
+      { start: 26, end: 50 },
+      { start: 51, end: 75 },
+      { start: 76, end: 100 },
+    ];
+
+    const renderColumn = (start: number, end: number) => {
+      let rowsHtml = '';
+      for (let q = start; q <= end; q++) {
+        const qStr = q < 10 ? `0${q}` : `${q}`;
+        const isShaded = q % 5 === 0;
+        rowsHtml += `
+          <div class="omr-row ${isShaded ? 'shaded' : ''}">
+            <span class="q-num">${qStr}</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        `;
+      }
+      return `
+        <div class="omr-col">
+          <div class="omr-col-header">Q. ${start} - ${end}</div>
+          <div class="omr-col-body">
+            ${rowsHtml}
+          </div>
+        </div>
+      `;
+    };
+
+    const qrImgTag = qrDataUrl
+      ? `<img src="${qrDataUrl}" alt="Verification QR" />`
+      : `<div style="font-size: 7px; color: #475569; text-align: center; padding-top: 15px;">QR PASS</div>`;
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AZM OMR Answer Sheet - ${rollNo}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    body {
+      background: #ffffff;
+      color: #000000;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .omr-page {
+      width: 210mm;
+      height: 297mm;
+      max-height: 297mm;
+      padding: 5.5mm 7.5mm;
+      position: relative;
+      background: #ffffff;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .page-break {
+      page-break-after: always;
+      break-after: page;
+    }
+
+    /* Corner Alignment Markers for Scanning */
+    .corner-mark {
+      position: absolute;
+      width: 6.5mm;
+      height: 6.5mm;
+      background: #000000;
+    }
+    .corner-tl { top: 2.5mm; left: 2.5mm; }
+    .corner-tr { top: 2.5mm; right: 2.5mm; }
+    .corner-bl { bottom: 2.5mm; left: 2.5mm; }
+    .corner-br { bottom: 2.5mm; right: 2.5mm; }
+
+    /* Header */
+    .omr-header {
+      text-align: center;
+      border-bottom: 2px solid #000000;
+      padding-bottom: 2mm;
+      margin-bottom: 2mm;
+    }
+    .omr-title {
+      font-size: 13pt;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      color: #0f172a;
+      text-transform: uppercase;
+      line-height: 1.1;
+    }
+    .omr-subtitle {
+      font-size: 8.5pt;
+      font-weight: 700;
+      color: #334155;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+    .omr-doc-name {
+      display: inline-block;
+      background: #000000;
+      color: #ffffff;
+      font-size: 7.8pt;
+      font-weight: 800;
+      padding: 1.5px 12px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      margin-top: 2px;
+      letter-spacing: 0.5px;
+    }
+
+    .preissue-banner {
+      background: #fffbeb;
+      border: 1.2px dashed #d97706;
+      color: #92400e;
+      font-size: 7.2pt;
+      font-weight: 800;
+      text-align: center;
+      padding: 2px 6px;
+      margin-bottom: 2mm;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    /* Candidate Particulars & Verification Section */
+    .info-container {
+      display: flex;
+      border: 1.5px solid #000000;
+      border-radius: 4px;
+      margin-bottom: 2mm;
+      padding: 2mm 3mm;
+      gap: 3mm;
+      align-items: stretch;
+      background: #fafafa;
+    }
+    .photo-box {
+      width: 23mm;
+      height: 27mm;
+      border: 1.2px solid #000000;
+      border-radius: 3px;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+    }
+    .photo-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .details-table {
+      flex: 1;
+      border-collapse: collapse;
+      font-size: 7.2pt;
+    }
+    .details-table td {
+      padding: 1.2px 2px;
+      vertical-align: middle;
+    }
+    .dt-label {
+      font-weight: 800;
+      color: #334155;
+      width: 25%;
+      text-transform: uppercase;
+      font-size: 6.5pt;
+    }
+    .dt-val {
+      font-weight: 700;
+      color: #000000;
+      border-bottom: 0.8px solid #cbd5e1;
+      font-size: 7.2pt;
+    }
+    .dt-val.highlight {
+      font-family: 'Courier New', monospace;
+      font-size: 8.5pt;
+      font-weight: 900;
+      color: #000000;
+    }
+    .qr-box {
+      width: 27mm;
+      height: 27mm;
+      border: 1.2px solid #000000;
+      border-radius: 3px;
+      padding: 1.5px;
+      background: #ffffff;
+      flex-shrink: 0;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .qr-box img {
+      width: 21mm;
+      height: 21mm;
+      object-fit: contain;
+    }
+    .qr-box-label {
+      font-size: 5pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #334155;
+      margin-top: 1px;
+    }
+
+    /* Instructions & Bubble Guide */
+    .guide-strip {
+      border: 1px solid #000000;
+      border-radius: 3px;
+      padding: 1.8px 5px;
+      margin-bottom: 2mm;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 6.8pt;
+      background: #f8fafc;
+    }
+    .guide-legend {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .guide-item {
+      display: flex;
+      align-items: center;
+      gap: 2.5px;
+    }
+    .sample-bubble {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      border: 1px solid #000000;
+      font-size: 5.5pt;
+      font-weight: bold;
+    }
+    .sample-filled {
+      background: #000000;
+      color: #ffffff;
+    }
+
+    /* 100 MCQs Grid (4 columns x 25 rows) */
+    .omr-grid-container {
+      display: flex;
+      justify-content: space-between;
+      gap: 2.5mm;
+      margin-bottom: 2mm;
+    }
+    .omr-col {
+      flex: 1;
+      border: 1.2px solid #000000;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .omr-col-header {
+      background: #000000;
+      color: #ffffff;
+      font-size: 6.8pt;
+      font-weight: 900;
+      text-align: center;
+      padding: 1.5px 0;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .omr-col-body {
+      padding: 0;
+    }
+    .omr-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.5px 2.5px;
+      border-bottom: 0.8px solid #e2e8f0;
+      font-size: 6.8pt;
+    }
+    .omr-row:last-child {
+      border-bottom: none;
+    }
+    .omr-row.shaded {
+      background: #f1f5f9;
+    }
+    .q-num {
+      width: 16px;
+      font-weight: 800;
+      color: #0f172a;
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+    }
+    .bubbles-wrap {
+      display: flex;
+      gap: 1.8px;
+    }
+    .bubble {
+      width: 4.1mm;
+      height: 4.1mm;
+      border: 1.1px solid #000000;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 5.8pt;
+      font-weight: 800;
+      color: #000000;
+      background: #ffffff;
+      line-height: 1;
+    }
+
+    /* Signatures Section */
+    .omr-footer-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #000000;
+      border-radius: 3px;
+      background: #fafafa;
+      margin-bottom: 2mm;
+    }
+    .omr-footer-table td {
+      width: 50%;
+      padding: 2.5mm 4mm;
+      vertical-align: top;
+    }
+    .sig-heading {
+      font-size: 6.5pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #1e293b;
+      margin-bottom: 7.5mm;
+    }
+    .sig-line {
+      border-top: 1px solid #000000;
+      font-size: 6.2pt;
+      font-weight: 700;
+      color: #334155;
+      padding-top: 1.5px;
+      display: inline-block;
+      width: 90%;
+    }
+
+    .omr-bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 5.8pt;
+      color: #475569;
+      font-family: monospace;
+      padding: 0 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="omr-page">
+    <!-- Corner Alignment Markers for Scanning -->
+    <div class="corner-mark corner-tl"></div>
+    <div class="corner-mark corner-tr"></div>
+    <div class="corner-mark corner-bl"></div>
+    <div class="corner-mark corner-br"></div>
+
+    <!-- Header -->
+    <div class="omr-header">
+      <div class="omr-title">AZM.AIO SCHOLARSHIP EXAMINATION</div>
+      <div class="omr-subtitle">Session V (2026) Merit &amp; Scholarship Screening Test</div>
+      <div class="omr-doc-name">OFFICIAL OMR ANSWER SHEET &mdash; 100 MCQS</div>
+    </div>
+
+    ${isProvisional ? `
+    <div class="preissue-banner">
+      PRE-ISSUE COPY &mdash; OFFICIAL ROLL NUMBER NOT YET ISSUED
+    </div>` : ''}
+
+    <!-- Candidate Info & Verification -->
+    <div class="info-container">
+      <div class="photo-box">
+        <img src="${photoSrc}" alt="Candidate Photo" />
+      </div>
+
+      <table class="details-table">
+        <tr>
+          <td class="dt-label">Candidate Name:</td>
+          <td class="dt-val">${candName}</td>
+          <td class="dt-label">Roll Number:</td>
+          <td class="dt-val highlight">${rollNo}</td>
+        </tr>
+        <tr>
+          <td class="dt-label">Father's Name:</td>
+          <td class="dt-val">${fatherName}</td>
+          <td class="dt-label">App / Form No:</td>
+          <td class="dt-val">${appNo}</td>
+        </tr>
+        <tr>
+          <td class="dt-label">CNIC / B-Form:</td>
+          <td class="dt-val" style="font-family: monospace;">${cnic}</td>
+          <td class="dt-label">Seat / Room:</td>
+          <td class="dt-val">${roomNo} | ${seatNo}</td>
+        </tr>
+        <tr>
+          <td class="dt-label">Class &amp; Group:</td>
+          <td class="dt-val">${classLevel} (${groupOrSubject})</td>
+          <td class="dt-label">Test Center:</td>
+          <td class="dt-val">${testCenter}</td>
+        </tr>
+      </table>
+
+      <div class="qr-box">
+        ${qrImgTag}
+        <div class="qr-box-label">Candidate Identity QR</div>
+      </div>
+    </div>
+
+    <!-- Instructions Strip -->
+    <div class="guide-strip">
+      <div class="guide-legend">
+        <strong>INSTRUCTIONS:</strong>
+        <span>Use Blue/Black Ballpoint only. Fill circle completely.</span>
+        <div class="guide-item">
+          <span>Correct:</span>
+          <span class="sample-bubble sample-filled">A</span>
+        </div>
+        <div class="guide-item">
+          <span>Wrong:</span>
+          <span class="sample-bubble">&#10007;</span>
+          <span class="sample-bubble">&#10003;</span>
+          <span class="sample-bubble">&#9680;</span>
+        </div>
+      </div>
+      <div><strong>Timing:</strong> 120 Mins | <strong>Total MCQs:</strong> 100</div>
+    </div>
+
+    <!-- 100 MCQs Grid (4 Columns) -->
+    <div class="omr-grid-container">
+      ${columns.map((c) => renderColumn(c.start, c.end)).join('')}
+    </div>
+
+    <!-- Signatures -->
+    <table class="omr-footer-table">
+      <tr>
+        <td>
+          <div class="sig-heading">Candidate Declaration &amp; Signature</div>
+          <span class="sig-line">Candidate Signature (Signed in Hall)</span>
+        </td>
+        <td style="text-align: right;">
+          <div class="sig-heading" style="text-align: right;">Hall Chief Invigilator Verification</div>
+          <span class="sig-line" style="text-align: center;">Invigilator Signature &amp; Center Stamp</span>
+        </td>
+      </tr>
+    </table>
+
+    <div class="omr-bottom-bar">
+      <span>SHEET-ID: AZM-OMR-2026V-${rollNo}</span>
+      <span>SECURITY VERIFICATION: CERTIFIED VALID FOR SESSION V 2026</span>
+      <span>TEMPLATE VER: 1.0</span>
+    </div>
+  </div>
+
+</body>
+</html>
+    `;
+  }
+
+  /**
+   * Generates a single HTML document containing multiple candidate OMR sheets
+   * separated by standard page-break rules for bulk printing.
+   */
+  generateBulkOmrSheetsHtml(sheets: Array<{ student: any; qrDataUrl: string; photoBase64?: string }>): string {
+    const pageHtmls = sheets.map((item) => {
+      const fullHtml = this.generateOmrSheetHtml(item.student, item.qrDataUrl, item.photoBase64);
+      // Extract the .omr-page body content
+      const match = fullHtml.match(/<div class="omr-page">([\s\S]*?)<\/div>\s*<\/body>/i);
+      if (match) {
+        return `<div class="omr-page page-break">${match[1]}</div>`;
+      }
+      return fullHtml;
+    });
+
+    const sample = sheets[0] ? this.generateOmrSheetHtml(sheets[0].student, sheets[0].qrDataUrl, sheets[0].photoBase64) : '';
+    const styleMatch = sample.match(/<style>([\s\S]*?)<\/style>/i);
+    const styles = styleMatch ? styleMatch[1] : '';
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AZM Bulk OMR Answer Sheets (${sheets.length} Candidates)</title>
+  <style>
+    ${styles}
+  </style>
+</head>
+<body>
+  ${pageHtmls.join('\n')}
+</body>
+</html>
+    `;
+  }
+
+  /**
+   * Generates a single HTML document containing multiple candidate Roll Number Slips
+   * separated by standard page-break rules for bulk printing.
+   */
+  generateBulkRollSlipsHtml(slips: Array<{ student: any; qrDataUrl: string; photoBase64?: string }>): string {
+    const pageHtmls = slips.map((item) => {
+      const fullHtml = this.generateRollSlipHtml(item.student, item.qrDataUrl, item.photoBase64);
+      const match = fullHtml.match(/<div class="slip-page">([\s\S]*?)<\/div>\s*<\/body>/i);
+      if (match) {
+        return `<div class="slip-page page-break" style="margin-bottom: 0; page-break-after: always; break-after: page;">${match[1]}</div>`;
+      }
+      return fullHtml;
+    });
+
+    const sample = slips[0] ? this.generateRollSlipHtml(slips[0].student, slips[0].qrDataUrl, slips[0].photoBase64) : '';
+    const styleMatch = sample.match(/<style>([\s\S]*?)<\/style>/i);
+    const styles = styleMatch ? styleMatch[1] : '';
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AZM Bulk Roll Number Slips (${slips.length} Candidates)</title>
+  <style>
+    ${styles}
+    @page {
+      size: A4 portrait;
+      margin: 6mm 8mm;
+    }
+    .page-break {
+      page-break-after: always;
+      break-after: page;
+    }
+  </style>
+</head>
+<body>
+  ${pageHtmls.join('\n')}
 </body>
 </html>
     `;

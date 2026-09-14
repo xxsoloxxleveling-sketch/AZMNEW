@@ -22,6 +22,8 @@ export interface MockStudent {
   id: string;
   applicationNo: string;
   rollNumber: string;
+  displayRollNumber?: string;
+  rollNumberStatus?: 'OFFICIAL' | 'PROVISIONAL';
   fullName: string;
   fatherName: string;
   gender: 'MALE' | 'FEMALE';
@@ -807,6 +809,13 @@ export const mockApi = {
   },
 
   async downloadRollSlipPdf(studentId: string, rollNumber?: string, studentObj?: any): Promise<void> {
+    // If backend PDF service is reachable, use server-side Puppeteer PDF
+    try {
+      await this.downloadStudentRollSlipPdf(studentId, rollNumber);
+      return;
+    } catch (e) {
+      console.warn('Server-side roll slip PDF fallback to client print:', e);
+    }
     let data = studentObj;
     if (!data || !data.fullName) {
       try {
@@ -816,6 +825,56 @@ export const mockApi = {
       }
     }
     printRollNumberSlip(data || { id: studentId, rollNumber });
+  },
+
+  async downloadStudentRollSlipPdf(studentId: string, rollNumber?: string): Promise<void> {
+    if (!studentId) throw new Error('Student identifier is required to download roll number slip.');
+    await apiDownloadPdf(
+      `/api/students/${encodeURIComponent(studentId)}/roll-slip-pdf`,
+      `AZM-RollSlip-${rollNumber || studentId}.pdf`
+    );
+  },
+
+  async downloadStudentOmrPdf(studentId: string, rollNumber?: string): Promise<void> {
+    if (!studentId) throw new Error('Student identifier is required to download OMR answer sheet.');
+    await apiDownloadPdf(
+      `/api/students/${encodeURIComponent(studentId)}/omr-sheet-pdf`,
+      `AZM-OMR-${rollNumber || studentId}.pdf`
+    );
+  },
+
+  async downloadBulkOmrPdf(studentIds: string[]): Promise<void> {
+    if (!studentIds?.length) throw new Error('At least one student must be selected.');
+    await apiDownloadPdf(
+      '/api/students/bulk-omr-pdf',
+      `AZM-Bulk-OMR-${studentIds.length}-Candidates.pdf`,
+      { method: 'POST', body: { studentIds } }
+    );
+  },
+
+  async downloadBulkRollSlipsPdf(studentIds: string[]): Promise<void> {
+    if (!studentIds?.length) throw new Error('At least one student must be selected.');
+    await apiDownloadPdf(
+      '/api/students/bulk-roll-slips-pdf',
+      `AZM-Bulk-RollSlips-${studentIds.length}-Candidates.pdf`,
+      { method: 'POST', body: { studentIds } }
+    );
+  },
+
+  async printStudentRollSlipPdf(studentId: string): Promise<void> {
+    if (!studentId) throw new Error('Student identifier is required to print roll number slip.');
+    await apiOpenPdfForPrint(
+      `/api/students/${encodeURIComponent(studentId)}/roll-slip-pdf`,
+      { title: 'Printing Roll Number Slip…' }
+    );
+  },
+
+  async printStudentOmrPdf(studentId: string): Promise<void> {
+    if (!studentId) throw new Error('Student identifier is required to print OMR answer sheet.');
+    await apiOpenPdfForPrint(
+      `/api/students/${encodeURIComponent(studentId)}/omr-sheet-pdf`,
+      { title: 'Printing MCQs OMR Sheet…' }
+    );
   },
 
   async downloadRegistrationSlipPdf(studentData: any): Promise<void> {

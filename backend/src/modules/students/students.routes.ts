@@ -149,6 +149,20 @@ router.get(
   studentsController.exportPdf
 );
 
+// Bulk OMR Sheet PDF export (SUPER_ADMIN, ADMIN)
+router.post(
+  '/bulk-omr-pdf',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.getBulkOmrPdf
+);
+
+// Bulk Roll Slips PDF export (SUPER_ADMIN, ADMIN)
+router.post(
+  '/bulk-roll-slips-pdf',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.getBulkRollSlipsPdf
+);
+
 router.get(
   '/:id',
   studentsController.getById
@@ -159,6 +173,13 @@ router.get(
   '/:id/roll-slip-pdf',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   studentsController.getRollSlipPdf
+);
+
+// Candidate MCQs OMR Sheet PDF export (SUPER_ADMIN, ADMIN)
+router.get(
+  '/:id/omr-sheet-pdf',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.getOmrSheetPdf
 );
 
 // Admin Walk-in Registration
@@ -175,12 +196,14 @@ router.post(
   validateBody(createStudentSchema),
   studentsController.create
 );
+
 router.patch(
   '/:id',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(updateStudentSchema),
   studentsController.update
 );
+
 router.delete(
   '/:id',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
