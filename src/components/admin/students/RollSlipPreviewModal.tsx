@@ -47,9 +47,9 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
       try {
         let url: string;
         try {
-          url = await apiFetchProtectedObjectUrl(`/api/students/${student.id}/document/photo`);
-        } catch {
           url = await apiFetchProtectedObjectUrl(`/api/students/${student.id}/document/photoThumbnail`);
+        } catch {
+          url = await apiFetchProtectedObjectUrl(`/api/students/${student.id}/document/photo`);
         }
         if (active) {
           createdUrl = url;
@@ -67,7 +67,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
       active = false;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [student, isOpen]);
+  }, [student?.id, isOpen]);
 
   // Generate verification QR code
   useEffect(() => {

@@ -154,6 +154,11 @@ router.get(
   studentsController.getById
 );
 
+// Single and bulk exam document exports require staff authorization.
+router.get('/:id/omr-sheet-pdf', authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN), studentsController.getOmrSheetPdf);
+router.post('/bulk-omr-pdf', authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN), studentsController.getBulkOmrPdf);
+router.post('/bulk-roll-slips-pdf', authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN), studentsController.getBulkRollSlipsPdf);
+
 // Candidate Roll Number Slip PDF export (SUPER_ADMIN, ADMIN)
 router.post(
   '/:id/prepare-print',

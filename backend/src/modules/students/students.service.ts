@@ -1523,6 +1523,20 @@ export class StudentsService {
    * Resolves student photo to a reliable base64 data URI for seamless embedding into PDFs.
    */
   async resolveStudentPhotoBase64(student: any): Promise<string> {
+    const source = await this.resolveOriginalStudentPhotoBase64(student);
+    const image = source.match(/^data:image\/(?:jpeg|png|webp);base64,(.+)$/s);
+    if (!image) return source;
+    try {
+      const buffer = await sharp(Buffer.from(image[1], 'base64'))
+        .rotate()
+        .resize(600, 800, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85, mozjpeg: true })
+        .toBuffer();
+      return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+    } catch { return source; }
+  }
+
+  private async resolveOriginalStudentPhotoBase64(student: any): Promise<string> {
     const defaultPlaceholder = `data:image/svg+xml;utf8,${encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
         <rect width="120" height="150" fill="#f8fafc"/>
