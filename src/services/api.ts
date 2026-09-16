@@ -295,20 +295,62 @@ export async function submitGrievanceTicket(
 // -------------------------------------------------------------
 // 5. Live Alerts & Announcements API
 // -------------------------------------------------------------
+function formatAnnouncementDate(isoString?: string | null): string {
+  if (!isoString) return 'Official Notice';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return 'Official Notice';
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return 'Official Notice';
+  }
+}
+
 export async function fetchLiveAlerts(): Promise<ApiResponse<AlertItem[]>> {
   try {
-    const response = await fetch(`${API_BASE_URL}/alerts`);
+    const response = await fetch(`${API_BASE_URL}/api/announcements`, {
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
     if (response.ok) {
-      const data = await response.json();
-      return { success: true, data };
+      const json = await response.json();
+      if (json && json.success) {
+        // Legacy fallback semantics:
+        // If SystemSetting key does not exist yet (configured === false), fallback to OFFICIAL_ALERTS.
+        if (json.configured === false) {
+          return { success: true, data: OFFICIAL_ALERTS };
+        }
+
+        // If configured === true, use managed announcements even if the array is intentionally empty.
+        const managedItems = Array.isArray(json.data) ? json.data : [];
+        const mappedAlerts: AlertItem[] = managedItems.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          subtitle: item.subtitle || undefined,
+          message: item.message,
+          type: item.type,
+          badge: item.badge,
+          date: formatAnnouncementDate(item.createdAt),
+          isPinned: Boolean(item.isPinned),
+        }));
+
+        return { success: true, data: mappedAlerts };
+      }
     }
   } catch (err) {
-    // Backend offline
+    // Backend offline or unreachable -> graceful fallback to OFFICIAL_ALERTS
   }
 
   return {
     success: true,
-    data: OFFICIAL_ALERTS
+    data: OFFICIAL_ALERTS,
   };
 }
 

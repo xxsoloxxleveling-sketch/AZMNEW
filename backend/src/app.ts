@@ -17,6 +17,7 @@ import testCentersRoutes from './modules/test-centers/testCenters.routes';
 import examHallsRoutes from './modules/exam-halls/examHalls.routes';
 import grievancesRoutes from './modules/grievances/grievances.routes';
 import resultsRoutes from './modules/results/results.routes';
+import announcementsRoutes from './modules/announcements/announcements.routes';
 
 import { logger } from './lib/logger';
 
@@ -149,6 +150,7 @@ app.use('/api/test-centers', testCentersRoutes);
 app.use('/api/exam-halls', examHallsRoutes);
 app.use('/api/grievances', grievancesRoutes);
 app.use('/api/results', resultsRoutes);
+app.use('/api/announcements', announcementsRoutes);
 
 // Fallback 404 for unknown routes
 app.use((req: Request, res: Response, _next: NextFunction) => {

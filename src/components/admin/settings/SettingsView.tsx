@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { School, Lock, Users, Shield, Save, CheckCircle, MapPin, Calendar, Trash2, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { School, Lock, Users, Shield, Save, CheckCircle, MapPin, Calendar, Trash2, AlertTriangle, Loader2, RefreshCw, BellRing } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { UserManagementTab } from './UserManagementTab';
 import { TestCentersTab } from './TestCentersTab';
 import { RollNumberScheduleTab } from './RollNumberScheduleTab';
+import { AnnouncementsTab } from './AnnouncementsTab';
 import { mockApi } from '../../../lib/mockApi';
 
 export const SettingsView: React.FC = () => {
   const { role, user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'schedule' | 'centers' | 'profile' | 'security' | 'users' | 'purge'>('schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'centers' | 'announcements' | 'profile' | 'security' | 'users' | 'purge'>('schedule');
   const [isPurging, setIsPurging] = useState(false);
   const [purgeSuccess, setPurgeSuccess] = useState(false);
 
@@ -95,6 +96,20 @@ export const SettingsView: React.FC = () => {
           <Lock className="w-4 h-4" />
           <span>Security</span>
         </button>
+
+        {role === 'SUPER_ADMIN' && (
+          <button
+            onClick={() => setActiveTab('announcements')}
+            className={`flex-1 min-w-[130px] py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'announcements'
+                ? 'bg-[#185b9d] text-white shadow-md shadow-blue-500/20'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <BellRing className="w-4 h-4" />
+            <span>Announcements</span>
+          </button>
+        )}
 
         {role === 'SUPER_ADMIN' && (
           <button
@@ -273,6 +288,9 @@ export const SettingsView: React.FC = () => {
 
       {/* Tab 0: Test Centers Management */}
       {activeTab === 'centers' && <TestCentersTab />}
+
+      {/* Tab: Announcements Management (Super Admin) */}
+      {activeTab === 'announcements' && role === 'SUPER_ADMIN' && <AnnouncementsTab />}
 
       {/* Tab 3: User Management (Super Admin) */}
       {activeTab === 'users' && role === 'SUPER_ADMIN' && <UserManagementTab />}

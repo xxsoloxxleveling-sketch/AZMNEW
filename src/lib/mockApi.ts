@@ -342,6 +342,37 @@ export function getCanonicalStudentKey(s: {
 
 export function saveUploadedFilesForCandidate(_keys?: any, _files?: any): void {}
 
+export type AlertVisualType = 'urgent' | 'registration' | 'exam' | 'info';
+
+export interface ManagedAnnouncement {
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  message: string;
+  type: AlertVisualType;
+  badge: string;
+  isPinned: boolean;
+  isPublished: boolean;
+  publishStartAt?: string | null;
+  publishEndAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAnnouncementPayload {
+  title: string;
+  subtitle?: string | null;
+  message: string;
+  type: AlertVisualType;
+  badge: string;
+  isPinned?: boolean;
+  isPublished?: boolean;
+  publishStartAt?: string | null;
+  publishEndAt?: string | null;
+}
+
+export type UpdateAnnouncementPayload = Partial<CreateAnnouncementPayload>;
+
 export interface RollNumberReleaseConfig {
   isScheduled: boolean; // true = schedule on/after releaseDateTime; false = immediate on payment approval
   releaseDateTime: string; // ISO string e.g. "2026-10-15T09:00:00"
@@ -1296,6 +1327,38 @@ export const mockApi = {
       success: true,
       message: res?.message || 'User account deleted successfully',
     };
+  },
+
+  // 11. Announcements Management (Super Admin)
+  async getAnnouncements(): Promise<{ configured: boolean; items: ManagedAnnouncement[] }> {
+    const res = await apiFetch<any>('/api/announcements/admin');
+    return {
+      configured: res?.configured ?? true,
+      items: Array.isArray(res?.items) ? res.items : [],
+    };
+  },
+
+  async createAnnouncement(payload: CreateAnnouncementPayload): Promise<ManagedAnnouncement> {
+    const res = await apiFetch<any>('/api/announcements/admin', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return res?.data || res;
+  },
+
+  async updateAnnouncement(id: string, payload: UpdateAnnouncementPayload): Promise<ManagedAnnouncement> {
+    const res = await apiFetch<any>(`/api/announcements/admin/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return res?.data || res;
+  },
+
+  async deleteAnnouncement(id: string): Promise<{ success: boolean; id: string }> {
+    const res = await apiFetch<any>(`/api/announcements/admin/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res || { success: true, id };
   },
 
   // 10. Test Centers Management (Custom Centers)

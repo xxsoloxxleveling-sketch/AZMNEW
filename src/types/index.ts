@@ -238,3 +238,32 @@ export interface GalleryItem {
 export type PaperVariant = 'A' | 'B' | 'C' | 'D';
 export type { MockStudent, RollNumberReleaseConfig } from '../lib/mockApi';
 
+export interface ManagedAnnouncement {
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  message: string;
+  type: AlertType;
+  badge: string;
+  isPinned: boolean;
+  isPublished: boolean;
+  publishStartAt?: string | null;
+  publishEndAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAnnouncementPayload {
+  title: string;
+  subtitle?: string | null;
+  message: string;
+  type: AlertType;
+  badge: string;
+  isPinned?: boolean;
+  isPublished?: boolean;
+  publishStartAt?: string | null;
+  publishEndAt?: string | null;
+}
+
+export type UpdateAnnouncementPayload = Partial<CreateAnnouncementPayload>;
+
