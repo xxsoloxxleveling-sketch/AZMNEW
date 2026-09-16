@@ -77,8 +77,50 @@ export class UsersService {
     return user;
   }
 
-  async updateUser(id: string, input: UpdateUserInput) {
-    await this.getUserById(id);
+  async countActiveSuperAdmins(): Promise<number> {
+    return prisma.user.count({
+      where: {
+        role: Role.SUPER_ADMIN,
+        status: 'ACTIVE',
+      },
+    });
+  }
+
+  async updateUser(id: string, input: UpdateUserInput, requesterUserId?: string) {
+    if (requesterUserId && id === requesterUserId && input.status === 'INACTIVE') {
+      const error: AppError = new Error('You cannot deactivate your own account.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const user = await this.getUserById(id);
+
+    if (
+      user.role === Role.SUPER_ADMIN &&
+      user.status === 'ACTIVE' &&
+      input.role !== undefined &&
+      input.role !== Role.SUPER_ADMIN
+    ) {
+      const activeCount = await this.countActiveSuperAdmins();
+      if (activeCount <= 1) {
+        const error: AppError = new Error('You cannot change the role of the last active Super Admin.');
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
+    if (
+      user.role === Role.SUPER_ADMIN &&
+      user.status === 'ACTIVE' &&
+      input.status === 'INACTIVE'
+    ) {
+      const activeCount = await this.countActiveSuperAdmins();
+      if (activeCount <= 1) {
+        const error: AppError = new Error('You cannot deactivate the last active Super Admin.');
+        error.statusCode = 400;
+        throw error;
+      }
+    }
 
     const updateData: any = {};
     if (input.name !== undefined) updateData.name = input.name;
@@ -114,11 +156,9 @@ export class UsersService {
 
     const user = await this.getUserById(id);
 
-    if (user.role === Role.SUPER_ADMIN) {
-      const superAdminCount = await prisma.user.count({
-        where: { role: Role.SUPER_ADMIN },
-      });
-      if (superAdminCount <= 1) {
+    if (user.role === Role.SUPER_ADMIN && user.status === 'ACTIVE') {
+      const activeCount = await this.countActiveSuperAdmins();
+      if (activeCount <= 1) {
         const error: AppError = new Error('Cannot delete the last remaining Super Admin account.');
         error.statusCode = 400;
         throw error;

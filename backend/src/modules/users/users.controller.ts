@@ -41,7 +41,7 @@ export class UsersController {
 
   async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const updated = await usersService.updateUser(req.params.id, req.body);
+      const updated = await usersService.updateUser(req.params.id, req.body, req.user?.id);
       res.status(200).json({
         success: true,
         message: 'User account updated successfully',
