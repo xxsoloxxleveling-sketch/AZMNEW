@@ -1253,7 +1253,7 @@ export const mockApi = {
     }));
   },
 
-  async createUser(payload: { name: string; email: string; role: Role; password?: string }): Promise<MockUserAccount> {
+  async createUser(payload: { name: string; email: string; role: Role; password: string }): Promise<MockUserAccount> {
     const res = await apiFetch<any>('/api/users', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -1266,6 +1266,35 @@ export const mockApi = {
       role: u.role || payload.role,
       status: u.status || 'ACTIVE',
       createdAt: u.createdAt || new Date().toISOString(),
+    };
+  },
+
+  async updateUser(
+    id: string,
+    payload: { name?: string; role?: Role; status?: 'ACTIVE' | 'INACTIVE'; password?: string }
+  ): Promise<MockUserAccount> {
+    const res = await apiFetch<any>(`/api/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    const u = res?.data || res;
+    return {
+      id: u.id || id,
+      name: u.name || '',
+      email: u.email || '',
+      role: u.role,
+      status: u.status || 'ACTIVE',
+      createdAt: u.createdAt || new Date().toISOString(),
+    };
+  },
+
+  async deleteUser(id: string): Promise<{ success: boolean; message?: string }> {
+    const res = await apiFetch<any>(`/api/users/${id}`, {
+      method: 'DELETE',
+    });
+    return {
+      success: true,
+      message: res?.message || 'User account deleted successfully',
     };
   },
 

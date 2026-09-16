@@ -23,6 +23,12 @@ export class AuthService {
       throw error;
     }
 
+    if (user.status !== 'ACTIVE') {
+      const error: AppError = new Error('This account is inactive. Contact the system administrator.');
+      error.statusCode = 403;
+      throw error;
+    }
+
     const payload = {
       userId: user.id,
       email: user.email,
@@ -58,6 +64,12 @@ export class AuthService {
         throw error;
       }
 
+      if (user.status !== 'ACTIVE') {
+        const error: AppError = new Error('This account is inactive. Contact the system administrator.');
+        error.statusCode = 403;
+        throw error;
+      }
+
       const payload = {
         userId: user.id,
         email: user.email,
@@ -73,6 +85,9 @@ export class AuthService {
         refreshToken: newRefreshToken,
       };
     } catch (err: any) {
+      if (err.statusCode) {
+        throw err;
+      }
       const error: AppError = new Error(err.message || 'Invalid or expired refresh token');
       error.statusCode = 401;
       throw error;
