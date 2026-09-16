@@ -44,6 +44,102 @@ const metadataOnlyDocuments = (documents: Record<string, any> | undefined) => {
 
 const isMissingStudentDocumentTable = (error: any) =>
   error?.code === 'P2021' && String(error?.meta?.table || error?.message || '').includes('StudentDocument');
+export const PAPER_VARIANTS = ['A', 'B', 'C', 'D'] as const;
+export type PaperVariant = (typeof PAPER_VARIANTS)[number];
+
+export function getPaperVariant(student: {
+  currentClass?: string | null;
+  id?: string | null;
+  applicationNo?: string | null;
+}): PaperVariant {
+  const normalizedClass = String(student?.currentClass || 'UNKNOWN')
+    .trim()
+    .toUpperCase();
+  const studentIdentifier = student?.id || student?.applicationNo || 'UNKNOWN';
+  const seed = `2026-V|${normalizedClass}|${studentIdentifier}`;
+  const digest = crypto.createHash('sha256').update(seed).digest();
+  return PAPER_VARIANTS[digest[0] % 4];
+}
+
+export function formatClockTime12h(timeStr: string): string {
+  if (!timeStr) return '';
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return timeStr;
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2];
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  const formattedHours = hours < 10 ? `0${hours}` : `${hours}`;
+  return `${formattedHours}:${minutes} ${ampm}`;
+}
+
+export function formatExamDateDisplay(dateStr: string): string {
+  if (!dateStr) return 'Sunday, 15 November 2026';
+  if (dateStr.includes(',') && !dateStr.includes('T')) return dateStr;
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day, 12, 0, 0);
+    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return `${weekdays[d.getDay()]}, ${day} ${months[month]} ${year}`;
+  }
+  return dateStr;
+}
+
+export function calculateDurationMinutes(startClock: string, endClock: string): number {
+  const parseMins = (t: string) => {
+    const match = t?.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return 0;
+    return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+  };
+  const start = parseMins(startClock);
+  const end = parseMins(endClock);
+  const diff = end - start;
+  return diff > 0 ? diff : 60;
+}
+
+export function getExamScheduleForStudent(student: any, config: any) {
+  const genderNorm = String(student?.gender || '').trim().toUpperCase();
+  if (genderNorm !== 'FEMALE' && genderNorm !== 'MALE') {
+    throw new Error('Candidate gender is missing or invalid; examination schedule cannot be resolved.');
+  }
+  const isFemale = genderNorm === 'FEMALE';
+
+  const rawReporting = isFemale
+    ? (config?.femaleReportingTime || '08:00')
+    : (config?.maleReportingTime || '11:00');
+  const rawStart = isFemale
+    ? (config?.femaleTestStartTime || '09:00')
+    : (config?.maleTestStartTime || '12:00');
+  const rawEnd = isFemale
+    ? (config?.femaleTestEndTime || '10:00')
+    : (config?.maleTestEndTime || '13:00');
+
+  const reportingTime = formatClockTime12h(rawReporting);
+  const testStartTime = formatClockTime12h(rawStart);
+  const testEndTime = formatClockTime12h(rawEnd);
+  const testTimeLabel = `${testStartTime} - ${testEndTime}`;
+  const durationMinutes = calculateDurationMinutes(rawStart, rawEnd);
+  const testDate = formatExamDateDisplay(config?.examDate || '2026-11-15');
+  const testCenterName = config?.examCenterName || 'Dubai International School and College Boys Campus Mansehra';
+
+  return {
+    testCenterName,
+    testDate,
+    reportingTime,
+    testStartTime,
+    testEndTime,
+    testTimeLabel,
+    durationMinutes,
+  };
+}
 
 export function getCandidateNumber(student: { rollNumber?: string | null; applicationNo?: string | null; id?: string; officeUse?: { testRollNo?: string | null } | null }) {
   if (student?.rollNumber) {
@@ -84,7 +180,20 @@ export class StudentsService {
   async preparePrintStudent(id: string) {
     const student = await this.getStudentById(id);
     await this.reserveCandidateNumber(student.id);
-    return this.getStudentById(student.id);
+    const refreshed = await this.getStudentById(student.id);
+    const releaseConfig = await this.getReleaseConfig();
+    const schedule = getExamScheduleForStudent(refreshed, releaseConfig);
+    const paperVariant = getPaperVariant(refreshed);
+
+    return {
+      ...refreshed,
+      paperVariant,
+      testCenterName: schedule.testCenterName,
+      testDate: schedule.testDate,
+      reportingTime: schedule.reportingTime,
+      examStartTime: schedule.testTimeLabel,
+      examDurationMinutes: schedule.durationMinutes,
+    };
   }
 
   async verifyCandidateIdentity(studentIdentifier: string, cnicOrBForm: string): Promise<boolean> {
@@ -806,17 +915,7 @@ export class StudentsService {
    * Retrieves official Roll Number release schedule config.
    */
   async getReleaseConfig() {
-    const setting = await prisma.systemSetting.findUnique({
-      where: { key: 'rollNumberReleaseConfig' },
-    });
-
-    if (setting?.value) {
-      try {
-        return JSON.parse(setting.value);
-      } catch (e) {}
-    }
-
-    return {
+    const defaultReleaseConfig = {
       isScheduled: false,
       releaseDateTime: '2026-10-15T09:00:00',
       announcementTitle: 'Roll Number Slips Official Release Schedule',
@@ -824,6 +923,33 @@ export class StudentsService {
         'Official Roll Number Slips, Assigned Test Centers, and Examination Hall seatings are live.',
       emergencyNotice:
         'Your registration and fee verification are permanently confirmed in the examination registry.',
+      examCenterName: 'Dubai International School and College Boys Campus Mansehra',
+      examDate: '2026-11-15',
+      femaleReportingTime: '08:00',
+      femaleTestStartTime: '09:00',
+      femaleTestEndTime: '10:00',
+      maleReportingTime: '11:00',
+      maleTestStartTime: '12:00',
+      maleTestEndTime: '13:00',
+      updatedAt: '2026-08-24T00:00:00Z',
+    };
+
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: 'rollNumberReleaseConfig' },
+    });
+
+    if (setting?.value) {
+      try {
+        const parsed = JSON.parse(setting.value);
+        return {
+          ...defaultReleaseConfig,
+          ...parsed,
+        };
+      } catch (e) {}
+    }
+
+    return {
+      ...defaultReleaseConfig,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -832,12 +958,21 @@ export class StudentsService {
    * Updates and persists official Roll Number release schedule config.
    */
   async saveReleaseConfig(config: any) {
+    const existing = await this.getReleaseConfig();
     const payload = {
-      isScheduled: Boolean(config.isScheduled),
-      releaseDateTime: config.releaseDateTime || '2026-10-15T09:00:00',
-      announcementTitle: config.announcementTitle || 'Roll Number Slips Official Release Schedule',
-      announcementMessage: config.announcementMessage || '',
-      emergencyNotice: config.emergencyNotice || '',
+      isScheduled: typeof config?.isScheduled === 'boolean' ? config.isScheduled : existing.isScheduled,
+      releaseDateTime: config?.releaseDateTime || existing.releaseDateTime,
+      announcementTitle: config?.announcementTitle !== undefined ? config.announcementTitle : existing.announcementTitle,
+      announcementMessage: config?.announcementMessage !== undefined ? config.announcementMessage : existing.announcementMessage,
+      emergencyNotice: config?.emergencyNotice !== undefined ? config.emergencyNotice : existing.emergencyNotice,
+      examCenterName: config?.examCenterName || existing.examCenterName,
+      examDate: config?.examDate || existing.examDate,
+      femaleReportingTime: config?.femaleReportingTime || existing.femaleReportingTime,
+      femaleTestStartTime: config?.femaleTestStartTime || existing.femaleTestStartTime,
+      femaleTestEndTime: config?.femaleTestEndTime || existing.femaleTestEndTime,
+      maleReportingTime: config?.maleReportingTime || existing.maleReportingTime,
+      maleTestStartTime: config?.maleTestStartTime || existing.maleTestStartTime,
+      maleTestEndTime: config?.maleTestEndTime || existing.maleTestEndTime,
       updatedAt: new Date().toISOString(),
     };
 
@@ -946,6 +1081,7 @@ export class StudentsService {
     }
 
     const rollNo = student.rollNumber;
+    const schedule = getExamScheduleForStudent(student, releaseConfig);
 
     return {
       success: true,
@@ -959,16 +1095,16 @@ export class StudentsService {
         candidatePhoto:
           (student.photoUrl && !student.photoUrl.includes('unsplash') ? student.photoUrl : null) ||
           `/api/students/${student.id}/photo-thumbnail?cnic=${encodeURIComponent(student.cnicOrBForm)}`,
-        testCenter: student.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra',
-        centerAddress: 'Main College Road, Mansehra / Abbottabad Regional Center, KP',
-        examDate: student.officeUse?.testDate || 'Sunday, 15 November 2026',
-        reportingTime: student.officeUse?.testReportingTime || '09:00 AM',
-        examStartTime: '10:00 AM - 12:00 PM (120 Mins)',
+        testCenter: schedule.testCenterName,
+        centerAddress: '',
+        examDate: schedule.testDate,
+        reportingTime: schedule.reportingTime,
+        examStartTime: schedule.testTimeLabel,
         roomNo: student.assignedRoom || 'HALL-01',
         seatIndex: student.seatNo || `SEAT-${rollNo.split('-').pop() || '0101'}`,
         instructions: [
           'Bring this original printed Roll Number Slip along with your original CNIC or B-Form to the examination center.',
-          'Candidates must report to their assigned examination hall 45 minutes prior to the scheduled exam commencement time.',
+          'Candidate must report at the Reporting Time printed above. Late entry may not be permitted.',
           'Electronic devices, mobile phones, smartwatches, and programmable calculators are strictly prohibited inside the hall.',
           'Standard blue/black ballpoints and a transparent clipboard are permitted for optical answer sheet marking.',
           'Biometric verification will take place at the entrance gate before seating allocation.',
@@ -1749,6 +1885,7 @@ export class StudentsService {
         applicationNo: student.applicationNo,
         rollNumber: candNum.value,
         rollType: candNum.type,
+        paperVariant: student.paperVariant,
         sheetVersion: 1,
       };
       qrDataUrl = await QRCode.toDataURL(JSON.stringify(omrPayloadObj), {
@@ -1793,6 +1930,7 @@ export class StudentsService {
           applicationNo: student.applicationNo,
           rollNumber: candNum.value,
           rollType: candNum.type,
+          paperVariant: student.paperVariant,
           sheetVersion: 1,
         };
         qrDataUrl = await QRCode.toDataURL(JSON.stringify(omrPayloadObj), {

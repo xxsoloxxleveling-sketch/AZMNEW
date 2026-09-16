@@ -81,6 +81,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
       rollNumber: displayRoll,
       rollType: isProvisional ? 'PROVISIONAL' : 'OFFICIAL',
       sheetVersion: 1,
+      paperVariant: (student as any)?.paperVariant || 'A',
     });
 
     QRCode.toDataURL(omrPayload, {
@@ -218,7 +219,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
                 SESSION 2026-V STANDARDIZED SCHOLARSHIP MERIT TEST
               </h1>
               <div className="inline-block bg-slate-900 text-white text-[11px] font-black px-4 py-0.5 mt-1 tracking-wider uppercase">
-                OFFICIAL MCQS OMR RESPONSE SHEET (100 QUESTIONS)
+                OFFICIAL MCQS OMR RESPONSE SHEET (100 QUESTIONS) &nbsp;|&nbsp; PAPER VERSION: {(student as any)?.paperVariant || 'A'}
               </div>
             </div>
 
@@ -300,7 +301,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
             <div className="border border-slate-300 bg-slate-100/80 p-2 mb-3 text-[9px] text-slate-700 leading-tight">
               <div className="flex items-center justify-between font-bold text-slate-900 uppercase mb-1">
                 <span>Instructions for Candidate:</span>
-                <span className="text-[8px] text-slate-500 lowercase">use blue/black ballpoint only</span>
+                <span className="text-[8px] text-slate-600 font-bold uppercase">Timing: {(student as any)?.examDurationMinutes || 60} Mins | Total MCQs: 100</span>
               </div>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div className="flex-1 space-y-0.5">

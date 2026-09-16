@@ -64,6 +64,11 @@ export interface MockStudent {
   assignedHall?: string;
   assignedRoom?: string;
   seatNo?: string;
+  paperVariant?: 'A' | 'B' | 'C' | 'D';
+  testDate?: string;
+  reportingTime?: string;
+  examStartTime?: string;
+  examDurationMinutes?: number;
   academicRecords?: {
     examLevel: string;
     boardOrUni?: string;
@@ -93,6 +98,8 @@ export interface MockStudent {
     documentVerifiedBy?: string;
     isEligible?: boolean;
     testCentre?: string;
+    testDate?: string;
+    testReportingTime?: string;
     finalStatus?: string;
     officeRemarks?: string;
   };
@@ -341,6 +348,14 @@ export interface RollNumberReleaseConfig {
   announcementTitle: string;
   announcementMessage: string;
   emergencyNotice?: string;
+  examCenterName: string;
+  examDate: string;
+  femaleReportingTime: string;
+  femaleTestStartTime: string;
+  femaleTestEndTime: string;
+  maleReportingTime: string;
+  maleTestStartTime: string;
+  maleTestEndTime: string;
   updatedAt: string;
 }
 
@@ -352,6 +367,14 @@ const DEFAULT_RELEASE_CONFIG: RollNumberReleaseConfig = {
     'Official Roll Number Slips, Assigned Test Centers, and Examination Hall seatings are live.',
   emergencyNotice:
     'Your registration and fee verification are permanently confirmed in the examination registry.',
+  examCenterName: 'Dubai International School and College Boys Campus Mansehra',
+  examDate: '2026-11-15',
+  femaleReportingTime: '08:00',
+  femaleTestStartTime: '09:00',
+  femaleTestEndTime: '10:00',
+  maleReportingTime: '11:00',
+  maleTestStartTime: '12:00',
+  maleTestEndTime: '13:00',
   updatedAt: '2026-08-24T00:00:00Z',
 };
 
@@ -362,8 +385,8 @@ export async function fetchRollNumberReleaseConfig(): Promise<RollNumberReleaseC
     const res: any = await apiFetch<any>('/api/students/release-config');
     const data = res?.data || res;
     if (data && typeof data.isScheduled === 'boolean') {
-      inMemoryReleaseConfig = data;
-      return data;
+      inMemoryReleaseConfig = { ...DEFAULT_RELEASE_CONFIG, ...data };
+      return inMemoryReleaseConfig;
     }
   } catch (err) {
     console.warn('Failed to fetch roll number release config from live server:', err);

@@ -416,7 +416,9 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                   <div className="col-span-2 pt-2 border-t border-slate-100">
                     <span className="text-slate-500 text-[10px] uppercase font-bold block">Assigned Examination Centre:</span>
                     <span className="text-xs font-bold text-slate-900 block">{selectedSlip.testCenter}</span>
-                    <span className="text-[11px] text-slate-600 block">{selectedSlip.centerAddress}</span>
+                    {selectedSlip.centerAddress && (
+                      <span className="text-[11px] text-slate-600 block">{selectedSlip.centerAddress}</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -466,14 +468,14 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Reporting Time:</span>
                 <span className="text-xs font-extrabold text-rose-700 font-mono flex items-center justify-center gap-1 mt-0.5">
                   <Clock className="w-3.5 h-3.5 text-rose-600" />
-                  {selectedSlip.reportingTime || '09:00 AM'} (Strict)
+                  {selectedSlip.reportingTime} (Strict)
                 </span>
               </div>
 
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Test Duration:</span>
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Test Time:</span>
                 <span className="text-xs font-extrabold text-[#185b9d] font-mono block mt-0.5">
-                  {selectedSlip.examStartTime || '10:00 AM - 12:00 PM (120 Mins)'}
+                  {selectedSlip.examStartTime}
                 </span>
               </div>
             </div>
@@ -487,7 +489,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700 leading-snug">
                 {(selectedSlip.specialInstructions || [
                   'Bring your original CNIC / B-Form along with this printed entry slip to the examination centre.',
-                  'Entry gate closes strictly 15 minutes before the reporting time (08:45 AM).',
+                  'Candidate must report at the Reporting Time printed above. Late entry may not be permitted.',
                   'Biometric verification will be carried out at the entry desk using your QR code.',
                   'Mobile phones, smartwatches, and programmable calculators are strictly prohibited inside the hall.'
                 ]).map((inst, iIdx) => (

@@ -235,5 +235,6 @@ export interface GalleryItem {
   description: string;
 }
 
-export type { MockStudent } from '../lib/mockApi';
+export type PaperVariant = 'A' | 'B' | 'C' | 'D';
+export type { MockStudent, RollNumberReleaseConfig } from '../lib/mockApi';
 

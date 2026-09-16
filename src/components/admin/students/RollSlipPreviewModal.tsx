@@ -110,10 +110,10 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
     }
   };
 
-  const examDate = ((student.officeUse as any)?.testDate ? new Date((student.officeUse as any).testDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : (student as any).testDate || 'To be announced');
-  const reportingTime = (student.officeUse as any)?.testReportingTime || (student as any).reportingTime || 'To be announced';
+  const examDate = (student as any)?.testDate || ((student?.officeUse as any)?.testDate ? new Date((student.officeUse as any).testDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'To be announced');
+  const reportingTime = (student as any)?.reportingTime || (student?.officeUse as any)?.testReportingTime || 'To be announced';
   const startTime = (student as any).examStartTime || 'To be announced';
-  const testCenter = student.officeUse?.testCentre || student.testCenterName || 'To be assigned';
+  const testCenter = (student as any)?.testCenterName || student?.officeUse?.testCentre || 'To be assigned';
   const hall = student.assignedHall || 'To be assigned';
   const room = student.assignedRoom || 'To be assigned';
   const seat = student.seatNo || 'To be assigned';
@@ -299,7 +299,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
               </div>
               <ul className="list-disc pl-4 space-y-0.5">
                 <li>Candidates must bring this printed Slip along with Original CNIC / B-Form to the examination center.</li>
-                <li>Report to the assigned hall at least 45 minutes prior to the examination start time.</li>
+                <li>Report at the exact reporting time printed on this Roll Number Slip. Late entry may not be permitted.</li>
                 <li>Mobile phones, smart watches, calculators, and study materials are strictly prohibited inside the hall.</li>
                 <li>Use only Blue or Black ballpoint pens to fill the MCQs OMR bubble sheet.</li>
               </ul>

@@ -256,6 +256,142 @@ export const RollNumberScheduleTab: React.FC = () => {
               </div>
             </div>
 
+            {/* Examination Schedule Printed on Candidate Slips */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-[#185b9d]" />
+                <span>Examination Schedule Printed on Candidate Slips</span>
+              </h3>
+
+              {/* Test Centre & Exam Date Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Test Centre
+                  </label>
+                  <input
+                    type="text"
+                    value={config.examCenterName || ''}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, examCenterName: e.target.value }))}
+                    placeholder="Dubai International School and College Boys Campus Mansehra"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-[#185b9d]" />
+                    <span>Examination Date</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={config.examDate || '2026-11-15'}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, examDate: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Gender Schedules: Female & Male */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                {/* Female Candidates */}
+                <div className="p-4 rounded-2xl bg-pink-50/50 border border-pink-200/70 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-pink-500" />
+                    <span className="font-bold text-xs text-pink-950 uppercase tracking-wider">
+                      Female Candidates
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-600">
+                      Reporting Time
+                    </label>
+                    <input
+                      type="time"
+                      value={config.femaleReportingTime || '08:00'}
+                      onChange={(e) => setConfig((prev) => ({ ...prev, femaleReportingTime: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-600">
+                        Test Start Time
+                      </label>
+                      <input
+                        type="time"
+                        value={config.femaleTestStartTime || '09:00'}
+                        onChange={(e) => setConfig((prev) => ({ ...prev, femaleTestStartTime: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-600">
+                        Test End Time
+                      </label>
+                      <input
+                        type="time"
+                        value={config.femaleTestEndTime || '10:00'}
+                        onChange={(e) => setConfig((prev) => ({ ...prev, femaleTestEndTime: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Male Candidates */}
+                <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/70 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className="font-bold text-xs text-blue-950 uppercase tracking-wider">
+                      Male Candidates
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-600">
+                      Reporting Time
+                    </label>
+                    <input
+                      type="time"
+                      value={config.maleReportingTime || '11:00'}
+                      onChange={(e) => setConfig((prev) => ({ ...prev, maleReportingTime: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-600">
+                        Test Start Time
+                      </label>
+                      <input
+                        type="time"
+                        value={config.maleTestStartTime || '12:00'}
+                        onChange={(e) => setConfig((prev) => ({ ...prev, maleTestStartTime: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-600">
+                        Test End Time
+                      </label>
+                      <input
+                        type="time"
+                        value={config.maleTestEndTime || '13:00'}
+                        onChange={(e) => setConfig((prev) => ({ ...prev, maleTestEndTime: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               {isSaved ? (
                 <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
