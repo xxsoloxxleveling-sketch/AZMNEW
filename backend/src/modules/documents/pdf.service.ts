@@ -594,21 +594,23 @@ export class PdfService {
     const fatherName = (student.fatherName || '').toUpperCase();
     const cnic = student.cnicOrBForm || 'N/A';
     const classLevel = student.currentClass || 'SSC-II (Class 10th)';
-    const testCenter = student.officeUse?.testCentre || student.testCenterName || 'To be assigned';
+    const testCenter = student.testCenterName || student.officeUse?.testCentre || 'To be assigned';
     const centerAddress = student.testCenterAddress || '';
     const roomNo = student.assignedRoom || 'To be assigned';
     const seatNo = student.seatNo || 'To be assigned';
 
-    const examDate = student.officeUse?.testDate
+    const examDate = student.testDate
+      ? student.testDate
+      : student.officeUse?.testDate
       ? new Date(student.officeUse.testDate).toLocaleDateString('en-US', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
           day: 'numeric',
         })
-      : student.testDate || 'To be announced';
-    const reportingTime = student.officeUse?.testReportingTime || student.reportingTime || 'To be announced';
-    const examTiming = student.examStartTime || 'To be announced (100 MCQs)';
+      : 'To be announced';
+    const reportingTime = student.reportingTime || student.officeUse?.testReportingTime || 'To be announced';
+    const examTiming = student.examStartTime || 'To be announced';
 
     const defaultPhoto = `data:image/svg+xml;utf8,${encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
@@ -805,7 +807,7 @@ export class PdfService {
         <div class="sched-value highlight">${reportingTime}</div>
       </div>
       <div class="sched-item">
-        <div class="sched-label">Test Duration & Format</div>
+        <div class="sched-label">Test Time</div>
         <div class="sched-value">${examTiming}</div>
       </div>
     </div>
@@ -814,7 +816,7 @@ export class PdfService {
     <div class="section-title">Important Candidate Instructions & Examination SOPs</div>
     <ol class="rules-list">
       <li><strong>Original Credentials Required:</strong> Candidate MUST bring this printed Roll Number Slip along with their original CNIC or NADRA B-Form to the examination center. No candidate will be admitted without original credentials.</li>
-      <li><strong>Strict Reporting Deadlines:</strong> Candidates must report to their allocated hall at least 45 minutes before the commencement of the exam (${reportingTime}). Entrance gates will strictly close 15 minutes before the test.</li>
+      <li><strong>Strict Reporting Deadlines:</strong> Candidate must report at the Reporting Time printed above. Late entry may not be permitted.</li>
       <li><strong>Prohibited Items:</strong> Mobile phones, smartwatches, digital calculators, bluetooth devices, books, and bags are strictly forbidden inside the hall. Violation will result in immediate disqualification.</li>
       <li><strong>Stationery & Optical Sheets:</strong> Bring a transparent clipboard, 2B lead pencils, blue/black ballpoint pens, and an eraser for OMR bubble sheet marking.</li>
       <li><strong>Biometric Check:</strong> Real-time QR biometric verification and photo authentication will be conducted at the venue gate prior to desk entry.</li>
@@ -1667,7 +1669,7 @@ export class PdfService {
     <div class="omr-header">
       <div class="omr-title">AZM.AIO SCHOLARSHIP EXAMINATION</div>
       <div class="omr-subtitle">Session V (2026) Merit &amp; Scholarship Screening Test</div>
-      <div class="omr-doc-name">OFFICIAL OMR ANSWER SHEET &mdash; 100 MCQS</div>
+      <div class="omr-doc-name">OFFICIAL OMR ANSWER SHEET &mdash; 100 MCQS &nbsp;|&nbsp; PAPER VERSION: ${student.paperVariant || 'A'}</div>
     </div>
 
     ${isProvisional ? `
@@ -1730,7 +1732,7 @@ export class PdfService {
           <span class="sample-bubble">&#9680;</span>
         </div>
       </div>
-      <div><strong>Timing:</strong> 120 Mins | <strong>Total MCQs:</strong> 100</div>
+      <div><strong>Timing:</strong> ${student.examDurationMinutes || 60} Mins | <strong>Total MCQs:</strong> 100</div>
     </div>
 
     <!-- 100 MCQs Grid (4 Columns) -->
