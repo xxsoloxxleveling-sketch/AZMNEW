@@ -80,8 +80,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
       applicationNo: student.applicationNo,
       rollNumber: displayRoll,
       rollType: isProvisional ? 'PROVISIONAL' : 'OFFICIAL',
-      sheetVersion: 1,
-      paperVariant: (student as any)?.paperVariant || 'A',
+      sheetVersion: 2,
     });
 
     QRCode.toDataURL(omrPayload, {
@@ -219,7 +218,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
                 SESSION 2026-V STANDARDIZED SCHOLARSHIP MERIT TEST
               </h1>
               <div className="inline-block bg-slate-900 text-white text-[11px] font-black px-4 py-0.5 mt-1 tracking-wider uppercase">
-                OFFICIAL MCQS OMR RESPONSE SHEET (100 QUESTIONS) &nbsp;|&nbsp; PAPER VERSION: {(student as any)?.paperVariant || 'A'}
+                OFFICIAL MCQS OMR RESPONSE SHEET (100 QUESTIONS)
               </div>
             </div>
 
@@ -237,7 +236,10 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
             )}
 
             {/* Candidate Info Grid with Photo & QR */}
-            <div className="border border-slate-900 p-2.5 mb-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/50">
+            <div className="relative overflow-hidden border border-slate-900 p-2.5 mb-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/50">
+              <div className="absolute inset-0 flex items-center justify-center opacity-[0.045] pointer-events-none select-none font-black text-3xl text-slate-900 tracking-wider">
+                AZM.AIO SCHOLARSHIP EXAMINATION
+              </div>
               {/* Photo Box */}
               <div className="w-20 h-24 bg-white border border-slate-900 overflow-hidden flex items-center justify-center shrink-0">
                 {photoUrl ? (
@@ -297,11 +299,21 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
               </div>
             </div>
 
-            {/* Instructions Bar */}
+            {/* Instructions Bar with Manual Paper Version Block */}
             <div className="border border-slate-300 bg-slate-100/80 p-2 mb-3 text-[9px] text-slate-700 leading-tight">
-              <div className="flex items-center justify-between font-bold text-slate-900 uppercase mb-1">
-                <span>Instructions for Candidate:</span>
-                <span className="text-[8px] text-slate-600 font-bold uppercase">Timing: {(student as any)?.examDurationMinutes || 60} Mins | Total MCQs: 100</span>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 font-bold text-slate-900 uppercase mb-1.5">
+                <span>Instructions for Candidate: Blue/Black ballpoint only. Darken circle completely.</span>
+                <div className="flex items-center gap-2 border border-slate-900 bg-white px-2 py-0.5 rounded-xs shrink-0">
+                  <span className="text-[8px] font-black text-slate-900">PAPER VERSION &mdash; MARK ONE ONLY:</span>
+                  <div className="flex items-center gap-2">
+                    {['A', 'B', 'C', 'D'].map((v) => (
+                      <span key={v} className="inline-flex items-center gap-1 font-bold text-slate-900">
+                        <span className="text-[9px] font-black">{v}</span>
+                        <span className="w-3.5 h-3.5 rounded-full border border-slate-900 bg-white inline-block" />
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div className="flex-1 space-y-0.5">
@@ -344,14 +356,17 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
             </div>
 
             {/* Signatures & Security Verification Box */}
-            <div className="border border-slate-900 p-2.5 grid grid-cols-3 gap-4 text-center text-[9px]">
-              <div className="border-b border-slate-400 pb-1 mt-6">
+            <div className="relative overflow-hidden border border-slate-900 p-2.5 grid grid-cols-3 gap-4 text-center text-[9px]">
+              <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none select-none font-black text-2xl text-slate-900 tracking-widest">
+                AZM.AIO
+              </div>
+              <div className="border-b border-slate-400 pb-1 mt-6 relative z-1">
                 <span className="font-bold text-slate-700 uppercase">Candidate Signature & Thumb</span>
               </div>
-              <div className="border-b border-slate-400 pb-1 mt-6">
+              <div className="border-b border-slate-400 pb-1 mt-6 relative z-1">
                 <span className="font-bold text-slate-700 uppercase">Invigilator Signature & Stamp</span>
               </div>
-              <div className="border-b border-slate-400 pb-1 mt-6">
+              <div className="border-b border-slate-400 pb-1 mt-6 relative z-1">
                 <span className="font-bold text-slate-700 uppercase">Center Superintendent Stamp</span>
               </div>
             </div>
@@ -364,7 +379,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
                   <span key={idx} className="w-2.5 h-1 bg-black inline-block" />
                 ))}
               </div>
-              <span className="text-[8px] font-mono text-slate-400">SESSION-V-REG</span>
+              <span className="text-[8px] font-mono text-slate-400">TEMPLATE VER: 2.0</span>
             </div>
           </div>
         </div>

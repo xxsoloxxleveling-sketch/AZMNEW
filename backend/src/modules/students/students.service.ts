@@ -47,18 +47,30 @@ const isMissingStudentDocumentTable = (error: any) =>
 export const PAPER_VARIANTS = ['A', 'B', 'C', 'D'] as const;
 export type PaperVariant = (typeof PAPER_VARIANTS)[number];
 
-export function getPaperVariant(student: {
-  currentClass?: string | null;
-  id?: string | null;
-  applicationNo?: string | null;
-}): PaperVariant {
-  const normalizedClass = String(student?.currentClass || 'UNKNOWN')
-    .trim()
-    .toUpperCase();
-  const studentIdentifier = student?.id || student?.applicationNo || 'UNKNOWN';
-  const seed = `2026-V|${normalizedClass}|${studentIdentifier}`;
-  const digest = crypto.createHash('sha256').update(seed).digest();
-  return PAPER_VARIANTS[digest[0] % 4];
+export interface OmrQrPayload {
+  type: string;
+  session: string;
+  studentId: string;
+  applicationNo: string;
+  rollNumber: string;
+  rollType: string;
+  sheetVersion: number;
+}
+
+export function buildOmrQrPayload(
+  student: { id: string; applicationNo?: string | null },
+  rollNumber: string,
+  rollType: string = 'OFFICIAL'
+): OmrQrPayload {
+  return {
+    type: 'AZM_OMR',
+    session: '2026-V',
+    studentId: student.id,
+    applicationNo: student.applicationNo || '',
+    rollNumber,
+    rollType,
+    sheetVersion: 2,
+  };
 }
 
 export function formatClockTime12h(timeStr: string): string {
@@ -183,11 +195,9 @@ export class StudentsService {
     const refreshed = await this.getStudentById(student.id);
     const releaseConfig = await this.getReleaseConfig();
     const schedule = getExamScheduleForStudent(refreshed, releaseConfig);
-    const paperVariant = getPaperVariant(refreshed);
 
     return {
       ...refreshed,
-      paperVariant,
       testCenterName: schedule.testCenterName,
       testDate: schedule.testDate,
       reportingTime: schedule.reportingTime,
@@ -1878,16 +1888,7 @@ export class StudentsService {
     let qrDataUrl = '';
     try {
       const QRCode = await import('qrcode');
-      const omrPayloadObj = {
-        type: 'AZM_OMR',
-        session: '2026-V',
-        studentId: student.id,
-        applicationNo: student.applicationNo,
-        rollNumber: candNum.value,
-        rollType: candNum.type,
-        paperVariant: student.paperVariant,
-        sheetVersion: 1,
-      };
+      const omrPayloadObj = buildOmrQrPayload(student, candNum.value, candNum.type);
       qrDataUrl = await QRCode.toDataURL(JSON.stringify(omrPayloadObj), {
         width: 300,
         margin: 1,
@@ -1923,16 +1924,7 @@ export class StudentsService {
       const candNum = getCandidateNumber(student);
       let qrDataUrl = '';
       try {
-        const omrPayloadObj = {
-          type: 'AZM_OMR',
-          session: '2026-V',
-          studentId: student.id,
-          applicationNo: student.applicationNo,
-          rollNumber: candNum.value,
-          rollType: candNum.type,
-          paperVariant: student.paperVariant,
-          sheetVersion: 1,
-        };
+        const omrPayloadObj = buildOmrQrPayload(student, candNum.value, candNum.type);
         qrDataUrl = await QRCode.toDataURL(JSON.stringify(omrPayloadObj), {
           width: 300,
           margin: 1,
