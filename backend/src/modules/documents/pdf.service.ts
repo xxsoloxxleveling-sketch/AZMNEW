@@ -1426,6 +1426,8 @@ export class PdfService {
 
     /* Candidate Particulars & Verification Section */
     .info-container {
+      position: relative;
+      overflow: hidden;
       display: flex;
       border: 1.5px solid #000000;
       border-radius: 4px;
@@ -1434,6 +1436,26 @@ export class PdfService {
       gap: 3mm;
       align-items: stretch;
       background: #fafafa;
+    }
+    .omr-watermark-info {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-4deg);
+      font-size: 26pt;
+      font-weight: 900;
+      letter-spacing: 3px;
+      color: #000000;
+      opacity: 0.045;
+      pointer-events: none;
+      user-select: none;
+      white-space: nowrap;
+      z-index: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    .photo-box, .details-table, .qr-box {
+      position: relative;
+      z-index: 1;
     }
     .photo-box {
       width: 23mm;
@@ -1512,38 +1534,85 @@ export class PdfService {
     .guide-strip {
       border: 1px solid #000000;
       border-radius: 3px;
-      padding: 1.8px 5px;
+      padding: 1.2px 4px;
       margin-bottom: 2mm;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 6.8pt;
+      font-size: 6.5pt;
       background: #f8fafc;
+      box-sizing: border-box;
     }
     .guide-legend {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
     }
     .guide-item {
       display: flex;
       align-items: center;
-      gap: 2.5px;
+      gap: 2px;
     }
     .sample-bubble {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 11px;
-      height: 11px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       border: 1px solid #000000;
-      font-size: 5.5pt;
+      font-size: 5pt;
       font-weight: bold;
     }
     .sample-filled {
       background: #000000;
       color: #ffffff;
+    }
+
+    /* Manual Paper Version Optical Block */
+    .omr-version-box {
+      display: flex;
+      align-items: center;
+      gap: 2.2mm;
+      padding: 0.3mm 2mm;
+      background: #ffffff;
+      border: 1.1px solid #000000;
+      border-radius: 2px;
+    }
+    .version-title {
+      font-size: 5.8pt;
+      font-weight: 900;
+      color: #000000;
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .version-bubbles-group {
+      display: flex;
+      align-items: center;
+      gap: 2.4mm;
+    }
+    .version-opt {
+      display: inline-flex;
+      align-items: center;
+      gap: 1.2px;
+    }
+    .v-label {
+      font-size: 6.5pt;
+      font-weight: 900;
+      color: #000000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      line-height: 1;
+    }
+    .v-bubble {
+      display: inline-block;
+      width: 4.1mm;
+      height: 4.1mm;
+      border: 1.1px solid #000000;
+      border-radius: 50%;
+      background: #ffffff;
+      box-sizing: border-box;
+      vertical-align: middle;
     }
 
     /* 100 MCQs Grid (4 columns x 25 rows) */
@@ -1613,15 +1682,41 @@ export class PdfService {
     }
 
     /* Signatures Section */
-    .omr-footer-table {
+    .omr-footer-container {
+      position: relative;
+      overflow: hidden;
       width: 100%;
-      border-collapse: collapse;
       border: 1px solid #000000;
       border-radius: 3px;
       background: #fafafa;
       margin-bottom: 2mm;
     }
+    .omr-footer-table {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      border-collapse: collapse;
+      background: transparent;
+    }
+    .omr-watermark-footer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 16pt;
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #000000;
+      opacity: 0.04;
+      pointer-events: none;
+      user-select: none;
+      white-space: nowrap;
+      z-index: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
     .omr-footer-table td {
+      position: relative;
+      z-index: 1;
       width: 50%;
       padding: 2.5mm 4mm;
       vertical-align: top;
@@ -1669,7 +1764,7 @@ export class PdfService {
     <div class="omr-header">
       <div class="omr-title">AZM.AIO SCHOLARSHIP EXAMINATION</div>
       <div class="omr-subtitle">Session V (2026) Merit &amp; Scholarship Screening Test</div>
-      <div class="omr-doc-name">OFFICIAL OMR ANSWER SHEET &mdash; 100 MCQS &nbsp;|&nbsp; PAPER VERSION: ${student.paperVariant || 'A'}</div>
+      <div class="omr-doc-name">OFFICIAL OMR ANSWER SHEET &mdash; 100 MCQS</div>
     </div>
 
     ${isProvisional ? `
@@ -1679,6 +1774,7 @@ export class PdfService {
 
     <!-- Candidate Info & Verification -->
     <div class="info-container">
+      <div class="omr-watermark-info">AZM.AIO SCHOLARSHIP EXAMINATION</div>
       <div class="photo-box">
         <img src="${photoSrc}" alt="Candidate Photo" />
       </div>
@@ -1716,11 +1812,11 @@ export class PdfService {
       </div>
     </div>
 
-    <!-- Instructions Strip -->
+    <!-- Instructions Strip with Manual Paper Version Block -->
     <div class="guide-strip">
       <div class="guide-legend">
         <strong>INSTRUCTIONS:</strong>
-        <span>Use Blue/Black Ballpoint only. Fill circle completely.</span>
+        <span>Blue/Black ballpoint only. Darken circle completely.</span>
         <div class="guide-item">
           <span>Correct:</span>
           <span class="sample-bubble sample-filled">A</span>
@@ -1732,7 +1828,15 @@ export class PdfService {
           <span class="sample-bubble">&#9680;</span>
         </div>
       </div>
-      <div><strong>Timing:</strong> ${student.examDurationMinutes || 60} Mins | <strong>Total MCQs:</strong> 100</div>
+      <div class="omr-version-box">
+        <span class="version-title">PAPER VERSION &mdash; MARK ONE ONLY:</span>
+        <div class="version-bubbles-group">
+          <div class="version-opt"><span class="v-label">A</span><i class="v-bubble"></i></div>
+          <div class="version-opt"><span class="v-label">B</span><i class="v-bubble"></i></div>
+          <div class="version-opt"><span class="v-label">C</span><i class="v-bubble"></i></div>
+          <div class="version-opt"><span class="v-label">D</span><i class="v-bubble"></i></div>
+        </div>
+      </div>
     </div>
 
     <!-- 100 MCQs Grid (4 Columns) -->
@@ -1741,23 +1845,26 @@ export class PdfService {
     </div>
 
     <!-- Signatures -->
-    <table class="omr-footer-table">
-      <tr>
-        <td>
-          <div class="sig-heading">Candidate Declaration &amp; Signature</div>
-          <span class="sig-line">Candidate Signature (Signed in Hall)</span>
-        </td>
-        <td style="text-align: right;">
-          <div class="sig-heading" style="text-align: right;">Hall Chief Invigilator Verification</div>
-          <span class="sig-line" style="text-align: center;">Invigilator Signature &amp; Center Stamp</span>
-        </td>
-      </tr>
-    </table>
+    <div class="omr-footer-container">
+      <div class="omr-watermark-footer">AZM.AIO</div>
+      <table class="omr-footer-table">
+        <tr>
+          <td>
+            <div class="sig-heading">Candidate Declaration &amp; Signature</div>
+            <span class="sig-line">Candidate Signature (Signed in Hall)</span>
+          </td>
+          <td style="text-align: right;">
+            <div class="sig-heading" style="text-align: right;">Hall Chief Invigilator Verification</div>
+            <span class="sig-line" style="text-align: center;">Invigilator Signature &amp; Center Stamp</span>
+          </td>
+        </tr>
+      </table>
+    </div>
 
     <div class="omr-bottom-bar">
       <span>SHEET-ID: AZM-OMR-2026V-${rollNo}</span>
       <span>SECURITY VERIFICATION: CERTIFIED VALID FOR SESSION V 2026</span>
-      <span>TEMPLATE VER: 1.0</span>
+      <span>TEMPLATE VER: 2.0</span>
     </div>
   </div>
 
