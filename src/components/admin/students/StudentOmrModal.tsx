@@ -123,12 +123,12 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
       rows.push(
         <div
           key={i}
-          className={`flex items-center justify-between py-[2px] px-1 text-[10px] font-mono border-b border-slate-100 ${
+          className={`flex items-center justify-center gap-[2mm] py-[2px] px-1 text-[10px] font-mono border-b border-slate-100 ${
             i % 5 === 0 ? 'border-b-2 border-slate-300' : ''
           }`}
         >
-          <span className="font-bold text-slate-700 w-5 text-right mr-1.5">{qNum}</span>
-          <div className="flex items-center gap-1.5">
+          <span className="font-bold text-slate-700 w-[5.5mm] text-right shrink-0">{qNum}</span>
+          <div className="flex items-center gap-1.5 shrink-0">
             {['A', 'B', 'C', 'D'].map((opt) => (
               <span
                 key={opt}
