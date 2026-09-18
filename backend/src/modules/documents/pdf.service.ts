@@ -1644,7 +1644,8 @@ export class PdfService {
     .omr-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
+      gap: 2mm;
       padding: 1.5px 2.5px;
       border-bottom: 0.8px solid #e2e8f0;
       font-size: 6.8pt;
@@ -1656,15 +1657,18 @@ export class PdfService {
       background: #f1f5f9;
     }
     .q-num {
-      width: 16px;
+      width: 5.5mm;
+      text-align: right;
       font-weight: 800;
       color: #0f172a;
       font-family: 'Courier New', monospace;
       font-size: 7pt;
+      flex-shrink: 0;
     }
     .bubbles-wrap {
       display: flex;
       gap: 1.8px;
+      flex-shrink: 0;
     }
     .bubble {
       width: 4.1mm;
