@@ -1,0 +1,642 @@
+SCIENCE — Questions 1–20
+
+1. A student observes a cell under a microscope and notices a rigid layer outside the cell membrane. This observation most strongly suggests that the cell has a:
+A) Nucleus
+B) Cytoplasm
+C) Vacuole
+D) Cell wall
+
+2. Several similar muscle cells work together to perform the same function. Together, these cells form a:
+A) Organ
+B) Tissue
+C) Organ system
+D) Organism
+
+3. A farmer cuts a potato into pieces. Only pieces containing an “eye” grow into new plants. The potato is reproducing mainly through a:
+A) Runner
+B) Bulb
+C) Tuber
+D) Seed
+
+4. A student's lunch contains bread, egg, vegetables, fruit and water in suitable quantities. This meal is best described as a:
+A) Protein diet
+B) High-energy diet
+C) Balanced diet
+D) Liquid diet
+
+5. After food has been completely digested, most of its useful nutrients enter the blood mainly through the:
+A) Stomach
+B) Mouth
+C) Large intestine
+D) Small intestine
+
+6. A mixture contains salt, sand and water. Which sequence would best separate the sand first and then obtain the salt?
+A) Evaporation → filtration
+B) Distillation → magnetism
+C) Filtration → evaporation
+D) Chromatography → condensation
+
+7. Water droplets appear on the outside of a very cold bottle. The process responsible is:
+A) Sublimation
+B) Evaporation
+C) Freezing
+D) Condensation
+
+8. Perfume spreads through a warm room faster than through a cold room mainly because, when heated, particles:
+A) Move faster
+B) Become heavier
+C) Stop colliding
+D) Increase in size
+
+9. A stretched rubber band that has not yet been released possesses mainly:
+A) Kinetic energy
+B) Potential energy
+C) Sound energy
+D) Electrical energy
+
+10. A cell and bulb are connected correctly, but the switch leaves a gap in the circuit. The bulb will not glow because the circuit is:
+A) Conducting too much current
+B) Open
+C) Magnetic
+D) Insulated by the cell
+
+11. A compass is useful for finding direction because its needle is essentially:
+A) A small magnet that aligns north–south
+B) An electrical conductor
+C) A thermometer
+D) A source of gravity
+
+12. A plant's roots absorb enough water, but water cannot reach its leaves because one transport tissue is blocked. Which tissue is most likely blocked?
+A) Phloem
+B) Stomata
+C) Xylem
+D) Chloroplast
+
+13. During breathing, oxygen finally enters the blood from tiny structures inside the lungs called:
+A) Bronchi
+B) Tracheae
+C) Capillaries only
+D) Alveoli
+
+14. A vaccine protects a person mainly because it helps the body:
+A) Digest food faster
+B) Produce more red blood cells
+C) Destroy all microorganisms immediately
+D) Develop immunity
+
+15. Which change is fundamentally different from melting ice?
+A) Evaporating water
+B) Rusting an iron nail
+C) Freezing juice
+D) Dissolving sugar in water
+
+16. An atom contains 11 protons and is electrically neutral. How many electrons should it have?
+A) 22
+B) 11
+C) 10
+D) 12
+
+17. Sodium chloride is formed mainly when electrons are transferred between atoms. The resulting bond is:
+A) Ionic
+B) Covalent
+C) Magnetic
+D) Gravitational
+
+18. Two teams pull a rope in opposite directions with equal force, and the rope does not move. The forces are:
+A) Frictionless
+B) Magnetic
+C) Balanced
+D) Unbalanced
+
+19. Two whistles make sounds of different pitch. The whistle producing more vibrations per second will normally have:
+A) Lower pitch
+B) Higher pitch
+C) Lower temperature
+D) Greater mass
+
+20. Heat from the Sun reaches Earth even though most of the space between them is nearly a vacuum. This heat is transferred mainly by:
+A) Convection
+B) Conduction
+C) Radiation
+D) Evaporation
+
+MATHEMATICS — Questions 21–40
+
+21. What is the HCF of 42 and 56?
+A) 6
+B) 7
+C) 14
+D) 28
+
+22. What is the LCM of 6 and 8?
+A) 12
+B) 24
+C) 36
+D) 48
+
+23. Which is the greatest of these negative integers?
+A) −12
+B) −5
+C) −9
+D) −7
+
+24. \( \frac34-\frac18 =\)
+A) \(\frac28\)
+B) \(\frac38\)
+C) \(\frac48\)
+D) \(\frac58\)
+
+25. Six notebooks cost Rs. 270. At the same rate, what will 10 notebooks cost?
+A) Rs. 360
+B) Rs. 400
+C) Rs. 450
+D) Rs. 540
+
+26. 35% of 200 is:
+A) 35
+B) 55
+C) 65
+D) 70
+
+27. If \(3x+5=26\), then \(x=\):
+A) 5
+B) 6
+C) 8
+D) 7
+
+28. Simplify \(4a+7a-2a\).
+A) 13a
+B) 9a
+C) 5a
+D) 9a²
+
+29. One of two complementary angles is \(38^\circ\). The other angle is:
+A) \(42^\circ\)
+B) \(48^\circ\)
+C) \(52^\circ\)
+D) \(142^\circ\)
+
+30. Two angles of a triangle are \(47^\circ\) and \(68^\circ\). The third angle is:
+A) \(65^\circ\)
+B) \(75^\circ\)
+C) \(85^\circ\)
+D) \(115^\circ\)
+
+31. A rectangle is 9 cm long and 6 cm wide. Its perimeter is:
+A) 15 cm
+B) 30 cm
+C) 54 cm
+D) 27 cm
+
+32. A triangle has base 12 cm and perpendicular height 5 cm. Its area is:
+A) 60 cm²
+B) 17 cm²
+C) 30 cm²
+D) 34 cm²
+
+33. The mean of 5, 7 and 12 is:
+A) 8
+B) 7
+C) 9
+D) 6
+
+34. What is the range of 3, 8, 11 and 15?
+A) 15
+B) 8
+C) 12
+D) 11
+
+35. A fair die is rolled once. What is the probability of getting a number greater than 4?
+A) \(\frac16\)
+B) \(\frac12\)
+C) \(\frac23\)
+D) \(\frac13\)
+
+36. Which fraction is equal to 0.125?
+A) \(\frac14\)
+B) \(\frac18\)
+C) \(\frac15\)
+D) \(\frac1{10}\)
+
+37. \(2.75+0.60=\)
+A) 3.35
+B) 3.25
+C) 2.81
+D) 3.15
+
+38. \(4.8\div0.6=\)
+A) 0.8
+B) 6
+C) 80
+D) 8
+
+39. A school gives a 15% scholarship discount on a fee of Rs. 240. What is the amount of the discount?
+A) Rs. 24
+B) Rs. 30
+C) Rs. 40
+D) Rs. 36
+
+40. A car travels 150 km in 3 hours at a constant average speed. Its average speed is:
+A) 50 km/h
+B) 45 km/h
+C) 60 km/h
+D) 75 km/h
+
+ENGLISH — Questions 41–60
+
+41. Choose the correct word:
+“Neither the principal nor the teachers ___ ready for the meeting.”
+A) are
+B) is
+C) was
+D) be
+
+42. Complete the sentence correctly:
+“By next Friday, Sara ___ her science project.”
+A) completed
+B) completes
+C) is completing
+D) will have completed
+
+43. Choose the correct passive form of:
+“The coach praised the team.”
+A) The coach was praised by the team.
+B) The team was praised by the coach.
+C) The team praised the coach.
+D) The team has praise by the coach.
+
+44. Which group of words is a dependent clause?
+A) The rain stopped.
+B) We returned home.
+C) The children were playing.
+D) Although the rain stopped
+
+45. If something happens “once in a blue moon,” it happens:
+A) every night
+B) unexpectedly
+C) very rarely
+D) very quickly
+
+46. A reader uses clues in a passage to reach a conclusion that is not directly stated. This conclusion is called an:
+A) advertisement
+B) inference
+C) heading
+D) quotation
+
+47. Which sentence contains personification?
+A) The road is very long.
+B) The leaves danced in the wind.
+C) The boy ran like a deer.
+D) The box is as heavy as iron.
+
+48. Which sentence is most suitable in a formal leave application?
+A) I respectfully request two days' leave due to illness.
+B) Hey Sir, I won't be coming.
+C) Give me two days off.
+D) I'm skipping school for a while.
+
+49. Which is the adjective form of “courage”?
+A) Courageously
+B) Encouragement
+C) Courage
+D) Courageous
+
+50. Complete correctly:
+“Hamza is interested ___ astronomy.”
+A) in
+B) on
+C) at
+D) from
+
+51. Choose the correct sentence.
+A) Each of the players has a locker.
+B) Each of the players have a locker.
+C) Each players has a locker.
+D) Each of player have lockers.
+
+52. Which sentence expresses prohibition?
+A) You may enter now.
+B) You can swim well.
+C) You should rest.
+D) You must not touch this wire.
+
+53. Choose the correct article:
+“He is ___ honest person.”
+A) an
+B) a
+C) the
+D) no article
+
+54. Choose the best reported form of:
+Ali said, “I am tired.”
+A) Ali says that I am tired.
+B) Ali said that I am tired.
+C) Ali said that he was tired.
+D) Ali said that he is tired yesterday.
+
+55. Complete correctly:
+“The news ___ surprising.”
+A) are
+B) is
+C) were
+D) have
+
+56. The suffix “-less” in “careless” means:
+A) full of
+B) again
+C) without
+D) before
+
+57. In the sentence “She completed the work carefully,” the word “carefully” is a/an:
+A) adjective
+B) noun
+C) adverb
+D) pronoun
+
+58. “The classroom was a zoo during the break.” This is an example of:
+A) simile
+B) metaphor
+C) alliteration
+D) rhyme
+
+59. A student reads a two-page passage quickly to understand its general idea. The student is:
+A) scanning
+B) skimming
+C) memorizing
+D) translating
+
+60. The topic sentence of a paragraph usually introduces its:
+A) main idea
+B) final punctuation
+C) writer's address
+D) smallest detail
+
+ISLAMIAT — Questions 61–80
+
+61. The first revelation to Prophet Muhammad ﷺ was received in:
+A) Cave Hira
+B) Cave Thawr
+C) Masjid Quba
+D) Masjid Nabawi
+
+62. The first revealed verses belonged to:
+A) Surah Al-Fatihah
+B) Surah Al-Ikhlas
+C) Surah Al-Baqarah
+D) Surah Al-Alaq
+
+63. A student wastes most of his day and later regrets losing valuable time. Which Surah in the prescribed material most directly teaches the value of time and righteous deeds?
+A) Surah Al-Feel
+B) Surah Quraish
+C) Surah Al-Asr
+D) Surah Al-Falaq
+
+64. When Muslims follow the practical example and way of Prophet Muhammad ﷺ, they are following his:
+A) Tafsir
+B) Sunnah
+C) History
+D) Language
+
+65. Rejecting the idea that anyone shares Allah's divinity is directly connected with belief in:
+A) Sawm
+B) Hijrah
+C) Tawheed
+D) Shura
+
+66. The title Khatam-un-Nabiyyin refers to:
+A) Hazrat Musa (AS)
+B) Hazrat Ibrahim (AS)
+C) Hazrat Isa (AS)
+D) Prophet Muhammad ﷺ
+
+67. A Muslim prepares for Salah by washing prescribed parts of the body with clean water. This purification is called:
+A) Wudu
+B) Zakat
+C) Sawm
+D) Ihram
+
+68. If clean water is unavailable or its use is harmful, Islamic teachings allow purification through:
+A) Tayammum
+B) Tawaf
+C) Sa'i
+D) Iftar
+
+69. A Muslim hears the Adhan shortly after sunset. Which obligatory prayer is due?
+A) Fajr
+B) Asr
+C) Maghrib
+D) Zuhr
+
+70. The people of Madinah who welcomed and supported the Muslims migrating from Makkah were called the:
+A) Muhajirun
+B) Ansar
+C) Quraysh
+D) Tabi'un
+
+71. The Battle of Badr took place in:
+A) 2 AH
+B) 3 AH
+C) 5 AH
+D) 8 AH
+
+72. During the Battle of Khandaq, the strategy of digging a trench is especially associated with:
+A) Hazrat Bilal (RA)
+B) Hazrat Abu Hurairah (RA)
+C) Hazrat Salman Al-Farsi (RA)
+D) Hazrat Zaid (RA)
+
+73. The conquest of Makkah occurred in:
+A) 5 AH
+B) 6 AH
+C) 8 AH
+D) 10 AH
+
+74. A pilgrim completes one Tawaf after making how many circuits around the Kaaba?
+A) Three
+B) Five
+C) Six
+D) Seven
+
+75. Sa'i during Hajj or Umrah is performed between:
+A) Mina and Arafat
+B) Makkah and Madinah
+C) Safa and Marwah
+D) Hira and Uhud
+
+76. Which outcome best reflects the social purpose of Zakat?
+A) Supporting needy members of society
+B) Increasing pride in wealth
+C) Encouraging hoarding
+D) Separating rich and poor
+
+77. The daily fast in Ramadan begins at:
+A) Sunrise
+B) Zuhr
+C) Fajr
+D) Maghrib
+
+78. Hajj is performed during the Islamic month of:
+A) Dhul-Hijjah
+B) Ramadan
+C) Muharram
+D) Rajab
+
+79. Which quality is especially associated in the notes with Hazrat Abu Bakr (RA)?
+A) Military wealth
+B) Truthfulness and loyalty
+C) Poetry
+D) Political luxury
+
+80. A student avoids wasting water, protects plants and treats animals kindly. This behaviour most closely reflects the Islamic value of:
+A) Competition
+B) Pride
+C) Isolation
+D) Responsibility
+
+SOCIAL STUDIES — Questions 81–90
+
+81. A traveller passes through the Khyber Pass from Pakistan toward the neighbouring country on its western side. He is travelling toward:
+A) India
+B) Afghanistan
+C) China
+D) Iran
+
+82. A ship crosses the imaginary line at \(0^\circ\) latitude. It is crossing the line that divides Earth into Northern and Southern Hemispheres, called the:
+A) Prime Meridian
+B) Tropic of Cancer
+C) Equator
+D) International Date Line
+
+83. Moist air is forced upward when it reaches a mountain range, cools and produces rainfall. This is known as:
+A) Cyclonic rainfall
+B) Convectional rainfall
+C) Artificial rainfall
+D) Relief rainfall
+
+84. An archaeologist studying Mohenjo-daro would be working in present-day:
+A) Punjab
+B) Sindh
+C) Balochistan
+D) Khyber Pakhtunkhwa
+
+85. The ancient Hydaspes River, connected with Alexander's battle against Porus, is generally identified with today's:
+A) Ravi
+B) Jhelum
+C) Indus
+D) Sutlej
+
+86. In a democratic state, which institution is primarily responsible for making laws?
+A) Judiciary
+B) Hospital system
+C) Legislature
+D) Banking system
+
+87. Which administrative system did Akbar use to organize military officers and officials?
+A) Parliamentary system
+B) Guild system
+C) Zamindari system
+D) Mansabdari system
+
+88. According to the supplied question bank, Muhammad bin Qasim entered Sindh in:
+A) 711 CE
+B) 1001 CE
+C) 1206 CE
+D) 1526 CE
+
+89. The All-India Muslim League was established at:
+A) Dhaka
+B) Lahore
+C) Karachi
+D) Delhi
+
+90. The Lahore Resolution was passed in:
+A) 1930
+B) 1940
+C) 1947
+D) 1956
+
+COMPUTER SCIENCE — Questions 91–100
+
+91. A computer is performing millions of calculations while other devices wait for the results. Which component is doing most of the processing?
+A) CPU
+B) Monitor
+C) Keyboard
+D) Speaker
+
+92. A student types an unsaved document and suddenly the computer loses power. The temporary data disappears mainly because it was being held in:
+A) RAM
+B) ROM
+C) Hard disk
+D) USB flash drive
+
+93. A school wants to convert old paper certificates into digital files. Which device is most suitable?
+A) Printer
+B) Projector
+C) Speaker
+D) Scanner
+
+94. Which software manages computer hardware, memory, files and other programs?
+A) Web browser
+B) Operating system
+C) Word processor
+D) Presentation software
+
+95. A student wants to move selected text from one place to another rather than make a second copy. Which shortcut should be used first?
+A) Ctrl+X
+B) Ctrl+C
+C) Ctrl+V
+D) Ctrl+S
+
+96. A browser needs the exact address of an online resource before opening it directly. This address is called a:
+A) LAN
+B) CPU
+C) RAM
+D) URL
+
+97. Twenty computers inside one school building are connected to share files and printers. This network is most appropriately called a:
+A) LAN
+B) WAN
+C) WWW
+D) USB
+
+98. A fake email looks like it came from a bank and asks a student to click a link and enter a password. This is most likely:
+A) Cloud computing
+B) Data processing
+C) File compression
+D) Phishing
+
+99. You receive a shortened link from an unknown account claiming that you have won a prize. The safest action is to:
+A) Enter your password first
+B) Forward it to friends
+C) Download any attached file
+D) Avoid opening the link
+
+100. A second copy of important data is stored separately so it can be recovered if the original is lost. This second copy is a:
+A) Virus
+B) Database
+C) Backup
+D) Folder
+
+Version A — Answer Key
+1–10	11–20	21–30	31–40	41–50
+1-D	11-A	21-C	31-B	41-A
+2-B	12-C	22-B	32-C	42-D
+3-C	13-D	23-B	33-A	43-B
+4-C	14-D	24-D	34-C	44-D
+5-D	15-B	25-C	35-D	45-C
+6-C	16-B	26-D	36-B	46-B
+7-D	17-A	27-D	37-A	47-B
+8-A	18-C	28-B	38-D	48-A
+9-B	19-B	29-C	39-D	49-D
+10-B	20-C	30-A	40-A	50-A
+51–60	61–70	71–80	81–90	91–100
+51-A	61-A	71-A	81-B	91-A
+52-D	62-D	72-C	82-C	92-A
+53-A	63-C	73-C	83-D	93-D
+54-C	64-B	74-D	84-B	94-B
+55-B	65-C	75-C	85-B	95-A
+56-C	66-D	76-A	86-C	96-D
+57-C	67-A	77-C	87-D	97-A
+58-B	68-A	78-A	88-A	98-D
+59-B	69-C	79-B	89-A	99-D
+60-A	70-B	80-D	90-B	100-C

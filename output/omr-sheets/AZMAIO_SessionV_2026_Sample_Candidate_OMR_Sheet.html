@@ -1,0 +1,1579 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AZM OMR Answer Sheet - AZM-2026-1234</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    body {
+      background: #ffffff;
+      color: #000000;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .omr-page {
+      width: 210mm;
+      height: 297mm;
+      max-height: 297mm;
+      padding: 5.5mm 7.5mm;
+      position: relative;
+      background: #ffffff;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .page-break {
+      page-break-after: always;
+      break-after: page;
+    }
+
+    /* Corner Alignment Markers for Scanning */
+    .corner-mark {
+      position: absolute;
+      width: 6mm;
+      height: 6mm;
+      background: #000000;
+    }
+    .timing-track { position: absolute; top: 70mm; display: flex; flex-direction: column; gap: 3mm; }
+    .timing-track.left { left: 2.5mm; }
+    .timing-track.right { right: 2.5mm; }
+    .timing-block { width: 2mm; height: 2mm; background: #000; }
+    .corner-tl { top: 2.5mm; left: 2.5mm; }
+    .corner-tr { top: 2.5mm; right: 2.5mm; }
+    .corner-bl { bottom: 2.5mm; left: 2.5mm; }
+    .corner-br { bottom: 2.5mm; right: 2.5mm; }
+
+    /* Header */
+    .omr-header {
+      text-align: center;
+      border-bottom: 2px solid #000000;
+      padding-bottom: 2mm;
+      margin-bottom: 2mm;
+    }
+    .omr-title {
+      font-size: 13pt;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      color: #0f172a;
+      text-transform: uppercase;
+      line-height: 1.1;
+    }
+    .omr-subtitle {
+      font-size: 8.5pt;
+      font-weight: 700;
+      color: #334155;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+    .omr-doc-name {
+      display: inline-block;
+      background: #000000;
+      color: #ffffff;
+      font-size: 7.8pt;
+      font-weight: 800;
+      padding: 1.5px 12px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      margin-top: 2px;
+      letter-spacing: 0.5px;
+    }
+
+    .preissue-banner {
+      background: #fffbeb;
+      border: 1.2px dashed #d97706;
+      color: #92400e;
+      font-size: 7.2pt;
+      font-weight: 800;
+      text-align: center;
+      padding: 2px 6px;
+      margin-bottom: 2mm;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    /* Candidate Particulars & Verification Section */
+    .info-container {
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      border: 1.5px solid #000000;
+      border-radius: 4px;
+      margin-bottom: 2mm;
+      padding: 2mm 3mm;
+      gap: 3mm;
+      align-items: stretch;
+      background: #fafafa;
+    }
+    .omr-watermark-info {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-4deg);
+      font-size: 26pt;
+      font-weight: 900;
+      letter-spacing: 3px;
+      color: #000000;
+      opacity: 0.045;
+      pointer-events: none;
+      user-select: none;
+      white-space: nowrap;
+      z-index: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    .photo-box, .details-table, .qr-box {
+      position: relative;
+      z-index: 1;
+    }
+    .photo-box {
+      width: 23mm;
+      height: 27mm;
+      border: 1.2px solid #000000;
+      border-radius: 3px;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+    }
+    .photo-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .details-table {
+      flex: 1;
+      border-collapse: collapse;
+      font-size: 7.2pt;
+    }
+    .details-table td {
+      padding: 1.2px 2px;
+      vertical-align: middle;
+    }
+    .dt-label {
+      font-weight: 800;
+      color: #334155;
+      width: 25%;
+      text-transform: uppercase;
+      font-size: 6.5pt;
+    }
+    .dt-val {
+      font-weight: 700;
+      color: #000000;
+      border-bottom: 0.8px solid #cbd5e1;
+      font-size: 7.2pt;
+    }
+    .dt-val.highlight {
+      font-family: 'Courier New', monospace;
+      font-size: 8.5pt;
+      font-weight: 900;
+      color: #000000;
+    }
+    .qr-box {
+      width: 27mm;
+      height: 27mm;
+      border: 1.2px solid #000000;
+      border-radius: 3px;
+      padding: 1.5px;
+      background: #ffffff;
+      flex-shrink: 0;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .qr-box img {
+      width: 21mm;
+      height: 21mm;
+      object-fit: contain;
+    }
+    .qr-box-label {
+      font-size: 5pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #334155;
+      margin-top: 1px;
+    }
+
+    /* Instructions & Bubble Guide */
+    .guide-strip {
+      border: 1px solid #000000;
+      border-radius: 3px;
+      padding: 1.2px 4px;
+      margin-bottom: 2mm;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 6.5pt;
+      background: #f8fafc;
+      box-sizing: border-box;
+    }
+    .guide-legend {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .guide-item {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .sample-bubble {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid #000000;
+      font-size: 5pt;
+      font-weight: bold;
+    }
+    .sample-filled {
+      background: #000000;
+      color: #ffffff;
+    }
+
+    /* Manual Paper Version Optical Block */
+    .omr-version-box {
+      display: flex;
+      align-items: center;
+      gap: 2.2mm;
+      padding: 0.3mm 2mm;
+      background: #ffffff;
+      border: 1.1px solid #000000;
+      border-radius: 2px;
+    }
+    .version-title {
+      font-size: 5.8pt;
+      font-weight: 900;
+      color: #000000;
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .version-bubbles-group {
+      display: flex;
+      align-items: center;
+      gap: 2.4mm;
+    }
+    .version-opt {
+      display: inline-flex;
+      align-items: center;
+      gap: 1.2px;
+    }
+    .v-label {
+      font-size: 6.5pt;
+      font-weight: 900;
+      color: #000000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      line-height: 1;
+    }
+    .v-bubble {
+      display: inline-block;
+      width: 4.1mm;
+      height: 4.1mm;
+      border: 1.1px solid #000000;
+      border-radius: 50%;
+      background: #ffffff;
+      box-sizing: border-box;
+      vertical-align: middle;
+    }
+
+    /* 100 MCQs Grid (4 columns x 25 rows) */
+    .omr-grid-container {
+      display: flex;
+      justify-content: space-between;
+      gap: 2.5mm;
+      margin-bottom: 2mm;
+    }
+    .omr-col {
+      flex: 1;
+      border: 1.2px solid #000000;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .omr-col-header {
+      background: #000000;
+      color: #ffffff;
+      font-size: 6.8pt;
+      font-weight: 900;
+      text-align: center;
+      padding: 1.5px 0;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .omr-col-body {
+      padding: 0;
+    }
+    .omr-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2mm;
+      padding: 1.5px 2.5px;
+      border-bottom: 0.8px solid #e2e8f0;
+      font-size: 6.8pt;
+    }
+    .omr-row:last-child {
+      border-bottom: none;
+    }
+    .omr-row.shaded {
+      background: #f1f5f9;
+    }
+    .q-num {
+      width: 5.5mm;
+      text-align: right;
+      font-weight: 800;
+      color: #0f172a;
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      flex-shrink: 0;
+    }
+    .bubbles-wrap {
+      display: flex;
+      gap: 1.8px;
+      flex-shrink: 0;
+    }
+    .bubble {
+      width: 4.1mm;
+      height: 4.1mm;
+      border: 1.1px solid #000000;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 5.8pt;
+      font-weight: 800;
+      color: #000000;
+      background: #ffffff;
+      line-height: 1;
+    }
+
+    /* Signatures Section */
+    .omr-footer-container {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      border: 1px solid #000000;
+      border-radius: 3px;
+      background: #fafafa;
+      margin-bottom: 2mm;
+    }
+    .omr-footer-table {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      border-collapse: collapse;
+      background: transparent;
+    }
+    .omr-watermark-footer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 16pt;
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #000000;
+      opacity: 0.04;
+      pointer-events: none;
+      user-select: none;
+      white-space: nowrap;
+      z-index: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    .omr-footer-table td {
+      position: relative;
+      z-index: 1;
+      width: 50%;
+      padding: 2.5mm 4mm;
+      vertical-align: top;
+    }
+    .sig-heading {
+      font-size: 6.5pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #1e293b;
+      margin-bottom: 7.5mm;
+    }
+    .sig-line {
+      border-top: 1px solid #000000;
+      font-size: 6.2pt;
+      font-weight: 700;
+      color: #334155;
+      padding-top: 1.5px;
+      display: inline-block;
+      width: 90%;
+    }
+
+    .omr-bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 5.8pt;
+      color: #475569;
+      font-family: monospace;
+      padding: 0 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="omr-page">
+    <div class="timing-track left"><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i></div>
+    <div class="timing-track right"><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i><i class="timing-block"></i></div>
+    <!-- Corner Alignment Markers for Scanning -->
+    <div class="corner-mark corner-tl"></div>
+    <div class="corner-mark corner-tr"></div>
+    <div class="corner-mark corner-bl"></div>
+    <div class="corner-mark corner-br"></div>
+
+    <!-- Header -->
+    <div class="omr-header">
+      <div class="omr-title">AZM.AIO SCHOLARSHIP EXAMINATION</div>
+      <div class="omr-subtitle">Session V (2026) Merit &amp; Scholarship Screening Test</div>
+      <div class="omr-doc-name">OFFICIAL OMR ANSWER SHEET &mdash; 100 MCQS</div>
+    </div>
+
+    
+
+    <!-- Candidate Info & Verification -->
+    <div class="info-container">
+      <div class="omr-watermark-info">AZM.AIO SCHOLARSHIP EXAMINATION</div>
+      <div class="photo-box">
+        <img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%22150%22%20viewBox%3D%220%200%20120%20150%22%3E%0A%20%20%20%20%20%20%20%20%3Crect%20width%3D%22120%22%20height%3D%22150%22%20fill%3D%22%23f8fafc%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Ccircle%20cx%3D%2260%22%20cy%3D%2250%22%20r%3D%2225%22%20fill%3D%22%2394a3b8%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cpath%20d%3D%22M20%20125%20C20%2090%2C%20100%2090%2C%20100%20125%20Z%22%20fill%3D%22%2364748b%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Ctext%20x%3D%2260%22%20y%3D%22142%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%229%22%20font-weight%3D%22bold%22%20fill%3D%22%23475569%22%20text-anchor%3D%22middle%22%3EPHOTO%3C%2Ftext%3E%0A%20%20%20%20%20%20%3C%2Fsvg%3E" alt="Candidate Photo" />
+      </div>
+
+      <table class="details-table">
+        <tr>
+          <td class="dt-label">Candidate Name:</td>
+          <td class="dt-val">MUHAMMAD HAMZA</td>
+          <td class="dt-label">Roll Number:</td>
+          <td class="dt-val highlight">AZM-2026-1234</td>
+        </tr>
+        <tr>
+          <td class="dt-label">Father's Name:</td>
+          <td class="dt-val">TARIQ MEHMOOD</td>
+          <td class="dt-label">App / Form No:</td>
+          <td class="dt-val">20261234</td>
+        </tr>
+        <tr>
+          <td class="dt-label">CNIC / B-Form:</td>
+          <td class="dt-val" style="font-family: monospace;">13501-1234567-1</td>
+          <td class="dt-label">Seat / Room:</td>
+          <td class="dt-val">Hall A - Room 12 | Seat-44</td>
+        </tr>
+        <tr>
+          <td class="dt-label">Class &amp; Group:</td>
+          <td class="dt-val">SSC-II (CLASS 10TH) (SCIENCE (COMPUTER SCIENCE))</td>
+          <td class="dt-label">Test Center:</td>
+          <td class="dt-val">Govt Post Graduate College Mansehra</td>
+        </tr>
+      </table>
+
+      <div class="qr-box">
+        <img src="data:image/png;base64,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" alt="Verification QR" />
+        <div class="qr-box-label">Candidate Identity QR</div>
+      </div>
+    </div>
+
+    <!-- Instructions Strip with Manual Paper Version Block -->
+    <div class="guide-strip">
+      <div class="guide-legend">
+        <strong>INSTRUCTIONS:</strong>
+        <span>Blue/Black ballpoint only. Darken circle completely.</span>
+        <div class="guide-item">
+          <span>Correct:</span>
+          <span class="sample-bubble sample-filled">A</span>
+        </div>
+        <div class="guide-item">
+          <span>Wrong:</span>
+          <span class="sample-bubble">&#10007;</span>
+          <span class="sample-bubble">&#10003;</span>
+          <span class="sample-bubble">&#9680;</span>
+        </div>
+      </div>
+      <div class="omr-version-box">
+        <span class="version-title">PAPER VERSION &mdash; MARK ONE ONLY:</span>
+        <div class="version-bubbles-group">
+          <div class="version-opt"><span class="v-label">A</span><i class="v-bubble"></i></div>
+          <div class="version-opt"><span class="v-label">B</span><i class="v-bubble"></i></div>
+          <div class="version-opt"><span class="v-label">C</span><i class="v-bubble"></i></div>
+          <div class="version-opt"><span class="v-label">D</span><i class="v-bubble"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 100 MCQs Grid (4 Columns) -->
+    <div class="omr-grid-container">
+      
+        <div class="omr-col">
+          <div class="omr-col-header">Q. 1 - 25</div>
+          <div class="omr-col-body">
+            
+          <div class="omr-row ">
+            <span class="q-num">01</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">02</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">03</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">04</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">05</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">06</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">07</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">08</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">09</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">10</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">11</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">12</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">13</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">14</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">15</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">16</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">17</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">18</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">19</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">20</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">21</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">22</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">23</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">24</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">25</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          </div>
+        </div>
+      
+        <div class="omr-col">
+          <div class="omr-col-header">Q. 26 - 50</div>
+          <div class="omr-col-body">
+            
+          <div class="omr-row ">
+            <span class="q-num">26</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">27</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">28</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">29</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">30</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">31</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">32</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">33</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">34</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">35</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">36</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">37</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">38</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">39</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">40</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">41</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">42</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">43</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">44</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">45</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">46</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">47</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">48</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">49</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">50</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          </div>
+        </div>
+      
+        <div class="omr-col">
+          <div class="omr-col-header">Q. 51 - 75</div>
+          <div class="omr-col-body">
+            
+          <div class="omr-row ">
+            <span class="q-num">51</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">52</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">53</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">54</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">55</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">56</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">57</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">58</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">59</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">60</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">61</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">62</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">63</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">64</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">65</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">66</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">67</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">68</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">69</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">70</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">71</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">72</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">73</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">74</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">75</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          </div>
+        </div>
+      
+        <div class="omr-col">
+          <div class="omr-col-header">Q. 76 - 100</div>
+          <div class="omr-col-body">
+            
+          <div class="omr-row ">
+            <span class="q-num">76</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">77</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">78</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">79</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">80</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">81</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">82</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">83</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">84</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">85</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">86</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">87</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">88</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">89</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">90</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">91</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">92</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">93</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">94</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">95</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">96</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">97</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">98</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row ">
+            <span class="q-num">99</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          <div class="omr-row shaded">
+            <span class="q-num">100</span>
+            <div class="bubbles-wrap">
+              <span class="bubble">A</span>
+              <span class="bubble">B</span>
+              <span class="bubble">C</span>
+              <span class="bubble">D</span>
+            </div>
+          </div>
+        
+          </div>
+        </div>
+      
+    </div>
+
+    <!-- Signatures -->
+    <div class="omr-footer-container">
+      <div class="omr-watermark-footer">AZM.AIO</div>
+      <table class="omr-footer-table">
+        <tr>
+          <td>
+            <div class="sig-heading">Candidate Declaration &amp; Signature</div>
+            <span class="sig-line">Candidate Signature (Signed in Hall)</span>
+          </td>
+          <td style="text-align: right;">
+            <div class="sig-heading" style="text-align: right;">Hall Chief Invigilator Verification</div>
+            <span class="sig-line" style="text-align: center;">Invigilator Signature &amp; Center Stamp</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="omr-bottom-bar">
+      <span>SHEET-ID: AZM-OMR-2026V-AZM-2026-1234</span>
+      <span>SECURITY VERIFICATION: CERTIFIED VALID FOR SESSION V 2026</span>
+      <span>TEMPLATE VER: 2.0</span>
+    </div>
+  </div>
+
+</body>
+</html>
+    

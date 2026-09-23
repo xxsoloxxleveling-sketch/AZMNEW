@@ -1,0 +1,1302 @@
+[
+  {
+    "id": "C6-001",
+    "masterNumber": 1,
+    "subject": "SCIENCE",
+    "questionText": "A student observes a cell under a microscope and notices a rigid layer outside the cell membrane. This observation most strongly suggests that the cell has a:",
+    "options": {
+      "A": "Nucleus",
+      "B": "Cytoplasm",
+      "C": "Vacuole",
+      "D": "Cell wall"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-002",
+    "masterNumber": 2,
+    "subject": "SCIENCE",
+    "questionText": "Several similar muscle cells work together to perform the same function. Together, these cells form a:",
+    "options": {
+      "A": "Organ",
+      "B": "Tissue",
+      "C": "Organ system",
+      "D": "Organism"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-003",
+    "masterNumber": 3,
+    "subject": "SCIENCE",
+    "questionText": "A farmer cuts a potato into pieces. Only pieces containing an “eye” grow into new plants. The potato is reproducing mainly through a:",
+    "options": {
+      "A": "Runner",
+      "B": "Bulb",
+      "C": "Tuber",
+      "D": "Seed"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-004",
+    "masterNumber": 4,
+    "subject": "SCIENCE",
+    "questionText": "A student's lunch contains bread, egg, vegetables, fruit and water in suitable quantities. This meal is best described as a:",
+    "options": {
+      "A": "Protein diet",
+      "B": "High-energy diet",
+      "C": "Balanced diet",
+      "D": "Liquid diet"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-005",
+    "masterNumber": 5,
+    "subject": "SCIENCE",
+    "questionText": "After food has been completely digested, most of its useful nutrients enter the blood mainly through the:",
+    "options": {
+      "A": "Stomach",
+      "B": "Mouth",
+      "C": "Large intestine",
+      "D": "Small intestine"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-006",
+    "masterNumber": 6,
+    "subject": "SCIENCE",
+    "questionText": "A mixture contains salt, sand and water. Which sequence would best separate the sand first and then obtain the salt?",
+    "options": {
+      "A": "Evaporation → filtration",
+      "B": "Distillation → magnetism",
+      "C": "Filtration → evaporation",
+      "D": "Chromatography → condensation"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-007",
+    "masterNumber": 7,
+    "subject": "SCIENCE",
+    "questionText": "Water droplets appear on the outside of a very cold bottle. The process responsible is:",
+    "options": {
+      "A": "Sublimation",
+      "B": "Evaporation",
+      "C": "Freezing",
+      "D": "Condensation"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-008",
+    "masterNumber": 8,
+    "subject": "SCIENCE",
+    "questionText": "Perfume spreads through a warm room faster than through a cold room mainly because, when heated, particles:",
+    "options": {
+      "A": "Move faster",
+      "B": "Become heavier",
+      "C": "Stop colliding",
+      "D": "Increase in size"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-009",
+    "masterNumber": 9,
+    "subject": "SCIENCE",
+    "questionText": "A stretched rubber band that has not yet been released possesses mainly:",
+    "options": {
+      "A": "Kinetic energy",
+      "B": "Potential energy",
+      "C": "Sound energy",
+      "D": "Electrical energy"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-010",
+    "masterNumber": 10,
+    "subject": "SCIENCE",
+    "questionText": "A cell and bulb are connected correctly, but the switch leaves a gap in the circuit. The bulb will not glow because the circuit is:",
+    "options": {
+      "A": "Conducting too much current",
+      "B": "Open",
+      "C": "Magnetic",
+      "D": "Insulated by the cell"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-011",
+    "masterNumber": 11,
+    "subject": "SCIENCE",
+    "questionText": "A compass is useful for finding direction because its needle is essentially:",
+    "options": {
+      "A": "A small magnet that aligns north–south",
+      "B": "An electrical conductor",
+      "C": "A thermometer",
+      "D": "A source of gravity"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-012",
+    "masterNumber": 12,
+    "subject": "SCIENCE",
+    "questionText": "A plant's roots absorb enough water, but water cannot reach its leaves because one transport tissue is blocked. Which tissue is most likely blocked?",
+    "options": {
+      "A": "Phloem",
+      "B": "Stomata",
+      "C": "Xylem",
+      "D": "Chloroplast"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-013",
+    "masterNumber": 13,
+    "subject": "SCIENCE",
+    "questionText": "During breathing, oxygen finally enters the blood from tiny structures inside the lungs called:",
+    "options": {
+      "A": "Bronchi",
+      "B": "Tracheae",
+      "C": "Capillaries only",
+      "D": "Alveoli"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-014",
+    "masterNumber": 14,
+    "subject": "SCIENCE",
+    "questionText": "A vaccine protects a person mainly because it helps the body:",
+    "options": {
+      "A": "Digest food faster",
+      "B": "Produce more red blood cells",
+      "C": "Destroy all microorganisms immediately",
+      "D": "Develop immunity"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-015",
+    "masterNumber": 15,
+    "subject": "SCIENCE",
+    "questionText": "Which change is fundamentally different from melting ice?",
+    "options": {
+      "A": "Evaporating water",
+      "B": "Rusting an iron nail",
+      "C": "Freezing juice",
+      "D": "Dissolving sugar in water"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-016",
+    "masterNumber": 16,
+    "subject": "SCIENCE",
+    "questionText": "An atom contains 11 protons and is electrically neutral. How many electrons should it have?",
+    "options": {
+      "A": "22",
+      "B": "11",
+      "C": "10",
+      "D": "12"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-017",
+    "masterNumber": 17,
+    "subject": "SCIENCE",
+    "questionText": "Sodium chloride is formed mainly when electrons are transferred between atoms. The resulting bond is:",
+    "options": {
+      "A": "Ionic",
+      "B": "Covalent",
+      "C": "Magnetic",
+      "D": "Gravitational"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-018",
+    "masterNumber": 18,
+    "subject": "SCIENCE",
+    "questionText": "Two teams pull a rope in opposite directions with equal force, and the rope does not move. The forces are:",
+    "options": {
+      "A": "Frictionless",
+      "B": "Magnetic",
+      "C": "Balanced",
+      "D": "Unbalanced"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-019",
+    "masterNumber": 19,
+    "subject": "SCIENCE",
+    "questionText": "Two whistles make sounds of different pitch. The whistle producing more vibrations per second will normally have:",
+    "options": {
+      "A": "Lower pitch",
+      "B": "Higher pitch",
+      "C": "Lower temperature",
+      "D": "Greater mass"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-020",
+    "masterNumber": 20,
+    "subject": "SCIENCE",
+    "questionText": "Heat from the Sun reaches Earth even though most of the space between them is nearly a vacuum. This heat is transferred mainly by:",
+    "options": {
+      "A": "Convection",
+      "B": "Conduction",
+      "C": "Radiation",
+      "D": "Evaporation"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-021",
+    "masterNumber": 21,
+    "subject": "MATHEMATICS",
+    "questionText": "What is the HCF of 42 and 56?",
+    "options": {
+      "A": "6",
+      "B": "7",
+      "C": "14",
+      "D": "28"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-022",
+    "masterNumber": 22,
+    "subject": "MATHEMATICS",
+    "questionText": "What is the LCM of 6 and 8?",
+    "options": {
+      "A": "12",
+      "B": "24",
+      "C": "36",
+      "D": "48"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-023",
+    "masterNumber": 23,
+    "subject": "MATHEMATICS",
+    "questionText": "Which is the greatest of these negative integers?",
+    "options": {
+      "A": "−12",
+      "B": "−5",
+      "C": "−9",
+      "D": "−7"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-024",
+    "masterNumber": 24,
+    "subject": "MATHEMATICS",
+    "questionText": "\\( \\frac34-\\frac18 =\\)",
+    "options": {
+      "A": "\\(\\frac28\\)",
+      "B": "\\(\\frac38\\)",
+      "C": "\\(\\frac48\\)",
+      "D": "\\(\\frac58\\)"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-025",
+    "masterNumber": 25,
+    "subject": "MATHEMATICS",
+    "questionText": "Six notebooks cost Rs. 270. At the same rate, what will 10 notebooks cost?",
+    "options": {
+      "A": "Rs. 360",
+      "B": "Rs. 400",
+      "C": "Rs. 450",
+      "D": "Rs. 540"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-026",
+    "masterNumber": 26,
+    "subject": "MATHEMATICS",
+    "questionText": "35% of 200 is:",
+    "options": {
+      "A": "35",
+      "B": "55",
+      "C": "65",
+      "D": "70"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-027",
+    "masterNumber": 27,
+    "subject": "MATHEMATICS",
+    "questionText": "If \\(3x+5=26\\), then \\(x=\\):",
+    "options": {
+      "A": "5",
+      "B": "6",
+      "C": "8",
+      "D": "7"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-028",
+    "masterNumber": 28,
+    "subject": "MATHEMATICS",
+    "questionText": "Simplify \\(4a+7a-2a\\).",
+    "options": {
+      "A": "13a",
+      "B": "9a",
+      "C": "5a",
+      "D": "9a²"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-029",
+    "masterNumber": 29,
+    "subject": "MATHEMATICS",
+    "questionText": "One of two complementary angles is \\(38^\\circ\\). The other angle is:",
+    "options": {
+      "A": "\\(42^\\circ\\)",
+      "B": "\\(48^\\circ\\)",
+      "C": "\\(52^\\circ\\)",
+      "D": "\\(142^\\circ\\)"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-030",
+    "masterNumber": 30,
+    "subject": "MATHEMATICS",
+    "questionText": "Two angles of a triangle are \\(47^\\circ\\) and \\(68^\\circ\\). The third angle is:",
+    "options": {
+      "A": "\\(65^\\circ\\)",
+      "B": "\\(75^\\circ\\)",
+      "C": "\\(85^\\circ\\)",
+      "D": "\\(115^\\circ\\)"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-031",
+    "masterNumber": 31,
+    "subject": "MATHEMATICS",
+    "questionText": "A rectangle is 9 cm long and 6 cm wide. Its perimeter is:",
+    "options": {
+      "A": "15 cm",
+      "B": "30 cm",
+      "C": "54 cm",
+      "D": "27 cm"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-032",
+    "masterNumber": 32,
+    "subject": "MATHEMATICS",
+    "questionText": "A triangle has base 12 cm and perpendicular height 5 cm. Its area is:",
+    "options": {
+      "A": "60 cm²",
+      "B": "17 cm²",
+      "C": "30 cm²",
+      "D": "34 cm²"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-033",
+    "masterNumber": 33,
+    "subject": "MATHEMATICS",
+    "questionText": "The mean of 5, 7 and 12 is:",
+    "options": {
+      "A": "8",
+      "B": "7",
+      "C": "9",
+      "D": "6"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-034",
+    "masterNumber": 34,
+    "subject": "MATHEMATICS",
+    "questionText": "What is the range of 3, 8, 11 and 15?",
+    "options": {
+      "A": "15",
+      "B": "8",
+      "C": "12",
+      "D": "11"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-035",
+    "masterNumber": 35,
+    "subject": "MATHEMATICS",
+    "questionText": "A fair die is rolled once. What is the probability of getting a number greater than 4?",
+    "options": {
+      "A": "\\(\\frac16\\)",
+      "B": "\\(\\frac12\\)",
+      "C": "\\(\\frac23\\)",
+      "D": "\\(\\frac13\\)"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-036",
+    "masterNumber": 36,
+    "subject": "MATHEMATICS",
+    "questionText": "Which fraction is equal to 0.125?",
+    "options": {
+      "A": "\\(\\frac14\\)",
+      "B": "\\(\\frac18\\)",
+      "C": "\\(\\frac15\\)",
+      "D": "\\(\\frac1{10}\\)"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-037",
+    "masterNumber": 37,
+    "subject": "MATHEMATICS",
+    "questionText": "\\(2.75+0.60=\\)",
+    "options": {
+      "A": "3.35",
+      "B": "3.25",
+      "C": "2.81",
+      "D": "3.15"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-038",
+    "masterNumber": 38,
+    "subject": "MATHEMATICS",
+    "questionText": "\\(4.8\\div0.6=\\)",
+    "options": {
+      "A": "0.8",
+      "B": "6",
+      "C": "80",
+      "D": "8"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-039",
+    "masterNumber": 39,
+    "subject": "MATHEMATICS",
+    "questionText": "A school gives a 15% scholarship discount on a fee of Rs. 240. What is the amount of the discount?",
+    "options": {
+      "A": "Rs. 24",
+      "B": "Rs. 30",
+      "C": "Rs. 40",
+      "D": "Rs. 36"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-040",
+    "masterNumber": 40,
+    "subject": "MATHEMATICS",
+    "questionText": "A car travels 150 km in 3 hours at a constant average speed. Its average speed is:",
+    "options": {
+      "A": "50 km/h",
+      "B": "45 km/h",
+      "C": "60 km/h",
+      "D": "75 km/h"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-041",
+    "masterNumber": 41,
+    "subject": "ENGLISH",
+    "questionText": "Choose the correct word:\n“Neither the principal nor the teachers ___ ready for the meeting.”",
+    "options": {
+      "A": "are",
+      "B": "is",
+      "C": "was",
+      "D": "be"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-042",
+    "masterNumber": 42,
+    "subject": "ENGLISH",
+    "questionText": "Complete the sentence correctly:\n“By next Friday, Sara ___ her science project.”",
+    "options": {
+      "A": "completed",
+      "B": "completes",
+      "C": "is completing",
+      "D": "will have completed"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-043",
+    "masterNumber": 43,
+    "subject": "ENGLISH",
+    "questionText": "Choose the correct passive form of:\n“The coach praised the team.”",
+    "options": {
+      "A": "The coach was praised by the team.",
+      "B": "The team was praised by the coach.",
+      "C": "The team praised the coach.",
+      "D": "The team has praise by the coach."
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-044",
+    "masterNumber": 44,
+    "subject": "ENGLISH",
+    "questionText": "Which group of words is a dependent clause?",
+    "options": {
+      "A": "The rain stopped.",
+      "B": "We returned home.",
+      "C": "The children were playing.",
+      "D": "Although the rain stopped"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-045",
+    "masterNumber": 45,
+    "subject": "ENGLISH",
+    "questionText": "If something happens “once in a blue moon,” it happens:",
+    "options": {
+      "A": "every night",
+      "B": "unexpectedly",
+      "C": "very rarely",
+      "D": "very quickly"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-046",
+    "masterNumber": 46,
+    "subject": "ENGLISH",
+    "questionText": "A reader uses clues in a passage to reach a conclusion that is not directly stated. This conclusion is called an:",
+    "options": {
+      "A": "advertisement",
+      "B": "inference",
+      "C": "heading",
+      "D": "quotation"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-047",
+    "masterNumber": 47,
+    "subject": "ENGLISH",
+    "questionText": "Which sentence contains personification?",
+    "options": {
+      "A": "The road is very long.",
+      "B": "The leaves danced in the wind.",
+      "C": "The boy ran like a deer.",
+      "D": "The box is as heavy as iron."
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-048",
+    "masterNumber": 48,
+    "subject": "ENGLISH",
+    "questionText": "Which sentence is most suitable in a formal leave application?",
+    "options": {
+      "A": "I respectfully request two days' leave due to illness.",
+      "B": "Hey Sir, I won't be coming.",
+      "C": "Give me two days off.",
+      "D": "I'm skipping school for a while."
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-049",
+    "masterNumber": 49,
+    "subject": "ENGLISH",
+    "questionText": "Which is the adjective form of “courage”?",
+    "options": {
+      "A": "Courageously",
+      "B": "Encouragement",
+      "C": "Courage",
+      "D": "Courageous"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-050",
+    "masterNumber": 50,
+    "subject": "ENGLISH",
+    "questionText": "Complete correctly:\n“Hamza is interested ___ astronomy.”",
+    "options": {
+      "A": "in",
+      "B": "on",
+      "C": "at",
+      "D": "from"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-051",
+    "masterNumber": 51,
+    "subject": "ENGLISH",
+    "questionText": "Choose the correct sentence.",
+    "options": {
+      "A": "Each of the players has a locker.",
+      "B": "Each of the players have a locker.",
+      "C": "Each players has a locker.",
+      "D": "Each of player have lockers."
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-052",
+    "masterNumber": 52,
+    "subject": "ENGLISH",
+    "questionText": "Which sentence expresses prohibition?",
+    "options": {
+      "A": "You may enter now.",
+      "B": "You can swim well.",
+      "C": "You should rest.",
+      "D": "You must not touch this wire."
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-053",
+    "masterNumber": 53,
+    "subject": "ENGLISH",
+    "questionText": "Choose the correct article:\n“He is ___ honest person.”",
+    "options": {
+      "A": "an",
+      "B": "a",
+      "C": "the",
+      "D": "no article"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-054",
+    "masterNumber": 54,
+    "subject": "ENGLISH",
+    "questionText": "Choose the best reported form of:\nAli said, “I am tired.”",
+    "options": {
+      "A": "Ali says that I am tired.",
+      "B": "Ali said that I am tired.",
+      "C": "Ali said that he was tired.",
+      "D": "Ali said that he is tired yesterday."
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-055",
+    "masterNumber": 55,
+    "subject": "ENGLISH",
+    "questionText": "Complete correctly:\n“The news ___ surprising.”",
+    "options": {
+      "A": "are",
+      "B": "is",
+      "C": "were",
+      "D": "have"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-056",
+    "masterNumber": 56,
+    "subject": "ENGLISH",
+    "questionText": "The suffix “-less” in “careless” means:",
+    "options": {
+      "A": "full of",
+      "B": "again",
+      "C": "without",
+      "D": "before"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-057",
+    "masterNumber": 57,
+    "subject": "ENGLISH",
+    "questionText": "In the sentence “She completed the work carefully,” the word “carefully” is a/an:",
+    "options": {
+      "A": "adjective",
+      "B": "noun",
+      "C": "adverb",
+      "D": "pronoun"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-058",
+    "masterNumber": 58,
+    "subject": "ENGLISH",
+    "questionText": "“The classroom was a zoo during the break.” This is an example of:",
+    "options": {
+      "A": "simile",
+      "B": "metaphor",
+      "C": "alliteration",
+      "D": "rhyme"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-059",
+    "masterNumber": 59,
+    "subject": "ENGLISH",
+    "questionText": "A student reads a two-page passage quickly to understand its general idea. The student is:",
+    "options": {
+      "A": "scanning",
+      "B": "skimming",
+      "C": "memorizing",
+      "D": "translating"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-060",
+    "masterNumber": 60,
+    "subject": "ENGLISH",
+    "questionText": "The topic sentence of a paragraph usually introduces its:",
+    "options": {
+      "A": "main idea",
+      "B": "final punctuation",
+      "C": "writer's address",
+      "D": "smallest detail"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-061",
+    "masterNumber": 61,
+    "subject": "ISLAMIAT",
+    "questionText": "The first revelation to Prophet Muhammad ﷺ was received in:",
+    "options": {
+      "A": "Cave Hira",
+      "B": "Cave Thawr",
+      "C": "Masjid Quba",
+      "D": "Masjid Nabawi"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-062",
+    "masterNumber": 62,
+    "subject": "ISLAMIAT",
+    "questionText": "The first revealed verses belonged to:",
+    "options": {
+      "A": "Surah Al-Fatihah",
+      "B": "Surah Al-Ikhlas",
+      "C": "Surah Al-Baqarah",
+      "D": "Surah Al-Alaq"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-063",
+    "masterNumber": 63,
+    "subject": "ISLAMIAT",
+    "questionText": "A student wastes most of his day and later regrets losing valuable time. Which Surah in the prescribed material most directly teaches the value of time and righteous deeds?",
+    "options": {
+      "A": "Surah Al-Feel",
+      "B": "Surah Quraish",
+      "C": "Surah Al-Asr",
+      "D": "Surah Al-Falaq"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-064",
+    "masterNumber": 64,
+    "subject": "ISLAMIAT",
+    "questionText": "When Muslims follow the practical example and way of Prophet Muhammad ﷺ, they are following his:",
+    "options": {
+      "A": "Tafsir",
+      "B": "Sunnah",
+      "C": "History",
+      "D": "Language"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-065",
+    "masterNumber": 65,
+    "subject": "ISLAMIAT",
+    "questionText": "Rejecting the idea that anyone shares Allah's divinity is directly connected with belief in:",
+    "options": {
+      "A": "Sawm",
+      "B": "Hijrah",
+      "C": "Tawheed",
+      "D": "Shura"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-066",
+    "masterNumber": 66,
+    "subject": "ISLAMIAT",
+    "questionText": "The title Khatam-un-Nabiyyin refers to:",
+    "options": {
+      "A": "Hazrat Musa (AS)",
+      "B": "Hazrat Ibrahim (AS)",
+      "C": "Hazrat Isa (AS)",
+      "D": "Prophet Muhammad ﷺ"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-067",
+    "masterNumber": 67,
+    "subject": "ISLAMIAT",
+    "questionText": "A Muslim prepares for Salah by washing prescribed parts of the body with clean water. This purification is called:",
+    "options": {
+      "A": "Wudu",
+      "B": "Zakat",
+      "C": "Sawm",
+      "D": "Ihram"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-068",
+    "masterNumber": 68,
+    "subject": "ISLAMIAT",
+    "questionText": "If clean water is unavailable or its use is harmful, Islamic teachings allow purification through:",
+    "options": {
+      "A": "Tayammum",
+      "B": "Tawaf",
+      "C": "Sa'i",
+      "D": "Iftar"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-069",
+    "masterNumber": 69,
+    "subject": "ISLAMIAT",
+    "questionText": "A Muslim hears the Adhan shortly after sunset. Which obligatory prayer is due?",
+    "options": {
+      "A": "Fajr",
+      "B": "Asr",
+      "C": "Maghrib",
+      "D": "Zuhr"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-070",
+    "masterNumber": 70,
+    "subject": "ISLAMIAT",
+    "questionText": "The people of Madinah who welcomed and supported the Muslims migrating from Makkah were called the:",
+    "options": {
+      "A": "Muhajirun",
+      "B": "Ansar",
+      "C": "Quraysh",
+      "D": "Tabi'un"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-071",
+    "masterNumber": 71,
+    "subject": "ISLAMIAT",
+    "questionText": "The Battle of Badr took place in:",
+    "options": {
+      "A": "2 AH",
+      "B": "3 AH",
+      "C": "5 AH",
+      "D": "8 AH"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-072",
+    "masterNumber": 72,
+    "subject": "ISLAMIAT",
+    "questionText": "During the Battle of Khandaq, the strategy of digging a trench is especially associated with:",
+    "options": {
+      "A": "Hazrat Bilal (RA)",
+      "B": "Hazrat Abu Hurairah (RA)",
+      "C": "Hazrat Salman Al-Farsi (RA)",
+      "D": "Hazrat Zaid (RA)"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-073",
+    "masterNumber": 73,
+    "subject": "ISLAMIAT",
+    "questionText": "The conquest of Makkah occurred in:",
+    "options": {
+      "A": "5 AH",
+      "B": "6 AH",
+      "C": "8 AH",
+      "D": "10 AH"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-074",
+    "masterNumber": 74,
+    "subject": "ISLAMIAT",
+    "questionText": "A pilgrim completes one Tawaf after making how many circuits around the Kaaba?",
+    "options": {
+      "A": "Three",
+      "B": "Five",
+      "C": "Six",
+      "D": "Seven"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-075",
+    "masterNumber": 75,
+    "subject": "ISLAMIAT",
+    "questionText": "Sa'i during Hajj or Umrah is performed between:",
+    "options": {
+      "A": "Mina and Arafat",
+      "B": "Makkah and Madinah",
+      "C": "Safa and Marwah",
+      "D": "Hira and Uhud"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-076",
+    "masterNumber": 76,
+    "subject": "ISLAMIAT",
+    "questionText": "Which outcome best reflects the social purpose of Zakat?",
+    "options": {
+      "A": "Supporting needy members of society",
+      "B": "Increasing pride in wealth",
+      "C": "Encouraging hoarding",
+      "D": "Separating rich and poor"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-077",
+    "masterNumber": 77,
+    "subject": "ISLAMIAT",
+    "questionText": "The daily fast in Ramadan begins at:",
+    "options": {
+      "A": "Sunrise",
+      "B": "Zuhr",
+      "C": "Fajr",
+      "D": "Maghrib"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-078",
+    "masterNumber": 78,
+    "subject": "ISLAMIAT",
+    "questionText": "Hajj is performed during the Islamic month of:",
+    "options": {
+      "A": "Dhul-Hijjah",
+      "B": "Ramadan",
+      "C": "Muharram",
+      "D": "Rajab"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-079",
+    "masterNumber": 79,
+    "subject": "ISLAMIAT",
+    "questionText": "Which quality is especially associated in the notes with Hazrat Abu Bakr (RA)?",
+    "options": {
+      "A": "Military wealth",
+      "B": "Truthfulness and loyalty",
+      "C": "Poetry",
+      "D": "Political luxury"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-080",
+    "masterNumber": 80,
+    "subject": "ISLAMIAT",
+    "questionText": "A student avoids wasting water, protects plants and treats animals kindly. This behaviour most closely reflects the Islamic value of:",
+    "options": {
+      "A": "Competition",
+      "B": "Pride",
+      "C": "Isolation",
+      "D": "Responsibility"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-081",
+    "masterNumber": 81,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "A traveller passes through the Khyber Pass from Pakistan toward the neighbouring country on its western side. He is travelling toward:",
+    "options": {
+      "A": "India",
+      "B": "Afghanistan",
+      "C": "China",
+      "D": "Iran"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-082",
+    "masterNumber": 82,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "A ship crosses the imaginary line at \\(0^\\circ\\) latitude. It is crossing the line that divides Earth into Northern and Southern Hemispheres, called the:",
+    "options": {
+      "A": "Prime Meridian",
+      "B": "Tropic of Cancer",
+      "C": "Equator",
+      "D": "International Date Line"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-083",
+    "masterNumber": 83,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "Moist air is forced upward when it reaches a mountain range, cools and produces rainfall. This is known as:",
+    "options": {
+      "A": "Cyclonic rainfall",
+      "B": "Convectional rainfall",
+      "C": "Artificial rainfall",
+      "D": "Relief rainfall"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-084",
+    "masterNumber": 84,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "An archaeologist studying Mohenjo-daro would be working in present-day:",
+    "options": {
+      "A": "Punjab",
+      "B": "Sindh",
+      "C": "Balochistan",
+      "D": "Khyber Pakhtunkhwa"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-085",
+    "masterNumber": 85,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "The ancient Hydaspes River, connected with Alexander's battle against Porus, is generally identified with today's:",
+    "options": {
+      "A": "Ravi",
+      "B": "Jhelum",
+      "C": "Indus",
+      "D": "Sutlej"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-086",
+    "masterNumber": 86,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "In a democratic state, which institution is primarily responsible for making laws?",
+    "options": {
+      "A": "Judiciary",
+      "B": "Hospital system",
+      "C": "Legislature",
+      "D": "Banking system"
+    },
+    "correctAnswer": "C"
+  },
+  {
+    "id": "C6-087",
+    "masterNumber": 87,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "Which administrative system did Akbar use to organize military officers and officials?",
+    "options": {
+      "A": "Parliamentary system",
+      "B": "Guild system",
+      "C": "Zamindari system",
+      "D": "Mansabdari system"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-088",
+    "masterNumber": 88,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "According to the supplied question bank, Muhammad bin Qasim entered Sindh in:",
+    "options": {
+      "A": "711 CE",
+      "B": "1001 CE",
+      "C": "1206 CE",
+      "D": "1526 CE"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-089",
+    "masterNumber": 89,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "The All-India Muslim League was established at:",
+    "options": {
+      "A": "Dhaka",
+      "B": "Lahore",
+      "C": "Karachi",
+      "D": "Delhi"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-090",
+    "masterNumber": 90,
+    "subject": "SOCIAL STUDIES",
+    "questionText": "The Lahore Resolution was passed in:",
+    "options": {
+      "A": "1930",
+      "B": "1940",
+      "C": "1947",
+      "D": "1956"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-091",
+    "masterNumber": 91,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "A computer is performing millions of calculations while other devices wait for the results. Which component is doing most of the processing?",
+    "options": {
+      "A": "CPU",
+      "B": "Monitor",
+      "C": "Keyboard",
+      "D": "Speaker"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-092",
+    "masterNumber": 92,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "A student types an unsaved document and suddenly the computer loses power. The temporary data disappears mainly because it was being held in:",
+    "options": {
+      "A": "RAM",
+      "B": "ROM",
+      "C": "Hard disk",
+      "D": "USB flash drive"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-093",
+    "masterNumber": 93,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "A school wants to convert old paper certificates into digital files. Which device is most suitable?",
+    "options": {
+      "A": "Printer",
+      "B": "Projector",
+      "C": "Speaker",
+      "D": "Scanner"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-094",
+    "masterNumber": 94,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "Which software manages computer hardware, memory, files and other programs?",
+    "options": {
+      "A": "Web browser",
+      "B": "Operating system",
+      "C": "Word processor",
+      "D": "Presentation software"
+    },
+    "correctAnswer": "B"
+  },
+  {
+    "id": "C6-095",
+    "masterNumber": 95,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "A student wants to move selected text from one place to another rather than make a second copy. Which shortcut should be used first?",
+    "options": {
+      "A": "Ctrl+X",
+      "B": "Ctrl+C",
+      "C": "Ctrl+V",
+      "D": "Ctrl+S"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-096",
+    "masterNumber": 96,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "A browser needs the exact address of an online resource before opening it directly. This address is called a:",
+    "options": {
+      "A": "LAN",
+      "B": "CPU",
+      "C": "RAM",
+      "D": "URL"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-097",
+    "masterNumber": 97,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "Twenty computers inside one school building are connected to share files and printers. This network is most appropriately called a:",
+    "options": {
+      "A": "LAN",
+      "B": "WAN",
+      "C": "WWW",
+      "D": "USB"
+    },
+    "correctAnswer": "A"
+  },
+  {
+    "id": "C6-098",
+    "masterNumber": 98,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "A fake email looks like it came from a bank and asks a student to click a link and enter a password. This is most likely:",
+    "options": {
+      "A": "Cloud computing",
+      "B": "Data processing",
+      "C": "File compression",
+      "D": "Phishing"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-099",
+    "masterNumber": 99,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "You receive a shortened link from an unknown account claiming that you have won a prize. The safest action is to:",
+    "options": {
+      "A": "Enter your password first",
+      "B": "Forward it to friends",
+      "C": "Download any attached file",
+      "D": "Avoid opening the link"
+    },
+    "correctAnswer": "D"
+  },
+  {
+    "id": "C6-100",
+    "masterNumber": 100,
+    "subject": "COMPUTER SCIENCE",
+    "questionText": "A second copy of important data is stored separately so it can be recovered if the original is lost. This second copy is a:",
+    "options": {
+      "A": "Virus",
+      "B": "Database",
+      "C": "Backup",
+      "D": "Folder"
+    },
+    "correctAnswer": "C"
+  }
+]
