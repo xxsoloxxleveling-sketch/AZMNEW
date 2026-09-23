@@ -38,14 +38,15 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       <div className="flex items-center gap-3">
         <button
           onClick={onOpenMobileSidebar}
-          className="lg:hidden p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+          aria-label="Toggle mobile navigation"
+          className="lg:hidden p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
         >
           <Menu className="w-5 h-5" />
         </button>
         <div>
           <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-none">{title}</h1>
           {subtitle && (
-            <p className="text-xs text-slate-400 font-medium mt-1 hidden sm:block">{subtitle}</p>
+            <p className="text-xs text-slate-500 font-medium mt-1 hidden sm:block">{subtitle}</p>
           )}
         </div>
       </div>
@@ -58,7 +59,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         {onOpenAddStudent && (role === 'SUPER_ADMIN' || role === 'ADMIN') && (
           <button
             onClick={onOpenAddStudent}
-            className="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-xs transition"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-lg shadow-2xs transition"
           >
             <UserPlus className="w-3.5 h-3.5" />
             <span>Add Student</span>
@@ -68,9 +69,9 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         {onOpenMarkAttendance && (
           <button
             onClick={onOpenMarkAttendance}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition"
           >
-            <QrCode className="w-3.5 h-3.5" />
+            <QrCode className="w-3.5 h-3.5 text-slate-600" />
             <span>Mark Attendance</span>
           </button>
         )}
@@ -78,16 +79,19 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         {onOpenGenerateFee && (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'ACCOUNTANT') && (
           <button
             onClick={onOpenGenerateFee}
-            className="hidden lg:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs transition"
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition"
           >
-            <Receipt className="w-3.5 h-3.5" />
+            <Receipt className="w-3.5 h-3.5 text-slate-600" />
             <span>Generate Challan</span>
           </button>
         )}
 
         {/* Notification Bell */}
         <div className="relative">
-          <button className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition relative">
+          <button
+            aria-label="Notifications"
+            className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition relative"
+          >
             <Bell className="w-4 h-4" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white" />
           </button>

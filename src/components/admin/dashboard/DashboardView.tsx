@@ -1,25 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  GraduationCap,
-  CalendarCheck,
-  Receipt,
-  Users,
-  QrCode,
-  TrendingUp,
   ArrowUpRight,
   ArrowDownRight,
   AlertTriangle,
-  Clock,
   ChevronRight,
-  UserPlus,
   Loader2,
-  Sparkles,
   Banknote,
   RefreshCw,
   WifiOff,
-  School,
+  FileText,
 } from 'lucide-react';
-import { StatCard } from '../shared/StatCard';
 import { StatusBadge } from '../shared/StatusBadge';
 import { mockApi } from '../../../lib/mockApi';
 import { AdminTab } from '../layout/AdminSidebar';
@@ -38,32 +28,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenMarkAttendance,
   onOpenGenerateFee,
 }) => {
-  const { isLoading: authLoading, isAuthenticated } = useAuth();
+  const { isLoading: authLoading } = useAuth();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadDashboard = useCallback(async (showLoading = true) => {
-    if (authLoading) return;
-    if (showLoading) setIsLoading(true);
-    setIsRefreshing(true);
-    setErrorMessage(null);
+  const loadDashboard = useCallback(
+    async (showLoading = true) => {
+      if (authLoading) return;
+      if (showLoading) setIsLoading(true);
+      setIsRefreshing(true);
+      setErrorMessage(null);
 
-    try {
-      const res = await mockApi.getDashboardOverview();
-      if (res) {
-        setData(res);
-        setErrorMessage(null);
+      try {
+        const res = await mockApi.getDashboardOverview();
+        if (res) {
+          setData(res);
+          setErrorMessage(null);
+        }
+      } catch (err: any) {
+        console.warn('Dashboard fetch warning:', err);
+        setErrorMessage(err?.message || 'Unable to connect to live database services.');
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
       }
-    } catch (err: any) {
-      console.warn('Dashboard fetch warning:', err);
-      setErrorMessage(err?.message || 'Unable to connect to live database services.');
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [authLoading]);
+    },
+    [authLoading]
+  );
 
   useEffect(() => {
     if (!authLoading) {
@@ -84,405 +77,538 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     };
   }, [authLoading, loadDashboard]);
 
-  // 1. Auth Hydration or Initial Data Loading State
+  // 1. Initial Data Loading State
   if (authLoading || (isLoading && !data && !errorMessage)) {
     return (
-      <div className="py-32 flex flex-col items-center justify-center space-y-3">
-        <Loader2 className="w-8 h-8 text-[#185b9d] animate-spin" />
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-          {authLoading ? 'Verifying authentication credentials...' : 'Loading Overview Dashboard...'}
+      <div className="py-24 flex flex-col items-center justify-center space-y-3">
+        <Loader2 className="w-7 h-7 text-[#185b9d] animate-spin" />
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Loading Executive Overview...
         </span>
       </div>
     );
   }
 
-  // 2. Clear Error State (Never silently fall back to fake zero cache)
+  // 2. Error State with Retry
   if (errorMessage && !data) {
     return (
-      <div className="py-24 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto space-y-4">
-        <div className="w-14 h-14 rounded-3xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shadow-xs">
-          <WifiOff className="w-7 h-7" />
+      <div className="py-20 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto space-y-4">
+        <div className="w-12 h-12 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center">
+          <WifiOff className="w-6 h-6" />
         </div>
-        <div className="space-y-1.5">
-          <h3 className="text-base font-bold text-slate-900">
-            Unable to Load Dashboard Data
-          </h3>
+        <div className="space-y-1">
+          <h3 className="text-sm font-bold text-slate-900">Unable to Load Dashboard Data</h3>
           <p className="text-xs text-slate-500 leading-relaxed">
-            {errorMessage}. Live metrics could not be retrieved from the central database.
+            {errorMessage}. Central database connection could not be established.
           </p>
         </div>
         <button
           onClick={() => loadDashboard(true)}
-          className="px-5 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white text-xs font-bold transition flex items-center gap-2 shadow-md cursor-pointer"
+          className="px-4 py-2 rounded-lg bg-[#185b9d] hover:bg-[#13497d] text-white text-xs font-semibold transition flex items-center gap-2 cursor-pointer shadow-2xs"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          <span>Retry Live Connection</span>
+          <span>Retry Connection</span>
         </button>
       </div>
     );
   }
 
-  if (!data) {
-    return (
-      <div className="py-32 flex flex-col items-center justify-center space-y-3">
-        <Loader2 className="w-8 h-8 text-[#185b9d] animate-spin" />
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Loading Overview Dashboard...
-        </span>
-      </div>
-    );
-  }
+  if (!data) return null;
 
   const stats = data.stats || {
     totalStudents: 0,
+    totalPartners: 0,
+    pendingPartners: 0,
+    totalExpectedApplicants: 0,
     attendancePercentage: 0,
     feeCollectionPercentage: 0,
     activeStaffCount: 0,
     totalBilled: 0,
     totalCollected: 0,
+    feeIncome: 0,
+    salaryExpenses: 0,
+    netCashFlow: 0,
   };
+
   const attendanceTrends = data.attendanceTrends || [];
   const feeDefaulters = data.feeDefaulters || [];
   const recentActivity = data.recentActivity || [];
   const demographics = data.demographics || {
     byGender: { MALE: 0, FEMALE: 0 },
     byClassLevel: {},
-    byScholarshipCategory: {},
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Top Banner & Quick Action Launchpad */}
-      <div className="bg-gradient-to-r from-[#0f3863] via-[#185b9d] to-[#2563eb] rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-blue-900/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/5 skew-x-12 pointer-events-none" />
-        <div className="space-y-2 z-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-xs text-xs font-semibold text-blue-100 border border-white/15">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>Academic Session 2026-2027</span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
-            Welcome to AZMAIO Administration Desk
-          </h2>
-          <p className="text-xs text-blue-100/90 max-w-xl leading-relaxed">
-            Real-time biometric attendance, automated fee collections, student scholarship registry, and institutional payroll ledger.
-          </p>
-        </div>
+  const totalGender =
+    (demographics?.byGender?.MALE || 0) + (demographics?.byGender?.FEMALE || 0);
+  const malePct = totalGender > 0 ? Math.round(((demographics?.byGender?.MALE || 0) / totalGender) * 100) : 0;
+  const femalePct = totalGender > 0 ? 100 - malePct : 0;
 
-        {/* Action Buttons in Hero */}
-        <div className="flex flex-wrap items-center gap-2.5 z-10">
+  // Determine attendance session status honestly (Decision #2)
+  const todayMarkedCount = data.attendanceToday?.markedCount || 0;
+  const totalActiveStudents = data.attendanceToday?.totalActiveStudents || stats.totalStudents || 0;
+  const hasTodaySession = todayMarkedCount > 0 || (stats.totalStudents > 0 && stats.attendancePercentage > 0);
+
+  // Truthful Zero-State Semantics (Step 7.6)
+  const hasBilledFees = (stats.totalBilled ?? 0) > 0;
+  const hasPartnerInstitutions = (stats.totalPartners ?? 0) > 0;
+  const hasActiveStaff = (stats.activeStaffCount ?? 0) > 0;
+  const hasRegisteredStudents = (stats.totalStudents ?? 0) > 0;
+
+  return (
+    <div className="space-y-4">
+      {/* 1. Core Administrative KPI Summary Surface (Unified Restrained Container) */}
+      <div className="bg-white border border-slate-200/90 rounded-xl shadow-2xs overflow-hidden">
+        {/* Subtle Operational Header Bar */}
+        <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-700">Administrative Overview</span>
+            <span className="text-slate-300">|</span>
+            <span className="text-[11px] font-medium text-slate-500">Key Performance Indicators</span>
+          </div>
           <button
-            onClick={() => loadDashboard(true)}
+            type="button"
+            onClick={() => loadDashboard(false)}
             disabled={isRefreshing}
-            className="px-3.5 py-2.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold backdrop-blur-xs border border-white/20 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 rounded border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer disabled:opacity-50"
             title="Refresh metrics from central database"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>{isRefreshing ? 'Syncing...' : 'Sync Live'}</span>
+            <RefreshCw className={`w-3 h-3 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Syncing...' : 'Sync Data'}</span>
           </button>
+        </div>
+
+        {/* Metric Cells with Restrained Dividers (Option A: 2-col on mobile with 5th spanning) */}
+        <div className="grid grid-cols-2 lg:grid-cols-5">
+          {/* Cell 1: Registered Students */}
           <button
-            onClick={onOpenMarkAttendance}
-            className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-900/20 transition flex items-center gap-2"
+            type="button"
+            onClick={() => onNavigate('students')}
+            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 border-r border-slate-100 hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
+            aria-label={`Navigate to Student Management. Total students: ${stats.totalStudents}`}
           >
-            <QrCode className="w-4 h-4" />
-            <span>Scan QR Code</span>
+            <div>
+              <span className="text-xs font-medium text-slate-500 block">Registered Students</span>
+              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
+                {stats.totalStudents.toLocaleString()}
+              </span>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
+              <span className="truncate">
+                {hasRegisteredStudents ? 'Active Candidates' : 'No active candidates'}
+              </span>
+              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
+                View →
+              </span>
+            </div>
           </button>
+
+          {/* Cell 2: Partner Institutions */}
           <button
-            onClick={onOpenAddStudent}
-            className="px-4 py-2.5 bg-white text-[#185b9d] hover:bg-blue-50 rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2"
+            type="button"
+            onClick={() => onNavigate('partners')}
+            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100 hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
+            aria-label={`Navigate to Partner Institutions. Total: ${stats.totalPartners ?? 0}`}
           >
-            <UserPlus className="w-4 h-4" />
-            <span>Add Student</span>
+            <div>
+              <span className="text-xs font-medium text-slate-500 block">Partner Institutions</span>
+              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
+                {(stats.totalPartners ?? 0).toLocaleString()}
+              </span>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
+              <span className="truncate">
+                {!hasPartnerInstitutions
+                  ? 'No partner institutions'
+                  : stats.pendingPartners > 0
+                  ? `${stats.pendingPartners} Pending Review`
+                  : 'Active Accredited'}
+              </span>
+              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
+                View →
+              </span>
+            </div>
+          </button>
+
+          {/* Cell 3: Today's Attendance */}
+          <button
+            type="button"
+            onClick={() => onNavigate('attendance')}
+            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 border-r border-slate-100 hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
+            aria-label="Navigate to Attendance Hub"
+          >
+            <div>
+              <span className="text-xs font-medium text-slate-500 block">Today's Attendance</span>
+              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
+                {hasTodaySession ? `${stats.attendancePercentage}%` : '—'}
+              </span>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
+              <span className="truncate">
+                {hasTodaySession ? `${todayMarkedCount} Marked Present` : 'No Session Conducted'}
+              </span>
+              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
+                View →
+              </span>
+            </div>
+          </button>
+
+          {/* Cell 4: Fee Collection Rate */}
+          <button
+            type="button"
+            onClick={() => onNavigate('fees')}
+            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100 hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
+            aria-label="Navigate to Fee Management"
+          >
+            <div>
+              <span className="text-xs font-medium text-slate-500 block">Fee Collection Rate</span>
+              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
+                {hasBilledFees ? `${stats.feeCollectionPercentage ?? 0}%` : '—'}
+              </span>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
+              <span className="truncate">
+                {hasBilledFees
+                  ? `PKR ${(stats.totalCollected ?? 0).toLocaleString()} Collected`
+                  : 'No fees billed this cycle'}
+              </span>
+              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
+                View →
+              </span>
+            </div>
+          </button>
+
+          {/* Cell 5: Active Faculty & Staff (Spans 2 cols on mobile) */}
+          <button
+            type="button"
+            onClick={() => onNavigate('staff')}
+            className="col-span-2 lg:col-span-1 text-left p-3.5 sm:p-4 flex flex-col justify-between hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
+            aria-label={`Navigate to Staff Directory. Total: ${stats.activeStaffCount ?? 0}`}
+          >
+            <div>
+              <span className="text-xs font-medium text-slate-500 block">Active Faculty & Staff</span>
+              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
+                {(stats.activeStaffCount ?? 0).toLocaleString()}
+              </span>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
+              <span className="truncate">
+                {hasActiveStaff ? 'Invigilators & Officers' : 'No active staff recorded'}
+              </span>
+              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
+                View →
+              </span>
+            </div>
           </button>
         </div>
       </div>
 
-      {/* 1. Core KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard
-          title="Registered Students"
-          value={stats.totalStudents}
-          icon={GraduationCap}
-          color="blue"
-          subtitle="Active Candidates"
-          trend="+12% this month"
-          trendType="up"
-          onClick={() => onNavigate('students')}
-        />
-        <StatCard
-          title="Partner Institutions"
-          value={stats.totalPartners ?? data.partnerStats?.totalPartners ?? 0}
-          icon={School}
-          color="sky"
-          subtitle={`${stats.pendingPartners ?? data.partnerStats?.pendingPartners ?? 0} Pending Verification`}
-          trend={`${(stats.totalExpectedApplicants ?? data.partnerStats?.totalExpectedApplicants ?? 0).toLocaleString()} Expected`}
-          trendType="neutral"
-          onClick={() => onNavigate('partners')}
-        />
-        <StatCard
-          title="Today's Attendance"
-          value={`${stats.attendancePercentage}%`}
-          icon={CalendarCheck}
-          color="emerald"
-          subtitle="Morning Scan Session"
-          trend="Live Marked"
-          trendType="neutral"
-          onClick={() => onNavigate('attendance')}
-        />
-        <StatCard
-          title="Fee Collection Rate"
-          value={`${stats.feeCollectionPercentage ?? 0}%`}
-          icon={Receipt}
-          color="indigo"
-          subtitle={`PKR ${(stats.totalCollected ?? 0).toLocaleString()} Collected`}
-          trend={`${stats.totalBilled ? 'PKR ' + (stats.totalBilled ?? 0).toLocaleString() : 'Total Due'}`}
-          trendType="neutral"
-          onClick={() => onNavigate('fees')}
-        />
-        <StatCard
-          title="Active Staff & Faculty"
-          value={stats.activeStaffCount}
-          icon={Users}
-          color="amber"
-          subtitle="Teachers & Officers"
-          trend="100% Active"
-          trendType="up"
-          onClick={() => onNavigate('staff')}
-        />
-      </div>
-
-      {/* 2. Middle Row: Attendance Trend + Financial Cash Flow */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Attendance Trends Bar Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+      {/* 3. Middle Operational Tier: Attendance Matrix + Financial Ledger */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Attendance Matrix (2 Cols) */}
+        <div className="lg:col-span-2 bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Attendance Trends (Weekly)</h3>
-              <p className="text-xs text-slate-400">Daily presence percentage across all active classes</p>
+              <h3 className="text-sm font-bold text-slate-900">Weekly Attendance Matrix</h3>
+              <p className="text-xs text-slate-500">Daily verification status across all examination classes</p>
             </div>
             <button
               onClick={() => onNavigate('attendance')}
-              className="text-xs font-semibold text-[#185b9d] hover:underline flex items-center gap-1"
+              className="text-xs font-semibold text-[#185b9d] hover:underline flex items-center gap-1 cursor-pointer"
             >
-              <span>View Attendance Hub</span>
+              <span>Attendance Hub</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="py-6">
-            <div className="h-44 flex items-end justify-between gap-3 pt-6">
+          {/* Differentiated Weekly Visualization (Decision #2) */}
+          <div className="py-2">
+            <div className="h-28 flex items-end justify-between gap-3 pt-2">
               {attendanceTrends.map((bar: any, idx: number) => {
-                const isToday = bar.day === 'Today';
+                const isToday = Boolean(bar.isToday);
+                const hasSession = Boolean(bar.hasSession);
+                const rate = bar.rate;
+
                 return (
-                  <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                    <span className="text-[11px] font-bold text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {bar.rate}%
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                    <span className="text-[10px] font-semibold text-slate-600 tabular-nums">
+                      {hasSession && rate !== null ? `${rate}%` : ''}
                     </span>
-                    <div className="w-full max-w-[42px] bg-slate-100 rounded-t-xl overflow-hidden h-36 flex items-end">
-                      <div
-                        style={{ height: `${bar.rate}%` }}
-                        className={`w-full rounded-t-xl transition-all duration-500 ${
-                          isToday
-                            ? 'bg-gradient-to-t from-[#185b9d] to-[#2563eb] shadow-md shadow-blue-500/20'
-                            : 'bg-slate-300 hover:bg-slate-400'
-                        }`}
-                      />
+                    <div className="w-full max-w-[42px] h-20 rounded-md overflow-hidden flex items-end justify-center">
+                      {hasSession && rate !== null ? (
+                        <div
+                          style={{ height: `${Math.max(rate, 6)}%` }}
+                          className={`w-full rounded-t-md transition-all duration-150 ${
+                            isToday
+                              ? 'bg-[#185b9d]'
+                              : 'bg-slate-300 hover:bg-slate-400'
+                          }`}
+                        />
+                      ) : (
+                        <div className="w-full h-full rounded-md border border-dashed border-slate-200 bg-slate-50/70 flex items-center justify-center p-0.5">
+                          <span className="text-[9px] text-slate-400 font-medium text-center leading-tight">
+                            No Session
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <span className={`text-xs font-semibold ${isToday ? 'text-[#185b9d]' : 'text-slate-500'}`}>
-                      {bar.day}
-                    </span>
+                    <div className="flex flex-col items-center text-center">
+                      <span
+                        className={`text-xs font-semibold ${
+                          isToday ? 'text-[#185b9d]' : 'text-slate-600'
+                        }`}
+                      >
+                        {bar.day}
+                      </span>
+                      {isToday && (
+                        <span className="text-[9px] font-bold text-[#185b9d] uppercase tracking-wider">
+                          Today
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Average Attendance: <strong className="text-slate-800 font-bold">93.8%</strong></span>
-            <span className="flex items-center gap-1.5 text-emerald-600 font-semibold">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>Above Target (+3.2%)</span>
+          {/* Real Operational Attendance Summary (No Fake Metrics) */}
+          <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2">
+            <span>
+              Today's Marked Check-ins:{' '}
+              <strong className="text-slate-900 font-bold tabular-nums">
+                {todayMarkedCount} students
+              </strong>
+            </span>
+            <span>
+              Total Candidate Roll:{' '}
+              <strong className="text-slate-900 font-bold tabular-nums">
+                {totalActiveStudents} students
+              </strong>
             </span>
           </div>
         </div>
 
-        {/* Financial Flow Card */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        {/* Monthly Financial Ledger Summary (1 Col - No Nested Cards) */}
+        <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-3">
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Financial Cash Flow</h3>
-              <p className="text-xs text-slate-400">Current Month Ledger Summary</p>
+              <h3 className="text-sm font-bold text-slate-900">Financial Ledger Summary</h3>
+              <p className="text-xs text-slate-500">Current month collections & payroll</p>
             </div>
-            <span className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600">
+            <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200/80 text-slate-600 flex items-center justify-center">
               <Banknote className="w-4 h-4 text-[#185b9d]" />
-            </span>
+            </div>
           </div>
 
-          <div className="space-y-3.5">
-            <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-100 flex items-center justify-between">
-              <div>
-                <span className="text-[11px] font-semibold text-emerald-700 block">Fee Income Collected</span>
-                <span className="text-lg font-bold text-emerald-950">PKR {(stats.feeIncome ?? 0).toLocaleString()}</span>
+          {/* Clean Ledger Rows (No Card-in-Card Nesting) */}
+          <div className="space-y-2.5 py-1">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50/70 border border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded bg-emerald-100/70 text-emerald-700">
+                  <ArrowDownRight className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-xs font-medium text-slate-700">Fee Income Collected</span>
               </div>
-              <div className="p-2 rounded-lg bg-emerald-500 text-white">
-                <ArrowDownRight className="w-4 h-4" />
-              </div>
+              <span className="text-sm font-bold text-slate-900 tabular-nums">
+                PKR {(stats.feeIncome ?? 0).toLocaleString()}
+              </span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-100 flex items-center justify-between">
-              <div>
-                <span className="text-[11px] font-semibold text-rose-700 block">Salary Disbursements</span>
-                <span className="text-lg font-bold text-rose-950">PKR {(stats.salaryExpenses ?? 0).toLocaleString()}</span>
+            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50/70 border border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded bg-rose-100/70 text-rose-700">
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-xs font-medium text-slate-700">Salary Disbursements</span>
               </div>
-              <div className="p-2 rounded-lg bg-rose-500 text-white">
-                <ArrowUpRight className="w-4 h-4" />
-              </div>
+              <span className="text-sm font-bold text-slate-900 tabular-nums">
+                PKR {(stats.salaryExpenses ?? 0).toLocaleString()}
+              </span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 block">Net Monthly Balance</span>
-                <span className={`text-base font-extrabold ${(stats.netCashFlow ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                  PKR {(stats.netCashFlow ?? 0).toLocaleString()}
-                </span>
-              </div>
-              <button
-                onClick={() => onNavigate('transactions')}
-                className="text-xs font-bold text-[#185b9d] hover:underline"
+            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-100/80 border border-slate-200">
+              <span className="text-xs font-semibold text-slate-800">Net Operating Balance</span>
+              <span
+                className={`text-sm font-extrabold tabular-nums ${
+                  (stats.netCashFlow ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                }`}
               >
-                Ledger →
-              </button>
+                PKR {(stats.netCashFlow ?? 0).toLocaleString()}
+              </span>
             </div>
           </div>
 
-          <button
-            onClick={onOpenGenerateFee}
-            className="w-full py-2.5 text-xs font-bold text-center bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-xs transition"
-          >
-            Generate Next Month Challans
-          </button>
+          {/* Action Row */}
+          <div className="pt-2 border-t border-slate-100 space-y-2">
+            <button
+              onClick={onOpenGenerateFee}
+              className="w-full py-2 text-xs font-semibold text-center bg-[#185b9d] hover:bg-[#13497d] text-white rounded-lg shadow-2xs transition cursor-pointer"
+            >
+              Issue Monthly Fee Challans
+            </button>
+            <button
+              onClick={() => onNavigate('transactions')}
+              className="w-full text-center text-xs font-semibold text-slate-600 hover:text-slate-900 hover:underline block cursor-pointer"
+            >
+              View General Ledger →
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 3. Bottom Row: Demographics + Fee Defaulters + Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 4. Bottom Operational Tier: Defaulters Table, Demographics, Activity Log */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Pending Fee Defaulters Queue (Compact Table - Decision #3) */}
+        <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <h3 className="text-sm font-bold text-slate-900">Pending Fee Defaulters</h3>
+            </div>
+            <button
+              onClick={() => onNavigate('fees')}
+              className="text-xs font-semibold text-[#185b9d] hover:underline cursor-pointer"
+            >
+              All Fees
+            </button>
+          </div>
+
+          <div className="overflow-x-auto min-h-[160px]">
+            {feeDefaulters.length > 0 ? (
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">
+                    <th className="py-1.5 px-2">Student</th>
+                    <th className="py-1.5 px-2">Class</th>
+                    <th className="py-1.5 px-2 text-right">Due</th>
+                    <th className="py-1.5 px-2 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {feeDefaulters.map((item: any) => (
+                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-2 px-2">
+                        <span className="font-semibold text-slate-900 block truncate max-w-[110px]">
+                          {item.studentName}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono block">
+                          {item.rollNumber}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
+                        {item.currentClass}
+                      </td>
+                      <td className="py-2 px-2 text-right font-bold text-rose-700 tabular-nums whitespace-nowrap">
+                        PKR {(item.amountDue ?? 0).toLocaleString()}
+                      </td>
+                      <td className="py-2 px-2 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => onNavigate('fees')}
+                          className="text-[11px] font-semibold text-[#185b9d] hover:text-[#13497d] hover:bg-blue-50 px-2 py-0.5 rounded transition cursor-pointer"
+                        >
+                          Review Fees
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-500 space-y-1">
+                <FileText className="w-5 h-5 text-slate-300 mx-auto" />
+                <p className="font-medium text-slate-600">No overdue fee accounts</p>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Student Demographics Breakdown */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
             <h3 className="text-sm font-bold text-slate-900">Student Demographics</h3>
-            <button onClick={() => onNavigate('students')} className="text-xs font-semibold text-[#185b9d] hover:underline">
+            <button
+              onClick={() => onNavigate('students')}
+              className="text-xs font-semibold text-[#185b9d] hover:underline cursor-pointer"
+            >
               All Students
             </button>
           </div>
 
           {/* Gender Split */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-600">
-              <span>Gender Distribution</span>
-              <span className="font-bold text-slate-800">
-                Male: {demographics?.byGender?.MALE || 0} | Female: {demographics?.byGender?.FEMALE || 0}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
+              <span>Gender Split</span>
+              <span className="font-semibold text-slate-800 tabular-nums">
+                M: {demographics?.byGender?.MALE || 0} ({malePct}%) | F:{' '}
+                {demographics?.byGender?.FEMALE || 0} ({femalePct}%)
               </span>
             </div>
-            <div className="h-3 rounded-full bg-slate-100 flex overflow-hidden">
-              <div
-                style={{
-                  width: `${
-                    ((demographics?.byGender?.MALE || 0) /
-                      Math.max((demographics?.byGender?.MALE || 0) + (demographics?.byGender?.FEMALE || 0), 1)) *
-                    100
-                  }%`,
-                }}
-                className="bg-[#185b9d]"
-              />
-              <div
-                style={{
-                  width: `${
-                    ((demographics?.byGender?.FEMALE || 0) /
-                      Math.max((demographics?.byGender?.MALE || 0) + (demographics?.byGender?.FEMALE || 0), 1)) *
-                    100
-                  }%`,
-                }}
-                className="bg-purple-500"
-              />
+            <div className="h-2 rounded-full bg-slate-100 flex overflow-hidden">
+              <div style={{ width: `${malePct}%` }} className="bg-[#185b9d]" />
+              <div style={{ width: `${femalePct}%` }} className="bg-purple-500" />
             </div>
           </div>
 
-          {/* Class Breakdown List */}
-          <div className="space-y-2 pt-2">
-            <span className="text-xs font-semibold text-slate-500 block">Enrollment by Class Level</span>
-            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-              {Object.entries(demographics?.byClassLevel || {}).map(([className, count]: any, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs"
-                >
-                  <span className="font-medium text-slate-700">{className}</span>
-                  <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                    {count} {count === 1 ? 'student' : 'students'}
-                  </span>
-                </div>
-              ))}
+          {/* Enrollment by Class Level */}
+          <div className="pt-2 border-t border-slate-100 space-y-1.5">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+              Enrollment by Class
+            </span>
+            <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+              {Object.keys(demographics?.byClassLevel || {}).length > 0 ? (
+                Object.entries(demographics.byClassLevel).map(([className, count]: any, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between py-1 px-2 rounded-md bg-slate-50 text-xs"
+                  >
+                    <span className="font-medium text-slate-700">{className}</span>
+                    <span className="font-bold text-slate-900 tabular-nums">
+                      {count} {count === 1 ? 'student' : 'students'}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-slate-400 py-3 text-center">
+                  No class enrollment records yet.
+                </p>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Fee Defaulters Alert Widget */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              <h3 className="text-sm font-bold text-slate-900">Pending Fee Defaulters</h3>
-            </div>
-            <button onClick={() => onNavigate('fees')} className="text-xs font-semibold text-[#185b9d] hover:underline">
-              View All Fees
+        {/* System Activity & Audit Trail */}
+        <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+            <h3 className="text-sm font-bold text-slate-900">Recent Activity Log</h3>
+            <button
+              onClick={() => onNavigate('transactions')}
+              className="text-xs font-semibold text-[#185b9d] hover:underline cursor-pointer"
+            >
+              View Audit Log
             </button>
           </div>
 
-          <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-            {feeDefaulters.length > 0 ? (
-              feeDefaulters.map((item: any) => (
-                <div
-                  key={item.id}
-                  className="p-3 rounded-xl bg-slate-50/70 border border-slate-200/80 flex items-center justify-between gap-3 text-xs"
-                >
-                  <div className="min-w-0">
-                    <p className="font-bold text-slate-900 truncate">{item.studentName}</p>
-                    <p className="text-[11px] text-slate-400">
-                      {item.rollNumber} • {item.currentClass}
+          <div className="min-h-[140px]">
+            {recentActivity.length > 0 ? (
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 divide-y divide-slate-100">
+                {recentActivity.map((act: any) => (
+                  <div key={act.id} className="pt-2 first:pt-0 flex items-start gap-2 text-xs">
+                    <span className="text-[10px] font-mono text-slate-400 shrink-0 w-10 mt-0.5">
+                      {act.time}
+                    </span>
+                    <p className="text-slate-700 font-normal leading-snug flex-1">
+                      {act.text}
                     </p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-bold text-rose-600">PKR {(item.amountDue ?? 0).toLocaleString()}</p>
-                    <StatusBadge status={item.status} size="sm" />
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-xs text-slate-400 text-center py-8">No overdue fee challans.</p>
-            )}
-          </div>
-        </div>
-
-        {/* Recent Activity Feed */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-slate-400" />
-              <h3 className="text-sm font-bold text-slate-900">Recent Activity Feed</h3>
-            </div>
-          </div>
-
-          <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-            {recentActivity.map((act: any) => (
-              <div key={act.id} className="flex items-start gap-3 text-xs">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#185b9d] flex items-center justify-center shrink-0 mt-0.5 border border-blue-100">
-                  <Sparkles className="w-3.5 h-3.5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-slate-700 font-medium leading-relaxed">{act.text}</p>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">{act.time}</span>
-                </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-500 space-y-1">
+                <FileText className="w-5 h-5 text-slate-300 mx-auto" />
+                <p className="font-medium text-slate-600">No recent audit events</p>
+                <p className="text-[11px] text-slate-400">Administrative activity will appear here as operations occur.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

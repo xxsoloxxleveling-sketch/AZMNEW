@@ -553,9 +553,38 @@ export const mockApi = {
     const feesRes: any = await apiFetch<any>('/api/fees?status=UNPAID').catch(() => []);
     const feesList = Array.isArray(feesRes) ? feesRes : Array.isArray(feesRes?.feeRecords) ? feesRes.feeRecords : [];
 
+    // Build truthful Monday-Friday work week schedule derived from period date
+    const refDate = live?.period?.date ? new Date(live.period.date) : new Date();
+    const dayOfWeek = refDate.getDay(); // 0: Sun, 1: Mon, ..., 6: Sat
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(refDate);
+    monday.setDate(refDate.getDate() + mondayOffset);
+
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    const todayRate = live?.attendanceToday?.attendancePercentage || 0;
+    const todayMarked = live?.attendanceToday?.markedCount || 0;
+    const hasTodaySession = todayMarked > 0 || ((live?.stats?.totalStudents || 0) > 0 && todayRate > 0);
+
+    const attendanceTrends = weekdays.map((weekday, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const isToday = d.toDateString() === refDate.toDateString();
+      const dayLabel = `${weekday} ${d.getDate()}`;
+
+      return {
+        day: dayLabel,
+        isToday,
+        hasSession: isToday ? hasTodaySession : false,
+        rate: isToday && hasTodaySession ? todayRate : null,
+      };
+    });
+
     return {
       stats: {
         totalStudents: live.stats?.totalStudents || 0,
+        totalPartners: live.stats?.totalPartners ?? live.partnerStats?.totalPartners ?? 0,
+        pendingPartners: live.stats?.pendingPartners ?? live.partnerStats?.pendingPartners ?? 0,
+        totalExpectedApplicants: live.stats?.totalExpectedApplicants || 0,
         attendancePercentage: live.attendanceToday?.attendancePercentage || 0,
         feeCollectionPercentage: live.feeCollection?.collectionPercentage || 0,
         activeStaffCount: live.stats?.activeStaffCount || 0,
@@ -565,14 +594,8 @@ export const mockApi = {
         salaryExpenses: live.financialFlow?.salaryExpenses || 0,
         netCashFlow: live.financialFlow?.netCashFlow || 0,
       },
-      attendanceTrends: [
-        { day: 'Mon', rate: live.attendanceToday?.attendancePercentage || 0 },
-        { day: 'Tue', rate: live.attendanceToday?.attendancePercentage || 0 },
-        { day: 'Wed', rate: live.attendanceToday?.attendancePercentage || 0 },
-        { day: 'Thu', rate: live.attendanceToday?.attendancePercentage || 0 },
-        { day: 'Fri', rate: live.attendanceToday?.attendancePercentage || 0 },
-        { day: 'Today', rate: live.attendanceToday?.attendancePercentage || 0 },
-      ],
+      attendanceToday: live.attendanceToday || null,
+      attendanceTrends,
       feeDefaulters: (feesList || []).slice(0, 5).map((f: any) => ({
         id: f.id,
         studentName: f.student?.fullName || f.studentName || 'Candidate',
@@ -581,18 +604,7 @@ export const mockApi = {
         amountDue: Number(f.amountDue) || 300,
         status: f.status || 'UNPAID',
       })),
-      recentActivity: [
-        {
-          id: 'act_1',
-          text: `System connected to live PostgreSQL cluster. Total enrolled students: ${live.stats?.totalStudents || 0}`,
-          time: 'Live',
-        },
-        {
-          id: 'act_2',
-          text: `Attendance ledger synced: ${live.attendanceToday?.markedCount || 0} active check-ins recorded.`,
-          time: 'Today',
-        },
-      ],
+      recentActivity: [],
       demographics: {
         byGender: live.studentDemographics?.byGender || { MALE: 0, FEMALE: 0 },
         byClassLevel: live.studentDemographics?.byClassLevel || {},
