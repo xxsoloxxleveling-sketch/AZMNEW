@@ -3,6 +3,8 @@ import { partnersController } from './partners.controller';
 import { validateBody } from '../../middleware/validate.middleware';
 import {
   registerPartnerSchema,
+  createPartnerSchema,
+  updatePartnerProfileSchema,
   updatePartnerStatusSchema,
 } from './partners.schema';
 import { authenticate } from '../../middleware/auth.middleware';
@@ -32,10 +34,11 @@ router.get(
   partnersController.getAll
 );
 
-router.get(
-  '/:id',
+router.post(
+  '/',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
-  partnersController.getById
+  validateBody(createPartnerSchema),
+  partnersController.create
 );
 
 router.get(
@@ -49,6 +52,19 @@ router.patch(
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(updatePartnerStatusSchema),
   partnersController.updateStatus
+);
+
+router.get(
+  '/:id',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  partnersController.getById
+);
+
+router.patch(
+  '/:id',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateBody(updatePartnerProfileSchema),
+  partnersController.updateProfile
 );
 
 export default router;

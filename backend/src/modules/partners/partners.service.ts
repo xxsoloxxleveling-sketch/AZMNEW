@@ -3,6 +3,8 @@ import { prisma } from '../../lib/prisma';
 import { pdfService } from '../documents/pdf.service';
 import {
   RegisterPartnerInput,
+  CreatePartnerInput,
+  UpdatePartnerProfileInput,
   UpdatePartnerStatusInput,
   PartnerQueryInput,
 } from './partners.schema';
@@ -37,6 +39,42 @@ export class PartnersService {
   }
 
   /**
+   * Institutional duplicate check by normalized name, district, and campus.
+   * Matches active applications (PENDING or APPROVED).
+   * Optionally excludes a specific partner ID for profile updates.
+   */
+  async checkDuplicatePartner(
+    institutionName: string,
+    district: string,
+    campus?: string | null,
+    excludeId?: string
+  ): Promise<void> {
+    const normName = institutionName.trim();
+    const normDistrict = district.trim();
+    const normCampus = campus ? campus.trim() : null;
+
+    const existingPartner = await prisma.partnerInstitution.findFirst({
+      where: {
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        institutionName: { equals: normName, mode: 'insensitive' },
+        district: { equals: normDistrict, mode: 'insensitive' },
+        campus: normCampus ? { equals: normCampus, mode: 'insensitive' } : null,
+        status: { in: ['PENDING', 'APPROVED'] },
+      },
+    });
+
+    if (existingPartner) {
+      const dupError: AppError = new Error(
+        `An institutional partnership registration for "${normName}" (${normDistrict}${
+          normCampus ? ` - ${normCampus}` : ''
+        }) already exists under Partner Code ${existingPartner.partnerCode}. Please contact Central Secretariat (0305-1755551) for verification.`
+      );
+      dupError.statusCode = 409;
+      throw dupError;
+    }
+  }
+
+  /**
    * Public registration with persistent idempotency and institutional duplicate protection.
    */
   async registerPartner(input: RegisterPartnerInput, idempotencyKey?: string) {
@@ -66,29 +104,7 @@ export class PartnersService {
     }
 
     // 2. Institutional Duplicate Detection
-    // Match based on normalized institutionName + district + campus to prevent double registration
-    const normName = input.institutionName.trim();
-    const normDistrict = input.district.trim();
-    const normCampus = input.campus ? input.campus.trim() : null;
-
-    const existingPartner = await prisma.partnerInstitution.findFirst({
-      where: {
-        institutionName: { equals: normName, mode: 'insensitive' },
-        district: { equals: normDistrict, mode: 'insensitive' },
-        campus: normCampus ? { equals: normCampus, mode: 'insensitive' } : null,
-        status: { in: ['PENDING', 'APPROVED'] },
-      },
-    });
-
-    if (existingPartner) {
-      const dupError: AppError = new Error(
-        `An institutional partnership registration for "${input.institutionName}" (${input.district}${
-          normCampus ? ` - ${normCampus}` : ''
-        }) already exists under Partner Code ${existingPartner.partnerCode}. Please contact Central Secretariat (0305-1755551) for verification.`
-      );
-      dupError.statusCode = 409;
-      throw dupError;
-    }
+    await this.checkDuplicatePartner(input.institutionName, input.district, input.campus);
 
     // 3. Normalize values
     const normalizedEmail = input.contactEmail ? input.contactEmail.trim().toLowerCase() : null;
@@ -159,6 +175,85 @@ export class PartnersService {
       return partner;
     });
 
+    return createdPartner;
+  }
+
+  /**
+   * Admin-driven partner institution creation.
+   * Enforces atomic code allocation, duplicate protection, and initial PENDING status.
+   * Client cannot set partnerCode, status, rejectionReason, reviewedBy, reviewedAt, timestamps, or audits.
+   * No partner user account creation.
+   */
+  async createPartner(
+    input: CreatePartnerInput,
+    user?: { id?: string; email?: string; name?: string }
+  ) {
+    if (input.signedAt && !input.agreedToTerms) {
+      const badRequestError: AppError = new Error(
+        'signedAt cannot be provided when agreedToTerms is false'
+      );
+      badRequestError.statusCode = 400;
+      throw badRequestError;
+    }
+
+    // 1. Institutional Duplicate Detection
+    await this.checkDuplicatePartner(input.institutionName, input.district, input.campus);
+
+    // 2. Normalize values
+    const normalizedEmail = input.contactEmail ? input.contactEmail.trim().toLowerCase() : null;
+    const normalizedMobile = input.contactMobile.replace(/\s+/g, '').trim();
+    const normalizedWhatsapp = input.contactWhatsapp ? input.contactWhatsapp.replace(/\s+/g, '').trim() : normalizedMobile;
+
+    const creatorName = user?.name || user?.email || 'Admin';
+
+    // 3. Transactional code allocation & record insertion
+    const createdPartner = await prisma.$transaction(async (tx) => {
+      const partnerCode = await this.generatePartnerCode(tx);
+
+      const partner = await tx.partnerInstitution.create({
+        data: {
+          institutionName: input.institutionName.trim(),
+          institutionType: input.institutionType,
+          campus: input.campus ? input.campus.trim() : null,
+          address: input.address.trim(),
+          district: input.district.trim(),
+          province: input.province.trim(),
+          contactName: input.contactName.trim(),
+          contactDesignation: input.contactDesignation.trim(),
+          contactMobile: normalizedMobile,
+          contactWhatsapp: normalizedWhatsapp,
+          contactEmail: normalizedEmail,
+          website: input.website ? input.website.trim() : null,
+          classesOffered: input.classesOffered,
+          studentStrength: input.studentStrength ?? null,
+          expectedApplicants: input.expectedApplicants ?? null,
+          agreedToTerms: input.agreedToTerms ?? false,
+          signedAt: input.signedAt ?? null,
+          partnerCode,
+          status: 'PENDING',
+          rejectionReason: null,
+          reviewedBy: null,
+          reviewedAt: null,
+        },
+      });
+
+      // Store initial audit record
+      await tx.partnerStatusAudit.create({
+        data: {
+          partnerId: partner.id,
+          previousStatus: 'PENDING',
+          newStatus: 'PENDING',
+          reason: 'Initial Partner Creation by Administrator',
+          changedById: user?.id || null,
+          changedByEmail: user?.email || null,
+          changedByName: creatorName,
+        },
+      });
+
+      return partner;
+    });
+
+    logger.info(`[Partner Created] Partner ${createdPartner.partnerCode} created by ${creatorName}`);
     return createdPartner;
   }
 
@@ -272,6 +367,62 @@ export class PartnersService {
     });
 
     return history;
+  }
+
+  /**
+   * Admin-driven partner institution profile update.
+   * Updates partial business/contact fields only.
+   * partnerCode, status, rejectionReason, reviewedBy, reviewedAt, agreedToTerms, signedAt, audits, and createdAt are strictly immutable here.
+   * Preserves current status and audit history.
+   * Duplicate detection excludes the current record.
+   * Missing record uses existing not-found behavior.
+   */
+  async updatePartnerProfile(
+    id: string,
+    input: UpdatePartnerProfileInput,
+    user?: { id?: string; email?: string; name?: string }
+  ) {
+    // 1. Verify existence using existing not-found behavior
+    const partner = await this.getPartnerById(id);
+
+    // 2. Duplicate detection excluding current record
+    const targetName = (input.institutionName !== undefined ? input.institutionName : partner.institutionName).trim();
+    const targetDistrict = (input.district !== undefined ? input.district : partner.district).trim();
+    const targetCampus = (input.campus !== undefined ? input.campus : partner.campus)?.trim() || null;
+
+    await this.checkDuplicatePartner(targetName, targetDistrict, targetCampus, id);
+
+    // 3. Build sanitized update payload (strictly whitelisted profile fields)
+    const dataToUpdate: any = {};
+    if (input.institutionName !== undefined) dataToUpdate.institutionName = input.institutionName.trim();
+    if (input.institutionType !== undefined) dataToUpdate.institutionType = input.institutionType;
+    if (input.campus !== undefined) dataToUpdate.campus = input.campus ? input.campus.trim() : null;
+    if (input.address !== undefined) dataToUpdate.address = input.address.trim();
+    if (input.district !== undefined) dataToUpdate.district = input.district.trim();
+    if (input.province !== undefined) dataToUpdate.province = input.province.trim();
+    if (input.contactName !== undefined) dataToUpdate.contactName = input.contactName.trim();
+    if (input.contactDesignation !== undefined) dataToUpdate.contactDesignation = input.contactDesignation.trim();
+    if (input.contactMobile !== undefined) dataToUpdate.contactMobile = input.contactMobile.replace(/\s+/g, '').trim();
+    if (input.contactWhatsapp !== undefined) {
+      dataToUpdate.contactWhatsapp = input.contactWhatsapp ? input.contactWhatsapp.replace(/\s+/g, '').trim() : null;
+    }
+    if (input.contactEmail !== undefined) {
+      dataToUpdate.contactEmail = input.contactEmail ? input.contactEmail.trim().toLowerCase() : null;
+    }
+    if (input.website !== undefined) dataToUpdate.website = input.website ? input.website.trim() : null;
+    if (input.classesOffered !== undefined) dataToUpdate.classesOffered = input.classesOffered;
+    if (input.studentStrength !== undefined) dataToUpdate.studentStrength = input.studentStrength ?? null;
+    if (input.expectedApplicants !== undefined) dataToUpdate.expectedApplicants = input.expectedApplicants ?? null;
+
+    // 4. Update record (status, rejectionReason, reviewedBy, reviewedAt, partnerCode, createdAt untouched)
+    const updated = await prisma.partnerInstitution.update({
+      where: { id },
+      data: dataToUpdate,
+    });
+
+    const updaterName = user?.name || user?.email || 'Admin';
+    logger.info(`[Partner Profile] Partner ${partner.partnerCode} profile updated by ${updaterName}`);
+    return updated;
   }
 
   /**

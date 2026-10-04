@@ -31,6 +31,20 @@ export class PartnersController {
     }
   }
 
+  async create(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const partner = await partnersService.createPartner(req.body, user);
+      res.status(201).json({
+        success: true,
+        message: 'Partner institution created successfully',
+        data: partner,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getById(req: Request, res: Response, next: NextFunction) {
     try {
       const partner = await partnersService.getPartnerById(req.params.id);
@@ -62,6 +76,20 @@ export class PartnersController {
       res.status(200).json({
         success: true,
         message: 'Partner institution status updated successfully',
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateProfile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const updated = await partnersService.updatePartnerProfile(req.params.id, req.body, user);
+      res.status(200).json({
+        success: true,
+        message: 'Partner institution profile updated successfully',
         data: updated,
       });
     } catch (error) {
