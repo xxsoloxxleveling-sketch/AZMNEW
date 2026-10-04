@@ -23,6 +23,25 @@ interface StudentDossierModalProps {
   student: MockStudent | null;
 }
 
+function formatHumanDate(dateStr?: string | null): string {
+  if (!dateStr) return 'N/A';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
+ * @deprecated Administrative student workspace now prints dossier directly via printStudentDossier in StudentDetailView.
+ * This modal is preserved for public candidate roll-number self-service view.
+ */
 export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen, onClose, student }) => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [photoBlobUrl, setPhotoBlobUrl] = useState<string | null>(null);
@@ -115,62 +134,11 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
   const appNo = student.applicationNo || student.studentId || student.id;
   const rollNo = student.rollNumber || (student.feeStatus === 'PAID' ? 'PENDING BATCH RELEASE' : 'PENDING FEE');
 
-  const academicRecords = (student as any).academicRecords || [
-    {
-      examLevel: 'Class 6th (Middle Wing)',
-      year: '2022',
-      institute: student.schoolName || 'Govt / Private High School',
-      board: 'School Assessment',
-      totalMarks: 600,
-      obtainedMarks: Math.round((Number((student as any).lastClassPercentage) || 88) * 6),
-      percentage: Number((student as any).lastClassPercentage) || 88,
-      grade: 'A-1',
-    },
-    {
-      examLevel: 'Class 7th (Middle Wing)',
-      year: '2023',
-      institute: student.schoolName || 'Govt / Private High School',
-      board: 'School Assessment',
-      totalMarks: 700,
-      obtainedMarks: Math.round((Number((student as any).lastClassPercentage) || 88) * 7),
-      percentage: Number((student as any).lastClassPercentage) || 88,
-      grade: 'A-1',
-    },
-    {
-      examLevel: 'Class 8th (Middle Standard)',
-      year: '2024',
-      institute: student.schoolName || 'Govt / Private High School',
-      board: 'BISE Assessment',
-      totalMarks: 800,
-      obtainedMarks: Math.round((Number((student as any).lastClassPercentage) || 89) * 8),
-      percentage: Number((student as any).lastClassPercentage) || 89,
-      grade: 'A-1',
-    },
-    {
-      examLevel: 'Class 9th (SSC-I Matric)',
-      year: '2025',
-      institute: student.schoolName || 'High School & College',
-      board: student.boardOrUniversity || 'BISE Abbottabad',
-      totalMarks: 550,
-      obtainedMarks: Math.round((Number((student as any).lastClassPercentage) || 91) * 5.5),
-      percentage: Number((student as any).lastClassPercentage) || 91,
-      grade: 'A-1',
-    },
-    {
-      examLevel: student.currentClass || 'Class 10th (SSC-II)',
-      year: '2026',
-      institute: student.schoolName || 'School & College',
-      board: student.boardOrUniversity || 'BISE Abbottabad',
-      totalMarks: 1100,
-      obtainedMarks: Math.round((Number((student as any).lastClassPercentage) || 92) * 11),
-      percentage: Number((student as any).lastClassPercentage) || 92,
-      grade: 'A-1',
-    },
-  ];
+  const academicRecords: any[] = Array.isArray((student as any).academicRecords) ? (student as any).academicRecords : [];
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="bg-white w-full max-w-4xl rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Top Bar */}
         <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -219,7 +187,7 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                   <h3 className="text-xl font-extrabold text-slate-900 font-display">{student.fullName}</h3>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${student.feeStatus === 'PAID' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
                     {student.feeStatus === 'PAID' ? 'Fee Cleared ✓' : 'Fee Pending'}
                   </span>
                 </div>
@@ -260,19 +228,19 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-400 text-[10px] font-bold uppercase block">Date of Birth</span>
-                <span className="font-bold text-slate-900">{student.dateOfBirth || '2008-04-12'}</span>
+                <span className="font-bold text-slate-900">{formatHumanDate(student.dateOfBirth)}</span>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-400 text-[10px] font-bold uppercase block">Gender / Age</span>
-                <span className="font-bold text-slate-900">{student.gender} ({student.age || '16'} yrs)</span>
+                <span className="font-bold text-slate-900">{student.gender || 'N/A'}{student.age ? ` (${student.age} yrs)` : ''}</span>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-400 text-[10px] font-bold uppercase block">District</span>
-                <span className="font-bold text-slate-900">{student.district || 'Mansehra'}</span>
+                <span className="font-bold text-slate-900">{student.district || 'N/A'}</span>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-400 text-[10px] font-bold uppercase block">Province</span>
-                <span className="font-bold text-slate-900">{student.province || 'Khyber Pakhtunkhwa'}</span>
+                <span className="font-bold text-slate-900">{student.province || 'N/A'}</span>
               </div>
             </div>
           </div>
@@ -286,22 +254,22 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-400 text-[10px] font-bold uppercase block">Candidate Mobile / WhatsApp</span>
-                <span className="font-mono font-bold text-slate-900">{student.whatsapp || student.mobile || '0300-XXXXXXX'}</span>
+                <span className="font-mono font-bold text-slate-900">{student.whatsapp || student.mobile || 'N/A'}</span>
               </div>
               <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200">
                 <span className="text-[#185b9d] text-[10px] font-bold uppercase block">Father / Guardian Mobile</span>
                 <span className="font-mono font-extrabold text-[#185b9d]">
-                  {student.parentMobile || (student as any).emergencyContact || '0305-1755551'}
+                  {student.parentMobile || (student as any).emergencyContact || 'N/A'}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-400 text-[10px] font-bold uppercase block">Email Address</span>
-                <span className="font-bold text-slate-900">{student.email || 'student@azmaio.com'}</span>
+                <span className="font-bold text-slate-900">{student.email || 'N/A'}</span>
               </div>
             </div>
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
               <span className="text-slate-400 text-[10px] font-bold uppercase block">Residential Postal Address</span>
-              <span className="font-semibold text-slate-800">{student.address || 'Main City, Mansehra, Khyber Pakhtunkhwa'}</span>
+              <span className="font-semibold text-slate-800">{student.address || 'N/A'}</span>
             </div>
           </div>
 
@@ -325,7 +293,14 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
-                  {academicRecords.map((rec: any, idx: number) => (
+                  {academicRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-4 px-3 text-center text-slate-500 font-medium italic">
+                        No previous academic records submitted with application.
+                      </td>
+                    </tr>
+                  ) : (
+                    academicRecords.map((rec: any, idx: number) => (
                     <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                       <td className="py-2 px-3 font-bold text-slate-900">{rec.examLevel}</td>
                       <td className="py-2 px-3 font-mono text-slate-600">{rec.year}</td>
@@ -335,7 +310,8 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
                       <td className="py-2 px-3 font-mono font-bold text-slate-900">{rec.obtainedMarks}</td>
                       <td className="py-2 px-3 font-mono font-extrabold text-emerald-700">{rec.percentage}%</td>
                     </tr>
-                  ))}
+                  ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -351,18 +327,18 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                 <span className="text-slate-400 text-[10px] font-bold uppercase block">Applied Scholarship Stream</span>
                 <span className="font-extrabold text-[#185b9d] text-sm block">
-                  {student.scholarshipCategory || 'Category B: Academic Merit Waiver'}
+                  {student.scholarshipCategory || 'Standard Stream'}
                 </span>
-                <span className="text-slate-500 text-[11px] block">School: {student.schoolName || 'Partner School'}</span>
+                <span className="text-slate-500 text-[11px] block">School: {student.schoolName || 'Not specified'}</span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                 <span className="text-slate-400 text-[10px] font-bold uppercase block">Assigned Examination Center</span>
                 <span className="font-bold text-slate-900 block">
-                  {student.officeUse?.testCentre || 'AZM Central Examination Center - Mansehra'}
+                  {student.officeUse?.testCentre || 'Examination Center Unassigned'}
                 </span>
                 <span className="text-slate-500 text-[11px] block">
-                  Test Date: {student.officeUse?.testDate || 'Sunday, 15 November 2026'} @ {student.officeUse?.testReportingTime || '09:00 AM'}
+                  {student.officeUse?.testDate ? `Test Date: ${student.officeUse.testDate}${student.officeUse?.testReportingTime ? ` @ ${student.officeUse.testReportingTime}` : ''}` : 'Test Schedule: Pending'}
                 </span>
               </div>
             </div>

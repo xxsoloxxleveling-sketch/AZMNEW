@@ -1,24 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  UserPlus,
-  QrCode,
-  GraduationCap,
-  Filter,
-  Eye,
-  Download,
-  Trash2,
-  AlertTriangle,
-  RefreshCw,
-  Zap,
-  CheckCircle2,
-  Clock,
-  Loader2,
-  Ticket,
-  MessageSquare,
-  FileDown,
-  FileText,
-} from 'lucide-react';
-import { DataTable, Column } from '../shared/DataTable';
+  IconSearch,
+  IconChevronLeft,
+  IconChevronRight,
+  IconChevronsUpDown,
+  IconAlertTriangle,
+  IconRefresh,
+  IconZap,
+  IconClock,
+  IconLoader,
+  IconMessageSquare,
+  IconFileText,
+  IconMoreHorizontal,
+  IconPrintSlip,
+  IconDownloadSlip,
+  IconEditStudent,
+  IconDeleteCandidate,
+  IconApproveFee,
+} from '../../common/icons';
 import { StatusBadge } from '../shared/StatusBadge';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
 import { AdminWalkInModal } from './AdminWalkInModal';
@@ -54,11 +53,31 @@ export const StudentsListView: React.FC = () => {
   const [showBatchRollModal, setShowBatchRollModal] = useState(false);
   const [isIssuingBatch, setIsIssuingBatch] = useState(false);
 
+  // Sorting state
+  const [sortField, setSortField] = useState<'rollNumber' | 'fullName' | 'currentClass' | null>(null);
+  const [sortAsc, setSortAsc] = useState(true);
+
   // Pre-issue roll slips, OMR sheets, and batch printing state
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [slipStudent, setSlipStudent] = useState<MockStudent | null>(null);
   const [omrStudent, setOmrStudent] = useState<MockStudent | null>(null);
   const [bulkPrintType, setBulkPrintType] = useState<'OMR' | 'ROLL_SLIP' | null>(null);
+  const [studentToEdit, setStudentToEdit] = useState<MockStudent | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Row action menu dropdown tracking
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+
+  // Close active action menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (activeActionMenuId && !(e.target as Element).closest('[data-action-menu]')) {
+        setActiveActionMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeActionMenuId]);
 
   const fetchStudents = async (showFullLoading = true) => {
     if (authLoading) return;
@@ -120,36 +139,32 @@ export const StudentsListView: React.FC = () => {
     return () => window.removeEventListener('students-updated', refresh);
   }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage]);
 
-  // Fetch private thumbnail files only for the ten rows currently displayed.
-  // Probe visible rows even when legacy records have no document metadata.
-  // Fallback gracefully from photoThumbnail to photo document if pending.
+  // Fetch private thumbnail files only for the rows currently displayed.
   useEffect(() => {
     let cancelled = false;
     const loadedUrls: string[] = [];
 
     const loadThumbnails = async () => {
       const results = await Promise.all(
-        students
-          .map(async (student) => {
+        students.map(async (student) => {
+          try {
+            let url: string;
             try {
-              let url: string;
-              try {
-                url = await apiFetchProtectedObjectUrl(
-                  `/api/students/${student.id}/document/photoThumbnail`
-                );
-              } catch {
-                // Fallback to photo document if photoThumbnail is missing or pending generation
-                url = await apiFetchProtectedObjectUrl(
-                  `/api/students/${student.id}/document/photo`
-                );
-              }
-              loadedUrls.push(url);
-              return [student.id, url] as const;
+              url = await apiFetchProtectedObjectUrl(
+                `/api/students/${student.id}/document/photoThumbnail`
+              );
             } catch {
-              // Older records without any photo keep their initials.
-              return null;
+              // Fallback to photo document if photoThumbnail is missing or pending generation
+              url = await apiFetchProtectedObjectUrl(
+                `/api/students/${student.id}/document/photo`
+              );
             }
-          })
+            loadedUrls.push(url);
+            return [student.id, url] as const;
+          } catch {
+            return null;
+          }
+        })
       );
 
       if (cancelled) {
@@ -181,6 +196,26 @@ export const StudentsListView: React.FC = () => {
     }
   };
 
+  const handleSort = (field: 'rollNumber' | 'fullName' | 'currentClass') => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(true);
+    }
+  };
+
+  const sortedStudents = useMemo(() => {
+    if (!sortField) return students;
+    return [...students].sort((a, b) => {
+      const aVal = (a[sortField] || '').toString().toLowerCase();
+      const bVal = (b[sortField] || '').toString().toLowerCase();
+      if (aVal < bVal) return sortAsc ? -1 : 1;
+      if (aVal > bVal) return sortAsc ? 1 : -1;
+      return 0;
+    });
+  }, [students, sortField, sortAsc]);
+
   if (selectedStudent) {
     return (
       <StudentDetailView
@@ -193,389 +228,170 @@ export const StudentsListView: React.FC = () => {
     );
   }
 
-  const columns: Column<MockStudent>[] = [
-    {
-      header: '',
-      className: 'w-10 text-center',
-      render: (row) => (
-        <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
-          <input
-            type="checkbox"
-            checked={selectedStudentIds.includes(row.id)}
-            onChange={() => {
-              setSelectedStudentIds((prev) =>
-                prev.includes(row.id) ? prev.filter((id) => id !== row.id) : [...prev, row.id]
-              );
-            }}
-            className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
-          />
-        </div>
-      ),
-    },
-    {
-      header: 'Roll / App No',
-      accessor: 'rollNumber',
-      sortable: true,
-      render: (row) => {
-        const isOfficial = !!row.rollNumber && row.rollNumberStatus !== 'PROVISIONAL';
-        const displayRoll = row.displayRollNumber || (row.rollNumber ? row.rollNumber : `PROV-${row.applicationNo}`);
-        return (
-          <div>
-            {isOfficial ? (
-              <span className="font-bold text-[#185b9d] block">{row.rollNumber}</span>
-            ) : (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-bold text-amber-700 text-xs font-mono">
-                  {displayRoll}
-                </span>
-                <span className="px-1.5 py-0.2 rounded-sm text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 tracking-wide uppercase">
-                  Pre-Issue
-                </span>
-              </div>
-            )}
-            <span className="text-[11px] text-slate-400 font-mono">App #{row.applicationNo}</span>
-          </div>
-        );
-      },
-    },
-    {
-      header: 'Student Name',
-      accessor: 'fullName',
-      sortable: true,
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-black text-slate-500" aria-label={`${row.fullName} avatar`}>
-            {thumbnailUrls[row.id] ? (
-              <img
-                src={thumbnailUrls[row.id]}
-                alt={`${row.fullName} profile thumbnail`}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              row.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'
-            )}
-          </div>
-          <div>
-            <span className="font-bold text-slate-900 block">{row.fullName}</span>
-            <span className="text-xs text-slate-400">S/D/O {row.fatherName}</span>
-          </div>
-        </div>
-      ),
-    },
-    {
-      header: 'Class & Level',
-      accessor: 'currentClass',
-      sortable: true,
-      render: (row) => (
-        <div>
-          <span className="font-semibold text-slate-800 block">{row.currentClass}</span>
-          <span className="text-[11px] text-slate-400">
-            {(row.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ')}
-          </span>
-        </div>
-      ),
-    },
-    {
-      header: 'Status',
-      accessor: 'status',
-      render: (row) => <StatusBadge status={row.status} size="sm" />,
-    },
-    {
-      header: 'Fee Status',
-      accessor: 'feeStatus',
-      render: (row) => {
-        const isPaid = row.feeStatus === 'PAID';
-        return (
-          <span
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
-              isPaid
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                : 'bg-amber-100 text-amber-800 border border-amber-200'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${isPaid ? 'bg-emerald-600' : 'bg-amber-600'}`} />
-            {isPaid ? 'PKR 300 Paid' : 'Pending Fee'}
-          </span>
-        );
-      },
-    },
-    {
-      header: 'Attendance',
-      accessor: 'attendancePercentage',
-      sortable: true,
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <div className="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-            <div
-              style={{ width: `${row.attendancePercentage || 0}%` }}
-              className={`h-full rounded-full ${
-                (row.attendancePercentage || 0) >= 90
-                  ? 'bg-emerald-500'
-                  : (row.attendancePercentage || 0) >= 75
-                  ? 'bg-amber-500'
-                  : 'bg-rose-500'
-              }`}
-            />
-          </div>
-          <span className="font-bold text-xs text-slate-700">
-            {row.attendancePercentage || 0}%
-          </span>
-        </div>
-      ),
-    },
-    {
-      header: 'Actions',
-      className: 'text-right',
-      render: (row) => (
-        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {row.feeStatus !== 'PAID' && (
-            <button
-              onClick={async () => {
-                if (confirm(`Approve PKR 300 fee payment for ${row.fullName}?`)) {
-                  try {
-                    setStudents((prev) =>
-                      prev.map((s) => (s.id === row.id ? { ...s, feeStatus: 'PAID' } : s))
-                    );
-                    await mockApi.approveStudentPayment(row.id);
-                    alert(`Fee payment approved for ${row.fullName}. Status updated to PAID.`);
-                    fetchStudents();
-                  } catch (err: any) {
-                    alert(err.message || 'Failed to approve payment');
-                    fetchStudents();
-                  }
-                }
-              }}
-              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition cursor-pointer"
-            >
-              Approve Fee
-            </button>
-          )}
+  const allCurrentIds = students.map((s) => s.id);
+  const allCurrentSelected = allCurrentIds.length > 0 && allCurrentIds.every((id) => selectedStudentIds.includes(id));
 
-          {/* WhatsApp Quick-Contact Button */}
-          {(() => {
-            const wa = getStudentWhatsAppContact(row);
-            return (
-              <button
-                type="button"
-                onClick={(e) => {
-                  if (!wa.isDisabled && wa.url) {
-                    openWhatsAppInNewTab(wa.url, e);
-                  }
-                }}
-                disabled={wa.isDisabled}
-                title={
-                  wa.isDisabled
-                    ? wa.disabledReason || 'No contact number on file'
-                    : `Contact ${row.fullName} on WhatsApp (${wa.formattedPhone})`
-                }
-                className={`p-1.5 rounded-lg border transition ${
-                  !wa.isDisabled
-                    ? 'border-emerald-200 text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300 cursor-pointer shadow-2xs'
-                    : 'border-slate-200 text-slate-300 cursor-not-allowed opacity-40'
-                }`}
-              >
-                <MessageSquare className="w-4 h-4" />
-              </button>
-            );
-          })()}
+  const toggleSelectAllCurrent = () => {
+    if (allCurrentSelected) {
+      setSelectedStudentIds((prev) => prev.filter((id) => !allCurrentIds.includes(id)));
+    } else {
+      setSelectedStudentIds((prev) => Array.from(new Set([...prev, ...allCurrentIds])));
+    }
+  };
 
-          <button
-            onClick={() => setSelectedStudent(row)}
-            title="View Full Profile"
-            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-[#185b9d] transition cursor-pointer"
-          >
-            <Eye className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => mockApi.downloadStudentPdf(row.id, row.rollNumber)}
-            title="Download Registration PDF"
-            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-[#185b9d] transition cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-
-          {/* Roll Slip Overview & Print Button - ALWAYS ENABLED */}
-          <button
-            onClick={() => setSlipStudent(row)}
-            title={
-              row.rollNumber
-                ? 'Overview & Print Official Roll Slip'
-                : 'Overview & Print Pre-Issue Roll Slip'
+  const renderActionMenu = (student: MockStudent, isUpward = false) => (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className={`absolute right-0 ${isUpward ? 'bottom-full mb-1' : 'top-full mt-1'} w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-100`}
+    >
+      {/* Approve Fee - SUPER_ADMIN, ADMIN, ACCOUNTANT */}
+      {student.feeStatus !== 'PAID' && (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'ACCOUNTANT') && (
+        <button
+          type="button"
+          onClick={async () => {
+            setActiveActionMenuId(null);
+            if (confirm(`Approve PKR 300 fee payment for ${student.fullName}?`)) {
+              try {
+                setStudents((prev) =>
+                  prev.map((s) => (s.id === student.id ? { ...s, feeStatus: 'PAID' } : s))
+                );
+                await mockApi.approveStudentPayment(student.id);
+                alert(`Fee payment approved for ${student.fullName}. Status updated to PAID.`);
+                fetchStudents();
+              } catch (err: any) {
+                alert(err.message || 'Failed to approve payment');
+                fetchStudents();
+              }
             }
-            className={`p-1.5 rounded-lg border transition cursor-pointer ${
-              row.rollNumber
-                ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                : 'border-amber-200 text-amber-700 hover:bg-amber-50'
-            }`}
-          >
-            <Ticket className="w-4 h-4" />
-          </button>
+          }}
+          className="w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 font-medium flex items-center gap-2 transition cursor-pointer"
+        >
+          <IconApproveFee size={14} className="text-emerald-600" />
+          <span>Approve Fee (PKR 300)</span>
+        </button>
+      )}
 
-          {/* OMR Sheet Overview & Print Button */}
+      {/* Edit Student - SUPER_ADMIN, ADMIN */}
+      {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
+        <button
+          type="button"
+          onClick={() => {
+            setActiveActionMenuId(null);
+            setStudentToEdit(student);
+            setIsEditModalOpen(true);
+          }}
+          className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2 transition cursor-pointer"
+        >
+          <IconEditStudent size={14} className="text-slate-500" />
+          <span>Edit Student</span>
+        </button>
+      )}
+
+      {/* Print Roll Slip - SUPER_ADMIN, ADMIN */}
+      {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
+        <button
+          type="button"
+          onClick={() => {
+            setActiveActionMenuId(null);
+            setSlipStudent(student);
+          }}
+          className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2 transition cursor-pointer"
+        >
+          <IconPrintSlip size={14} className="text-slate-500" />
+          <span>{student.rollNumber ? 'Print Official Slip' : 'Print Pre-Issue Slip'}</span>
+        </button>
+      )}
+
+      {/* Print OMR Sheet - SUPER_ADMIN, ADMIN */}
+      {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
+        <button
+          type="button"
+          onClick={() => {
+            setActiveActionMenuId(null);
+            setOmrStudent(student);
+          }}
+          className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2 transition cursor-pointer"
+        >
+          <IconFileText size={14} className="text-slate-500" />
+          <span>Print OMR Bubble Sheet</span>
+        </button>
+      )}
+
+      {/* Download Registration PDF - All staff */}
+      <button
+        type="button"
+        onClick={() => {
+          setActiveActionMenuId(null);
+          mockApi.downloadStudentPdf(student.id, student.rollNumber);
+        }}
+        className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2 transition cursor-pointer"
+      >
+        <IconDownloadSlip size={14} className="text-slate-500" />
+        <span>Download PDF</span>
+      </button>
+
+      {/* Delete Candidate - Strictly SUPER_ADMIN only */}
+      {role === 'SUPER_ADMIN' && (
+        <>
+          <div className="border-t border-slate-100 my-1" />
           <button
-            onClick={() => setOmrStudent(row)}
-            title="Overview & Print MCQs OMR Bubble Sheet (100 Questions)"
-            className="p-1.5 rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50 transition cursor-pointer"
+            type="button"
+            onClick={() => {
+              setActiveActionMenuId(null);
+              setStudentToDelete(student);
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 font-medium flex items-center gap-2 transition cursor-pointer"
           >
-            <FileText className="w-4 h-4" />
+            <IconDeleteCandidate size={14} className="text-rose-600" />
+            <span>Delete Candidate</span>
           </button>
-
-          {role === 'SUPER_ADMIN' && (
-            <button
-              onClick={() => setStudentToDelete(row)}
-              title="Delete Candidate (Super Admin Only)"
-              className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      ),
-    },
-  ];
+        </>
+      )}
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {errorMessage && (
-        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <IconAlertTriangle size={16} className="text-amber-600 shrink-0" />
             <span className="text-xs font-semibold">{errorMessage}</span>
           </div>
           <button
             onClick={() => fetchStudents(true)}
-            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Retry Connection</span>
+            <IconRefresh size={12} />
+            <span>Retry</span>
           </button>
         </div>
       )}
 
-      {/* Batch Printing Actions Bar (When multiple students are selected) */}
-      {selectedStudentIds.length > 0 && (
-        <div className="bg-slate-900 text-white px-5 py-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xl animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-2.5">
-            <span className="bg-blue-600 text-white text-xs font-black px-2.5 py-1 rounded-lg">
-              {selectedStudentIds.length} Selected
-            </span>
-            <span className="text-xs text-slate-300 font-medium">
-              Candidates selected for batch printing
-            </span>
-          </div>
+      {/* Main Roster Card */}
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
+        {/* Toolbar: Search, Filters, and Operations */}
+        <div className="p-3.5 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-50/50">
+          {/* Search & Filters */}
+          <div className="flex flex-wrap items-center gap-2 flex-1">
+            <div className="relative min-w-[200px] flex-1 max-w-sm">
+              <IconSearch size={16} className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search name, roll, or CNIC..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#185b9d] transition h-9"
+              />
+            </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setBulkPrintType('OMR')}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Print OMR Sheets ({selectedStudentIds.length})</span>
-            </button>
-
-            <button
-              onClick={() => setBulkPrintType('ROLL_SLIP')}
-              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-            >
-              <Ticket className="w-3.5 h-3.5" />
-              <span>Print Roll Slips ({selectedStudentIds.length})</span>
-            </button>
-
-            <button
-              onClick={() => setSelectedStudentIds([])}
-              className="px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition cursor-pointer"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Table Component */}
-      <DataTable
-        columns={columns}
-        data={students}
-        keyExtractor={(row) => row.id}
-        isLoading={isLoading}
-        searchPlaceholder="Search by student name, roll number, or CNIC..."
-        searchValue={searchQuery}
-        onSearchChange={(value) => {
-          setSearchQuery(value);
-          setCurrentPage(1);
-        }}
-        onRowClick={(row) => setSelectedStudent(row)}
-        emptyTitle="No Students Enrolled"
-        emptyMessage="Start by adding your first student walk-in registration or sync from online applications."
-        pageSize={STUDENTS_PER_PAGE}
-        pagination={{
-          page: pagination.page,
-          total: pagination.total,
-          totalPages: pagination.totalPages,
-          onPageChange: setCurrentPage,
-        }}
-        actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const allCurrentIds = students.map((s) => s.id);
-                const allSelected = allCurrentIds.length > 0 && allCurrentIds.every((id) => selectedStudentIds.includes(id));
-                if (allSelected) {
-                  setSelectedStudentIds((prev) => prev.filter((id) => !allCurrentIds.includes(id)));
-                } else {
-                  setSelectedStudentIds((prev) => Array.from(new Set([...prev, ...allCurrentIds])));
-                }
-              }}
-              className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-              title="Select or deselect all candidates on the current page"
-            >
-              <span>
-                {students.length > 0 && students.every((s) => selectedStudentIds.includes(s.id))
-                  ? 'Deselect Page'
-                  : 'Select Page'}
-              </span>
-            </button>
-
-            <button
-              onClick={() => fetchStudents(true)}
-              disabled={isRefreshing}
-              className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              title="Fetch latest student registrations from database"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-[#185b9d] ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>{isRefreshing ? 'Syncing...' : 'Sync Live'}</span>
-            </button>
-
-            {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
-              <button
-                onClick={() => setShowBatchRollModal(true)}
-                className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-                title="Batch assign roll numbers and QR codes to paid candidates"
-              >
-                <Zap className="w-3.5 h-3.5" />
-                <span>Issue Roll Numbers</span>
-                {rollStatus && rollStatus.readyCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white text-emerald-800 ml-0.5">
-                    {rollStatus.readyCount}
-                  </span>
-                )}
-              </button>
-            )}
-
-            <button
-              onClick={() => setIsWalkInOpen(true)}
-              className="px-4 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-md transition flex items-center gap-2"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Add Student</span>
-            </button>
-          </div>
-        }
-        filters={
-          <div className="flex flex-wrap items-center gap-2">
             <select
               value={classFilter}
               onChange={(e) => { setClassFilter(e.target.value); setCurrentPage(1); }}
-              className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
+              className="text-xs font-medium bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer h-9"
             >
               <option value="ALL">All Classes</option>
               <option value="6th">Class 6th</option>
@@ -591,7 +407,7 @@ export const StudentsListView: React.FC = () => {
             <select
               value={genderFilter}
               onChange={(e) => { setGenderFilter(e.target.value); setCurrentPage(1); }}
-              className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
+              className="text-xs font-medium bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer h-9"
             >
               <option value="ALL">All Genders</option>
               <option value="MALE">Male</option>
@@ -601,7 +417,7 @@ export const StudentsListView: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-              className="text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
+              className="text-xs font-medium bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer h-9"
             >
               <option value="ALL">All Statuses</option>
               <option value="ACTIVE">Active</option>
@@ -611,17 +427,493 @@ export const StudentsListView: React.FC = () => {
             <button
               onClick={handleExportPdf}
               disabled={isExportingPdf}
-              className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              title="Download clean printable candidate roster PDF matching your current search and filters"
+              className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 h-9"
+              title="Download printable candidate roster PDF"
             >
-              <FileDown className="w-3.5 h-3.5 text-[#185b9d]" />
-              <span>{isExportingPdf ? 'Exporting PDF...' : 'Export List PDF'}</span>
+              <IconDownloadSlip size={14} className="text-[#185b9d]" />
+              <span>{isExportingPdf ? 'Exporting...' : 'Export PDF'}</span>
             </button>
           </div>
-        }
-      />
 
-      {/* Admin Walk-In Registration Modal */}
+          {/* Operational Toolbar Actions (Add Student removed - authoritative in AdminHeader) */}
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              onClick={toggleSelectAllCurrent}
+              className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition flex items-center gap-1 cursor-pointer h-9"
+              title="Select or deselect all candidates on current page"
+            >
+              <span>{allCurrentSelected ? 'Deselect Page' : 'Select Page'}</span>
+            </button>
+
+            <button
+              onClick={() => fetchStudents(true)}
+              disabled={isRefreshing}
+              className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 h-9"
+              title="Sync latest student registrations"
+            >
+              <IconRefresh size={14} className={`text-[#185b9d] ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Syncing...' : 'Sync Live'}</span>
+            </button>
+
+            {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
+              <button
+                type="button"
+                onClick={() => setShowBatchRollModal(true)}
+                className="px-3 py-1.5 text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 hover:text-[#185b9d] border border-slate-200 hover:border-[#185b9d]/30 focus:outline-none focus:ring-1 focus:ring-[#185b9d] rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer h-9"
+                title="Batch assign roll numbers and QR codes to paid candidates"
+              >
+                <IconZap size={14} className="text-slate-500" />
+                <span>Issue Roll Numbers</span>
+                {rollStatus && rollStatus.readyCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-50 text-[#185b9d] border border-blue-200 ml-0.5">
+                    {rollStatus.readyCount}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Integrated Batch Selection Bar (Active when candidates selected) */}
+        {selectedStudentIds.length > 0 && (
+          <div className="bg-slate-50/90 border-b border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs animate-in fade-in duration-100">
+            <div className="flex items-center gap-2">
+              <span className="bg-[#185b9d] text-white text-[11px] font-bold px-2 py-0.5 rounded-md">
+                {selectedStudentIds.length} Selected
+              </span>
+              <span className="text-xs text-slate-600 font-medium">
+                Candidates selected for batch actions
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setBulkPrintType('OMR')}
+                className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-xs font-medium transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <IconFileText size={14} className="text-[#185b9d]" />
+                <span>Print OMR Sheets ({selectedStudentIds.length})</span>
+              </button>
+
+              <button
+                onClick={() => setBulkPrintType('ROLL_SLIP')}
+                className="px-3 py-1 bg-[#185b9d] hover:bg-[#13497d] text-white rounded-md text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <IconPrintSlip size={14} />
+                <span>Print Roll Slips ({selectedStudentIds.length})</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedStudentIds([])}
+                className="px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-md transition cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Content Area with Loading Spinner */}
+        <div className="relative min-h-[360px]">
+          {isLoading ? (
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-2xs flex flex-col items-center justify-center z-20 space-y-2">
+              <IconLoader size={24} className="text-[#185b9d]" />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Loading Candidates...</span>
+            </div>
+          ) : null}
+
+          {/* Desktop & Tablet Table View (hidden on narrow screens < 768px) */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
+                  <th className="py-2.5 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allCurrentSelected}
+                      onChange={toggleSelectAllCurrent}
+                      className="w-4 h-4 text-[#185b9d] rounded border-slate-300 focus:ring-[#185b9d] cursor-pointer"
+                    />
+                  </th>
+                  <th
+                    onClick={() => handleSort('rollNumber')}
+                    className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-900"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Roll / App No</span>
+                      <IconChevronsUpDown size={12} className="text-slate-400" />
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('fullName')}
+                    className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-900"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Student Identity</span>
+                      <IconChevronsUpDown size={12} className="text-slate-400" />
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('currentClass')}
+                    className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-900"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Class & Level</span>
+                      <IconChevronsUpDown size={12} className="text-slate-400" />
+                    </div>
+                  </th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Fee Status</th>
+                  <th className="py-2.5 px-3">Assigned Seating</th>
+                  <th className="py-2.5 px-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sortedStudents.length > 0 ? (
+                  sortedStudents.map((student) => {
+                    const isOfficial = !!student.rollNumber && student.rollNumberStatus !== 'PROVISIONAL';
+                    const displayRoll = student.displayRollNumber || (student.rollNumber ? student.rollNumber : `PROV-${student.applicationNo}`);
+                    const seating = student.assignedHall && student.seatNo
+                      ? `${student.assignedRoom || student.assignedHall} · ${student.seatNo}`
+                      : (student.assignedHall || student.seatNo ? `${student.assignedHall || ''} ${student.seatNo || ''}`.trim() : 'Unallocated');
+                    const isPaid = student.feeStatus === 'PAID';
+                    const wa = getStudentWhatsAppContact(student);
+
+                    return (
+                      <tr
+                        key={student.id}
+                        onClick={() => setSelectedStudent(student)}
+                        className="hover:bg-slate-50/70 transition-colors cursor-pointer h-[52px]"
+                      >
+                        {/* Checkbox */}
+                        <td onClick={(e) => e.stopPropagation()} className="py-2 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedStudentIds.includes(student.id)}
+                            onChange={() => {
+                              setSelectedStudentIds((prev) =>
+                                prev.includes(student.id) ? prev.filter((id) => id !== student.id) : [...prev, student.id]
+                              );
+                            }}
+                            className="w-4 h-4 text-[#185b9d] rounded border-slate-300 focus:ring-[#185b9d] cursor-pointer"
+                          />
+                        </td>
+
+                        {/* Roll / App No */}
+                        <td className="py-2 px-3">
+                          <div className="font-mono tabular-nums leading-tight">
+                            {isOfficial ? (
+                              <span className="font-bold text-[#185b9d] text-xs block leading-tight">{student.rollNumber}</span>
+                            ) : (
+                              <div className="flex items-center gap-1.5 flex-wrap leading-tight">
+                                <span className="font-bold text-amber-700 text-xs leading-tight">
+                                  {displayRoll}
+                                </span>
+                                <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 uppercase leading-none">
+                                  Pre-Issue
+                                </span>
+                              </div>
+                            )}
+                            <span className="text-[10px] text-slate-400 block leading-tight mt-0.5">App #{student.applicationNo}</span>
+                          </div>
+                        </td>
+
+                        {/* Student Identity: Real Photo Thumbnail (32-36px) + Name + Father Name */}
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className="w-8 h-8 rounded-md bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
+                              aria-hidden="true"
+                            >
+                              {thumbnailUrls[student.id] ? (
+                                <img
+                                  src={thumbnailUrls[student.id]}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                student.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'
+                              )}
+                            </div>
+                            <div className="min-w-0 leading-tight">
+                              <span className="font-bold text-slate-900 text-xs block truncate leading-tight">{student.fullName}</span>
+                              <span className="text-[11px] text-slate-500 block truncate leading-tight mt-0.5">S/D/O {student.fatherName}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Class & Level */}
+                        <td className="py-2 px-3">
+                          <div className="leading-tight">
+                            <span className="font-semibold text-slate-800 text-xs block leading-tight">{student.currentClass}</span>
+                            <span className="text-[10px] text-slate-400 block truncate max-w-[140px] leading-tight mt-0.5">
+                              {(student.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-2 px-3">
+                          <StatusBadge status={student.status} size="sm" />
+                        </td>
+
+                        {/* Fee Status: Semantic Badge */}
+                        <td className="py-2 px-3">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold leading-none ${
+                              isPaid
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${isPaid ? 'bg-emerald-600' : 'bg-amber-600'}`} />
+                            {isPaid ? 'PKR 300 Paid' : 'Pending Fee'}
+                          </span>
+                        </td>
+
+                        {/* Assigned Seating */}
+                        <td className="py-2 px-3">
+                          {seating !== 'Unallocated' ? (
+                            <span className="font-mono text-xs font-medium text-slate-800 leading-tight block">{seating}</span>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic leading-tight block">Unallocated</span>
+                          )}
+                        </td>
+
+                        {/* Consolidated Row Actions */}
+                        <td className="py-2 px-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5 leading-none">
+                            {/* Visible View Profile Button */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedStudent(student)}
+                              className="px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-md shadow-2xs transition cursor-pointer leading-tight"
+                            >
+                              View Profile
+                            </button>
+
+                            {/* WhatsApp Quick Icon (if valid contact exists) */}
+                            {!wa.isDisabled && wa.url && (
+                              <button
+                                type="button"
+                                onClick={(e) => openWhatsAppInNewTab(wa.url!, e)}
+                                title={`Contact ${student.fullName} on WhatsApp (${wa.formattedPhone})`}
+                                className="p-1 rounded-md border border-slate-200 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition cursor-pointer shadow-2xs"
+                                aria-label={`Contact ${student.fullName} on WhatsApp`}
+                              >
+                                <IconMessageSquare size={14} className="text-emerald-600" />
+                              </button>
+                            )}
+
+                            {/* Overflow Menu Button */}
+                            <div className="relative" data-action-menu>
+                              <button
+                                type="button"
+                                onClick={() => setActiveActionMenuId(activeActionMenuId === student.id ? null : student.id)}
+                                title="More actions"
+                                className="p-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer shadow-2xs"
+                                aria-label="More actions"
+                              >
+                                <IconMoreHorizontal size={14} />
+                              </button>
+
+                              {activeActionMenuId === student.id && renderActionMenu(student)}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : !isLoading ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-slate-500">
+                      <div className="max-w-xs mx-auto space-y-1.5">
+                        <p className="font-semibold text-slate-800 text-sm">No Students Found</p>
+                        <p className="text-xs text-slate-400">Try adjusting your search criteria or filters.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Flat Divided List View (active on screens < 768px) */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {sortedStudents.length > 0 ? (
+              sortedStudents.map((student, idx) => {
+                const isPaid = student.feeStatus === 'PAID';
+                const wa = getStudentWhatsAppContact(student);
+                const seating = student.assignedHall && student.seatNo
+                  ? `${student.assignedRoom || student.assignedHall} · ${student.seatNo}`
+                  : (student.assignedHall || student.seatNo ? `${student.assignedHall || ''} ${student.seatNo || ''}`.trim() : 'Unallocated');
+                const isNearBottom = idx >= sortedStudents.length - 2;
+
+                return (
+                  <div
+                    key={student.id}
+                    onClick={() => setSelectedStudent(student)}
+                    className="p-3.5 hover:bg-slate-50/70 transition cursor-pointer space-y-2.5"
+                  >
+                    {/* Line 1: Checkbox + Photo Thumbnail (36-40px) + Candidate Name + Status */}
+                    <div className="flex items-center gap-3">
+                      <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedStudentIds.includes(student.id)}
+                          onChange={() => {
+                            setSelectedStudentIds((prev) =>
+                              prev.includes(student.id) ? prev.filter((id) => id !== student.id) : [...prev, student.id]
+                            );
+                          }}
+                          className="w-4 h-4 text-[#185b9d] rounded border-slate-300 focus:ring-[#185b9d] cursor-pointer"
+                        />
+                      </div>
+
+                      <div
+                        className="w-9 h-9 rounded-md bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
+                        aria-hidden="true"
+                      >
+                        {thumbnailUrls[student.id] ? (
+                          <img
+                            src={thumbnailUrls[student.id]}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          student.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="font-bold text-slate-900 text-xs truncate">{student.fullName}</span>
+                          <StatusBadge status={student.status} size="sm" />
+                        </div>
+                        <span className="text-[11px] text-slate-500 block truncate">S/D/O {student.fatherName}</span>
+                      </div>
+                    </div>
+
+                    {/* Line 2: Roll / App No · Class & Stream · Fee Status */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-[#185b9d]">
+                          {student.rollNumber || `App #${student.applicationNo}`}
+                        </span>
+                        <span className="text-slate-300">·</span>
+                        <span className="font-medium text-slate-700 text-[11px]">
+                          {student.currentClass}
+                        </span>
+                      </div>
+
+                      <div>
+                        {isPaid ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                            Paid
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+                            Pending Fee
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Line 3: Seating & Bottom Action Bar */}
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-50 text-xs">
+                      <div className="text-[11px] text-slate-500">
+                        <span className="text-slate-400">Seat: </span>
+                        <span className="font-mono font-medium text-slate-700">
+                          {seating}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStudent(student)}
+                          className="px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-md shadow-2xs transition cursor-pointer"
+                        >
+                          View Profile
+                        </button>
+
+                        {!wa.isDisabled && wa.url && (
+                          <button
+                            type="button"
+                            onClick={(e) => openWhatsAppInNewTab(wa.url!, e)}
+                            title={`Contact ${student.fullName} on WhatsApp (${wa.formattedPhone})`}
+                            className="p-1 rounded-md border border-slate-200 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 transition cursor-pointer shadow-2xs"
+                            aria-label={`WhatsApp ${student.fullName}`}
+                          >
+                            <IconMessageSquare size={14} className="text-emerald-600" />
+                          </button>
+                        )}
+
+                        <div className="relative" data-action-menu>
+                          <button
+                            type="button"
+                            onClick={() => setActiveActionMenuId(activeActionMenuId === student.id ? null : student.id)}
+                            className="p-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                            aria-label="More actions"
+                          >
+                            <IconMoreHorizontal size={14} />
+                          </button>
+
+                          {activeActionMenuId === student.id && renderActionMenu(student, isNearBottom)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : !isLoading ? (
+              <div className="py-12 text-center text-slate-500">
+                <p className="font-semibold text-slate-800 text-sm">No Students Found</p>
+                <p className="text-xs text-slate-400 mt-1">Try adjusting your search criteria or filters.</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Unified Pagination Footer */}
+        <div className="p-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 bg-slate-50/50">
+          <div>
+            Showing{' '}
+            <span className="font-semibold text-slate-700">
+              {pagination.total === 0 ? 0 : (pagination.page - 1) * STUDENTS_PER_PAGE + 1}
+            </span>{' '}
+            to{' '}
+            <span className="font-semibold text-slate-700">
+              {Math.min(pagination.page * STUDENTS_PER_PAGE, pagination.total)}
+            </span>{' '}
+            of <span className="font-semibold text-slate-700">{pagination.total}</span> candidates
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <IconChevronLeft size={16} />
+            </button>
+            <span className="px-3 py-1 font-medium text-slate-700">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages, p + 1))}
+              disabled={currentPage >= pagination.totalPages}
+              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <IconChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Admin Walk-In Registration Modal (When triggered from App shell or local trigger) */}
       {isWalkInOpen && (
         <AdminWalkInModal
           isOpen={isWalkInOpen}
@@ -630,6 +922,27 @@ export const StudentsListView: React.FC = () => {
             setIsWalkInOpen(false);
             fetchStudents();
             setSelectedStudent(newStudent);
+          }}
+        />
+      )}
+
+      {/* Admin Edit Student Modal */}
+      {isEditModalOpen && studentToEdit && (
+        <AdminWalkInModal
+          isOpen={isEditModalOpen}
+          mode="edit"
+          studentToEdit={studentToEdit}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setStudentToEdit(null);
+          }}
+          onSuccess={(updatedStudent) => {
+            setIsEditModalOpen(false);
+            setStudentToEdit(null);
+            fetchStudents(false);
+            if (selectedStudent?.id === updatedStudent.id) {
+              setSelectedStudent(updatedStudent);
+            }
           }}
         />
       )}
@@ -659,12 +972,12 @@ export const StudentsListView: React.FC = () => {
       {/* Confirm Student Delete Modal (Super Admin Only) */}
       {studentToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4">
-            <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
+          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4">
+            <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center mx-auto border border-rose-100">
+              <IconAlertTriangle size={24} />
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-900">Delete Candidate Record?</h3>
+              <h3 className="text-base font-bold text-slate-900">Delete Candidate Record?</h3>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 Are you sure you want to permanently delete{' '}
                 <strong className="text-slate-800">{studentToDelete.fullName}</strong> (
@@ -676,7 +989,7 @@ export const StudentsListView: React.FC = () => {
                 type="button"
                 onClick={() => setStudentToDelete(null)}
                 disabled={isDeleting}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -684,9 +997,9 @@ export const StudentsListView: React.FC = () => {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
               >
-                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {isDeleting ? <IconLoader size={14} className="animate-spin" /> : <IconDeleteCandidate size={14} />}
                 <span>{isDeleting ? 'Deleting...' : 'Yes, Delete Record'}</span>
               </button>
             </div>
@@ -697,44 +1010,44 @@ export const StudentsListView: React.FC = () => {
       {/* Batch Issue Roll Numbers Modal */}
       {showBatchRollModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-100 space-y-5">
+          <div className="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl border border-slate-100 space-y-5">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
-                <Zap className="w-5 h-5" />
+              <div className="w-10 h-10 bg-blue-50 text-[#185b9d] rounded-xl flex items-center justify-center border border-blue-100">
+                <IconZap size={20} />
               </div>
               <div>
-                <h3 className="text-base font-black text-slate-900">Batch Issue Roll Numbers</h3>
+                <h3 className="text-base font-bold text-slate-900">Batch Issue Roll Numbers</h3>
                 <p className="text-xs text-slate-500">Official sequential roll number assignment</p>
               </div>
             </div>
 
             <div className="space-y-3 text-xs text-slate-600">
-              <div className="p-3.5 bg-emerald-50/70 border border-emerald-100 rounded-2xl space-y-1.5">
-                <div className="flex justify-between font-bold text-emerald-900">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <div className="flex justify-between font-semibold text-slate-800">
                   <span>Candidates with Paid Verification:</span>
-                  <span>{rollStatus?.totalPaidCount ?? 0}</span>
+                  <span className="font-mono">{rollStatus?.totalPaidCount ?? 0}</span>
                 </div>
-                <div className="flex justify-between font-bold text-emerald-700">
+                <div className="flex justify-between font-semibold text-slate-700">
                   <span>Already Issued Roll Numbers:</span>
-                  <span>{rollStatus?.issuedCount ?? 0}</span>
+                  <span className="font-mono">{rollStatus?.issuedCount ?? 0}</span>
                 </div>
-                <div className="flex justify-between font-black text-emerald-950 text-sm pt-1 border-t border-emerald-200">
+                <div className="flex justify-between font-bold text-slate-900 text-sm pt-1 border-t border-slate-200">
                   <span>Ready for Batch Issuance Now:</span>
-                  <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-md font-mono">
+                  <span className="bg-[#185b9d] text-white px-2 py-0.5 rounded font-mono text-xs">
                     {rollStatus?.readyCount ?? 0}
                   </span>
                 </div>
               </div>
 
               {rollStatus && rollStatus.scheduledDate && (
-                <div className="flex items-center gap-2 p-3 bg-blue-50/70 border border-blue-100 rounded-2xl text-blue-800">
-                  <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                <div className="flex items-center gap-2 p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-blue-800">
+                  <IconClock size={16} className="text-[#185b9d] shrink-0" />
                   <span>Scheduled Batch Issuance Date: <strong>{new Date(rollStatus.scheduledDate).toLocaleDateString()}</strong></span>
                 </div>
               )}
 
-              <p className="text-slate-500 leading-relaxed">
-                Issuing will assign permanent canonical roll numbers in the sequence <code>AZMVS-2026-XXXX</code>, generate secure QR codes, and lock official examination admittance.
+              <p className="text-slate-500 leading-relaxed text-[11px]">
+                Issuing will assign permanent canonical roll numbers in the sequence <code className="font-mono font-semibold text-slate-700">AZMVS-2026-XXXX</code>, generate secure QR codes, and lock official examination admittance.
               </p>
             </div>
 
@@ -743,7 +1056,7 @@ export const StudentsListView: React.FC = () => {
                 type="button"
                 onClick={() => setShowBatchRollModal(false)}
                 disabled={isIssuingBatch}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -763,16 +1076,16 @@ export const StudentsListView: React.FC = () => {
                     setIsIssuingBatch(false);
                   }
                 }}
-                className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                className="px-5 py-2 text-xs font-bold text-white bg-[#185b9d] hover:bg-[#13497d] rounded-lg shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 {isIssuingBatch ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <IconLoader size={14} className="animate-spin" />
                     <span>Processing Batch Issuance...</span>
                   </>
                 ) : (
                   <>
-                    <Zap className="w-4 h-4" />
+                    <IconZap size={14} />
                     <span>
                       {rollStatus && rollStatus.readyCount > 0
                         ? `Issue Roll Numbers to ${rollStatus.readyCount} Candidate(s)`

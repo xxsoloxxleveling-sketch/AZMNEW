@@ -1,38 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ArrowLeft,
-  Download,
-  QrCode,
-  FileText,
-  User,
-  BookOpen,
-  Award,
-  FileCheck,
-  Eye,
-  Check,
-  X,
-  Printer,
-  Trash2,
-  AlertTriangle,
-  MapPin,
-  Building2,
-  Save,
-  CheckCircle2,
-  Ticket,
-  Loader2,
-  MessageSquare,
-  Image,
-} from 'lucide-react';
+  IconArrowLeft,
+  IconDownloadSlip,
+  IconQrCode,
+  IconFileText,
+  IconUser,
+  IconBookOpen,
+  IconAward,
+  IconFileCheck,
+  IconEye,
+  IconCheck,
+  IconClose,
+  IconPrinter,
+  IconDeleteCandidate,
+  IconAlertTriangle,
+  IconMapPin,
+  IconBuilding,
+  IconSave,
+  IconCheckCircle,
+  IconPrintSlip,
+  IconLoader,
+  IconMessageSquare,
+  IconImageIcon,
+  IconEditStudent,
+  IconApproveFee,
+} from '../../common/icons';
 import {
   MockStudent,
   MockStudentDocument,
   MockTestCenter,
   mockApi,
+  printStudentDossier,
 } from '../../../lib/mockApi';
 import { StatusBadge } from '../shared/StatusBadge';
-import { StudentDossierModal } from '../../common/StudentDossierModal';
 import { RollSlipPreviewModal } from './RollSlipPreviewModal';
 import { StudentOmrModal } from './StudentOmrModal';
+import { AdminWalkInModal } from './AdminWalkInModal';
 import { useAuth } from '../../../lib/authContext';
 import { apiFetchProtectedObjectUrl, API_BASE_URL } from '../../../lib/apiClient';
 import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/whatsapp';
@@ -40,6 +43,21 @@ import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/
 interface StudentDetailViewProps {
   student: MockStudent;
   onBack: () => void;
+}
+
+function formatHumanDate(dateStr?: string | null): string {
+  if (!dateStr) return 'N/A';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
 }
 
 function getDocTypeInfo(docKey: string, doc: any) {
@@ -207,13 +225,13 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
   const [profilePhotoBlobUrl, setProfilePhotoBlobUrl] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingSlip, setIsDownloadingSlip] = useState(false);
-  const [isDossierOpen, setIsDossierOpen] = useState(false);
   const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
   const [isOmrModalOpen, setIsOmrModalOpen] = useState(false);
   const [documents, setDocuments] = useState<MockStudentDocument[]>(() => extractStudentDocuments(initialStudent));
   const [selectedDoc, setSelectedDoc] = useState<MockStudentDocument | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [testCenters, setTestCenters] = useState<MockTestCenter[]>([]);
   const [assignedCenter, setAssignedCenter] = useState(initialStudent.testCenterName || initialStudent.officeUse?.testCentre || 'Main Campus Examination Center, Mansehra');
   const [assignedHall, setAssignedHall] = useState(initialStudent.assignedHall || 'Hall E (Matric SSC-II Main Examination Hall)');
@@ -308,6 +326,13 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
     }
   };
 
+  const handlePrintDossier = () => {
+    printStudentDossier({
+      ...student,
+      photoUrl: profilePhotoBlobUrl || student.photoUrl,
+    });
+  };
+
   const handlePrintRegistrationPdf = async () => {
     setIsDownloading(true);
     try {
@@ -386,17 +411,18 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
   return (
     <div className="space-y-6">
       {/* Top Action Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-2xs">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 px-3.5 py-2 rounded-xl transition cursor-pointer"
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl transition cursor-pointer shadow-2xs"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <IconArrowLeft size={16} />
           <span>Back to Students List</span>
         </button>
 
-        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
-          {student.feeStatus !== 'PAID' && (
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          {/* Dominant Primary Action */}
+          {student.feeStatus !== 'PAID' && (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'ACCOUNTANT') ? (
             <button
               onClick={async () => {
                 if (confirm(`Approve PKR 300 fee payment and verify registration for ${student.fullName}?`)) {
@@ -410,14 +436,27 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                   }
                 }
               }}
-              className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
-              <Check className="w-4 h-4" />
+              <IconApproveFee size={16} />
               <span>Approve Fee (PKR 300)</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setIsSlipModalOpen(true)}
+              title={
+                student.rollNumber
+                  ? 'Preview & Print Official Roll Number Slip'
+                  : 'Preview & Print Pre-Issue Roll Number Slip'
+              }
+              className="px-3.5 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <IconPrintSlip size={16} className="text-white" />
+              <span>{student.rollNumber ? 'Roll Number Slip' : 'Pre-Issue Slip'}</span>
             </button>
           )}
 
-          {/* WhatsApp Contact Action */}
+          {/* Secondary Action: WhatsApp Contact */}
           {(() => {
             const wa = getStudentWhatsAppContact(student);
             return (
@@ -434,87 +473,87 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                     ? wa.disabledReason || 'No contact number on file'
                     : `Contact ${student.fullName} on WhatsApp (${wa.formattedPhone})`
                 }
-                className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 shadow-2xs ${
+                className={`px-3 py-2 text-xs font-medium rounded-xl border transition flex items-center gap-1.5 shadow-2xs ${
                   !wa.isDisabled
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer'
+                    ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-emerald-700 cursor-pointer'
                     : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed opacity-50'
                 }`}
               >
-                <MessageSquare className="w-4 h-4 text-emerald-600" />
-                <span>WhatsApp Contact</span>
+                <IconMessageSquare size={16} className="text-emerald-600" />
+                <span>WhatsApp</span>
               </button>
             );
           })()}
 
+          {/* Secondary Action: Edit Student (SUPER_ADMIN and ADMIN only) */}
+          {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
+            <button
+              type="button"
+              onClick={() => setIsEditModalOpen(true)}
+              title="Edit candidate profile and registration details"
+              className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <IconEditStudent size={16} className="text-slate-500" />
+              <span>Edit Student</span>
+            </button>
+          )}
+
+          {/* Secondary Action: Print Dossier (A4) */}
           <button
-            onClick={() => setIsDossierOpen(true)}
-            className="px-3.5 py-2 text-xs font-bold bg-blue-50 border border-blue-200 text-[#185b9d] hover:bg-blue-100 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+            onClick={handlePrintDossier}
+            title="Direct Print or Save Candidate Dossier as A4 PDF"
+            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
-            <FileText className="w-4 h-4" />
-            <span>Full Profile Dossier</span>
+            <IconPrinter size={16} className="text-slate-500" />
+            <span>Print Dossier (A4)</span>
           </button>
 
-
+          {/* Secondary Action: Print Registration PDF */}
           <button
             onClick={handlePrintRegistrationPdf}
             disabled={isDownloading}
             title="Open the official registration PDF with the candidate's stored photo, ready to print."
-            className="px-3.5 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
+            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-60"
           >
-            <Printer className="w-4 h-4 text-slate-500" />
-            <span>{isDownloading ? 'Preparing PDF...' : 'Print Registration PDF (A4)'}</span>
+            <IconFileText size={16} className="text-slate-500" />
+            <span>{isDownloading ? 'Preparing...' : 'Registration PDF'}</span>
           </button>
 
-          <button
-            onClick={handleDownloadPdf}
-            disabled={isDownloading}
-            className="px-4 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-md transition flex items-center gap-2 disabled:opacity-60 cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>{isDownloading ? 'Generating PDF...' : 'Download Registration PDF'}</span>
-          </button>
-
-          <button
-            onClick={() => setIsSlipModalOpen(true)}
-            title={
-              student.rollNumber
-                ? 'Preview & Print Official Roll Number Slip'
-                : 'Preview & Print Pre-Issue Roll Number Slip'
-            }
-            className={`px-3.5 py-2 text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer ${
-              student.rollNumber
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                : 'bg-amber-600 hover:bg-amber-700 text-white'
-            }`}
-          >
-            <Ticket className="w-4 h-4 text-white" />
-            <span>{student.rollNumber ? 'Roll Number Slip' : 'Pre-Issue Slip'}</span>
-          </button>
-
+          {/* Secondary Action: Print MCQs OMR Sheet */}
           <button
             onClick={() => setIsOmrModalOpen(true)}
             title="Preview & Print MCQs OMR Bubble Sheet (100 Questions) with Photo and QR"
-            className="px-3.5 py-2 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
-            <FileText className="w-4 h-4 text-white" />
-            <span>Print MCQs OMR Sheet</span>
+            <IconFileText size={16} className="text-slate-500" />
+            <span>OMR Sheet</span>
           </button>
 
+          {/* Secondary Action: Download PDF */}
+          <button
+            onClick={handleDownloadPdf}
+            disabled={isDownloading}
+            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-60"
+          >
+            <IconDownloadSlip size={16} className="text-slate-500" />
+            <span>Download PDF</span>
+          </button>
+
+          {/* Destructive Action: Delete Candidate (Super Admin Only) */}
           {role === 'SUPER_ADMIN' && (
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="px-3.5 py-2 text-xs font-bold bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+              className="px-3 py-2 text-xs font-medium bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >
-              <Trash2 className="w-4 h-4 text-rose-600" />
+              <IconDeleteCandidate size={16} className="text-rose-600" />
               <span>Delete Candidate</span>
             </button>
           )}
         </div>
       </div>
 
-
       {/* Header Profile Card with Biometric QR */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
+      <div className="bg-white rounded-xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
           {profilePhotoBlobUrl ? (
             <img
@@ -537,8 +576,8 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
                   student.feeStatus === 'PAID'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-amber-100 text-amber-800'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
                 }`}
               >
                 {student.feeStatus === 'PAID'
@@ -552,7 +591,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
               S/D of <strong className="text-slate-700">{student.fatherName}</strong> • {student.currentClass}
             </p>
             <div className="inline-flex max-w-full items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-950">
-              <Building2 className="h-4 w-4 shrink-0 text-indigo-600" />
+              <IconBuilding size={16} className="shrink-0 text-indigo-600" />
               <span className="text-indigo-600 font-bold">Current School / College:</span>
               <strong className="truncate">{student.schoolName || 'Not provided'}</strong>
             </div>
@@ -572,7 +611,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
             {student.qrImageUrl ? (
               <img src={student.qrImageUrl} alt="QR Matrix" className="w-24 h-24 object-contain" />
             ) : (
-              <QrCode className="w-24 h-24 text-slate-800" />
+              <IconQrCode size={96} className="text-slate-800" />
             )}
           </div>
           <span className="text-[10px] font-mono font-bold text-slate-500 max-w-[150px] truncate">
@@ -589,16 +628,16 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
         {/* Left Column: Personal, Contact & Academic */}
         <div className="space-y-6">
           {/* Card 1: Personal & Contact */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-              <User className="w-4 h-4 text-[#185b9d]" />
+              <IconUser size={16} className="text-[#185b9d]" />
               <h3 className="text-sm font-bold text-slate-900">Parts A & B: Personal & Contact Information</h3>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div>
                 <span className="text-slate-400 block text-[11px]">Date of Birth</span>
-                <span className="font-semibold text-slate-800">{student.dateOfBirth} (Age: {student.age || 16})</span>
+                <span className="font-semibold text-slate-800">{formatHumanDate(student.dateOfBirth)} (Age: {student.age || 16})</span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[11px]">Gender & Religion</span>
@@ -620,16 +659,16 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
           </div>
 
           {/* Card 2: Academic Record Details */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-              <BookOpen className="w-4 h-4 text-[#185b9d]" />
+              <IconBookOpen size={16} className="text-[#185b9d]" />
               <h3 className="text-sm font-bold text-slate-900">Part C: Academic Examination Record</h3>
             </div>
 
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 text-xs">
                 <div className="flex items-start gap-2">
-                  <Building2 className="w-4 h-4 shrink-0 text-indigo-600 mt-0.5" />
+                  <IconBuilding size={16} className="shrink-0 text-indigo-600 mt-0.5" />
                   <div>
                     <span className="block text-[11px] text-slate-500">Current School / College</span>
                     <strong className="text-slate-900">{student.schoolName || 'Not provided'}</strong>
@@ -679,9 +718,9 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
         {/* Right Column: Scholarship, Documents, & Inspection */}
         <div className="space-y-6">
           {/* Card 3: Scholarship Category */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-              <Award className="w-4 h-4 text-[#185b9d]" />
+              <IconAward size={16} className="text-[#185b9d]" />
               <h3 className="text-sm font-bold text-slate-900">Parts D & E: Scholarship Category & Household</h3>
             </div>
 
@@ -710,11 +749,11 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
           </div>
 
           {/* Card 3.5: Exam Test Center & Room Allocation */}
-          <div className="bg-white rounded-3xl p-6 border border-blue-200/80 shadow-sm space-y-4 relative overflow-hidden">
+          <div className="bg-white rounded-xl p-6 border border-blue-200/80 shadow-sm space-y-4 relative overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#185b9d] flex items-center justify-center font-bold">
-                  <MapPin className="w-4 h-4" />
+                  <IconMapPin size={16} />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Exam Test Center &amp; Hall Allocation</h3>
@@ -723,7 +762,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
               </div>
               {allocationSuccess && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 animate-fade-in">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <IconCheckCircle size={14} />
                   Saved
                 </span>
               )}
@@ -823,7 +862,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                   disabled={isSavingAllocation}
                   className="w-full py-2.5 px-4 bg-[#185b9d] hover:bg-[#13487c] text-white rounded-xl font-bold text-xs shadow-md shadow-blue-900/10 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  <Save className="w-3.5 h-3.5" />
+                  <IconSave size={14} />
                   <span>{isSavingAllocation ? 'Saving Allocation...' : 'Save Center & Hall'}</span>
                 </button>
               </div>
@@ -831,10 +870,10 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
           </div>
 
           {/* Card 4: Submitted Candidate Documents & Storage */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
-                <FileCheck className="w-4 h-4 text-emerald-600" />
+                <IconFileCheck size={16} className="text-emerald-600" />
                 <h3 className="text-sm font-bold text-slate-900">Submitted Candidate Documents & Storage</h3>
               </div>
               <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
@@ -844,7 +883,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
 
             {documents.length === 0 ? (
               <div className="p-8 text-center bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 space-y-1.5">
-                <FileCheck className="w-7 h-7 text-slate-300 mx-auto" />
+                <IconFileCheck size={28} className="text-slate-300 mx-auto" />
                 <p className="text-xs font-bold text-slate-600">No Attached Documents</p>
                 <p className="text-[11px] text-slate-400">
                   Candidate did not upload additional physical documents during registration.
@@ -871,14 +910,14 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                       >
                         {isPdf ? (
                           <div className="flex flex-col items-center justify-center text-[10px] font-black text-rose-600">
-                            <FileText className="w-5 h-5 text-rose-500 mb-0.5" />
+                            <IconFileText size={20} className="text-rose-500 mb-0.5" />
                             <span>PDF</span>
                           </div>
                         ) : (
-                          <Image className="w-5 h-5 text-[#185b9d]" aria-label="Image document" />
+                          <IconImageIcon size={20} className="text-[#185b9d]" aria-label="Image document" />
                         )}
                         <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                          <Eye className="w-4 h-4 text-white" />
+                          <IconEye size={16} className="text-white" />
                         </div>
                       </div>
 
@@ -912,7 +951,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                         onClick={() => openDocument(doc)}
                         className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer flex items-center gap-1"
                       >
-                        <Eye className="w-3 h-3" />
+                        <IconEye size={12} />
                         <span>Inspect</span>
                       </button>
 
@@ -922,14 +961,14 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                           title="Verify Document"
                           className="p-1 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 cursor-pointer"
                         >
-                          <Check className="w-3 h-3" />
+                          <IconCheck size={12} />
                         </button>
                         <button
                           onClick={() => handleUpdateStatus(doc.id, 'REJECTED')}
                           title="Reject Document"
                           className="p-1 rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer"
                         >
-                          <X className="w-3 h-3" />
+                          <IconClose size={12} />
                         </button>
                       </div>
                     </div>
@@ -945,7 +984,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
       {/* Lightbox Preview Modal for Real Submitted Documents */}
       {selectedDoc && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+          <div className="bg-white rounded-xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
             <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-slate-100">{selectedDoc.title}</h3>
@@ -966,7 +1005,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
               selectedDoc.title.toLowerCase().endsWith('.pdf') ||
               selectedDoc.fileUrl.startsWith('data:application/pdf') ? (
                 <div className="w-full h-[480px] bg-white rounded-2xl p-4 shadow-md flex flex-col items-center justify-center border border-slate-300">
-                  <FileText className="w-16 h-16 text-rose-500 mb-3" />
+                  <IconFileText size={64} className="text-rose-500 mb-3" />
                   <h4 className="text-sm font-bold text-slate-900">{selectedDoc.title}</h4>
                   <p className="text-xs text-slate-500 mb-4">Official Candidate PDF Attachment</p>
                   <a
@@ -976,7 +1015,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                     rel="noreferrer"
                     className="px-5 py-2.5 rounded-xl bg-[#185b9d] text-white font-bold text-xs shadow-md hover:bg-[#13497d] transition flex items-center gap-2"
                   >
-                    <Download className="w-4 h-4" />
+                    <IconDownloadSlip size={16} />
                     <span>Download / Open PDF Document</span>
                   </a>
                 </div>
@@ -1013,7 +1052,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                   rel="noreferrer"
                   className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  <IconDownloadSlip size={14} />
                   <span>Download File</span>
                 </a>
                 <button
@@ -1028,19 +1067,12 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
         </div>
       )}
 
-      {/* Full Candidate Application Dossier Modal */}
-      <StudentDossierModal
-        isOpen={isDossierOpen}
-        onClose={() => setIsDossierOpen(false)}
-        student={student}
-      />
-
       {/* Super Admin Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-5 border border-slate-200 shadow-2xl">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 space-y-5 border border-slate-200 shadow-2xl">
             <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
+              <IconAlertTriangle size={24} />
             </div>
 
             <div className="text-center space-y-2">
@@ -1072,7 +1104,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                 disabled={isDeleting}
                 className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-60"
               >
-                <Trash2 className="w-4 h-4" />
+                <IconDeleteCandidate size={16} />
                 <span>{isDeleting ? 'Deleting...' : 'Delete Candidate'}</span>
               </button>
             </div>
@@ -1093,6 +1125,22 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
         isOpen={isOmrModalOpen}
         onClose={() => setIsOmrModalOpen(false)}
       />
+
+      {/* Edit Student Modal */}
+      {isEditModalOpen && (
+        <AdminWalkInModal
+          isOpen={isEditModalOpen}
+          mode="edit"
+          studentToEdit={student}
+          onClose={() => setIsEditModalOpen(false)}
+          onSuccess={(updatedStudent) => {
+            setIsEditModalOpen(false);
+            setStudent((prev) => ({ ...prev, ...updatedStudent }));
+            loadFullStudent();
+            window.dispatchEvent(new Event('students-updated'));
+          }}
+        />
+      )}
     </div>
   );
 };
