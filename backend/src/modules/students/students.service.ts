@@ -1323,6 +1323,16 @@ export class StudentsService {
           currentClass: true,
           hsscGroup: true,
           schoolName: true,
+          boardOrUniversity: true,
+          address: true,
+          district: true,
+          province: true,
+          email: true,
+          religion: true,
+          guardianOccupation: true,
+          guardianMonthlyIncome: true,
+          emergencyContact: true,
+          emergencyRelation: true,
           scholarshipCategory: true,
           status: true,
           createdAt: true,
@@ -1561,7 +1571,14 @@ export class StudentsService {
   async updateStudent(id: string, input: UpdateStudentInput) {
     await this.getStudentById(id);
 
-    const { academicRecords, documents, ...baseData } = input;
+    const {
+      academicRecords,
+      documents,
+      uploadedDocuments,
+      signatureDataUrl,
+      signature,
+      ...baseData
+    } = input;
 
     const updated = await prisma.student.update({
       where: { id },

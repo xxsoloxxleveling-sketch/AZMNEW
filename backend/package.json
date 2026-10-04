@@ -30,6 +30,8 @@
   "author": "AZM",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1125.0",
+    "@aws-sdk/s3-request-presigner": "^3.1125.0",
     "@electric-sql/pglite": "^0.5.7",
     "@prisma/adapter-pg": "^5.22.0",
     "@prisma/client": "^5.22.0",

@@ -1,3 +1,4 @@
+import '../src/config/env';
 import { prisma, Role } from '../src/lib/prisma';
 import { hashPassword } from '../src/lib/hash';
 import { logger } from '../src/lib/logger';
