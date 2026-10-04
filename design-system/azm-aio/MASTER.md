@@ -246,6 +246,11 @@ Every screen or view must have **at most one visually dominant primary action**.
    - Use them only for truly compact tertiary table row actions where the click/touch target remains comfortably accessible and does not impede touch interaction.
 6. **Accessible Focus Requirement:**
    - All interactive buttons must have visible keyboard focus: `focus-visible:ring-2 focus-visible:ring-[#185b9d]/30 focus-visible:outline-none`.
+7. **Table Row Action Hierarchy (Visible Primary + Overflow Menu):**
+   - In operational data tables, the single most frequent action (e.g., *"View Profile"* or *"View Details"*) should be visible directly in the row action cell.
+   - Secondary, occasional, or destructive actions (e.g., *Edit*, *Print*, *Verify*, *Delete*) must be placed within a restrained row action overflow menu (`···` dropdown) to prevent button clutter and preserve column hierarchy.
+8. **Contextual Batch Selection Toolbar Replacement:**
+   - When multi-select checkboxes are engaged in data tables, the batch action toolbar must **replace** the standard filter/search toolbar rather than stacking vertically on top of it. This prevents disruptive layout shifts and preserves vertical information density.
 
 ---
 
@@ -291,9 +296,15 @@ Tables are the backbone of educational and financial administration. They must n
   - Style: `bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider`.
   - Alignment: Text left-aligned; numerical/currency right-aligned (`tabular-nums`); status/actions center or right-aligned.
 - **Body Rows:**
-  - Height: 36px–44px (`py-2 px-3`).
+  - Height: 36px–44px (`py-2 px-3`) for standard data tables; calibrated to ~52px when rows include identity thumbnails.
   - Style: `border-b border-slate-100 hover:bg-slate-50/70 text-xs sm:text-[13px] text-slate-700 font-normal`.
   - Figures: `.tabular-nums` for numbers, fees, percentages, and dates. Monospace (`font-mono`) is recommended for machine identifiers and roll numbers where it enhances vertical scanning.
+- **Rich Identity Cells (Thumbnails & Entity Data):**
+  - When entities possess individual identities (such as candidates, staff, or institutions), tables may integrate a compact 32–36px identity thumbnail (`rounded-md`, neutral border, `object-fit: cover`) directly inside the identity cell alongside the name and secondary metadata.
+  - Do not create an isolated "Photo" column.
+  - Fall back gracefully to a neutral initials block when no image exists; never use synthetic/fake avatars.
+- **Machine Identifier Non-Wrapping:**
+  - System identifiers (roll numbers, application numbers, challan numbers, CNICs) must use monospace formatting (`font-mono text-xs whitespace-nowrap`) and must never wrap to multiple lines.
 - **Pagination Footer:**
   - Height: ~40px (`px-4 py-2 bg-slate-50/40 border-t border-slate-200`).
   - Clear count: *"Showing 1 to 50 of 1,420 records"*.
@@ -323,6 +334,12 @@ NO DATA != FAILURE
    - Empty states must state only what the underlying query/data genuinely proves (e.g., *"No overdue fee accounts"*, *"No partner institutions"*).
 4. **Zero Simulated Activity:**
    - Never generate synthetic system-health or status messages merely to make an activity feed look populated. An empty feed is vastly preferable to simulated records.
+5. **Operational Invariant Protection in Edit Workflows:**
+   - Edit forms and correction modals across all modules must strictly distinguish between **mutable profile attributes** (e.g., contact numbers, residential address, parent details, academic stream) and **system-controlled operational invariants** (e.g., roll numbers, application numbers, fee transaction statuses, exam room/seat allocations). Operational invariants must remain immutable in general profile edit forms to prevent administrative state corruption.
+6. **Non-Destructive Data Preservation:**
+   - Updating profile text attributes must never reset, unlink, or destroy attached documents, uploaded photos, or relational records unless the user explicitly uploads a replacement.
+7. **Semantic Unknowns for Unassigned Data:**
+   - If an operational attribute (e.g., examination hall, room allocation, seating assignment, or previous qualification history) is pending or unassigned, it must be rendered as a muted semantic unknown (e.g., `"Unallocated"`, `"Pending"`), never populated with fake fallback data.
 
 ### Approved Empty State Pattern:
 - Centered container with small neutral Lucide outline icon (`w-5 h-5 text-slate-300 mx-auto`).
@@ -364,6 +381,7 @@ NO DATA != FAILURE
   - Prioritize operational task order; reduce vertical spacing (`p-2.5` to `p-3.5`).
   - When a multi-metric summary surface exists, reflow into a compact 2-column grid (with odd final metric spanning both columns if appropriate).
   - Tables use bounded horizontal scroll wrappers (`overflow-x-auto`) to prevent viewport blowout.
+  - **Mobile Operational Lists (Dividers Over Cards):** On narrow mobile screens, multi-column operational tables may reflow into clean, flat list items separated by hairline dividers (`divide-y divide-slate-100`) rather than being converted into chunky, isolated floating cards.
   - **Never hide essential information behind horizontal scrolling simply to preserve a desktop layout.** Core metrics must be immediately discoverable without horizontal gestures.
 
 ---
@@ -399,4 +417,59 @@ Arbitrary 1.0x height compression        | Legitimate vertical scrolling for dat
 Sub-12px text on operational body/inputs | 13-14px operational body; 11px limited to meta
 Floating cards replacing tables          | High-density, sortable, accessible data tables
 Decorative animations & slow transitions | Instant-feeling functional transitions (<= 150ms)
+Generic / cheap starter-template icons   | Custom institutional iconography system (24px grid, 1.75 stroke)
 ```
+
+---
+
+## 17. Custom Iconography System Architecture & Governance
+
+### 17.1 Philosophy & Intent
+AZM.AIO is an educational and scholarship administration platform, not a generic consumer SaaS tool. Icons must communicate institutional authority, operational precision, and calm clarity. Generic Lucide/Feather defaults in rounded rainbow pastel boxes make serious enterprise tools look like low-cost starter templates or toy prototypes.
+
+AZM.AIO implements a **Two-Tier Hybrid Icon Architecture**:
+1. **Tier A — Custom Signature Icons (High Visibility Surfaces):**
+   - **Shell Navigation:** Dashboard (`IconDashboard`), Candidate Roster (`IconStudents`), Partner Colleges (`IconPartners`), Examination Halls (`IconHalls`), Cloud Document Storage (`IconStorage`), Biometric Attendance (`IconAttendance`), Fee Accounts (`IconFees`), Staff Directory (`IconStaff`), Payroll (`IconPayroll`), General Ledger (`IconLedger`), System Settings (`IconSettings`), Handheld QR Scan (`IconScan`), Institutional Brand Crest (`IconBrandCrest`).
+   - **Authoritative Top Actions:** Register Walk-in Student (`IconAddStudent`), Mark Attendance (`IconMarkAttendance`), Issue Fee Challan (`IconGenerateChallan`).
+   - **Core Workflow Actions:** Dossier Inspection (`IconViewProfile`), Edit Candidate (`IconEditStudent`), Fee Clearance (`IconApproveFee`), Print Roll Slip (`IconPrintSlip`), Download Registration PDF (`IconDownloadSlip`), Purge Candidate (`IconDeleteCandidate`).
+2. **Tier B — Controlled Utility Icons (Low-Level Micro Controls):**
+   - Standard, unembellished vector utilities: `IconSearch`, `IconClose`, `IconChevronRight`, `IconChevronLeft`, `IconChevronDown`, `IconChevronsUpDown`, `IconMoreHorizontal`, `IconRefresh`, `IconAlertTriangle`, `IconCheckCircle`, `IconClock`, `IconFileText`, `IconFilter`, `IconExternalLink`, `IconLogOut`, `IconShield`, `IconUpload`, `IconMenu`, `IconBell`, `IconPlus`, `IconEye`, `IconArrowLeft`, `IconCheck`, `IconPrinter`, `IconMessageSquare`, `IconUser`, `IconBookOpen`, `IconAward`, `IconMapPin`, `IconBuilding`, `IconSave`, `IconQrCode`, `IconFileCheck`, `IconImageIcon`, `IconLoader`, `IconZap`.
+
+### 17.2 Mathematical & Vector Rules
+- **Base Coordinate Grid:** $24 \times 24$ standard SVG viewBox (`0 0 24 24`).
+- **Stroke Width Hierarchy:**
+  - **Tier-A Signature Icons:** Fixed at `2.0px` optical stroke with selective solid fills (`fill="currentColor" stroke="none"`) for grounding elements (heraldic crests, QR finder centers, dais elements, candidate admissions collars).
+  - **Tier-B Utility Icons:** `1.75px` default (16–20px) to balance clarity and density without feeling heavy or wireframe-thin. Micro-indicators (12–14px) may use `1.5` to avoid visual clogging.
+- **Corner & Cap Geometry:** `strokeLinecap="round"`, `strokeLinejoin="round"`, with restrained internal rect radii (`rx="1.0"` to `rx="1.5"`). Never sharp knife-edge miter joins, never bubbly stadium curves.
+- **Optical Mass Balancing:** Icons are visually balanced against their optical centroids. Solid accents provide punch and instant recognition at 18px without making icons fully solid.
+
+### 17.3 Icon Sizing Hierarchy Matrix
+```
+CONTEXT / SURFACE                  | TOKEN SIZE | SVG VIEWBOX | STROKE WIDTH | NOTES
+-----------------------------------|------------|-------------|--------------|--------------------------------------------
+Sidebar Navigation Items           | 18px       | 0 0 24 24   | 2.00         | Paired with 12px text; optimal optical scale
+Header Quick Action Buttons        | 16px       | 0 0 24 24   | 2.00         | Inside compact 32px action buttons
+Header Brand Crest                 | 20px       | 0 0 24 24   | 2.00         | Centered inside 36x36 brand tile
+Operational Table Action Menus     | 14px       | 0 0 24 24   | 2.00 / 1.75  | Inside 28px row dropdown action items
+Roster Search & Filter Inputs      | 16px       | 0 0 24 24   | 1.75         | Absolute-positioned leading icon in 36px bar
+Table Column Sort Chevrons         | 12px       | 0 0 24 24   | 1.50         | Micro vertical alignment indicator
+Pagination Chevrons                | 16px       | 0 0 24 24   | 1.75         | Centered in 28px square button
+Document Inspection Thumbnails     | 20px       | 0 0 24 24   | 1.75         | Inside 48x56px document card previews
+Biometric QR Matrix & Modal View   | 64-96px    | 0 0 24 24   | 2.00         | High-resolution structural vectors
+```
+
+### 17.4 State & Color Governance
+- **Inactive / Default State:** In the sidebar, inactive items use `text-slate-500` with `group-hover:text-slate-800` (or `group-hover:text-[#185b9d]`), paired with `text-slate-600` labels. This guarantees high-contrast legibility without shouting or overpowering the text label.
+- **Active Navigation State:** In the sidebar, active nav item applies `bg-[#185b9d] text-white`, causing the icon to render in pure white (`text-white`) with zero color distortion.
+- **Semantic Colors:**
+  - *Cleared / Positive:* `text-emerald-600` / `bg-emerald-50`
+  - *Pending / Pre-issue:* `text-amber-600` / `bg-amber-50`
+  - *Critical / Destructive:* `text-rose-600` / `bg-rose-50`
+  - *Institutional Primary:* `text-[#185b9d]` / `bg-blue-50`
+- **Icon Background Removal Rule:**
+  Decorative colored boxes (e.g. pastel green/red square tiles around arrows) are **strictly prohibited**. Where a status must be shown (such as in ledger transaction lists), use compact status dots (`w-2 h-2 rounded-full bg-emerald-600` or `bg-rose-600`) or clean typography. Reserve background containers exclusively for the authoritative Brand Crest and key header actions.
+
+### 17.5 Accessibility & Quality Bar
+- Every icon-only button must include an explicit `aria-label` or `title`.
+- Purely decorative icons must have `aria-hidden="true"`.
+- All icon components support dynamic sizing (`size`), stroke customization (`strokeWidth`), class forwarding (`className`), and accessible title injection (`title`).

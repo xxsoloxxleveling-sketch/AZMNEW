@@ -1,23 +1,23 @@
 import React from 'react';
 import {
-  LayoutDashboard,
-  GraduationCap,
-  CalendarCheck,
-  Receipt,
-  Users,
-  Banknote,
-  History,
-  Settings,
-  QrCode,
-  LogOut,
-  ChevronRight,
-  ExternalLink,
-  Shield,
-  UserCheck,
-  School,
-  Building2,
-  FolderArchive,
-} from 'lucide-react';
+  IconDashboard,
+  IconStudents,
+  IconPartners,
+  IconHalls,
+  IconStorage,
+  IconAttendance,
+  IconFees,
+  IconStaff,
+  IconPayroll,
+  IconLedger,
+  IconSettings,
+  IconScan,
+  IconBrandCrest,
+  IconChevronRight,
+  IconExternalLink,
+  IconLogOut,
+  IconShield,
+} from '../../common/icons';
 import { useAuth } from '../../../lib/authContext';
 import { Role } from '../../../lib/mockApi';
 
@@ -56,67 +56,67 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     {
       id: 'dashboard' as AdminTab,
       label: 'Dashboard',
-      icon: LayoutDashboard,
+      icon: IconDashboard,
       roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     },
     {
       id: 'students' as AdminTab,
       label: 'Students',
-      icon: GraduationCap,
+      icon: IconStudents,
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
       id: 'partners' as AdminTab,
       label: 'Partner Institutions',
-      icon: School,
+      icon: IconPartners,
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
       id: 'halls' as AdminTab,
       label: 'Exam Halls & Seating',
-      icon: Building2,
+      icon: IconHalls,
       roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
     },
     {
       id: 'storage' as AdminTab,
       label: 'Document Storage Vault',
-      icon: FolderArchive,
+      icon: IconStorage,
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
       id: 'attendance' as AdminTab,
       label: 'Attendance & QR',
-      icon: CalendarCheck,
+      icon: IconAttendance,
       roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
     },
     {
       id: 'fees' as AdminTab,
       label: 'Fee Challans',
-      icon: Receipt,
+      icon: IconFees,
       roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     },
     {
       id: 'staff' as AdminTab,
       label: 'Staff Directory',
-      icon: Users,
+      icon: IconStaff,
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
       id: 'payroll' as AdminTab,
       label: 'Payroll & Salaries',
-      icon: Banknote,
+      icon: IconPayroll,
       roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     },
     {
       id: 'transactions' as AdminTab,
       label: 'General Ledger',
-      icon: History,
+      icon: IconLedger,
       roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     },
     {
       id: 'settings' as AdminTab,
       label: 'Settings & Security',
-      icon: Settings,
+      icon: IconSettings,
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
   ];
@@ -157,10 +157,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         }`}
       >
         {/* Brand Logo & Title */}
+        {/* Brand Logo & Title */}
         <div>
           <div className="h-16 px-5 border-b border-slate-100 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#185b9d] to-[#2563eb] flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-              <School className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-lg bg-[#185b9d] flex items-center justify-center text-white shadow-2xs">
+              <IconBrandCrest size={20} />
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="text-sm font-extrabold text-slate-900 truncate tracking-tight">
@@ -175,8 +176,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {/* Role Indicator & Test Switcher */}
           <div className="p-3.5 mx-3 my-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
             <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-slate-500 font-medium flex items-center gap-1">
-                <Shield className="w-3.5 h-3.5 text-[#185b9d]" /> Active Role:
+              <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                <IconShield size={14} className="text-[#185b9d]" /> Active Role:
               </span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getRoleBadgeStyle(
@@ -213,19 +214,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                     onSelectTab(item.id);
                     if (onCloseMobile) onCloseMobile();
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-semibold transition-colors ${
                     isActive
-                      ? 'bg-[#185b9d] text-white shadow-md shadow-blue-500/20'
+                      ? 'bg-[#185b9d] text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   <Icon
-                    className={`w-4 h-4 transition-colors ${
-                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
+                    size={18}
+                    className={`transition-colors shrink-0 ${
+                      isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-800'
                     }`}
                   />
-                  <span className="flex-1 text-left">{item.label}</span>
-                  {isActive && <ChevronRight className="w-3.5 h-3.5 opacity-80" />}
+                  <span className="flex-1 text-left truncate">{item.label}</span>
+                  {isActive && <IconChevronRight size={14} className="opacity-80 shrink-0" />}
                 </button>
               );
             })}
@@ -240,38 +242,43 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   onSelectTab('scan');
                   if (onCloseMobile) onCloseMobile();
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-semibold transition-colors ${
                   currentTab === 'scan'
-                    ? 'bg-[#185b9d] text-white shadow-sm'
+                    ? 'bg-[#185b9d] text-white shadow-2xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
-                <QrCode className="w-4 h-4 text-emerald-600" />
-                <span className="flex-1 text-left">Mobile Scanner (/scan)</span>
+                <IconScan
+                  size={18}
+                  className={`transition-colors shrink-0 ${
+                    currentTab === 'scan' ? 'text-white' : 'text-slate-500 group-hover:text-[#185b9d]'
+                  }`}
+                />
+                <span className="flex-1 text-left truncate">Mobile Scanner (/scan)</span>
               </button>
 
               {onNavigatePublic && (
                 <>
                   <button
                     onClick={() => onNavigatePublic('/register')}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
                   >
                     <span>Public Registration</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                    <IconExternalLink size={14} className="text-slate-400" />
                   </button>
                   <button
                     onClick={() => onNavigatePublic('/partner-registration')}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
                   >
                     <span>Partner Registration</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                    <IconExternalLink size={14} className="text-slate-400" />
                   </button>
                   <button
                     onClick={() => onNavigatePublic('/')}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
                   >
                     <span>Public Website</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                    <IconExternalLink size={14} className="text-slate-400" />
                   </button>
                 </>
               )}
@@ -281,14 +288,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
         {/* User Profile Card & Logout */}
         <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white border border-slate-200/80 shadow-xs mb-2">
+          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200/80 shadow-2xs mb-2">
             <img
               src={
                 user?.avatarUrl ||
                 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
               }
               alt="Avatar"
-              className="w-8 h-8 rounded-lg object-cover border border-slate-200"
+              className="w-8 h-8 rounded-md object-cover border border-slate-200"
             />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold text-slate-900 truncate">{user?.name || 'Admin User'}</p>
@@ -298,9 +305,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
           <button
             onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <IconLogOut size={16} />
             <span>Sign Out</span>
           </button>
         </div>
