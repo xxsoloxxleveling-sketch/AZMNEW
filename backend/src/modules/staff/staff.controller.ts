@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { staffService } from './staff.service';
+import { StaffQueryInput } from './staff.schema';
 
 export class StaffController {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -17,7 +18,7 @@ export class StaffController {
 
   async getAll(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await staffService.getStaffList(req.query as any);
+      const result = await staffService.getStaffList(req.query as unknown as StaffQueryInput);
       res.status(200).json({
         success: true,
         data: result,

@@ -348,7 +348,7 @@ enum PayrollStatus {
 model PayrollRecord {
   id        String        @id @default(cuid())
   staffId   String
-  staff     Staff         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staff     Staff         @relation(fields: [staffId], references: [id], onDelete: Restrict)
   month     String
   amount    Decimal
   status    PayrollStatus @default(PENDING)

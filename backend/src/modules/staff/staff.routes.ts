@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { staffController } from './staff.controller';
-import { validateBody } from '../../middleware/validate.middleware';
-import { createStaffSchema, updateStaffSchema } from './staff.schema';
+import { validateBody, validateQuery } from '../../middleware/validate.middleware';
+import { createStaffSchema, updateStaffSchema, staffQuerySchema } from './staff.schema';
 import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
 import { Role } from '@prisma/client';
@@ -14,6 +14,7 @@ router.use(authenticate);
 router.get(
   '/',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT),
+  validateQuery(staffQuerySchema),
   staffController.getAll
 );
 

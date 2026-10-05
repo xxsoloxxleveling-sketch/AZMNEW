@@ -236,6 +236,84 @@ export interface MockFeeChallan {
   createdAt: string;
 }
 
+export type StaffStatus = 'ACTIVE' | 'INACTIVE';
+
+export interface StaffDirectoryRecord {
+  id: string;
+  fullName: string;
+  role: string;
+  cnic: string;
+  phone: string;
+  status: StaffStatus;
+  joinDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StaffQueryParams {
+  search?: string;
+  role?: string;
+  status?: StaffStatus;
+  page?: number;
+  limit?: number;
+}
+
+export interface StaffPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface StaffListResponse {
+  staff: StaffDirectoryRecord[];
+  pagination: StaffPagination;
+}
+
+export interface StaffPayrollRecord {
+  id: string;
+  staffId: string;
+  month: string;
+  amount: string;
+  status: 'PENDING' | 'PAID';
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StaffDetailRecord {
+  id: string;
+  fullName: string;
+  role: string;
+  cnic: string;
+  phone: string;
+  joinDate: string;
+  salary: string;
+  status: StaffStatus;
+  createdAt: string;
+  updatedAt: string;
+  payroll: StaffPayrollRecord[];
+}
+
+export interface CreateStaffPayload {
+  fullName: string;
+  role: string;
+  cnic: string;
+  phone: string;
+  salary: number;
+  joinDate?: string;
+}
+
+export interface UpdateStaffPayload {
+  fullName?: string;
+  role?: string;
+  cnic?: string;
+  phone?: string;
+  salary?: number;
+  joinDate?: string;
+  status?: StaffStatus;
+}
+
 export interface MockStaff {
   id: string;
   fullName: string;
@@ -1401,6 +1479,133 @@ export const mockApi = {
   },
 
   // 7. Staff & Faculty Directory
+  async getStaffDirectory(query?: StaffQueryParams): Promise<StaffListResponse> {
+    const params = new URLSearchParams();
+    if (query?.search?.trim()) params.set('search', query.search.trim());
+    if (query?.role?.trim()) params.set('role', query.role.trim());
+    if (query?.status) params.set('status', query.status);
+    if (query?.page) params.set('page', String(query.page));
+    if (query?.limit) params.set('limit', String(query.limit));
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const res: any = await apiFetch<any>(`/api/staff${queryString}`);
+
+    const rawList = Array.isArray(res?.staff)
+      ? res.staff
+      : Array.isArray(res?.data?.staff)
+      ? res.data.staff
+      : Array.isArray(res?.data)
+      ? res.data
+      : Array.isArray(res)
+      ? res
+      : [];
+
+    const rawPagination = res?.pagination || res?.data?.pagination;
+
+    const staff: StaffDirectoryRecord[] = rawList.map((s: any) => ({
+      id: s.id,
+      fullName: s.fullName || '',
+      role: s.role || '',
+      cnic: s.cnic || '',
+      phone: s.phone || '',
+      status: s.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      joinDate: s.joinDate ? (typeof s.joinDate === 'string' ? s.joinDate.split('T')[0] : String(s.joinDate)) : '',
+      createdAt: s.createdAt || '',
+      updatedAt: s.updatedAt || '',
+    }));
+
+    const pagination: StaffPagination = {
+      page: Number(rawPagination?.page) || 1,
+      limit: Number(rawPagination?.limit) || (query?.limit || 20),
+      total: Number(rawPagination?.total) || staff.length,
+      totalPages: Number(rawPagination?.totalPages) || (rawPagination?.total ? Math.ceil(rawPagination.total / (Number(rawPagination?.limit) || 20)) : 1),
+    };
+
+    return { staff, pagination };
+  },
+
+  async getStaffById(id: string): Promise<StaffDetailRecord> {
+    const res: any = await apiFetch<any>(`/api/staff/${id}`);
+    const data = res?.data || res;
+    return {
+      id: data.id,
+      fullName: data.fullName || '',
+      role: data.role || '',
+      cnic: data.cnic || '',
+      phone: data.phone || '',
+      joinDate: data.joinDate ? (typeof data.joinDate === 'string' ? data.joinDate.split('T')[0] : String(data.joinDate)) : '',
+      salary: data.salary != null ? String(data.salary) : '0',
+      status: data.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      createdAt: data.createdAt || '',
+      updatedAt: data.updatedAt || '',
+      payroll: Array.isArray(data.payroll)
+        ? data.payroll.map((p: any) => ({
+            id: p.id,
+            staffId: p.staffId,
+            month: p.month || '',
+            amount: p.amount != null ? String(p.amount) : '0',
+            status: p.status === 'PAID' ? 'PAID' : 'PENDING',
+            paidAt: p.paidAt || null,
+            createdAt: p.createdAt || '',
+            updatedAt: p.updatedAt || '',
+          }))
+        : [],
+    };
+  },
+
+  async createStaffMember(payload: CreateStaffPayload): Promise<StaffDetailRecord> {
+    const res: any = await apiFetch<any>('/api/staff', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const data = res?.data || res;
+    return {
+      id: data.id,
+      fullName: data.fullName || '',
+      role: data.role || '',
+      cnic: data.cnic || '',
+      phone: data.phone || '',
+      joinDate: data.joinDate ? (typeof data.joinDate === 'string' ? data.joinDate.split('T')[0] : String(data.joinDate)) : '',
+      salary: data.salary != null ? String(data.salary) : '0',
+      status: data.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      createdAt: data.createdAt || '',
+      updatedAt: data.updatedAt || '',
+      payroll: [],
+    };
+  },
+
+  async updateStaffMember(id: string, payload: UpdateStaffPayload): Promise<StaffDetailRecord> {
+    const res: any = await apiFetch<any>(`/api/staff/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    const data = res?.data || res;
+    return {
+      id: data.id,
+      fullName: data.fullName || '',
+      role: data.role || '',
+      cnic: data.cnic || '',
+      phone: data.phone || '',
+      joinDate: data.joinDate ? (typeof data.joinDate === 'string' ? data.joinDate.split('T')[0] : String(data.joinDate)) : '',
+      salary: data.salary != null ? String(data.salary) : '0',
+      status: data.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      createdAt: data.createdAt || '',
+      updatedAt: data.updatedAt || '',
+      payroll: Array.isArray(data.payroll)
+        ? data.payroll.map((p: any) => ({
+            id: p.id,
+            staffId: p.staffId,
+            month: p.month || '',
+            amount: p.amount != null ? String(p.amount) : '0',
+            status: p.status === 'PAID' ? 'PAID' : 'PENDING',
+            paidAt: p.paidAt || null,
+            createdAt: p.createdAt || '',
+            updatedAt: p.updatedAt || '',
+          }))
+        : [],
+    };
+  },
+
   async getStaff(): Promise<MockStaff[]> {
     try {
       const res: any = await apiFetch<any>('/api/staff');

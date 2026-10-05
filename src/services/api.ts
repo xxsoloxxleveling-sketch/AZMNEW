@@ -46,6 +46,15 @@ import type {
   TransactionSummaryResponse,
   TransactionSummaryQueryParams,
   CreateManualTransactionPayload,
+  StaffStatus,
+  StaffDirectoryRecord,
+  StaffQueryParams,
+  StaffPagination,
+  StaffListResponse,
+  StaffPayrollRecord,
+  StaffDetailRecord,
+  CreateStaffPayload,
+  UpdateStaffPayload,
 } from '../lib/mockApi';
 
 export { API_BASE_URL };
@@ -72,6 +81,15 @@ export type {
   TransactionSummaryResponse,
   TransactionSummaryQueryParams,
   CreateManualTransactionPayload,
+  StaffStatus,
+  StaffDirectoryRecord,
+  StaffQueryParams,
+  StaffPagination,
+  StaffListResponse,
+  StaffPayrollRecord,
+  StaffDetailRecord,
+  CreateStaffPayload,
+  UpdateStaffPayload,
 };
 export const USE_MOCK_FALLBACK = true;
 
@@ -506,6 +524,24 @@ export const api = {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.voidTransaction(id, reason);
     },
-  }
+  },
+  staff: {
+    getAll: async (query?: StaffQueryParams): Promise<StaffListResponse> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getStaffDirectory(query);
+    },
+    getById: async (id: string): Promise<StaffDetailRecord> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getStaffById(id);
+    },
+    create: async (data: CreateStaffPayload): Promise<StaffDetailRecord> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.createStaffMember(data);
+    },
+    update: async (id: string, data: UpdateStaffPayload): Promise<StaffDetailRecord> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.updateStaffMember(id, data);
+    },
+  },
 };
 

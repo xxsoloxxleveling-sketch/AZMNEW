@@ -99,7 +99,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'staff' as AdminTab,
       label: 'Staff Directory',
       icon: IconStaff,
-      roles: ['SUPER_ADMIN', 'ADMIN'],
+      roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     },
     {
       id: 'payroll' as AdminTab,
