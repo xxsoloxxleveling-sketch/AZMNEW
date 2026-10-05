@@ -131,14 +131,80 @@ export interface MockPartner {
   reviewedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
-  statusAudits?: Array<{
-    id: string;
-    previousStatus: string;
-    newStatus: string;
-    reason?: string | null;
-    changedByName?: string | null;
-    changedAt: string;
-  }>;
+  statusAudits?: PartnerStatusAuditRecord[];
+}
+
+export interface PartnerStatusAuditRecord {
+  id: string;
+  partnerId: string;
+  previousStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  newStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason: string | null;
+  changedById: string | null;
+  changedByEmail: string | null;
+  changedByName: string | null;
+  changedAt: string;
+}
+
+export interface CreatePartnerPayload {
+  institutionName: string;
+  institutionType: 'SCHOOL' | 'COLLEGE' | 'ACADEMY' | 'UNIVERSITY';
+  campus?: string | null;
+  address: string;
+  district: string;
+  province: string;
+  contactName: string;
+  contactDesignation: string;
+  contactMobile: string;
+  contactWhatsapp?: string | null;
+  contactEmail?: string | null;
+  website?: string | null;
+  classesOffered: string[];
+  studentStrength?: number | null;
+  expectedApplicants?: number | null;
+  agreedToTerms?: boolean;
+  signedAt?: string | Date | null;
+}
+
+export interface UpdatePartnerProfilePayload {
+  institutionName?: string;
+  institutionType?: 'SCHOOL' | 'COLLEGE' | 'ACADEMY' | 'UNIVERSITY';
+  campus?: string | null;
+  address?: string;
+  district?: string;
+  province?: string;
+  contactName?: string;
+  contactDesignation?: string;
+  contactMobile?: string;
+  contactWhatsapp?: string | null;
+  contactEmail?: string | null;
+  website?: string | null;
+  classesOffered?: string[];
+  studentStrength?: number | null;
+  expectedApplicants?: number | null;
+}
+
+export interface PartnerQueryParams {
+  search?: string;
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL';
+  institutionType?: 'SCHOOL' | 'COLLEGE' | 'ACADEMY' | 'UNIVERSITY' | 'ALL';
+  district?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+}
+
+export interface PartnerPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PartnerListResponse {
+  data: MockPartner[];
+  pagination: PartnerPagination;
 }
 
 export interface MockAttendance {
@@ -996,16 +1062,7 @@ export const mockApi = {
 
 
   // 4. Partner Institutions
-  async getPartners(query?: {
-    search?: string;
-    status?: string;
-    institutionType?: string;
-    district?: string;
-    page?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: string;
-  }): Promise<{ data: MockPartner[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
+  async getPartners(query?: PartnerQueryParams): Promise<PartnerListResponse> {
     const params = new URLSearchParams();
     if (query?.search) params.set('search', query.search);
     if (query?.status && query.status !== 'ALL') params.set('status', query.status);
@@ -1038,11 +1095,19 @@ export const mockApi = {
   },
 
   async getPartnerById(id: string): Promise<MockPartner> {
-    return apiFetch<MockPartner>(`/api/partners/${id}`);
+    const res: any = await apiFetch<any>('/api/partners/' + id);
+    return (res?.data !== undefined ? res.data : res) as MockPartner;
   },
 
-  async getPartnerStatusHistory(id: string): Promise<any[]> {
-    return apiFetch<any[]>(`/api/partners/${id}/status-history`);
+  async getPartnerStatusHistory(id: string): Promise<PartnerStatusAuditRecord[]> {
+    const res: any = await apiFetch<any>('/api/partners/' + id + '/status-history');
+    if (res && Array.isArray(res.data)) {
+      return res.data;
+    }
+    if (Array.isArray(res)) {
+      return res;
+    }
+    return [];
   },
 
   async registerPartner(partnerData: any, idempotencyKey?: string): Promise<MockPartner> {
@@ -1056,6 +1121,22 @@ export const mockApi = {
       headers,
       body: JSON.stringify(partnerData),
     });
+  },
+
+  async createPartner(payload: CreatePartnerPayload): Promise<MockPartner> {
+    const res: any = await apiFetch<any>('/api/partners', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res?.data !== undefined ? res.data : res) as MockPartner;
+  },
+
+  async updatePartnerProfile(id: string, payload: UpdatePartnerProfilePayload): Promise<MockPartner> {
+    const res: any = await apiFetch<any>(`/api/partners/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return (res?.data !== undefined ? res.data : res) as MockPartner;
   },
 
   async updatePartnerStatus(

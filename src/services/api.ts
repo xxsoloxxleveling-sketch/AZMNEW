@@ -23,7 +23,26 @@ import {
  * 2. Set `USE_MOCK_FALLBACK = false` when your backend endpoints are fully deployed.
  */
 import { API_BASE_URL } from '../lib/apiClient';
+import type {
+  MockPartner,
+  PartnerQueryParams,
+  PartnerPagination,
+  PartnerListResponse,
+  PartnerStatusAuditRecord,
+  CreatePartnerPayload,
+  UpdatePartnerProfilePayload,
+} from '../lib/mockApi';
+
 export { API_BASE_URL };
+export type {
+  MockPartner,
+  PartnerQueryParams,
+  PartnerPagination,
+  PartnerListResponse,
+  PartnerStatusAuditRecord,
+  CreatePartnerPayload,
+  UpdatePartnerProfilePayload,
+};
 export const USE_MOCK_FALLBACK = true;
 
 /**
@@ -400,27 +419,38 @@ export async function fetchPartnerInstitutions(): Promise<ApiResponse<PartnerSch
 
 export const api = {
   partners: {
-    register: async (data: any, idempotencyKey?: string) => {
+    register: async (data: any, idempotencyKey?: string): Promise<MockPartner> => {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.registerPartner(data, idempotencyKey);
     },
-    getAll: async (query?: any) => {
+    create: async (data: CreatePartnerPayload): Promise<MockPartner> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.createPartner(data);
+    },
+    getAll: async (query?: PartnerQueryParams): Promise<PartnerListResponse> => {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.getPartners(query);
     },
-    getById: async (id: string) => {
+    getById: async (id: string): Promise<MockPartner> => {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.getPartnerById(id);
     },
-    getStatusHistory: async (id: string) => {
+    updateProfile: async (id: string, data: UpdatePartnerProfilePayload): Promise<MockPartner> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.updatePartnerProfile(id, data);
+    },
+    getStatusHistory: async (id: string): Promise<PartnerStatusAuditRecord[]> => {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.getPartnerStatusHistory(id);
     },
-    updateStatus: async (id: string, payload: { status: 'PENDING' | 'APPROVED' | 'REJECTED'; reason?: string; expectedStatus?: string }) => {
+    updateStatus: async (
+      id: string,
+      payload: { status: 'PENDING' | 'APPROVED' | 'REJECTED'; reason?: string; expectedStatus?: string }
+    ): Promise<MockPartner> => {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.updatePartnerStatus(id, payload);
     },
-    downloadPdf: async (id: string, partnerCode?: string) => {
+    downloadPdf: async (id: string, partnerCode?: string): Promise<void> => {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.downloadPartnerPdf(id, partnerCode);
     }
