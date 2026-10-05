@@ -31,6 +31,21 @@ import type {
   PartnerStatusAuditRecord,
   CreatePartnerPayload,
   UpdatePartnerProfilePayload,
+  TransactionType,
+  TransactionStatus,
+  TransactionSource,
+  PaymentMethod,
+  TransactionFeeRecord,
+  TransactionPayrollRecord,
+  TransactionRecord,
+  MockTransaction,
+  TransactionPagination,
+  TransactionListResponse,
+  TransactionQueryParams,
+  TransactionSummaryPeriod,
+  TransactionSummaryResponse,
+  TransactionSummaryQueryParams,
+  CreateManualTransactionPayload,
 } from '../lib/mockApi';
 
 export { API_BASE_URL };
@@ -42,6 +57,21 @@ export type {
   PartnerStatusAuditRecord,
   CreatePartnerPayload,
   UpdatePartnerProfilePayload,
+  TransactionType,
+  TransactionStatus,
+  TransactionSource,
+  PaymentMethod,
+  TransactionFeeRecord,
+  TransactionPayrollRecord,
+  TransactionRecord,
+  MockTransaction,
+  TransactionPagination,
+  TransactionListResponse,
+  TransactionQueryParams,
+  TransactionSummaryPeriod,
+  TransactionSummaryResponse,
+  TransactionSummaryQueryParams,
+  CreateManualTransactionPayload,
 };
 export const USE_MOCK_FALLBACK = true;
 
@@ -454,6 +484,28 @@ export const api = {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.downloadPartnerPdf(id, partnerCode);
     }
+  },
+  transactions: {
+    getAll: async (query?: TransactionQueryParams): Promise<TransactionListResponse> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getTransactions(query);
+    },
+    getSummary: async (query?: TransactionSummaryQueryParams): Promise<TransactionSummaryResponse> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getTransactionSummary(query);
+    },
+    getById: async (id: string): Promise<TransactionRecord> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getTransactionById(id);
+    },
+    create: async (data: CreateManualTransactionPayload, idempotencyKey?: string): Promise<TransactionRecord> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.createManualTransaction(data, idempotencyKey);
+    },
+    void: async (id: string, reason: string): Promise<TransactionRecord> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.voidTransaction(id, reason);
+    },
   }
 };
 

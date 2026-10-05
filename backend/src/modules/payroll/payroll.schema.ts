@@ -14,6 +14,7 @@ export const markPayrollPaidSchema = z.object({
     .transform((v) => (v ? new Date(v) : new Date()))
     .optional(),
   paymentMethod: z.string().default('BANK_TRANSFER'),
+  referenceNumber: z.string().optional(),
   notes: z.string().optional(),
 });
 

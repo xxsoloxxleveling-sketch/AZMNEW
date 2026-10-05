@@ -190,7 +190,18 @@ export class StudentsController {
 
   async approvePayment(req: Request, res: Response, next: NextFunction) {
     try {
-      const student = await studentsService.approvePayment(req.params.id);
+      const user = req.user;
+      const actor = user
+        ? { id: user.id, name: user.name || null, email: user.email }
+        : undefined;
+      const idempotencyKey = (req.headers['idempotency-key'] ||
+        req.headers['x-idempotency-key']) as string | undefined;
+
+      const student = await studentsService.approvePayment(
+        req.params.id,
+        actor,
+        idempotencyKey
+      );
       res.status(200).json({
         success: true,
         message: 'Student registration payment approved successfully. Roll number is pending batch release.',

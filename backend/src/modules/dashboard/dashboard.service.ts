@@ -1,4 +1,5 @@
 import { prisma, TransactionType } from '../../lib/prisma';
+import { TransactionStatus, Prisma } from '@prisma/client';
 
 export class DashboardService {
   /**
@@ -108,31 +109,52 @@ export class DashboardService {
       where: { status: 'ACTIVE' },
     });
 
-    // 5. Financial Flow via database SUM aggregation
+    // 5. Financial Flow via database SUM aggregation (Strictly Current Calendar Month & POSTED only)
+    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+    const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+
     const txSums = await prisma.transaction.groupBy({
       by: ['type'],
+      where: {
+        status: TransactionStatus.POSTED,
+        transactionDate: {
+          gte: startOfMonth,
+          lt: nextMonthStart,
+        },
+      },
       _sum: {
         amount: true,
       },
     });
 
-    let monthFeeIncome = 0;
-    let monthSalaryExpense = 0;
-    let otherIncome = 0;
-    let otherExpense = 0;
+    let monthFeeIncomeDec = new Prisma.Decimal(0);
+    let monthSalaryExpenseDec = new Prisma.Decimal(0);
+    let otherIncomeDec = new Prisma.Decimal(0);
+    let otherExpenseDec = new Prisma.Decimal(0);
 
     for (const tx of txSums) {
-      const txAmount = Number(tx._sum.amount || 0);
+      const txAmount = tx._sum.amount ? new Prisma.Decimal(tx._sum.amount) : new Prisma.Decimal(0);
       if (tx.type === TransactionType.FEE_INCOME) {
-        monthFeeIncome += txAmount;
+        monthFeeIncomeDec = monthFeeIncomeDec.plus(txAmount);
       } else if (tx.type === TransactionType.SALARY_EXPENSE) {
-        monthSalaryExpense += txAmount;
+        monthSalaryExpenseDec = monthSalaryExpenseDec.plus(txAmount);
       } else if (tx.type === TransactionType.OTHER_INCOME) {
-        otherIncome += txAmount;
+        otherIncomeDec = otherIncomeDec.plus(txAmount);
       } else if (tx.type === TransactionType.OTHER_EXPENSE) {
-        otherExpense += txAmount;
+        otherExpenseDec = otherExpenseDec.plus(txAmount);
       }
     }
+
+    const netCashFlowDec = monthFeeIncomeDec
+      .plus(otherIncomeDec)
+      .minus(monthSalaryExpenseDec)
+      .minus(otherExpenseDec);
+
+    const monthFeeIncome = Number(monthFeeIncomeDec);
+    const monthSalaryExpense = Number(monthSalaryExpenseDec);
+    const otherIncome = Number(otherIncomeDec);
+    const otherExpense = Number(otherExpenseDec);
+    const netCashFlow = Number(netCashFlowDec);
 
     // 6. Partner Institution Aggregations (Coalesced NULL-safe)
     const [
@@ -153,7 +175,7 @@ export class DashboardService {
 
     const totalPartnerStudents = Number(partnerStrengthAgg._sum.studentStrength ?? 0);
     const totalExpectedApplicants = Number(partnerApplicantsAgg._sum.expectedApplicants ?? 0);
-    const netCashFlow = monthFeeIncome + otherIncome - (monthSalaryExpense + otherExpense);
+// netCashFlow computed above via Prisma.Decimal
 
     return {
       period: {

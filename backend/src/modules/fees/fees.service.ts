@@ -1,4 +1,6 @@
+import crypto from 'crypto';
 import { prisma, FeeStatus, TransactionType } from '../../lib/prisma';
+import { TransactionStatus, TransactionSource } from '@prisma/client';
 import { qrService } from '../attendance/qr.service';
 import { supabaseStorage } from '../../lib/supabaseStorage';
 import { GenerateChallanInput, MarkPaidInput, FeeQueryInput } from './fees.schema';
@@ -140,78 +142,185 @@ export class FeesService {
   }
 
   /**
-   * Marks a fee challan as paid and automatically creates a corresponding FEE_INCOME Transaction record.
+   * Marks a fee challan as paid and atomically creates a corresponding FEE_INCOME Transaction record.
+   * Guarantees atomic execution, compare-and-swap concurrency protection, and persistent idempotency.
    */
-  async markFeePaid(feeId: string, input: MarkPaidInput) {
-    const fee = await prisma.feeRecord.findUnique({
-      where: { id: feeId },
-      include: { student: true },
-    });
-
-    if (!fee) {
-      const error: AppError = new Error(`Fee record with ID '${feeId}' not found.`);
-      error.statusCode = 404;
-      throw error;
-    }
-
-    if (fee.status === FeeStatus.PAID) {
-      const error: AppError = new Error(
-        `Fee challan #${fee.challanNumber} is already fully paid.`
-      );
-      error.statusCode = 400;
-      throw error;
-    }
-
-    const currentPaid = Number(fee.amountPaid || 0);
-    const amountDue = Number(fee.amountDue);
-    const remainingBalance = Math.max(0, amountDue - currentPaid);
-
-    const paymentAmount = input.amountPaid !== undefined ? input.amountPaid : remainingBalance;
-
-    if (paymentAmount <= 0) {
-      const error: AppError = new Error('Payment amount must be greater than 0.');
-      error.statusCode = 400;
-      throw error;
-    }
-
-    const newTotalPaid = currentPaid + paymentAmount;
-    const newStatus: FeeStatus =
-      newTotalPaid >= amountDue ? FeeStatus.PAID : FeeStatus.PARTIAL;
-
-    const paidAt = input.paidAt || new Date();
-
-    // 1. Update the FeeRecord
-    const updatedFee = await prisma.feeRecord.update({
-      where: { id: feeId },
-      data: {
-        amountPaid: newTotalPaid,
-        status: newStatus,
-        paidAt,
-      },
-      include: {
-        student: true,
-      },
-    });
-
-    // 2. Create the corresponding FEE_INCOME Transaction record
-    const studentInfo = updatedFee.student
-      ? `${updatedFee.student.fullName} (${updatedFee.student.applicationNo || updatedFee.student.id})`
-      : 'Student';
-
-    const transaction = await prisma.transaction.create({
-      data: {
-        type: TransactionType.FEE_INCOME,
-        amount: paymentAmount,
-        description: `Fee Collection - Challan #${fee.challanNumber} (${studentInfo} for month ${fee.month})`,
-        relatedFeeId: fee.id,
-      },
-    });
-
-    return {
-      message: `Challan #${fee.challanNumber} marked as ${newStatus}. Received: PKR ${paymentAmount}`,
-      feeRecord: updatedFee,
-      transaction,
+  async markFeePaid(
+    feeId: string,
+    input: MarkPaidInput,
+    actor?: { id: string; name?: string | null; email: string },
+    idempotencyKey?: string
+  ) {
+    const idempotencyPayload = {
+      action: 'FEE_PAYMENT',
+      requestPath: `/api/fees/${feeId}/mark-paid`,
+      feeId,
+      amountPaid: input.amountPaid,
+      paymentMethod: input.paymentMethod,
+      notes: input.notes,
+      actorId: actor?.id,
     };
+    const payloadHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(idempotencyPayload))
+      .digest('hex');
+
+    // 1. Check Idempotency Key if supplied by client
+    if (idempotencyKey) {
+      const existingIdemp = await prisma.idempotencyRecord.findUnique({
+        where: { key: idempotencyKey },
+      });
+      if (existingIdemp && existingIdemp.expiresAt > new Date()) {
+        if (
+          existingIdemp.action === 'FEE_PAYMENT' &&
+          existingIdemp.payloadHash === payloadHash
+        ) {
+          return JSON.parse(existingIdemp.response);
+        } else {
+          const conflictErr: AppError = new Error(
+            'Idempotency key has already been used for a different request.'
+          );
+          conflictErr.statusCode = 409;
+          throw conflictErr;
+        }
+      }
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const fee = await tx.feeRecord.findUnique({
+        where: { id: feeId },
+        include: { student: true },
+      });
+
+      if (!fee) {
+        const error: AppError = new Error(`Fee record with ID '${feeId}' not found.`);
+        error.statusCode = 404;
+        throw error;
+      }
+
+      if (fee.status === FeeStatus.PAID) {
+        const error: AppError = new Error(
+          `Fee challan #${fee.challanNumber} is already fully paid.`
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const currentPaid = Number(fee.amountPaid || 0);
+      const amountDue = Number(fee.amountDue);
+      const remainingBalance = Math.max(0, amountDue - currentPaid);
+
+      if (remainingBalance <= 0) {
+        const error: AppError = new Error(
+          `Fee challan #${fee.challanNumber} is already fully paid.`
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const paymentAmount =
+        input.amountPaid !== undefined ? input.amountPaid : remainingBalance;
+
+      if (paymentAmount <= 0) {
+        const error: AppError = new Error('Payment amount must be greater than 0.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (paymentAmount > remainingBalance) {
+        const error: AppError = new Error(
+          `Payment amount (PKR ${paymentAmount}) exceeds remaining balance (PKR ${remainingBalance}) for challan #${fee.challanNumber}.`
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const newTotalPaid = currentPaid + paymentAmount;
+      const newStatus: FeeStatus =
+        newTotalPaid >= amountDue ? FeeStatus.PAID : FeeStatus.PARTIAL;
+
+      const paidAt = input.paidAt || new Date();
+
+      // Atomic conditional update to guard against concurrent double-submits
+      const updateRes = await tx.feeRecord.updateMany({
+        where: {
+          id: feeId,
+          amountPaid: fee.amountPaid,
+          status: { not: FeeStatus.PAID },
+        },
+        data: {
+          amountPaid: newTotalPaid,
+          status: newStatus,
+          paidAt,
+        },
+      });
+
+      if (updateRes.count === 0) {
+        const error: AppError = new Error(
+          `Concurrent payment conflict detected on challan #${fee.challanNumber}. Please refresh and retry.`
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const updatedFee = await tx.feeRecord.findUnique({
+        where: { id: feeId },
+        include: {
+          student: true,
+        },
+      });
+
+      const studentInfo = updatedFee?.student
+        ? `${updatedFee.student.fullName} (${updatedFee.student.applicationNo || updatedFee.student.id})`
+        : 'Student';
+
+      const transaction = await tx.transaction.create({
+        data: {
+          type: TransactionType.FEE_INCOME,
+          amount: paymentAmount,
+          description: `Fee Collection - Challan #${fee.challanNumber} (${studentInfo} for month ${fee.month})`,
+          transactionDate: paidAt,
+          status: TransactionStatus.POSTED,
+          source: TransactionSource.FEE,
+          relatedFeeId: fee.id,
+          createdById: actor?.id || null,
+          createdByName: actor?.name || actor?.email || null,
+          createdByEmail: actor?.email || null,
+        },
+      });
+
+      const responseData = {
+        message: `Challan #${fee.challanNumber} marked as ${newStatus}. Received: PKR ${paymentAmount}`,
+        feeRecord: updatedFee,
+        transaction: {
+          ...transaction,
+          amount: transaction.amount.toString(),
+        },
+      };
+
+      if (idempotencyKey) {
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await tx.idempotencyRecord.upsert({
+          where: { key: idempotencyKey },
+          update: {
+            action: 'FEE_PAYMENT',
+            payloadHash,
+            response: JSON.stringify(responseData),
+            expiresAt,
+          },
+          create: {
+            key: idempotencyKey,
+            action: 'FEE_PAYMENT',
+            payloadHash,
+            statusCode: 200,
+            response: JSON.stringify(responseData),
+            expiresAt,
+          },
+        });
+      }
+
+      return responseData;
+    });
   }
 
   /**

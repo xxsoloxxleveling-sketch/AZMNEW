@@ -17,7 +17,19 @@ export class FeesController {
 
   async markPaid(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await feesService.markFeePaid(req.params.id, req.body);
+      const user = req.user;
+      const actor = user
+        ? { id: user.id, name: user.name || null, email: user.email }
+        : undefined;
+      const idempotencyKey = (req.headers['idempotency-key'] ||
+        req.headers['x-idempotency-key']) as string | undefined;
+
+      const result = await feesService.markFeePaid(
+        req.params.id,
+        req.body,
+        actor,
+        idempotencyKey
+      );
       res.status(200).json({
         success: true,
         message: result.message,

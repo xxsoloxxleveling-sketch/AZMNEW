@@ -1,4 +1,6 @@
+import crypto from 'crypto';
 import { prisma, PayrollStatus, TransactionType } from '../../lib/prisma';
+import { TransactionStatus, TransactionSource } from '@prisma/client';
 import { RunPayrollInput, MarkPayrollPaidInput, PayrollQueryInput } from './payroll.schema';
 import { AppError } from '../../middleware/error.middleware';
 
@@ -60,61 +62,151 @@ export class PayrollService {
   }
 
   /**
-   * Marks a staff member's payroll as paid and creates a corresponding SALARY_EXPENSE Transaction.
+   * Marks a staff member's payroll as paid and atomically creates a corresponding SALARY_EXPENSE Transaction.
+   * Guarantees atomic execution, compare-and-swap concurrency protection, and persistent idempotency.
    */
-  async markPayrollPaid(id: string, input: MarkPayrollPaidInput) {
-    const payroll = await prisma.payrollRecord.findUnique({
-      where: { id },
-      include: {
-        staff: true,
-      },
-    });
-
-    if (!payroll) {
-      const error: AppError = new Error(`Payroll record with ID '${id}' not found.`);
-      error.statusCode = 404;
-      throw error;
-    }
-
-    if (payroll.status === PayrollStatus.PAID) {
-      const error: AppError = new Error(
-        `Payroll record for '${payroll.staff?.fullName || 'Staff'}' (${payroll.month}) is already marked as paid.`
-      );
-      error.statusCode = 400;
-      throw error;
-    }
-
-    const paidAt = input.paidAt || new Date();
-
-    // 1. Update PayrollRecord status to PAID
-    const updated = await prisma.payrollRecord.update({
-      where: { id },
-      data: {
-        status: PayrollStatus.PAID,
-        paidAt,
-      },
-      include: {
-        staff: true,
-      },
-    });
-
-    // 2. Create SALARY_EXPENSE Transaction record
-    const staffName = updated.staff ? `${updated.staff.fullName} (${updated.staff.role})` : 'Staff';
-
-    const transaction = await prisma.transaction.create({
-      data: {
-        type: TransactionType.SALARY_EXPENSE,
-        amount: updated.amount,
-        description: `Salary Disbursement - ${staffName} for month ${updated.month}`,
-        relatedPayrollId: updated.id,
-      },
-    });
-
-    return {
-      message: `Payroll for ${staffName} marked as PAID. Disbursed: PKR ${updated.amount}`,
-      payrollRecord: updated,
-      transaction,
+  async markPayrollPaid(
+    id: string,
+    input: MarkPayrollPaidInput,
+    actor?: { id: string; name?: string | null; email: string },
+    idempotencyKey?: string
+  ) {
+    const idempotencyPayload = {
+      action: 'PAYROLL_SETTLEMENT',
+      requestPath: `/api/payroll/${id}/mark-paid`,
+      payrollId: id,
+      paymentMethod: input.paymentMethod,
+      referenceNumber: input.referenceNumber,
+      actorId: actor?.id,
     };
+    const payloadHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(idempotencyPayload))
+      .digest('hex');
+
+    // 1. Check Idempotency Key if supplied by client
+    if (idempotencyKey) {
+      const existingIdemp = await prisma.idempotencyRecord.findUnique({
+        where: { key: idempotencyKey },
+      });
+      if (existingIdemp && existingIdemp.expiresAt > new Date()) {
+        if (
+          existingIdemp.action === 'PAYROLL_SETTLEMENT' &&
+          existingIdemp.payloadHash === payloadHash
+        ) {
+          return JSON.parse(existingIdemp.response);
+        } else {
+          const conflictErr: AppError = new Error(
+            'Idempotency key has already been used for a different request.'
+          );
+          conflictErr.statusCode = 409;
+          throw conflictErr;
+        }
+      }
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const payroll = await tx.payrollRecord.findUnique({
+        where: { id },
+        include: {
+          staff: true,
+        },
+      });
+
+      if (!payroll) {
+        const error: AppError = new Error(`Payroll record with ID '${id}' not found.`);
+        error.statusCode = 404;
+        throw error;
+      }
+
+      if (payroll.status === PayrollStatus.PAID) {
+        const error: AppError = new Error(
+          `Payroll record for '${payroll.staff?.fullName || 'Staff'}' (${payroll.month}) is already marked as paid.`
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const paidAt = input.paidAt || new Date();
+
+      // Atomic conditional update to guard against concurrent double-submits
+      const updateRes = await tx.payrollRecord.updateMany({
+        where: {
+          id,
+          status: PayrollStatus.PENDING,
+        },
+        data: {
+          status: PayrollStatus.PAID,
+          paidAt,
+        },
+      });
+
+      if (updateRes.count === 0) {
+        const error: AppError = new Error(
+          `Payroll record for '${payroll.staff?.fullName || 'Staff'}' (${payroll.month}) has already been paid concurrently.`
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const updated = await tx.payrollRecord.findUnique({
+        where: { id },
+        include: {
+          staff: true,
+        },
+      });
+
+      const staffName = updated?.staff
+        ? `${updated.staff.fullName} (${updated.staff.role})`
+        : 'Staff';
+
+      const transaction = await tx.transaction.create({
+        data: {
+          type: TransactionType.SALARY_EXPENSE,
+          amount: updated!.amount,
+          description: `Salary Disbursement - ${staffName} for month ${updated!.month}`,
+          transactionDate: paidAt,
+          status: TransactionStatus.POSTED,
+          source: TransactionSource.PAYROLL,
+          relatedPayrollId: updated!.id,
+          createdById: actor?.id || null,
+          createdByName: actor?.name || actor?.email || null,
+          createdByEmail: actor?.email || null,
+        },
+      });
+
+      const responseData = {
+        message: `Payroll for ${staffName} marked as PAID. Disbursed: PKR ${updated!.amount}`,
+        payrollRecord: updated,
+        transaction: {
+          ...transaction,
+          amount: transaction.amount.toString(),
+        },
+      };
+
+      if (idempotencyKey) {
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await tx.idempotencyRecord.upsert({
+          where: { key: idempotencyKey },
+          update: {
+            action: 'PAYROLL_SETTLEMENT',
+            payloadHash,
+            response: JSON.stringify(responseData),
+            expiresAt,
+          },
+          create: {
+            key: idempotencyKey,
+            action: 'PAYROLL_SETTLEMENT',
+            payloadHash,
+            statusCode: 200,
+            response: JSON.stringify(responseData),
+            expiresAt,
+          },
+        });
+      }
+
+      return responseData;
+    });
   }
 
   /**

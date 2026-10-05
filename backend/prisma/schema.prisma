@@ -313,11 +313,12 @@ model FeeRecord {
   amountDue     Decimal
   amountPaid    Decimal   @default(0)
   status        FeeStatus @default(UNPAID)
-  challanNumber String    @unique
+  challanNumber String        @unique
   dueDate       DateTime
   paidAt        DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now()) @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now()) @updatedAt
+  transactions  Transaction[]
 }
 
 enum StaffStatus {
@@ -351,9 +352,10 @@ model PayrollRecord {
   month     String
   amount    Decimal
   status    PayrollStatus @default(PENDING)
-  paidAt    DateTime?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @default(now()) @updatedAt
+  paidAt       DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @default(now()) @updatedAt
+  transactions Transaction[]
 }
 
 enum TransactionType {
@@ -363,14 +365,64 @@ enum TransactionType {
   OTHER_EXPENSE
 }
 
+enum TransactionStatus {
+  POSTED
+  VOIDED
+}
+
+enum TransactionSource {
+  MANUAL
+  FEE
+  PAYROLL
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+  OTHER
+}
+
 model Transaction {
-  id               String          @id @default(cuid())
+  id               String            @id @default(cuid())
   type             TransactionType
   amount           Decimal
   description      String
+  transactionDate  DateTime          @default(now())
+  status           TransactionStatus @default(POSTED)
+  source           TransactionSource @default(MANUAL)
+  category         String?
+  paymentMethod    PaymentMethod?
+  referenceNumber  String?
+
+  // Operator / Creator metadata
+  createdById      String?
+  createdByName    String?
+  createdByEmail   String?
+
+  // Immutability / Void metadata
+  voidedAt         DateTime?
+  voidedById       String?
+  voidedByName     String?
+  voidedByEmail    String?
+  voidReason       String?
+
+  // Relations
   relatedFeeId     String?
+  feeRecord        FeeRecord?        @relation(fields: [relatedFeeId], references: [id], onDelete: SetNull)
   relatedPayrollId String?
-  createdAt        DateTime        @default(now())
+  payrollRecord    PayrollRecord?    @relation(fields: [relatedPayrollId], references: [id], onDelete: SetNull)
+
+  createdAt        DateTime          @default(now())
+
+  @@index([transactionDate])
+  @@index([createdAt])
+  @@index([type])
+  @@index([status])
+  @@index([source])
+  @@index([relatedFeeId])
+  @@index([relatedPayrollId])
 }
 
 model TestCenter {
@@ -436,5 +488,6 @@ model SystemSetting {
   id        String   @id @default(cuid())
   key       String   @unique
   value     String
+  createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 }

@@ -260,14 +260,120 @@ export interface MockPayrollRecord {
   createdAt: string;
 }
 
-export interface MockTransaction {
+export type TransactionType = 'FEE_INCOME' | 'SALARY_EXPENSE' | 'OTHER_INCOME' | 'OTHER_EXPENSE';
+export type TransactionStatus = 'POSTED' | 'VOIDED';
+export type TransactionSource = 'MANUAL' | 'FEE' | 'PAYROLL';
+export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'ONLINE' | 'OTHER';
+
+export interface TransactionFeeRecord {
   id: string;
-  type: 'FEE_INCOME' | 'SALARY_EXPENSE' | 'OTHER_INCOME' | 'OTHER_EXPENSE';
+  studentId: string;
+  challanNumber: string;
+  month: string;
+  status: string;
+  student?: {
+    id: string;
+    fullName: string;
+    applicationNo: string;
+  } | null;
+}
+
+export interface TransactionPayrollRecord {
+  id: string;
+  staffId: string;
+  month: string;
+  status: string;
+  staff?: {
+    id: string;
+    fullName: string;
+    role: string;
+  } | null;
+}
+
+export interface TransactionRecord {
+  id: string;
+  type: TransactionType;
+  amount: string; // Authoritative decimal string
+  description: string;
+  transactionDate: string;
+  status: TransactionStatus;
+  source: TransactionSource;
+  category?: string | null;
+  paymentMethod?: PaymentMethod | null;
+  referenceNumber?: string | null;
+  createdById?: string | null;
+  createdByName?: string | null;
+  createdByEmail?: string | null;
+  voidedAt?: string | null;
+  voidedById?: string | null;
+  voidedByName?: string | null;
+  voidedByEmail?: string | null;
+  voidReason?: string | null;
+  relatedFeeId?: string | null;
+  relatedPayrollId?: string | null;
+  createdAt: string;
+  feeRecord?: TransactionFeeRecord | null;
+  payrollRecord?: TransactionPayrollRecord | null;
+}
+
+// Backward compatibility alias
+export type MockTransaction = TransactionRecord;
+
+export interface TransactionPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface TransactionListResponse {
+  transactions: TransactionRecord[];
+  pagination: TransactionPagination;
+}
+
+export interface TransactionQueryParams {
+  page?: number;
+  limit?: number;
+  type?: TransactionType | 'ALL';
+  status?: TransactionStatus | 'ALL';
+  source?: TransactionSource | 'ALL';
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  sortBy?: 'transactionDate' | 'createdAt' | 'amount';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface TransactionSummaryPeriod {
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface TransactionSummaryResponse {
+  currency: string;
+  totalIncome: string;
+  totalExpense: string;
+  netMovement: string;
+  postedCount: number;
+  voidedCount: number;
+  period: TransactionSummaryPeriod;
+}
+
+export interface TransactionSummaryQueryParams {
+  startDate?: string;
+  endDate?: string;
+  type?: TransactionType | 'ALL';
+  source?: TransactionSource | 'ALL';
+}
+
+export interface CreateManualTransactionPayload {
+  type: 'OTHER_INCOME' | 'OTHER_EXPENSE';
   amount: number;
   description: string;
-  relatedFeeId?: string;
-  relatedPayrollId?: string;
-  createdAt: string;
+  transactionDate?: string;
+  category?: string | null;
+  paymentMethod?: PaymentMethod | null;
+  referenceNumber?: string | null;
 }
 
 export interface MockUserAccount {
@@ -1365,25 +1471,204 @@ export const mockApi = {
     });
   },
 
-  // 9. General Ledger Transactions
-  async getTransactions(type?: string): Promise<MockTransaction[]> {
-    try {
-      const query = type && type !== 'ALL' ? `?type=${type}` : '';
-      const res: any = await apiFetch<any>(`/api/transactions${query}`);
-      const list = Array.isArray(res) ? res : Array.isArray(res?.transactions) ? res.transactions : [];
-      return list.map((t: any) => ({
-        id: t.id,
-        type: t.type,
-        amount: Number(t.amount) || 0,
-        description: t.description,
-        relatedFeeId: t.relatedFeeId,
-        relatedPayrollId: t.relatedPayrollId,
-        createdAt: t.createdAt,
-      }));
-    } catch (err) {
-      console.warn('Transactions fetch error:', err);
-      return [];
+  // 9. General Financial Ledger Transactions
+  async getTransactions(queryOrType?: TransactionQueryParams | string): Promise<TransactionListResponse> {
+    const query: TransactionQueryParams =
+      typeof queryOrType === 'string'
+        ? { type: queryOrType as any }
+        : queryOrType || {};
+
+    const params = new URLSearchParams();
+    if (query.page) params.set('page', String(query.page));
+    if (query.limit) params.set('limit', String(query.limit));
+    if (query.type && query.type !== 'ALL') params.set('type', query.type);
+    if (query.status && query.status !== 'ALL') params.set('status', query.status);
+    if (query.source && query.source !== 'ALL') params.set('source', query.source);
+    if (query.search && query.search.trim()) params.set('search', query.search.trim());
+    if (query.startDate && query.startDate.trim()) params.set('startDate', query.startDate.trim());
+    if (query.endDate && query.endDate.trim()) params.set('endDate', query.endDate.trim());
+    if (query.sortBy) params.set('sortBy', query.sortBy);
+    if (query.sortOrder) params.set('sortOrder', query.sortOrder);
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const res: any = await apiFetch<any>(`/api/transactions${queryString}`);
+
+    const rawList = Array.isArray(res?.transactions)
+      ? res.transactions
+      : Array.isArray(res?.data?.transactions)
+      ? res.data.transactions
+      : Array.isArray(res?.data)
+      ? res.data
+      : Array.isArray(res)
+      ? res
+      : [];
+
+    const rawPagination = res?.pagination || res?.data?.pagination;
+
+    const transactions: TransactionRecord[] = rawList.map((t: any) => ({
+      id: t.id,
+      type: t.type,
+      amount: t.amount != null ? String(t.amount) : '0.00',
+      description: t.description || '',
+      transactionDate: t.transactionDate || t.createdAt,
+      status: t.status || 'POSTED',
+      source: t.source || 'MANUAL',
+      category: t.category ?? null,
+      paymentMethod: t.paymentMethod ?? null,
+      referenceNumber: t.referenceNumber ?? null,
+      createdById: t.createdById ?? null,
+      createdByName: t.createdByName ?? null,
+      createdByEmail: t.createdByEmail ?? null,
+      voidedAt: t.voidedAt ?? null,
+      voidedById: t.voidedById ?? null,
+      voidedByName: t.voidedByName ?? null,
+      voidedByEmail: t.voidedByEmail ?? null,
+      voidReason: t.voidReason ?? null,
+      relatedFeeId: t.relatedFeeId ?? null,
+      relatedPayrollId: t.relatedPayrollId ?? null,
+      createdAt: t.createdAt,
+      feeRecord: t.feeRecord ?? null,
+      payrollRecord: t.payrollRecord ?? null,
+    }));
+
+    return {
+      transactions,
+      pagination: {
+        page: Number(rawPagination?.page) || query.page || 1,
+        limit: Number(rawPagination?.limit) || query.limit || 20,
+        total: typeof rawPagination?.total === 'number' ? rawPagination.total : transactions.length,
+        totalPages: Number(rawPagination?.totalPages) || (Math.ceil(transactions.length / (query.limit || 20)) || 1),
+      },
+    };
+  },
+
+  async getTransactionSummary(query?: TransactionSummaryQueryParams): Promise<TransactionSummaryResponse> {
+    const params = new URLSearchParams();
+    if (query?.type && query.type !== 'ALL') params.set('type', query.type);
+    if (query?.source && query.source !== 'ALL') params.set('source', query.source);
+    if (query?.startDate && query.startDate.trim()) params.set('startDate', query.startDate.trim());
+    if (query?.endDate && query.endDate.trim()) params.set('endDate', query.endDate.trim());
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const res: any = await apiFetch<any>(`/api/transactions/summary${queryString}`);
+    const data = res?.data !== undefined ? res.data : res;
+
+    return {
+      currency: data?.currency || 'PKR',
+      totalIncome: data?.totalIncome != null ? String(data.totalIncome) : '0.00',
+      totalExpense: data?.totalExpense != null ? String(data.totalExpense) : '0.00',
+      netMovement: data?.netMovement != null ? String(data.netMovement) : '0.00',
+      postedCount: typeof data?.postedCount === 'number' ? data.postedCount : 0,
+      voidedCount: typeof data?.voidedCount === 'number' ? data.voidedCount : 0,
+      period: {
+        startDate: data?.period?.startDate ?? query?.startDate ?? null,
+        endDate: data?.period?.endDate ?? query?.endDate ?? null,
+      },
+    };
+  },
+
+  async getTransactionById(id: string): Promise<TransactionRecord> {
+    const res: any = await apiFetch<any>(`/api/transactions/${id}`);
+    const t = res?.data !== undefined ? res.data : res;
+    return {
+      id: t.id,
+      type: t.type,
+      amount: t.amount != null ? String(t.amount) : '0.00',
+      description: t.description || '',
+      transactionDate: t.transactionDate || t.createdAt,
+      status: t.status || 'POSTED',
+      source: t.source || 'MANUAL',
+      category: t.category ?? null,
+      paymentMethod: t.paymentMethod ?? null,
+      referenceNumber: t.referenceNumber ?? null,
+      createdById: t.createdById ?? null,
+      createdByName: t.createdByName ?? null,
+      createdByEmail: t.createdByEmail ?? null,
+      voidedAt: t.voidedAt ?? null,
+      voidedById: t.voidedById ?? null,
+      voidedByName: t.voidedByName ?? null,
+      voidedByEmail: t.voidedByEmail ?? null,
+      voidReason: t.voidReason ?? null,
+      relatedFeeId: t.relatedFeeId ?? null,
+      relatedPayrollId: t.relatedPayrollId ?? null,
+      createdAt: t.createdAt,
+      feeRecord: t.feeRecord ?? null,
+      payrollRecord: t.payrollRecord ?? null,
+    };
+  },
+
+  async createManualTransaction(
+    data: CreateManualTransactionPayload,
+    idempotencyKey?: string
+  ): Promise<TransactionRecord> {
+    const headers: Record<string, string> = {};
+    if (idempotencyKey && idempotencyKey.trim()) {
+      headers['Idempotency-Key'] = idempotencyKey.trim();
     }
+    const res: any = await apiFetch<any>('/api/transactions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+    });
+    const t = res?.data !== undefined ? res.data : res;
+    return {
+      id: t.id,
+      type: t.type,
+      amount: t.amount != null ? String(t.amount) : '0.00',
+      description: t.description || '',
+      transactionDate: t.transactionDate || t.createdAt,
+      status: t.status || 'POSTED',
+      source: t.source || 'MANUAL',
+      category: t.category ?? null,
+      paymentMethod: t.paymentMethod ?? null,
+      referenceNumber: t.referenceNumber ?? null,
+      createdById: t.createdById ?? null,
+      createdByName: t.createdByName ?? null,
+      createdByEmail: t.createdByEmail ?? null,
+      voidedAt: t.voidedAt ?? null,
+      voidedById: t.voidedById ?? null,
+      voidedByName: t.voidedByName ?? null,
+      voidedByEmail: t.voidedByEmail ?? null,
+      voidReason: t.voidReason ?? null,
+      relatedFeeId: t.relatedFeeId ?? null,
+      relatedPayrollId: t.relatedPayrollId ?? null,
+      createdAt: t.createdAt,
+      feeRecord: t.feeRecord ?? null,
+      payrollRecord: t.payrollRecord ?? null,
+    };
+  },
+
+  async voidTransaction(id: string, reason: string): Promise<TransactionRecord> {
+    const res: any = await apiFetch<any>(`/api/transactions/${id}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    const t = res?.data !== undefined ? res.data : res;
+    return {
+      id: t.id,
+      type: t.type,
+      amount: t.amount != null ? String(t.amount) : '0.00',
+      description: t.description || '',
+      transactionDate: t.transactionDate || t.createdAt,
+      status: t.status || 'VOIDED',
+      source: t.source || 'MANUAL',
+      category: t.category ?? null,
+      paymentMethod: t.paymentMethod ?? null,
+      referenceNumber: t.referenceNumber ?? null,
+      createdById: t.createdById ?? null,
+      createdByName: t.createdByName ?? null,
+      createdByEmail: t.createdByEmail ?? null,
+      voidedAt: t.voidedAt ?? null,
+      voidedById: t.voidedById ?? null,
+      voidedByName: t.voidedByName ?? null,
+      voidedByEmail: t.voidedByEmail ?? null,
+      voidReason: t.voidReason ?? null,
+      relatedFeeId: t.relatedFeeId ?? null,
+      relatedPayrollId: t.relatedPayrollId ?? null,
+      createdAt: t.createdAt,
+      feeRecord: t.feeRecord ?? null,
+      payrollRecord: t.payrollRecord ?? null,
+    };
   },
 
   async deleteTransaction(transactionId: string): Promise<boolean> {

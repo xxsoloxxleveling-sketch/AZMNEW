@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import sharp from 'sharp';
 import { prisma, TransactionType } from '../../lib/prisma';
+import { TransactionStatus, TransactionSource, FeeStatus } from '@prisma/client';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
 import { supabaseStorage, StorageBucket } from '../../lib/supabaseStorage';
@@ -820,63 +821,206 @@ export class StudentsService {
   /**
    * Approves student payment, assigns sequential Roll Number, and generates biometric QR Code.
    */
-  async approveStudentPayment(studentId: string) {
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-      include: { feeRecords: true },
-    });
+  async approveStudentPayment(
+    studentId: string,
+    actor?: { id?: string; name?: string | null; email?: string },
+    idempotencyKey?: string
+  ) {
+    const idempotencyPayload = {
+      action: 'STUDENT_REGISTRATION_PAYMENT',
+      requestPath: `/api/students/${studentId}/approve-payment`,
+      studentId,
+      actorId: actor?.id,
+    };
+    const payloadHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(idempotencyPayload))
+      .digest('hex');
 
-    if (!student) {
-      const error: AppError = new Error(`Student with ID '${studentId}' not found.`);
-      error.statusCode = 404;
-      throw error;
-    }
-
-    // Mark student's registration fee records as PAID
-    const paidAt = new Date();
-    await prisma.feeRecord.updateMany({
-      where: { studentId: student.id },
-      data: {
-        status: 'PAID',
-        amountPaid: 300,
-        paidAt,
-      },
-    });
-
-    // Create FEE_INCOME transaction record if none exists for this student
-    const existingFee = student.feeRecords[0];
-    if (existingFee) {
-      const existingTx = await prisma.transaction.findFirst({
-        where: { relatedFeeId: existingFee.id },
+    // 1. Idempotency Check
+    if (idempotencyKey) {
+      const existingIdemp = await prisma.idempotencyRecord.findUnique({
+        where: { key: idempotencyKey },
       });
-      if (!existingTx) {
-        await prisma.transaction.create({
-          data: {
-            type: TransactionType.FEE_INCOME,
-            amount: 300,
-            description: `Registration Fee Collection (${student.fullName} - ${student.applicationNo})`,
-            relatedFeeId: existingFee.id,
-          },
-        });
+      if (existingIdemp && existingIdemp.expiresAt > new Date()) {
+        if (
+          existingIdemp.action === 'STUDENT_REGISTRATION_PAYMENT' &&
+          existingIdemp.payloadHash === payloadHash
+        ) {
+          return JSON.parse(existingIdemp.response);
+        } else {
+          const conflictErr: AppError = new Error(
+            'Idempotency key has already been used for a different request.'
+          );
+          conflictErr.statusCode = 409;
+          throw conflictErr;
+        }
       }
     }
 
-    const updatedStudent = await prisma.student.findUnique({
-      where: { id: studentId },
-      include: {
-        academicRecords: true,
-        documents: true,
-        officeUse: true,
-        feeRecords: true,
-        studentDocuments: true,
-      },
-    });
+    return await prisma.$transaction(async (tx) => {
+      const student = await tx.student.findUnique({
+        where: { id: studentId },
+        include: { feeRecords: true },
+      });
 
-    return this.formatStudentWithDocuments(updatedStudent!);
+      if (!student) {
+        const error: AppError = new Error(`Student with ID '${studentId}' not found.`);
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // 2. Identify the authoritative registration FeeRecord
+      const feeRecords = student.feeRecords || [];
+
+      if (feeRecords.length === 0) {
+        const error: AppError = new Error(
+          `No fee record found for student '${student.fullName}' (${student.applicationNo || studentId}). Registration payment requires a generated fee challan.`
+        );
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // Check for explicit registration fee record by month discriminator
+      const registrationFees = feeRecords.filter((f) =>
+        f.month.toLowerCase().includes('registration')
+      );
+
+      let targetFee: (typeof feeRecords)[0] | null = null;
+
+      if (registrationFees.length === 1) {
+        targetFee = registrationFees[0];
+      } else if (registrationFees.length > 1) {
+        const unpaidRegFees = registrationFees.filter((f) => f.status !== FeeStatus.PAID);
+        if (unpaidRegFees.length === 1) {
+          targetFee = unpaidRegFees[0];
+        } else if (unpaidRegFees.length === 0) {
+          const error: AppError = new Error('Student registration fee has already been paid.');
+          error.statusCode = 409;
+          throw error;
+        } else {
+          const error: AppError = new Error(
+            `Ambiguous fee state: multiple unpaid registration fee records found for student '${student.fullName}'.`
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+      } else {
+        // No fee record explicitly has 'registration' in month
+        if (feeRecords.length === 1) {
+          targetFee = feeRecords[0];
+        } else {
+          const error: AppError = new Error(
+            `Ambiguous fee state: multiple fee records exist for student '${student.fullName}' without an explicit registration designation.`
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
+      // Concurrency / duplicate protection: if fee is already marked PAID, reject with 409
+      if (targetFee.status === FeeStatus.PAID) {
+        const error: AppError = new Error('Student registration fee has already been paid.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const registrationAmount = Number(targetFee.amountDue);
+      if (registrationAmount <= 0) {
+        const error: AppError = new Error(
+          `Invalid fee amount (${registrationAmount}) on registration challan #${targetFee.challanNumber}.`
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const paidAt = new Date();
+
+      // Compare-and-swap update on the target feeRecord
+      const updateResult = await tx.feeRecord.updateMany({
+        where: {
+          id: targetFee.id,
+          status: { not: FeeStatus.PAID },
+        },
+        data: {
+          status: FeeStatus.PAID,
+          amountPaid: targetFee.amountDue,
+          paidAt,
+        },
+      });
+
+      if (updateResult.count === 0) {
+        const error: AppError = new Error('Student registration fee has already been updated or paid concurrently.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // Check if transaction already exists for this fee
+      const existingTx = await tx.transaction.findFirst({
+        where: { relatedFeeId: targetFee.id },
+      });
+
+      if (!existingTx) {
+        await tx.transaction.create({
+          data: {
+            type: TransactionType.FEE_INCOME,
+            amount: targetFee.amountDue,
+            description: `Registration Fee Collection (${student.fullName} - ${student.applicationNo || student.id})`,
+            transactionDate: paidAt,
+            status: TransactionStatus.POSTED,
+            source: TransactionSource.FEE,
+            relatedFeeId: targetFee.id,
+            createdById: actor?.id,
+            createdByName: actor?.name || actor?.email || null,
+            createdByEmail: actor?.email,
+          },
+        });
+      }
+
+      const updatedStudent = await tx.student.findUnique({
+        where: { id: studentId },
+        include: {
+          academicRecords: true,
+          documents: true,
+          officeUse: true,
+          feeRecords: true,
+          studentDocuments: true,
+        },
+      });
+
+      const formatted = this.formatStudentWithDocuments(updatedStudent!);
+
+      if (idempotencyKey) {
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await tx.idempotencyRecord.upsert({
+          where: { key: idempotencyKey },
+          update: {
+            action: 'STUDENT_REGISTRATION_PAYMENT',
+            payloadHash,
+            response: JSON.stringify(formatted),
+            expiresAt,
+          },
+          create: {
+            key: idempotencyKey,
+            action: 'STUDENT_REGISTRATION_PAYMENT',
+            payloadHash,
+            statusCode: 200,
+            response: JSON.stringify(formatted),
+            expiresAt,
+          },
+        });
+      }
+
+      return formatted;
+    });
   }
 
-  async approvePayment(studentId: string) {
-    return this.approveStudentPayment(studentId);
+  async approvePayment(
+    studentId: string,
+    actor?: { id?: string; name?: string | null; email?: string },
+    idempotencyKey?: string
+  ) {
+    return this.approveStudentPayment(studentId, actor, idempotencyKey);
   }
 
   /**
@@ -1628,33 +1772,10 @@ export class StudentsService {
   async deleteStudent(id: string) {
     const student = await this.getStudentById(id);
 
-    // 1. Find all fee record IDs for this student
-    const feeIds = student.feeRecords?.map((f: any) => f.id) || [];
-    const appNo = student.applicationNo;
-    const stdId = student.id;
+    // Financial Ledger transactions are immutable records. Linked fee transaction references
+    // are safely decoupled via onDelete: SetNull at the schema layer. Do not delete transactions.
 
-    // 2. Cascade delete all linked General Ledger transactions
-    const orConditions: any[] = [];
-    if (feeIds.length > 0) {
-      orConditions.push({ relatedFeeId: { in: feeIds } });
-    }
-    if (appNo) {
-      orConditions.push({ description: { contains: appNo } });
-    }
-    if (stdId) {
-      orConditions.push({ description: { contains: stdId } });
-    }
-
-    if (orConditions.length > 0) {
-      const deletedTxCount = await prisma.transaction.deleteMany({
-        where: { OR: orConditions },
-      });
-      console.log(
-        `[AUDIT] Cascaded deletion of ${deletedTxCount.count} transaction(s) for deleted student ${student.fullName} (${student.applicationNo || id}) at ${new Date().toISOString()}`
-      );
-    }
-
-    // 3. Delete student (Prisma cascades academicRecords, documents, officeUse, attendance, feeRecords)
+    // Delete student (Prisma cascades academicRecords, documents, officeUse, attendance, feeRecords)
     return prisma.student.delete({
       where: { id },
     });
