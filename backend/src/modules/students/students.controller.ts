@@ -508,20 +508,20 @@ export class StudentsController {
 
   async searchPublicSlip(req: Request, res: Response, next: NextFunction) {
     try {
-      const query = String(req.body?.query || req.body?.rollNo || req.body?.applicationNo || '');
+      const query = String(req.body?.query || req.body?.rollNo || req.body?.applicationNo || '').trim();
       const cnic = String(
         req.headers['x-candidate-cnic'] ||
         req.headers['x-candidate-key'] ||
         req.body?.cnic ||
         ''
-      );
-      if (!query || !cnic) {
+      ).trim();
+      if (!cnic) {
         return res.status(400).json({
           success: false,
-          error: 'Query identifier and matching CNIC / B-Form are required.',
+          error: 'Matching CNIC / B-Form is required.',
         });
       }
-      const result = await studentsService.searchPublicSlip(query, cnic);
+      const result = await studentsService.searchPublicSlip(query || undefined, cnic);
       return res.status(200).json(result);
     } catch (error) {
       next(error);

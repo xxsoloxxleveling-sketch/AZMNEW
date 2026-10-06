@@ -122,20 +122,24 @@ export interface ApiResponse<T> {
 // -------------------------------------------------------------
 // 1. Roll Number Slips API
 // -------------------------------------------------------------
-export async function searchRollNumberSlip(query: string, cnicOrBForm: string): Promise<ApiResponse<RollNumberSlip>> {
-  const clean = query.trim();
+export async function searchRollNumberSlip(query: string | undefined, cnicOrBForm: string): Promise<ApiResponse<RollNumberSlip>> {
+  const clean = String(query || '').trim();
   const identity = cnicOrBForm.trim();
   const identityDigits = identity.replace(/\D/g, '');
 
-  if (!clean) {
-    return { success: false, error: 'Enter your application ID or roll number.' };
-  }
   if (identityDigits.length < 5) {
     return { success: false, error: 'Enter the complete CNIC / B-Form used for registration.' };
   }
 
   try {
     const url = `${API_BASE_URL}/api/students/search-slip`;
+    const bodyPayload: Record<string, string> = {
+      cnic: identity,
+    };
+    if (clean) {
+      bodyPayload.query = clean;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -143,10 +147,7 @@ export async function searchRollNumberSlip(query: string, cnicOrBForm: string): 
         'Accept': 'application/json',
         'X-Candidate-CNIC': identity,
       },
-      body: JSON.stringify({
-        query: clean,
-        cnic: identity,
-      }),
+      body: JSON.stringify(bodyPayload),
     });
     const json: any = await response.json();
     return json && typeof json.success === 'boolean'

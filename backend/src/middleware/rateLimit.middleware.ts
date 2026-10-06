@@ -53,3 +53,15 @@ export const documentUploadRateLimiter = rateLimit({
   message: standardRateLimitResponse,
 });
 
+/** Dedicated rate limiter for public Roll Number Slip search (enumeration protection: 60 req / 15 min per IP) */
+export const publicSlipSearchRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { message: 'Too many search requests from this IP. Please wait a few minutes and try again.' },
+  },
+});
+

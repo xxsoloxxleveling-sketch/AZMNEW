@@ -1140,48 +1140,65 @@ export class StudentsService {
   }
 
   /**
-   * Public Candidate Roll Number Slip search method with exact priority, partial matching, and multi-match safeguards.
+   * Public Candidate Roll Number Slip search method with exact identity matching.
+   * CNIC / B-Form is mandatory; optional searchQuery (Application ID or Roll Number) is verified if provided.
    */
-  async searchPublicSlip(searchQuery: string, cnicOrBForm: string) {
-    const rawQuery = searchQuery.trim();
-    const clean = rawQuery.toLowerCase();
-    const cnicDigits = cnicOrBForm.replace(/\D/g, '');
+  async searchPublicSlip(searchQuery: string | undefined, cnicOrBForm: string) {
+    const rawCnic = String(cnicOrBForm || '').trim();
+    const cnicDigits = rawCnic.replace(/\D/g, '');
 
-    if (!clean || cnicDigits.length < 5) {
+    if (!rawCnic || cnicDigits.length < 5) {
       return {
         success: false,
         error: 'Enter your complete CNIC / B-Form exactly as registered to access your slip.',
       };
     }
 
-    // Step 1: Attempt exact match first
+    const rawQuery = String(searchQuery || '').trim();
+    const cleanQuery = rawQuery.toLowerCase();
+
+    // Step 1: Normalize exact candidate identity (formatted with hyphens or unformatted digits if 13 digits)
     const formattedCnic =
       cnicDigits.length === 13
         ? `${cnicDigits.slice(0, 5)}-${cnicDigits.slice(5, 12)}-${cnicDigits.slice(12)}`
         : null;
+    const unformattedCnic = cnicDigits.length === 13 ? cnicDigits : null;
 
-    // A slip is personal information.  Never fall back to partial identifiers or
-    // candidate names here: both the requested identifier and the CNIC/B-form
-    // must match the same record exactly.
-    const registeredIdentity = [
-      { cnicOrBForm: { equals: cnicOrBForm } },
-      ...(formattedCnic ? [{ cnicOrBForm: { equals: formattedCnic } }] : []),
+    const identityClauses: Array<{ cnicOrBForm: { equals: string; mode?: 'insensitive' } }> = [
+      { cnicOrBForm: { equals: rawCnic, mode: 'insensitive' } },
     ];
+    if (formattedCnic && formattedCnic !== rawCnic) {
+      identityClauses.push({ cnicOrBForm: { equals: formattedCnic, mode: 'insensitive' } });
+    }
+    if (unformattedCnic && unformattedCnic !== rawCnic) {
+      identityClauses.push({ cnicOrBForm: { equals: unformattedCnic, mode: 'insensitive' } });
+    }
 
-    const student = await prisma.student.findFirst({
-      where: {
+    const identityFilter = { OR: identityClauses };
+
+    let whereClause: any;
+    if (!cleanQuery) {
+      // Scenario A: CNIC ONLY
+      whereClause = identityFilter;
+    } else {
+      // Scenario B / C / D: CNIC + OPTIONAL IDENTIFIER
+      // Candidate must match CNIC *AND* the optional identifier must match rollNumber, applicationNo, or id.
+      whereClause = {
         AND: [
+          identityFilter,
           {
             OR: [
-              { rollNumber: { equals: clean, mode: 'insensitive' } },
-              { applicationNo: { equals: clean, mode: 'insensitive' } },
+              { rollNumber: { equals: rawQuery, mode: 'insensitive' } },
+              { applicationNo: { equals: rawQuery, mode: 'insensitive' } },
               { id: { equals: rawQuery } },
-              ...registeredIdentity,
             ],
           },
-          { OR: registeredIdentity },
         ],
-      },
+      };
+    }
+
+    const student = await prisma.student.findFirst({
+      where: whereClause,
       include: {
         feeRecords: true,
         officeUse: true,
@@ -1190,7 +1207,12 @@ export class StudentsService {
     });
 
     if (!student) {
-      return { success: false, error: 'No matching application was found. Check the application number and CNIC / B-Form.' };
+      return {
+        success: false,
+        error: cleanQuery
+          ? 'The provided details do not match an issued Roll Number Slip.'
+          : 'No issued Roll Number Slip was found for the provided CNIC / B-Form.',
+      };
     }
 
     // Determine fee payment status

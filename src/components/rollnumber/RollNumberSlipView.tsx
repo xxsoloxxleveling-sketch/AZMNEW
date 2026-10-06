@@ -76,10 +76,6 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
     const cleanQuery = searchQuery.trim();
     const cleanIdentity = cnicOrBForm.trim();
 
-    if (!cleanQuery) {
-      setErrorMsg('Enter your application ID or roll number.');
-      return;
-    }
     if (cleanIdentity.replace(/\D/g, '').length < 5) {
       setErrorMsg('Enter the complete CNIC / B-Form used for registration.');
       return;
@@ -88,14 +84,19 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
     setIsLoading(true);
     setHasSearched(true);
 
-    const res = await searchRollNumberSlip(cleanQuery, cleanIdentity);
+    const res = await searchRollNumberSlip(cleanQuery || undefined, cleanIdentity);
     setIsLoading(false);
 
     if (res.success && res.data) {
       setSelectedSlip(res.data);
     } else {
       setSelectedSlip(null);
-      setErrorMsg(res.error || 'No issued slip found. Slips are issued on 25 October 2026 following registration verification.');
+      setErrorMsg(
+        res.error ||
+          (cleanQuery
+            ? 'The provided details do not match an issued Roll Number Slip.'
+            : 'No issued Roll Number Slip was found for the provided CNIC / B-Form.')
+      );
     }
   };
 
@@ -120,55 +121,60 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
           Session V (2026) Roll Number Slip Desk
         </h1>
         <p className="text-xs sm:text-sm text-slate-600">
-          Enter your Roll Number, CNIC / B-Form, or Application ID to view, verify, and print your standardized examination entry pass.
+          Enter your registered CNIC / B-Form to view, verify, and print your examination entry pass. Application ID or Roll Number is optional.
         </p>
       </div>
 
       {/* Quick Search Bar */}
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-md p-5 sm:p-6 no-print space-y-4">
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              id="input-roll-search"
-              placeholder="Application ID or Roll No."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 text-xs sm:text-sm font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:ring-1 focus:ring-[#185b9d] focus:outline-hidden"
-            />
-          </div>
-          <div className="relative flex-1">
-            <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              id="input-slip-cnic"
-              placeholder="CNIC / B-Form used at registration"
-              value={cnicOrBForm}
-              onChange={(e) => setCnicOrBForm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 text-xs sm:text-sm font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:ring-1 focus:ring-[#185b9d] focus:outline-hidden"
-              autoComplete="off"
-            />
-          </div>
+        <form onSubmit={handleSearch} className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                id="input-roll-search"
+                placeholder="Application ID or Roll No. (Optional)"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 text-xs sm:text-sm font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:ring-1 focus:ring-[#185b9d] focus:outline-hidden"
+              />
+            </div>
+            <div className="relative flex-1">
+              <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                id="input-slip-cnic"
+                placeholder="CNIC / B-Form used at registration"
+                value={cnicOrBForm}
+                onChange={(e) => setCnicOrBForm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 text-xs sm:text-sm font-mono rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:ring-1 focus:ring-[#185b9d] focus:outline-hidden"
+                autoComplete="off"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            id="btn-search-slip"
-            className="px-6 py-3 bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 focus:outline-hidden disabled:opacity-70"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Verifying...</span>
-              </>
-            ) : (
-              <>
-                <Search className="w-4 h-4" />
-                <span>Search Slip</span>
-              </>
-            )}
-          </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              id="btn-search-slip"
+              className="px-6 py-3 bg-[#185b9d] hover:bg-[#13497e] text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 focus:outline-hidden disabled:opacity-70"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Verifying...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  <span>Search Slip</span>
+                </>
+              )}
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Enter your registered CNIC / B-Form. Application ID or Roll Number is optional.
+          </p>
         </form>
 
         <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
@@ -253,7 +259,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
             Search Your Examination Entry Slip
           </h3>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
-            Enter your candidate CNIC / B-Form or the Application Tracking ID generated during registration to download your authenticated slip.
+            Enter your registered CNIC / B-Form to find your examination entry slip. You may also enter your Application ID or Roll Number for additional verification.
           </p>
           <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <button
@@ -276,7 +282,10 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
             No Candidate Slip Found
           </h3>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
-            We could not find an issued entry pass matching "<strong className="text-slate-800">{searchQuery}</strong>". Official Roll Number Slips are generated after institutional verification on <strong>25 October 2026</strong>.
+            {searchQuery.trim()
+              ? 'The provided details do not match an issued Roll Number Slip.'
+              : 'No issued Roll Number Slip was found for the provided CNIC / B-Form.'}{' '}
+            Official Roll Number Slips are generated after institutional verification on <strong>25 October 2026</strong>.
           </p>
           <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <a

@@ -15,6 +15,7 @@ import {
   registrationRateLimiter,
   uploadSessionRateLimiter,
   documentUploadRateLimiter,
+  publicSlipSearchRateLimiter,
 } from '../../middleware/rateLimit.middleware';
 import { Role } from '@prisma/client';
 
@@ -64,6 +65,7 @@ router.get(
 // Public Roll Number Slip Search Endpoint (POST body: query, cnic)
 router.post(
   '/search-slip',
+  publicSlipSearchRateLimiter,
   studentsController.searchPublicSlip
 );
 
