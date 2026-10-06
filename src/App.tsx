@@ -158,10 +158,107 @@ const ViewLoadingFallback = () => (
   </div>
 );
 
+interface TeacherReleaseNoticeProps {
+  user: any;
+  onLogout: () => void;
+  onNavigateHome: () => void;
+  onOpenSettings?: () => void;
+}
+
+const TeacherReleaseNotice: React.FC<TeacherReleaseNoticeProps> = ({
+  user,
+  onLogout,
+  onNavigateHome,
+  onOpenSettings,
+}) => {
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-between items-center p-4 sm:p-6 relative font-sans select-none">
+      <div className="w-full max-w-md flex items-center justify-between z-10 pt-2 pb-4">
+        <button
+          onClick={onNavigateHome}
+          className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition flex items-center gap-1.5 py-1 px-2.5 rounded-lg hover:bg-slate-200/50 cursor-pointer"
+        >
+          <span>← Back to Portal Home</span>
+        </button>
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#185b9d] bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100/80">
+          Staff Account
+        </span>
+      </div>
+
+      <div className="w-full max-w-md my-auto z-10">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md p-6 sm:p-8 space-y-6 text-center">
+          <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#185b9d]">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-lg font-bold text-slate-900">
+              Teacher workspace is not enabled in this release.
+            </h1>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              The Attendance & Verification Hub and Mobile QR Scanner modules are scheduled for deployment in a subsequent phase. Your account remains active and in good standing.
+            </p>
+          </div>
+
+          <div className="bg-slate-50 rounded-xl border border-slate-200/60 p-3.5 text-left text-xs space-y-1">
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-medium">Logged-in User</span>
+              <span className="text-slate-900 font-semibold">{user?.fullName || user?.name || user?.email || 'Teacher Account'}</span>
+            </div>
+            {user?.email && (
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Email</span>
+                <span className="text-slate-700 font-mono text-[11px]">{user.email}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-medium">Assigned Role</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                TEACHER
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold bg-[#185b9d] hover:bg-[#13497d] text-white shadow-xs transition cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>My Account &amp; Security Settings</span>
+              </button>
+            )}
+            <button
+              onClick={onLogout}
+              className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold ${
+                onOpenSettings ? 'border border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-[#185b9d] hover:bg-[#13497d] text-white shadow-xs'
+              } transition cursor-pointer`}
+            >
+              Sign Out
+            </button>
+            <button
+              onClick={onNavigateHome}
+              className="w-full py-2 px-4 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
+            >
+              Return to Website
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full max-w-md text-center py-4 text-[11px] text-slate-400">
+        AZM Educational Platform &copy; 2026
+      </div>
+    </div>
+  );
+};
+
 type AppRoute = 'public' | 'login' | 'register' | 'partner-registration' | 'scan' | 'admin';
 
 function AppContent() {
-  const { user, role, isAuthenticated } = useAuth();
+  const { user, role, isAuthenticated, logout } = useAuth();
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('public');
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
 
@@ -187,6 +284,8 @@ function AppContent() {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
+      const deferredTabs = ['halls', 'storage', 'attendance', 'fees', 'payroll', 'scan'];
+
       if (!hash || hash === 'home') {
         setCurrentRoute('public');
         setActiveTab('home');
@@ -196,13 +295,16 @@ function AppContent() {
         setCurrentRoute('register');
       } else if (hash === 'partner-registration' || hash === 'partner-register') {
         setCurrentRoute('partner-registration');
-      } else if (hash === 'scan') {
-        setCurrentRoute('scan');
+      } else if (deferredTabs.includes(hash)) {
+        setCurrentRoute('admin');
+        const fallbackTab: AdminTab = 'dashboard';
+        setAdminTab(fallbackTab);
+        window.location.hash = fallbackTab;
       } else if (hash === 'admin-partners') {
         setCurrentRoute('admin');
         setAdminTab('partners');
       } else if (
-        ['dashboard', 'students', 'halls', 'storage', 'attendance', 'fees', 'staff', 'payroll', 'transactions', 'settings'].includes(
+        ['dashboard', 'students', 'partners', 'staff', 'transactions', 'settings'].includes(
           hash
         )
       ) {
@@ -238,12 +340,22 @@ function AppContent() {
     handleHash();
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
-  }, []);
+  }, [role]);
 
   const navigateTo = (route: AppRoute, tab?: AdminTab) => {
-    setCurrentRoute(route);
-    if (tab) setAdminTab(tab);
-    window.location.hash = route === 'admin' ? tab || 'dashboard' : route === 'public' ? activeTab : route;
+    let targetRoute = route;
+    let targetTab = tab;
+
+    if (targetRoute === 'scan') {
+      targetRoute = 'admin';
+      targetTab = 'dashboard';
+    } else if (targetTab && ['halls', 'storage', 'attendance', 'fees', 'payroll', 'scan'].includes(targetTab)) {
+      targetTab = 'dashboard';
+    }
+
+    setCurrentRoute(targetRoute);
+    if (targetTab) setAdminTab(targetTab);
+    window.location.hash = targetRoute === 'admin' ? targetTab || 'dashboard' : targetRoute === 'public' ? activeTab : targetRoute;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -313,25 +425,40 @@ function AppContent() {
     );
   }
 
-  // Route 4: Standalone Teacher QR Scanner (/scan)
+  // Route 4: Standalone Teacher QR Scanner (/scan) - DEFERRED IN THIS RELEASE
   if (currentRoute === 'scan') {
     if (!isAuthenticated) {
       return (
         <Suspense fallback={<ViewLoadingFallback />}>
           <LoginPage
-            onLoginSuccess={(tab) => {
-              if (tab === 'scan') {
-                navigateTo('scan');
-              } else {
-                navigateTo('admin', tab as AdminTab);
-              }
-            }}
+            onLoginSuccess={() => navigateTo('admin', 'dashboard')}
             onNavigateHome={() => navigateTo('public')}
           />
         </Suspense>
       );
     }
-    return <TeacherScanView onBackToDashboard={() => navigateTo('admin', 'dashboard')} />;
+    if (role === 'TEACHER') {
+      return (
+        <TeacherReleaseNotice
+          user={user}
+          onLogout={logout}
+          onNavigateHome={() => navigateTo('public')}
+          onOpenSettings={() => {
+            setCurrentRoute('admin');
+            setAdminTab('settings');
+            window.location.hash = 'settings';
+          }}
+        />
+      );
+    }
+    return (
+      <Suspense fallback={<ViewLoadingFallback />}>
+        <DashboardView
+          onNavigate={(tab) => navigateTo('admin', tab)}
+          onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
+        />
+      </Suspense>
+    );
   }
 
   // Route 5: Admin Management Panel (Protected)
@@ -340,18 +467,70 @@ function AppContent() {
       return (
         <Suspense fallback={<ViewLoadingFallback />}>
           <LoginPage
-            onLoginSuccess={(tab) => {
-              if (tab === 'scan') {
-                navigateTo('scan');
-              } else {
-                navigateTo('admin', tab as AdminTab);
-              }
-            }}
+            onLoginSuccess={() => navigateTo('admin', 'dashboard')}
             onNavigateHome={() => navigateTo('public')}
           />
         </Suspense>
       );
     }
+
+    if (role === 'TEACHER') {
+      if (adminTab === 'settings') {
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+              <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setAdminTab('dashboard');
+                      window.location.hash = 'dashboard';
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    <span>← Back to Notice</span>
+                  </button>
+                  <div className="h-4 w-px bg-slate-200" />
+                  <span className="text-xs font-bold text-slate-800 tracking-tight">
+                    Teacher Account Settings
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="hidden sm:flex items-center gap-2 text-xs">
+                    <span className="text-slate-500 font-medium">{user?.fullName || user?.name || user?.email}</span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                      TEACHER
+                    </span>
+                  </div>
+                  <button
+                    onClick={logout}
+                    className="text-xs font-semibold text-slate-600 hover:text-red-600 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </header>
+              <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+                <SettingsView />
+              </main>
+            </div>
+          </Suspense>
+        );
+      }
+
+      return (
+        <TeacherReleaseNotice
+          user={user}
+          onLogout={logout}
+          onNavigateHome={() => navigateTo('public')}
+          onOpenSettings={() => {
+            setAdminTab('settings');
+            window.location.hash = 'settings';
+          }}
+        />
+      );
+    }
+
     const getTabMeta = () => {
 
       switch (adminTab) {
@@ -374,7 +553,7 @@ function AppContent() {
         case 'payroll':
           return { title: 'Payroll & Salary Disbursements', subtitle: 'Monthly voucher generation & expense settlement' };
         case 'transactions':
-          return { title: 'General Financial Ledger', subtitle: 'Double-entry cash flow records & audit trails' };
+          return { title: 'Financial Ledger', subtitle: 'Double-entry cash flow records & audit trails' };
         case 'settings':
           return { title: 'System Settings & User RBAC', subtitle: 'School preferences and administrative access accounts' };
         default:
@@ -389,8 +568,9 @@ function AppContent() {
         <AdminLayout
           currentTab={adminTab}
           onSelectTab={(tab) => {
-            if (tab === 'scan') {
-              navigateTo('scan');
+            if (['halls', 'storage', 'attendance', 'fees', 'payroll', 'scan'].includes(tab)) {
+              setAdminTab('dashboard');
+              window.location.hash = 'dashboard';
             } else {
               setAdminTab(tab);
               window.location.hash = tab;
@@ -399,11 +579,6 @@ function AppContent() {
           title={meta.title}
           subtitle={meta.subtitle}
           onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
-          onOpenMarkAttendance={() => {
-            setAdminTab('attendance');
-            window.location.hash = 'attendance';
-          }}
-          onOpenGenerateFee={openGlobalFeeChallanModal}
           onNavigatePublic={(path) => {
             if (path === '/') navigateTo('public');
             else if (path === '/register') navigateTo('register');
@@ -413,27 +588,31 @@ function AppContent() {
           {adminTab === 'dashboard' && (
             <DashboardView
               onNavigate={(tab) => {
-                setAdminTab(tab);
-                window.location.hash = tab;
+                if (['halls', 'storage', 'attendance', 'fees', 'payroll', 'scan'].includes(tab)) {
+                  setAdminTab('dashboard');
+                  window.location.hash = 'dashboard';
+                } else {
+                  setAdminTab(tab);
+                  window.location.hash = tab;
+                }
               }}
               onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
-              onOpenMarkAttendance={() => {
-                setAdminTab('attendance');
-                window.location.hash = 'attendance';
-              }}
-              onOpenGenerateFee={openGlobalFeeChallanModal}
             />
           )}
           {adminTab === 'students' && <StudentsListView />}
           {adminTab === 'partners' && <AdminPartnersListView />}
-          {adminTab === 'halls' && <ExamHallsView onOpenQrScanner={() => navigateTo('scan')} />}
-          {adminTab === 'storage' && <DocumentVaultView />}
-          {adminTab === 'attendance' && <AttendanceHubView />}
-          {adminTab === 'fees' && <FeesListView />}
           {adminTab === 'staff' && <StaffListView />}
-          {adminTab === 'payroll' && <PayrollListView />}
           {adminTab === 'transactions' && <TransactionsListView />}
           {adminTab === 'settings' && <SettingsView />}
+          {['halls', 'storage', 'attendance', 'fees', 'payroll'].includes(adminTab) && (
+            <DashboardView
+              onNavigate={(tab) => {
+                setAdminTab(tab);
+                window.location.hash = tab;
+              }}
+              onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
+            />
+          )}
 
 
           {/* Global Action Modals */}

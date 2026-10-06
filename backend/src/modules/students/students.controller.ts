@@ -18,7 +18,13 @@ export class StudentsController {
         return true;
       } catch {}
     }
-    return studentsService.verifyCandidateIdentity(studentIdentifier, String(req.query.cnic || req.body?.cnic || ''));
+    const cnic = String(
+      req.headers['x-candidate-cnic'] ||
+      req.headers['x-candidate-key'] ||
+      req.body?.cnic ||
+      ''
+    );
+    return studentsService.verifyCandidateIdentity(studentIdentifier, cnic);
   }
   async startThumbnailBackfill(_req: Request, res: Response, next: NextFunction) {
     try {
@@ -264,6 +270,13 @@ export class StudentsController {
 
   async getQr(req: Request, res: Response, next: NextFunction) {
     try {
+      if (!(await this.hasCandidateOrStaffAccess(req, req.params.id))) {
+        return res.status(401).json({
+          success: false,
+          error: { message: 'Enter the matching CNIC / B-Form to access this QR code.' },
+        });
+      }
+
       const qrData = await studentsService.getStudentQr(req.params.id);
 
       if (req.query.format === 'image') {
@@ -495,8 +508,19 @@ export class StudentsController {
 
   async searchPublicSlip(req: Request, res: Response, next: NextFunction) {
     try {
-      const query = String(req.query.query || req.body?.query || '');
-      const cnic = String(req.query.cnic || req.body?.cnic || query);
+      const query = String(req.body?.query || req.body?.rollNo || req.body?.applicationNo || '');
+      const cnic = String(
+        req.headers['x-candidate-cnic'] ||
+        req.headers['x-candidate-key'] ||
+        req.body?.cnic ||
+        ''
+      );
+      if (!query || !cnic) {
+        return res.status(400).json({
+          success: false,
+          error: 'Query identifier and matching CNIC / B-Form are required.',
+        });
+      }
       const result = await studentsService.searchPublicSlip(query, cnic);
       return res.status(200).json(result);
     } catch (error) {
@@ -506,8 +530,19 @@ export class StudentsController {
 
   async findPublicRegistration(req: Request, res: Response, next: NextFunction) {
     try {
-      const applicationNo = String(req.query.applicationNo || req.body?.applicationNo || '');
-      const cnic = String(req.query.cnic || req.body?.cnic || '');
+      const applicationNo = String(req.body?.applicationNo || req.body?.applicationNumber || '');
+      const cnic = String(
+        req.headers['x-candidate-cnic'] ||
+        req.headers['x-candidate-key'] ||
+        req.body?.cnic ||
+        ''
+      );
+      if (!applicationNo || !cnic) {
+        return res.status(400).json({
+          success: false,
+          error: 'Application Number and matching CNIC / B-Form are required.',
+        });
+      }
       return res.status(200).json(await studentsService.findPublicRegistration(applicationNo, cnic));
     } catch (error) {
       next(error);
@@ -526,18 +561,7 @@ export class StudentsController {
     }
   };
 
-  async purgeAll(_req: Request, res: Response, next: NextFunction) {
-    try {
-      const result = await studentsService.purgeAllData();
-      res.status(200).json({
-        success: true,
-        message: 'All system data and storage attachments have been purged successfully.',
-        data: result,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+
 }
 
 export const studentsController = new StudentsController();

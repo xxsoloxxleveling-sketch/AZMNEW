@@ -1125,34 +1125,22 @@ export const prisma = new Proxy(realPrisma, {
   get(target: any, prop: string | symbol) {
     const isProduction = process.env.NODE_ENV === 'production';
 
-    if (prop === '$queryRaw' || prop === '$connect' || prop === '$disconnect' || prop === '$transaction') {
-      return async (...args: any[]) => {
-        try {
-          if (isDbAvailable !== false) {
-            return await target[prop](...args);
-          }
-        } catch (err: any) {
-          if (isProduction) {
+    // In production: STRICT FAIL-CLOSED. No fallback to MemoryStore under any circumstances.
+    // Database unavailable = Request failure.
+    if (isProduction) {
+      const targetVal = target[prop];
+      if (typeof targetVal === 'function') {
+        return async (...args: any[]) => {
+          try {
+            return await targetVal.apply(target, args);
+          } catch (err: any) {
             logger.error(`🚨 CRITICAL: Database operation "${String(prop)}" failed in production:`, err.message || err);
             throw err;
           }
-          if (err.message && (err.message.includes("Can't reach database server") || err.code === 'P1001')) {
-            isDbAvailable = false;
-          } else {
-            throw err;
-          }
-        }
-        return (memoryPrisma as any)[prop]?.(...args);
-      };
-    }
-
-    const targetModel = target[prop];
-    const memoryModel = (memoryPrisma as any)[prop];
-
-    if (typeof targetModel === 'object' && targetModel !== null) {
-      // In production, execute against real database directly with critical alert logging on failure
-      if (isProduction) {
-        return new Proxy(targetModel, {
+        };
+      }
+      if (typeof targetVal === 'object' && targetVal !== null) {
+        return new Proxy(targetVal, {
           get(mTarget: any, mProp: string | symbol) {
             const realMethod = mTarget[mProp];
             if (typeof realMethod === 'function') {
@@ -1172,6 +1160,28 @@ export const prisma = new Proxy(realPrisma, {
           },
         });
       }
+      return targetVal;
+    }
+
+    if (prop === '$queryRaw' || prop === '$connect' || prop === '$disconnect' || prop === '$transaction') {
+      return async (...args: any[]) => {
+        try {
+          if (isDbAvailable !== false) {
+            return await target[prop](...args);
+          }
+        } catch (err: any) {
+          if (err.message && (err.message.includes("Can't reach database server") || err.code === 'P1001')) {
+            isDbAvailable = false;
+          } else {
+            throw err;
+          }
+        }
+        return (memoryPrisma as any)[prop]?.(...args);
+      };
+    }
+
+    const targetModel = target[prop];
+    const memoryModel = (memoryPrisma as any)[prop];
 
       // In non-production (local development / testing offline), support memory store fallback
       if (memoryModel) {
@@ -1214,10 +1224,9 @@ export const prisma = new Proxy(realPrisma, {
           },
         });
       }
-    }
 
-    return targetModel;
-  },
-}) as unknown as PrismaClient;
+      return targetModel;
+    },
+  }) as unknown as PrismaClient;
 
 export { Role, StudentStatus, Gender, ScholarshipCategory, AttendanceStatus, AttendanceMethod, FeeStatus, StaffStatus, PayrollStatus, TransactionType, EligibilityStatus, FinalStatus, InstitutionType, PartnerStatus, GrievanceStatus };

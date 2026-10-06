@@ -72,27 +72,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
-      id: 'halls' as AdminTab,
-      label: 'Exam Halls & Seating',
-      icon: IconHalls,
-      roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
-    },
-    {
-      id: 'storage' as AdminTab,
-      label: 'Document Storage Vault',
-      icon: IconStorage,
-      roles: ['SUPER_ADMIN', 'ADMIN'],
-    },
-    {
-      id: 'attendance' as AdminTab,
-      label: 'Attendance & QR',
-      icon: IconAttendance,
-      roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
-    },
-    {
-      id: 'fees' as AdminTab,
-      label: 'Fee Challans',
-      icon: IconFees,
+      id: 'transactions' as AdminTab,
+      label: 'Financial Ledger',
+      icon: IconLedger,
       roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     },
     {
@@ -102,22 +84,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     },
     {
-      id: 'payroll' as AdminTab,
-      label: 'Payroll & Salaries',
-      icon: IconPayroll,
-      roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
-    },
-    {
-      id: 'transactions' as AdminTab,
-      label: 'General Ledger',
-      icon: IconLedger,
-      roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
-    },
-    {
       id: 'settings' as AdminTab,
       label: 'Settings & Security',
       icon: IconSettings,
-      roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER'],
+      roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     },
   ];
 

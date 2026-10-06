@@ -61,18 +61,15 @@ router.get(
   studentsController.getReleaseConfig
 );
 
-// Public Roll Number Slip Search Endpoint (CNIC, Roll No, Application No)
-router.get(
-  '/search-slip',
-  studentsController.searchPublicSlip
-);
+// Public Roll Number Slip Search Endpoint (POST body: query, cnic)
 router.post(
   '/search-slip',
   studentsController.searchPublicSlip
 );
 
-router.get('/search-registration', studentsController.findPublicRegistration);
+// Public Candidate Registration Search Endpoint (POST body: applicationNo, cnic)
 router.post('/search-registration', studentsController.findPublicRegistration);
+router.post('/public/registration/search', studentsController.findPublicRegistration);
 
 // Candidate self-service uses the matching CNIC / B-Form as the verification
 // secret. Private staff routes below remain authenticated.
@@ -95,12 +92,6 @@ router.post(
   studentsController.saveReleaseConfig
 );
 
-// Emergency / Admin Data Purge & Fresh Start Endpoint (SUPER_ADMIN ONLY)
-router.post(
-  '/purge-all-system-data',
-  authorizeRoles(Role.SUPER_ADMIN),
-  studentsController.purgeAll
-);
 
 // Roll Number Batch Issuance & Status (SUPER_ADMIN, ADMIN)
 router.get(

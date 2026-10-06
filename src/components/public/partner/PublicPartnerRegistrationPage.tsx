@@ -92,7 +92,10 @@ export const PublicPartnerRegistrationPage: React.FC<PublicPartnerRegistrationPa
   const handleDownloadPdf = async (partner: MockPartner) => {
     try {
       setIsPdfDownloading(true);
-      await api.partners.downloadPdf(partner.id, partner.partnerCode);
+      await api.partners.downloadPdf(partner.id, partner.partnerCode, {
+        mobile: partner.contactMobile,
+        email: partner.contactEmail,
+      });
     } catch (err: any) {
       alert('PDF generation encountered an error: ' + (err.message || 'Please try again.'));
     } finally {

@@ -1347,7 +1347,10 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     if (!createdPartner?.id) return;
     setIsDownloadingPartnerPdf(true);
     try {
-      await mockApi.downloadPartnerPdf(createdPartner.id, createdPartner.partnerCode);
+      await mockApi.downloadPartnerPdf(createdPartner.id, createdPartner.partnerCode, {
+        mobile: createdPartner.contactMobile,
+        email: createdPartner.contactEmail,
+      });
     } catch (err: any) {
       alert(err.message || 'Failed to download partner agreement PDF');
     } finally {

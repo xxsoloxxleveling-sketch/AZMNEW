@@ -6,14 +6,15 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "npx puppeteer browsers install chrome && tsc",
-    "start": "node --max-old-space-size=128 dist/server.js",
+    "start": "node dist/server.js",
     "postinstall": "prisma generate && npx puppeteer browsers install chrome",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "storage:backfill": "tsx scripts/backfill-student-documents.ts",
     "storage:backfill-thumbnails": "tsx scripts/backfill-student-thumbnails.ts",
     "test:egress": "tsx tests/egress-remediation.test.ts",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "bootstrap:admin": "tsx scripts/bootstrap-admin.ts"
   },
   "engines": {
     "node": ">=18"
@@ -50,6 +51,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "express-rate-limit": "^8.6.2",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.23.0",
     "pg-gateway": "^0.3.0-beta.4",
@@ -58,7 +60,7 @@
     "puppeteer": "^25.8.0",
     "puppeteer-core": "^25.8.0",
     "qrcode": "^1.5.4",
-    "sharp": "0.34.5",
+    "sharp": "^0.35.5",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4",
     "uuid": "^10.0.0",

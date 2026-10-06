@@ -513,6 +513,55 @@ export class PartnersService {
 
     return { buffer, filename };
   }
+
+  /**
+   * Verifies proof-of-possession for partner registration slip downloads.
+   */
+  async verifyPartnerIdentity(
+    partnerIdentifier: string,
+    verification: { mobile?: string; email?: string }
+  ): Promise<boolean> {
+    const mobileDigits = verification.mobile ? verification.mobile.replace(/\D/g, '') : '';
+    const emailLower = verification.email ? verification.email.trim().toLowerCase() : '';
+
+    if (mobileDigits.length < 7 && !emailLower) {
+      return false;
+    }
+
+    const partner = await prisma.partnerInstitution.findFirst({
+      where: {
+        OR: [
+          { id: partnerIdentifier },
+          { partnerCode: partnerIdentifier },
+        ],
+      },
+      select: {
+        contactMobile: true,
+        contactEmail: true,
+      },
+    });
+
+    if (!partner) return false;
+
+    if (mobileDigits && mobileDigits.length >= 7) {
+      const partnerDigits = partner.contactMobile.replace(/\D/g, '');
+      if (
+        partnerDigits === mobileDigits ||
+        partnerDigits.endsWith(mobileDigits) ||
+        mobileDigits.endsWith(partnerDigits)
+      ) {
+        return true;
+      }
+    }
+
+    if (emailLower && partner.contactEmail) {
+      if (partner.contactEmail.trim().toLowerCase() === emailLower) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 }
 
 export const partnersService = new PartnersService();

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { partnersService } from './partners.service';
 import { partnerQuerySchema } from './partners.schema';
+import { verifyAccessToken } from '../../lib/jwt';
 
 export class PartnersController {
   async register(req: Request, res: Response, next: NextFunction) {
@@ -97,8 +98,28 @@ export class PartnersController {
     }
   }
 
-  async getRegistrationPdf(req: Request, res: Response, next: NextFunction) {
+  private hasPartnerOrStaffAccess = async (req: Request, partnerIdentifier: string): Promise<boolean> => {
+    const authorization = String(req.headers.authorization || '');
+    if (authorization.startsWith('Bearer ')) {
+      try {
+        verifyAccessToken(authorization.slice(7));
+        return true;
+      } catch {}
+    }
+    const mobile = String(req.headers['x-partner-mobile'] || req.body?.mobile || '');
+    const email = String(req.headers['x-partner-email'] || req.body?.email || '');
+    return partnersService.verifyPartnerIdentity(partnerIdentifier, { mobile, email });
+  };
+
+  getRegistrationPdf = async (req: Request, res: Response, next: NextFunction) => {
     try {
+      if (!(await this.hasPartnerOrStaffAccess(req, req.params.id))) {
+        return res.status(401).json({
+          success: false,
+          error: { message: 'Provide the matching contact mobile number or email to download this registration agreement.' },
+        });
+      }
+
       const { buffer, filename } = await partnersService.generatePartnerRegistrationPdf(
         req.params.id
       );
@@ -111,7 +132,7 @@ export class PartnersController {
     } catch (error) {
       next(error);
     }
-  }
+  };
 }
 
 export const partnersController = new PartnersController();

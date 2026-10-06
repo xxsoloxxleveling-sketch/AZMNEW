@@ -17,6 +17,12 @@ const envSchema = z.object({
   QR_SECRET: z.string().min(16, 'QR_SECRET must be at least 16 characters').default('azm-aio-dev-qr-biometric-secret-32chars!!'),
   SUPABASE_URL: z.string().optional().default('https://amteshciynijqkxapjwd.supabase.co'),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_ENDPOINT: z.string().optional(),
+  R2_REGION: z.string().optional().default('auto'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -49,6 +55,16 @@ if (parsed.data.NODE_ENV === 'production') {
     parsed.data.QR_SECRET.includes('dev-qr-biometric')
   ) {
     console.error('❌ CRITICAL SECURITY ALERT: QR_SECRET is required and cannot be a default development secret in production.');
+    process.exit(1);
+  }
+
+  if (
+    !parsed.data.R2_BUCKET ||
+    !parsed.data.R2_ACCOUNT_ID ||
+    !parsed.data.R2_ACCESS_KEY_ID ||
+    !parsed.data.R2_SECRET_ACCESS_KEY
+  ) {
+    console.error('❌ CRITICAL CONFIGURATION ALERT: R2_BUCKET, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY are required in production.');
     process.exit(1);
   }
 }

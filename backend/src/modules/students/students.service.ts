@@ -1248,7 +1248,7 @@ export class StudentsService {
         classLevel: student.currentClass || 'SSC-II (Class 10th)',
         candidatePhoto:
           (student.photoUrl && !student.photoUrl.includes('unsplash') ? student.photoUrl : null) ||
-          `/api/students/${student.id}/photo-thumbnail?cnic=${encodeURIComponent(student.cnicOrBForm)}`,
+          `/api/students/${student.id}/photo-thumbnail`,
         testCenter: schedule.testCenterName,
         centerAddress: '',
         examDate: schedule.testDate,
@@ -1264,7 +1264,7 @@ export class StudentsService {
           'Biometric verification will take place at the entrance gate before seating allocation.',
         ],
         issuedAt: student.updatedAt.toISOString(),
-        qrPayload: `https://azmaio.com/verify?rollNo=${rollNo}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`,
+        qrPayload: `https://azmaio.com/verify?rollNo=${rollNo}&appId=${student.applicationNo}`,
       },
     };
   }
@@ -1992,7 +1992,7 @@ export class StudentsService {
     let qrDataUrl = '';
     try {
       const QRCode = await import('qrcode');
-      const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${candNum.value}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`;
+      const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${candNum.value}&appId=${student.applicationNo}`;
       qrDataUrl = await QRCode.toDataURL(qrPayload, {
         width: 300,
         margin: 1,
@@ -2104,7 +2104,7 @@ export class StudentsService {
       const candNum = getCandidateNumber(student);
       let qrDataUrl = '';
       try {
-        const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${candNum.value}&appId=${student.applicationNo}&cnic=${student.cnicOrBForm || ''}`;
+        const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${candNum.value}&appId=${student.applicationNo}`;
         qrDataUrl = await QRCode.toDataURL(qrPayload, {
           width: 300,
           margin: 1,
@@ -2618,6 +2618,9 @@ export class StudentsService {
    * Complete Database & Storage Purge (Leaves admin user intact so login works)
    */
   async purgeAllData() {
+    if (process.env.NODE_ENV === 'production' || process.env.ALLOW_DESTRUCTIVE_PURGE !== 'true') {
+      throw new Error('Database purge is permanently disabled in production and requires explicit ALLOW_DESTRUCTIVE_PURGE=true confirmation flag.');
+    }
     // 1. Delete all student dependent records and students
     await prisma.academicRecord.deleteMany();
     await prisma.documentChecklist.deleteMany();

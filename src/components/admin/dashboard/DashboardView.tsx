@@ -15,8 +15,8 @@ import { useAuth } from '../../../lib/authContext';
 interface DashboardViewProps {
   onNavigate: (tab: AdminTab) => void;
   onOpenAddStudent: () => void;
-  onOpenMarkAttendance: () => void;
-  onOpenGenerateFee: () => void;
+  onOpenMarkAttendance?: () => void;
+  onOpenGenerateFee?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -227,11 +227,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
 
           {/* Cell 3: Today's Attendance */}
-          <button
-            type="button"
-            onClick={() => onNavigate('attendance')}
-            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 border-r border-slate-100 hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
-            aria-label="Navigate to Attendance Hub"
+          <div
+            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 border-r border-slate-100"
           >
             <div>
               <span className="text-xs font-medium text-slate-500 block">Today's Attendance</span>
@@ -243,18 +240,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span className="truncate">
                 {hasTodaySession ? `${todayMarkedCount} Marked Present` : 'No Session Conducted'}
               </span>
-              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
-                View →
+              <span className="text-[10px] font-medium text-slate-400">
+                Daily Metric
               </span>
             </div>
-          </button>
+          </div>
 
           {/* Cell 4: Fee Collection Rate */}
-          <button
-            type="button"
-            onClick={() => onNavigate('fees')}
-            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100 hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
-            aria-label="Navigate to Fee Management"
+          <div
+            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100"
           >
             <div>
               <span className="text-xs font-medium text-slate-500 block">Fee Collection Rate</span>
@@ -268,11 +262,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   ? `PKR ${(stats.totalCollected ?? 0).toLocaleString()} Collected`
                   : 'No fees billed this cycle'}
               </span>
-              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
-                View →
+              <span className="text-[10px] font-medium text-slate-400">
+                Cycle Metric
               </span>
             </div>
-          </button>
+          </div>
 
           {/* Cell 5: Active Faculty & Staff (Spans 2 cols on mobile) */}
           <button
@@ -308,13 +302,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <h3 className="text-sm font-bold text-slate-900">Weekly Attendance Matrix</h3>
               <p className="text-xs text-slate-500">Daily verification status across all examination classes</p>
             </div>
-            <button
-              onClick={() => onNavigate('attendance')}
-              className="text-xs font-semibold text-[#185b9d] hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span>Attendance Hub</span>
-              <IconChevronRight size={14} />
-            </button>
+            <span className="text-[11px] font-medium text-slate-400 bg-slate-50 border border-slate-200/60 px-2.5 py-1 rounded-md">
+              7-Day Activity
+            </span>
           </div>
 
           {/* Differentiated Weekly Visualization (Decision #2) */}
@@ -432,18 +422,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Action Row */}
-          <div className="pt-2 border-t border-slate-100 space-y-2">
-            <button
-              onClick={onOpenGenerateFee}
-              className="w-full py-2 text-xs font-semibold text-center bg-[#185b9d] hover:bg-[#13497d] text-white rounded-lg shadow-2xs transition cursor-pointer"
-            >
-              Issue Monthly Fee Challans
-            </button>
+          <div className="pt-2 border-t border-slate-100">
             <button
               onClick={() => onNavigate('transactions')}
-              className="w-full text-center text-xs font-semibold text-slate-600 hover:text-slate-900 hover:underline block cursor-pointer"
+              className="w-full py-2 text-center text-xs font-semibold text-[#185b9d] hover:text-[#13497d] hover:bg-slate-50 border border-slate-200 rounded-lg transition cursor-pointer"
             >
-              View General Ledger →
+              View Financial Ledger →
             </button>
           </div>
         </div>
@@ -458,12 +442,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <IconAlertTriangle size={16} className="text-amber-600" />
               <h3 className="text-sm font-bold text-slate-900">Pending Fee Defaulters</h3>
             </div>
-            <button
-              onClick={() => onNavigate('fees')}
-              className="text-xs font-semibold text-[#185b9d] hover:underline cursor-pointer"
-            >
-              All Fees
-            </button>
+            <span className="text-[11px] font-medium text-slate-400 bg-slate-50 border border-slate-200/60 px-2.5 py-1 rounded-md">
+              Collections Queue
+            </span>
           </div>
 
           <div className="overflow-x-auto min-h-[160px]">
@@ -474,10 +455,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <th className="py-1.5 px-2">Student</th>
                     <th className="py-1.5 px-2">Class</th>
                     <th className="py-1.5 px-2 text-right">Due</th>
-                    <th className="py-1.5 px-2 text-right">Action</th>
+                    <th className="py-1.5 px-2 text-right">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y border-slate-100">
                   {feeDefaulters.map((item: any) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-2 px-2">
@@ -495,12 +476,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         PKR {(item.amountDue ?? 0).toLocaleString()}
                       </td>
                       <td className="py-2 px-2 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => onNavigate('fees')}
-                          className="text-[11px] font-semibold text-[#185b9d] hover:text-[#13497d] hover:bg-blue-50 px-2 py-0.5 rounded transition cursor-pointer"
-                        >
-                          Review Fees
-                        </button>
+                        <span className="text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
+                          Unpaid
+                        </span>
                       </td>
                     </tr>
                   ))}

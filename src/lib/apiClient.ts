@@ -238,12 +238,14 @@ async function fetchProtectedBinary(url: string, options: RequestInit = {}): Pro
 export async function apiDownloadPdf(
   endpoint: string,
   suggestedFilename: string,
-  options?: { method?: 'GET' | 'POST'; body?: any }
+  options?: { method?: 'GET' | 'POST'; body?: any; headers?: Record<string, string> }
 ): Promise<void> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const token = getToken();
 
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    ...(options?.headers || {}),
+  };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -279,7 +281,7 @@ export async function apiDownloadPdf(
 /** Opens an authorized server-generated PDF in a new tab so it can be printed. */
 export async function apiOpenPdfForPrint(
   endpoint: string,
-  options?: { method?: 'GET' | 'POST'; body?: any; title?: string }
+  options?: { method?: 'GET' | 'POST'; body?: any; title?: string; headers?: Record<string, string> }
 ): Promise<void> {
   // Open synchronously from the button click. This avoids browsers blocking the
   // PDF tab as a popup once the authenticated request has completed.
@@ -293,7 +295,10 @@ export async function apiOpenPdfForPrint(
 
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const token = getToken();
-  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: Record<string, string> = {
+    ...(options?.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
   if (options?.body) {
     headers['Content-Type'] = 'application/json';
   }
@@ -319,11 +324,17 @@ export async function apiOpenPdfForPrint(
 }
 
 /** Fetches a protected binary only when a user explicitly opens it. */
-export async function apiFetchProtectedObjectUrl(endpoint: string): Promise<string> {
+export async function apiFetchProtectedObjectUrl(
+  endpoint: string,
+  options?: { headers?: Record<string, string> }
+): Promise<string> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const token = getToken();
   const response = await fetchProtectedBinary(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: {
+      ...(options?.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     cache: 'no-store',
   });
   if (!response.ok) {

@@ -93,13 +93,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
       const response = await login(email, password);
 
       // Role-based routing:
-      // TEACHER role goes directly to mobile scanner (/scan)
+      // TEACHER role workspace is deferred in this release and handled by release notice
       // SUPER_ADMIN / ADMIN / ACCOUNTANT go to /dashboard
-      if (response.role === 'TEACHER') {
-        onLoginSuccess('scan');
-      } else {
-        onLoginSuccess('dashboard');
-      }
+      onLoginSuccess('dashboard');
     } catch (err: any) {
       setServerError(
         err.message || 'Invalid email or password. Please verify your credentials and try again.'

@@ -4,6 +4,11 @@ import { hashPassword } from '../src/lib/hash';
 import { logger } from '../src/lib/logger';
 
 export async function seedDatabase() {
+  if (process.env.NODE_ENV === 'production') {
+    logger.error('CRITICAL: Seed execution is strictly prohibited in production environments.');
+    throw new Error('Seed script cannot be run in production.');
+  }
+
   logger.info('🌱 Purging legacy accounts and seeding new default credentials...');
 
   // 1. Permanently delete all old / legacy accounts so NO ONE can login with old emails

@@ -135,11 +135,18 @@ export async function searchRollNumberSlip(query: string, cnicOrBForm: string): 
   }
 
   try {
-    const url = `${API_BASE_URL}/api/students/search-slip?query=${encodeURIComponent(clean)}&cnic=${encodeURIComponent(identity)}`;
+    const url = `${API_BASE_URL}/api/students/search-slip`;
     const response = await fetch(url, {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'X-Candidate-CNIC': identity,
       },
+      body: JSON.stringify({
+        query: clean,
+        cnic: identity,
+      }),
     });
     const json: any = await response.json();
     return json && typeof json.success === 'boolean'
@@ -512,9 +519,13 @@ export const api = {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.updatePartnerStatus(id, payload);
     },
-    downloadPdf: async (id: string, partnerCode?: string): Promise<void> => {
+    downloadPdf: async (
+      id: string,
+      partnerCode?: string,
+      verification?: { mobile?: string; email?: string }
+    ): Promise<void> => {
       const { mockApi } = await import('../lib/mockApi');
-      return mockApi.downloadPartnerPdf(id, partnerCode);
+      return mockApi.downloadPartnerPdf(id, partnerCode, verification);
     }
   },
   transactions: {

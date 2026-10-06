@@ -1,5 +1,6 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { errorHandler } from './middleware/error.middleware';
 import { prisma } from './lib/prisma';
 import { env } from './config/env';
@@ -22,56 +23,75 @@ import announcementsRoutes from './modules/announcements/announcements.routes';
 import { logger } from './lib/logger';
 
 const app: Express = express();
+
+/**
+ * Production Topology & Trust Proxy Configuration:
+ * Topology: Client -> Cloudflare (Proxy/WAF) -> Nginx (Reverse Proxy on host) -> Express (Node backend :5000)
+ *
+ * Trust Proxy Hop Setting:
+ * - Set to 1: Express trusts the immediate reverse proxy (local Nginx on 127.0.0.1).
+ * - Nginx proxy header contract:
+ *   Nginx MUST set `proxy_set_header X-Forwarded-For $http_cf_connecting_ip;` or ensure
+ *   `$proxy_add_x_forwarded_for` forwards the authenticated Cloudflare client IP.
+ * - This ensures req.ip resolves to the true client IP (via CF-Connecting-IP) and cannot be spoofed
+ *   by untrusted client-supplied X-Forwarded-For headers, preserving accurate rate limiting.
+ */
 app.set('trust proxy', 1);
 
-// Middlewares
-const allowedOrigins = [
-  env.CORS_ORIGIN,
-  env.FRONTEND_URL,
+// Authoritative production origins
+const productionStaticOrigins = [
   'https://azmaio.com',
   'https://www.azmaio.com',
-  'http://azmaio.com',
-  'http://www.azmaio.com',
-  'https://azmnew.onrender.com',
+];
+
+// Development localhost origins
+const developmentLocalOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:4173',
   'http://localhost:5000',
-].filter(Boolean) as string[];
+];
+
+const parseConfiguredOrigins = (): string[] => {
+  return [env.CORS_ORIGIN, env.FRONTEND_URL]
+    .filter(Boolean)
+    .flatMap((o) => (o as string).split(',').map((s) => s.trim().replace(/\/+$/, '')))
+    .filter(Boolean);
+};
 
 const isOriginAllowed = (origin: string | undefined): boolean => {
+  // Allow server-to-server, mobile app, CLI, or same-origin requests without an Origin header
   if (!origin) return true;
-  if (env.NODE_ENV !== 'production') return true;
 
-  // Exact match
-  if (allowedOrigins.includes(origin)) return true;
+  // In non-production environments (development / test), allow local development origins
+  if (env.NODE_ENV !== 'production') {
+    if (developmentLocalOrigins.includes(origin)) return true;
+    try {
+      const url = new URL(origin);
+      if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return true;
+    } catch {}
+  }
 
-  // Comma-separated env entries
-  const envOrigins = [env.CORS_ORIGIN, env.FRONTEND_URL]
-    .filter(Boolean)
-    .flatMap((o) => (o as string).split(',').map((s) => s.trim()));
-  if (envOrigins.includes(origin)) return true;
+  // Exact match against configured environment origins (CORS_ORIGIN, FRONTEND_URL)
+  const configuredOrigins = parseConfiguredOrigins();
+  const normalizedOrigin = origin.replace(/\/+$/, '');
+  if (configuredOrigins.includes(normalizedOrigin)) return true;
 
-  // Domain & subdomain matching
-  try {
-    const url = new URL(origin);
-    const host = url.hostname.toLowerCase();
-    if (
-      host === 'azmaio.com' ||
-      host.endsWith('.azmaio.com') ||
-      host === 'onrender.com' ||
-      host.endsWith('.onrender.com') ||
-      host.endsWith('.hostingersite.com') ||
-      host.endsWith('.hostinger.com') ||
-      host.endsWith('.vercel.app') ||
-      host.endsWith('.netlify.app')
-    ) {
-      return true;
-    }
-  } catch {}
+  // Exact match against authoritative production origins
+  if (productionStaticOrigins.includes(normalizedOrigin)) return true;
 
   return false;
 };
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // CSP enforced at Nginx layer for frontend SPA
+    crossOriginEmbedderPolicy: false,
+    frameguard: { action: 'deny' },
+    noSniff: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  })
+);
 
 app.use(
   cors({
@@ -96,6 +116,9 @@ app.use(
       'Origin',
       'X-Upload-Session',
       'X-Candidate-Key',
+      'X-Candidate-CNIC',
+      'X-Partner-Mobile',
+      'X-Partner-Email',
       'X-Document-Type',
       'X-File-Name',
     ],

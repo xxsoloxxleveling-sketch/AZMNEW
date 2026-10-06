@@ -1146,16 +1146,26 @@ export const mockApi = {
     if (!studentId) throw new Error('Student identifier is required to download the registration slip.');
     // Registration PDFs are generated server-side so the private original photo
     // is fetched only for this explicit download, never from a roster response.
+    const headers: Record<string, string> = {};
+    if (studentObj?.cnicOrBForm) {
+      headers['X-Candidate-CNIC'] = String(studentObj.cnicOrBForm).trim();
+    }
     await apiDownloadPdf(
-      `/api/students/${encodeURIComponent(studentId)}/registration-pdf${studentObj?.cnicOrBForm ? `?cnic=${encodeURIComponent(studentObj.cnicOrBForm)}` : ''}`,
-      `AZM-Registration-${rollNumber || studentId}.pdf`
+      `/api/students/${encodeURIComponent(studentId)}/registration-pdf`,
+      `AZM-Registration-${rollNumber || studentId}.pdf`,
+      { headers }
     );
   },
 
   async printStudentRegistrationPdf(studentId: string, studentObj?: any): Promise<void> {
     if (!studentId) throw new Error('Student identifier is required to print the registration slip.');
+    const headers: Record<string, string> = {};
+    if (studentObj?.cnicOrBForm) {
+      headers['X-Candidate-CNIC'] = String(studentObj.cnicOrBForm).trim();
+    }
     await apiOpenPdfForPrint(
-      `/api/students/${encodeURIComponent(studentId)}/registration-pdf${studentObj?.cnicOrBForm ? `?cnic=${encodeURIComponent(studentObj.cnicOrBForm)}` : ''}`
+      `/api/students/${encodeURIComponent(studentId)}/registration-pdf`,
+      { headers }
     );
   },
 
@@ -1342,10 +1352,19 @@ export const mockApi = {
     });
   },
 
-  async downloadPartnerPdf(partnerId: string, partnerCode?: string): Promise<void> {
+  async downloadPartnerPdf(
+    partnerId: string,
+    partnerCode?: string,
+    verification?: { mobile?: string; email?: string }
+  ): Promise<void> {
+    const headers: Record<string, string> = {};
+    if (verification?.mobile) headers['X-Partner-Mobile'] = verification.mobile.trim();
+    if (verification?.email) headers['X-Partner-Email'] = verification.email.trim();
+
     await apiDownloadPdf(
       `/api/partners/${partnerId}/registration-pdf`,
-      `AZM_Partner_Acknowledgement_${partnerCode || partnerId}.pdf`
+      `AZM_Partner_Acknowledgement_${partnerCode || partnerId}.pdf`,
+      { headers }
     );
   },
 
@@ -2378,19 +2397,6 @@ export const mockApi = {
       }
     }
     return true;
-  },
-
-  async purgeAllData(): Promise<boolean> {
-    try {
-      await apiFetch('/api/students/purge-all-system-data', { method: 'POST' }).catch((err) => {
-        console.warn('Backend purge API notification:', err);
-      });
-      purgeLegacyDataCaches();
-      return true;
-    } catch (err) {
-      console.error('Failed to purge data:', err);
-      return false;
-    }
   },
 };
 

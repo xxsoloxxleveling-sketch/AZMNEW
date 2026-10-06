@@ -8,6 +8,13 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl as createPresignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from './logger';
+import { AppError } from '../middleware/error.middleware';
+
+function createStorageError(message: string, statusCode = 502): AppError {
+  const err: AppError = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+}
 
 export type StorageBucket =
   | 'student-photos'
@@ -37,9 +44,15 @@ class R2StorageService {
       !secretAccessKey
     ) {
       this.isConfigured = false;
-      logger.info(
-        '📦 Cloudflare R2 storage not configured; operating in local storage fallback mode.'
-      );
+      if (process.env.NODE_ENV === 'production') {
+        logger.error(
+          '🚨 CRITICAL: Cloudflare R2 storage is not configured in production! Missing required environment variables: R2_BUCKET, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY'
+        );
+      } else {
+        logger.info(
+          '📦 Cloudflare R2 storage not configured; operating in local storage fallback mode.'
+        );
+      }
       return;
     }
 
@@ -59,7 +72,7 @@ class R2StorageService {
     } catch (err: any) {
       this.isConfigured = false;
       this.client = null;
-      logger.warn('Failed to initialize Cloudflare R2 client:', err.message);
+      logger.error('Failed to initialize Cloudflare R2 client:', err.message);
     }
   }
 
@@ -88,7 +101,13 @@ class R2StorageService {
     path: string,
     expiresInSeconds: number = 604800
   ): Promise<string | null> {
-    if (!this.client || !this.isConfigured || !this.bucketName) return null;
+    if (!this.client || !this.isConfigured || !this.bucketName) {
+      if (process.env.NODE_ENV === 'production') {
+        logger.error('R2 signed URL failed: storage is not configured in production.');
+        throw createStorageError('Storage service is unavailable.');
+      }
+      return null;
+    }
 
     try {
       return await createPresignedUrl(
@@ -103,6 +122,9 @@ class R2StorageService {
       );
     } catch (err: any) {
       logger.warn(`R2 signed URL failed for "${bucket}":`, err.message);
+      if (process.env.NODE_ENV === 'production') {
+        throw createStorageError('Failed to generate file access URL from storage service.');
+      }
       return null;
     }
   }
@@ -124,6 +146,10 @@ class R2StorageService {
     contentType: string = 'application/octet-stream'
   ): Promise<{ path: string; error?: string }> {
     if (!this.client || !this.isConfigured || !this.bucketName) {
+      if (process.env.NODE_ENV === 'production') {
+        logger.error('R2 upload failed: storage is not configured in production.');
+        throw createStorageError('Cloudflare R2 storage is not configured or unavailable in production.');
+      }
       // Local development fallback: do not attempt cloud upload, and do not return an error
       // so caller's local disk storage (backend/uploads) remains authoritative without 502 failure.
       return { path };
@@ -154,10 +180,13 @@ class R2StorageService {
 
       return { path };
     } catch (err: any) {
-      logger.warn(`R2 upload failed in "${bucket}":`, err.message);
+      logger.error(`R2 upload failed in "${bucket}": ${err.message}`);
+      if (process.env.NODE_ENV === 'production') {
+        throw createStorageError('Failed to upload file to storage service.');
+      }
       return {
         path,
-        error: err.message,
+        error: err.message || 'Upload failed',
       };
     }
   }
@@ -166,7 +195,13 @@ class R2StorageService {
     bucket: StorageBucket,
     path: string
   ): Promise<Buffer | null> {
-    if (!this.client || !this.isConfigured || !this.bucketName) return null;
+    if (!this.client || !this.isConfigured || !this.bucketName) {
+      if (process.env.NODE_ENV === 'production') {
+        logger.error('R2 download failed: storage is not configured in production.');
+        throw createStorageError('Storage service is unavailable.');
+      }
+      return null;
+    }
 
     try {
       const response = await this.client.send(
@@ -180,7 +215,20 @@ class R2StorageService {
 
       const bytes = await response.Body.transformToByteArray();
       return Buffer.from(bytes);
-    } catch {
+    } catch (err: any) {
+      const isNotFound =
+        err.name === 'NoSuchKey' ||
+        err.name === 'NotFound' ||
+        err.$metadata?.httpStatusCode === 404;
+
+      if (isNotFound) {
+        return null;
+      }
+
+      logger.error(`R2 download failed in "${bucket}": ${err.message}`);
+      if (process.env.NODE_ENV === 'production') {
+        throw createStorageError('Failed to retrieve file from storage service.');
+      }
       return null;
     }
   }
@@ -189,7 +237,12 @@ class R2StorageService {
     bucket: StorageBucket,
     path: string
   ): Promise<boolean> {
-    if (!this.client || !this.isConfigured || !this.bucketName || !path) return false;
+    if (!this.client || !this.isConfigured || !this.bucketName || !path) {
+      if (process.env.NODE_ENV === 'production') {
+        throw createStorageError('Storage service is unavailable.');
+      }
+      return false;
+    }
 
     try {
       await this.client.send(
@@ -200,7 +253,20 @@ class R2StorageService {
       );
 
       return true;
-    } catch {
+    } catch (err: any) {
+      const isNotFound =
+        err.name === 'NoSuchKey' ||
+        err.name === 'NotFound' ||
+        err.$metadata?.httpStatusCode === 404;
+
+      if (isNotFound) {
+        return false;
+      }
+
+      if (process.env.NODE_ENV === 'production') {
+        logger.error(`R2 fileExists check failed for "${bucket}/${path}": ${err.message}`);
+        throw createStorageError('Failed to verify file existence in storage service.');
+      }
       return false;
     }
   }
@@ -209,7 +275,13 @@ class R2StorageService {
     bucket: StorageBucket,
     paths: string[]
   ): Promise<boolean> {
-    if (!this.client || !this.isConfigured || !this.bucketName) return true;
+    if (!this.client || !this.isConfigured || !this.bucketName) {
+      if (process.env.NODE_ENV === 'production') {
+        logger.error('R2 delete failed: storage is not configured in production.');
+        throw createStorageError('Storage service is unavailable.');
+      }
+      return true;
+    }
     if (paths.length === 0) return true;
 
     try {
@@ -231,13 +303,22 @@ class R2StorageService {
 
       return true;
     } catch (err: any) {
-      logger.warn(`R2 delete failed in "${bucket}":`, err.message);
+      logger.error(`R2 delete failed in "${bucket}": ${err.message}`);
+      if (process.env.NODE_ENV === 'production') {
+        throw createStorageError('Failed to delete files from storage service.');
+      }
       return false;
     }
   }
 
   async emptyBucket(bucket: StorageBucket): Promise<boolean> {
-    if (!this.client || !this.isConfigured || !this.bucketName) return true;
+    if (!this.client || !this.isConfigured || !this.bucketName) {
+      if (process.env.NODE_ENV === 'production') {
+        logger.error('R2 emptyBucket failed: storage is not configured in production.');
+        throw createStorageError('Storage service is unavailable.');
+      }
+      return true;
+    }
 
     try {
       const prefix = `${bucket}/`;
@@ -272,7 +353,10 @@ class R2StorageService {
 
       return true;
     } catch (err: any) {
-      logger.warn(`Failed to empty R2 prefix "${bucket}":`, err.message);
+      logger.error(`Failed to empty R2 prefix "${bucket}": ${err.message}`);
+      if (process.env.NODE_ENV === 'production') {
+        throw createStorageError('Failed to empty storage prefix.');
+      }
       return false;
     }
   }

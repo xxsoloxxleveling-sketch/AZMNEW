@@ -59,8 +59,16 @@ export const CandidateSlipRetrievalCard: React.FC<CandidateSlipRetrievalCardProp
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/students/search-registration?applicationNo=${encodeURIComponent(applicationNo)}&cnic=${encodeURIComponent(cnic)}`,
-        { headers: { Accept: 'application/json' } }
+        `${API_BASE_URL}/api/students/search-registration`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Candidate-CNIC': cnic,
+          },
+          body: JSON.stringify({ applicationNo, cnic }),
+        }
       );
       const result = await response.json();
       if (response.ok && result?.success && result.data) {
