@@ -2,6 +2,21 @@ import { setToken, setRefreshToken, setUser, getUser, getToken } from './auth';
 import { apiFetch, apiDownloadPdf, apiOpenPdfForPrint, API_BASE_URL } from './apiClient';
 export { API_BASE_URL };
 
+export interface HallCandidate {
+  id: string;
+  fullName: string;
+  rollNumber: string | null;
+  applicationNo: string | null;
+  currentClass: string;
+  assignedHallId: string | null;
+  assignedRoom: string | null;
+  seatNo: string | null;
+}
+export interface HallCandidatePage {
+  candidates: HallCandidate[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
 export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'TEACHER' | 'ACCOUNTANT';
 
 export interface CurrentUser {
@@ -1074,7 +1089,24 @@ export const mockApi = {
 
   async getExamHalls(): Promise<any[]> {
     const res = await apiFetch<any[]>('/api/exam-halls');
-    return Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
+    if (!Array.isArray(res) || res.some(h => typeof h?.id !== 'string' || !Number.isInteger(h?.assignedCount))) throw new Error('Invalid exam halls response.');
+    return res;
+  },
+
+  async getExamHall(id: string): Promise<any> {
+    const res = await apiFetch<any>(`/api/exam-halls/${id}`);
+    if (res?.id !== id || !Array.isArray(res?.assignedStudents)) throw new Error('Invalid hall roster response.');
+    return res;
+  },
+
+  async getHallCandidates(query: { search?: string; class?: string; assignment?: 'unassigned' | 'assigned' | 'all'; page?: number; limit?: number }): Promise<HallCandidatePage> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, String(value));
+    const res = await apiFetch<HallCandidatePage>(`/api/exam-halls/candidates?${params}`);
+    if (!Array.isArray(res?.candidates) || !res?.pagination ||
+      !['page', 'limit', 'total', 'totalPages'].every(key => Number.isInteger((res.pagination as any)[key])) ||
+      res.pagination.page < 1 || res.pagination.limit < 1 || res.pagination.total < 0 || res.pagination.totalPages < 0) throw new Error('Invalid candidate placement response.');
+    return res;
   },
 
   async createExamHall(data: any): Promise<any> {
@@ -1082,7 +1114,8 @@ export const mockApi = {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return (res && (res.data || res)) || data;
+    if (typeof res?.id !== 'string' || typeof res?.name !== 'string') throw new Error('Invalid created hall response.');
+    return res;
   },
 
   async updateExamHall(id: string, data: any): Promise<any> {
@@ -1090,11 +1123,13 @@ export const mockApi = {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
-    return (res && (res.data || res)) || { id, ...data };
+    if (res?.id !== id || typeof res?.name !== 'string') throw new Error('Invalid updated hall response.');
+    return res;
   },
 
   async deleteExamHall(id: string): Promise<boolean> {
-    await apiFetch(`/api/exam-halls/${id}`, { method: 'DELETE' });
+    const res = await apiFetch<any>(`/api/exam-halls/${id}`, { method: 'DELETE' });
+    if (res?.success !== true) throw new Error('Invalid hall deletion response.');
     return true;
   },
 
@@ -1103,17 +1138,18 @@ export const mockApi = {
     allocation: {
       testCenterId?: string;
       testCenterName?: string;
-      assignedHallId?: string;
-      assignedHall?: string;
-      assignedRoom?: string;
-      seatNo?: string;
+      assignedHallId?: string | null;
+      assignedHall?: string | null;
+      assignedRoom?: string | null;
+      seatNo?: string | null;
     }
-  ): Promise<MockStudent | null> {
+  ): Promise<HallCandidate> {
     const res = await apiFetch<any>(`/api/exam-halls/students/${studentId}/allocation`, {
       method: 'PATCH',
       body: JSON.stringify(allocation),
     });
-    return res?.data || res;
+    if (res?.id !== studentId) throw new Error('Invalid allocation response.');
+    return res;
   },
 
   async batchAssignStudentsToHall(
@@ -1130,13 +1166,15 @@ export const mockApi = {
         testCenterName: hallInfo.testCenterName,
       }),
     });
-    return res?.count || studentIds.length;
+    if (!Number.isInteger(res?.assignedCount) || res.assignedCount < 0) throw new Error('Invalid batch allocation response.');
+    return res.assignedCount;
   },
 
   async unassignStudentFromHall(studentId: string): Promise<boolean> {
-    await apiFetch<any>(`/api/exam-halls/students/${studentId}/allocation`, {
+    const res = await apiFetch<any>(`/api/exam-halls/students/${studentId}/allocation`, {
       method: 'DELETE',
     });
+    if (res?.id !== studentId || res.assignedHallId !== null || res.seatNo !== null) throw new Error('Invalid unassignment response.');
     return true;
   },
 
@@ -2079,7 +2117,8 @@ export const mockApi = {
   // 10. Test Centers Management (Custom Centers)
   async getTestCenters(): Promise<MockTestCenter[]> {
     const res = await apiFetch<any>('/api/test-centers');
-    const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+    if (!Array.isArray(res)) throw new Error('Invalid test centers response.');
+    const list = res;
 
     return list.map((tc: any) => {
       return {
@@ -2090,14 +2129,14 @@ export const mockApi = {
         address: tc.address,
         district: tc.district,
         province: tc.province,
-        capacity: Number(tc.capacity) || 300,
-        reportingTime: tc.reportingTime || '09:00 AM',
-        testDate: tc.testDate || 'Sunday, 15 November 2026',
+        capacity: tc.capacity,
+        reportingTime: tc.reportingTime,
+        testDate: tc.testDate,
         contactPerson: tc.contactPerson || '',
         contactPhone: tc.contactPhone || '',
-        status: tc.status || 'ACTIVE',
-        createdAt: tc.createdAt || new Date().toISOString(),
-        assignedCount: Number(tc.assignedCount) || 0,
+        status: tc.status,
+        createdAt: tc.createdAt,
+        assignedCount: tc.assignedCount,
       };
     });
   },

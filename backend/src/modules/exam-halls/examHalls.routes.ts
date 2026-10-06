@@ -13,54 +13,44 @@ import { Role } from '@prisma/client';
 
 const router = Router();
 
-// Public / Authenticated read endpoints
+// Hall administration and candidate placement are internal admin data.
+router.use(authenticate, authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN));
 router.get('/', examHallsController.getAll);
+router.get('/candidates', examHallsController.getCandidates);
 router.get('/:id', examHallsController.getById);
 
 // Admin-only creation, update, deletion, and allocation
 router.post(
   '/',
-  authenticate,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(createExamHallSchema),
   examHallsController.create
 );
 
 router.patch(
   '/:id',
-  authenticate,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(updateExamHallSchema),
   examHallsController.update
 );
 
 router.delete(
   '/:id',
-  authenticate,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   examHallsController.delete
 );
 
 router.post(
   '/:id/batch-assign',
-  authenticate,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(batchAssignSchema),
   examHallsController.batchAssign
 );
 
 router.patch(
   '/students/:studentId/allocation',
-  authenticate,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(updateAllocationSchema),
   examHallsController.updateStudentAllocation
 );
 
 router.delete(
   '/students/:studentId/allocation',
-  authenticate,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   examHallsController.unassignStudent
 );
 

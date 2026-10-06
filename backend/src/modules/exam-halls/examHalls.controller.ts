@@ -1,7 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { examHallsService } from './examHalls.service';
+import { candidateQuerySchema } from './examHalls.schema';
 
 export class ExamHallsController {
+  async getCandidates(req: Request, res: Response, next: NextFunction) {
+    try {
+      res.status(200).json({ success: true, data: await examHallsService.getCandidates(candidateQuerySchema.parse(req.query)) });
+    } catch (error) {
+      next(error);
+    }
+  }
   async getAll(_req: Request, res: Response, next: NextFunction) {
     try {
       const halls = await examHallsService.getExamHalls();

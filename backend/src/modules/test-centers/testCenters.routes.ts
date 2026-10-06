@@ -8,31 +8,26 @@ import { Role } from '@prisma/client';
 
 const router = Router();
 
-// Public / Authenticated read endpoints
+// No public registration caller uses these internal administration endpoints.
+router.use(authenticate, authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN));
 router.get('/', testCentersController.getAll);
 router.get('/:id', testCentersController.getById);
 
 // Admin-protected creation, update, and deletion endpoints
 router.post(
   '/',
-  authenticate,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(createTestCenterSchema),
   testCentersController.create
 );
 
 router.patch(
   '/:id',
-  authenticate,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(updateTestCenterSchema),
   testCentersController.update
 );
 
 router.delete(
   '/:id',
-  authenticate,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   testCentersController.delete
 );
 

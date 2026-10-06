@@ -24,7 +24,7 @@ import {
   X,
   Edit3,
 } from 'lucide-react';
-import { mockApi, MockStudent, MockTestCenter } from '../../../lib/mockApi';
+import { mockApi, HallCandidate, MockTestCenter } from '../../../lib/mockApi';
 import { useAuth } from '../../../lib/authContext';
 
 export interface ExamHall {
@@ -38,105 +38,37 @@ export interface ExamHall {
   invigilatorPhone: string;
   reportingTime: string;
   examDate: string;
-  centerId?: string;
+  assignedCount: number;
+  availableSeats: number;
+  utilizationPercent: number | null;
+  isOverCapacity: boolean;
+  testCenterId?: string;
   centerName?: string;
 }
-
-const DEFAULT_HALLS: ExamHall[] = [
-  {
-    id: 'hall-6',
-    name: 'Hall A (Junior Examination Wing)',
-    roomNumber: 'Room 101-A',
-    targetClass: 'Class 6th',
-    wing: 'Ground Floor, East Wing',
-    capacity: 60,
-    invigilatorName: 'Prof. Asim Khan',
-    invigilatorPhone: '0305-1755551',
-    reportingTime: '09:00 AM',
-    examDate: 'Sunday, 15 Nov 2026',
-    centerName: 'Main Campus Examination Center, Mansehra',
-  },
-  {
-    id: 'hall-7',
-    name: 'Hall B (Middle Standard Wing)',
-    roomNumber: 'Room 102-B',
-    targetClass: 'Class 7th',
-    wing: 'Ground Floor, West Wing',
-    capacity: 60,
-    invigilatorName: 'Madam Samina Bibi',
-    invigilatorPhone: '0305-1755551',
-    reportingTime: '09:00 AM',
-    examDate: 'Sunday, 15 Nov 2026',
-    centerName: 'Main Campus Examination Center, Mansehra',
-  },
-  {
-    id: 'hall-8',
-    name: 'Hall C (Middle Assessment Hall)',
-    roomNumber: 'Room 201-C',
-    targetClass: 'Class 8th',
-    wing: '1st Floor, Academic Block',
-    capacity: 75,
-    invigilatorName: 'Sir Tariq Mahmood',
-    invigilatorPhone: '0305-1755551',
-    reportingTime: '09:00 AM',
-    examDate: 'Sunday, 15 Nov 2026',
-    centerName: 'Main Campus Examination Center, Mansehra',
-  },
-  {
-    id: 'hall-9',
-    name: 'Hall D (Matric SSC-I Hall)',
-    roomNumber: 'Room 202-D',
-    targetClass: 'Class 9th',
-    wing: '1st Floor, Science Wing',
-    capacity: 80,
-    invigilatorName: 'Sir Naveed Qureshi',
-    invigilatorPhone: '0305-1755551',
-    reportingTime: '09:00 AM',
-    examDate: 'Sunday, 15 Nov 2026',
-    centerName: 'Main Campus Examination Center, Mansehra',
-  },
-  {
-    id: 'hall-10',
-    name: 'Hall E (Matric SSC-II Main Examination Hall)',
-    roomNumber: 'Hall 301-E',
-    targetClass: 'Class 10th',
-    wing: '2nd Floor, Central Wing',
-    capacity: 90,
-    invigilatorName: 'Dr. Sumama Khan',
-    invigilatorPhone: '0305-1755551',
-    reportingTime: '09:00 AM',
-    examDate: 'Sunday, 15 Nov 2026',
-    centerName: 'Main Campus Examination Center, Mansehra',
-  },
-  {
-    id: 'hall-11',
-    name: 'Hall F (Intermediate / College Wing)',
-    roomNumber: 'Auditorium Hall',
-    targetClass: '1st Year / 2nd Year',
-    wing: 'Main Campus Central Auditorium',
-    capacity: 150,
-    invigilatorName: 'Prof. Dr. M. Tariq (Chief Supt.)',
-    invigilatorPhone: '0305-1755551',
-    reportingTime: '09:00 AM',
-    examDate: 'Sunday, 15 Nov 2026',
-    centerName: 'Main Campus Examination Center, Mansehra',
-  },
-];
 
 interface ExamHallsViewProps {
   onOpenQrScanner?: () => void;
 }
 
 export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner }) => {
-  const [halls, setHalls] = useState<ExamHall[]>(DEFAULT_HALLS);
+  const [halls, setHalls] = useState<ExamHall[]>([]);
 
   const [testCenters, setTestCenters] = useState<MockTestCenter[]>([]);
-  const [selectedHallId, setSelectedHallId] = useState<string>(halls[0]?.id || 'hall-6');
-  const [students, setStudents] = useState<MockStudent[]>([]);
-  const [attendanceMap, setAttendanceMap] = useState<Record<string, 'PRESENT' | 'ABSENT' | 'NOT_MARKED'>>({});
+  const [selectedHallId, setSelectedHallId] = useState<string>('');
+  const [students, setStudents] = useState<HallCandidate[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const [loadError, setLoadError] = useState('');
+  const [rosterError, setRosterError] = useState('');
+  const [rosterHallId, setRosterHallId] = useState('');
+  const [rosterRevision, setRosterRevision] = useState(0);
+  const [placementCandidates, setPlacementCandidates] = useState<HallCandidate[]>([]);
+  const [placePage, setPlacePage] = useState(1);
+  const [placeTotal, setPlaceTotal] = useState(0);
+  const [placeTotalPages, setPlaceTotalPages] = useState(0);
+  const [placeLoading, setPlaceLoading] = useState(false);
+  const [placeError, setPlaceError] = useState('');
 
   // Custom Student Placement Modal State
   const [isPlaceModalOpen, setIsPlaceModalOpen] = useState<boolean>(false);
@@ -154,10 +86,10 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
     wing: '',
     capacity: 60,
     invigilatorName: '',
-    invigilatorPhone: '0305-1755551',
-    reportingTime: '09:00 AM',
-    examDate: 'Sunday, 15 Nov 2026',
-    centerName: 'Main Campus Examination Center, Mansehra',
+    invigilatorPhone: '',
+    reportingTime: '',
+    examDate: '',
+    testCenterId: '',
   });
 
   const { isLoading: authLoading } = useAuth();
@@ -171,88 +103,58 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
   const loadData = async () => {
     if (authLoading) return;
     setIsLoading(true);
-    const [stData, tcData, hallsData] = await Promise.all([
-      mockApi.getStudents().catch(() => []),
-      mockApi.getTestCenters().catch(() => []),
-      mockApi.getExamHalls().catch(() => []),
-    ]);
-    setStudents(stData);
-    setTestCenters(tcData);
-    if (hallsData && hallsData.length > 0) {
+    setLoadError('');
+    try {
+      const [tcData, hallsData] = await Promise.all([mockApi.getTestCenters(), mockApi.getExamHalls()]);
+      setTestCenters(tcData);
       setHalls(hallsData);
+      const id = hallsData.some(h => h.id === selectedHallId) ? selectedHallId : hallsData[0]?.id || '';
+      setSelectedHallId(id);
+      setRosterRevision(value => value + 1);
+    } catch (error: any) {
+      setLoadError(error.message || 'Unable to load exam halls.');
+      setHalls([]);
+      setStudents([]);
+      setSelectedHallId('');
+    } finally {
+      setIsLoading(false);
     }
-
-    const map: Record<string, 'PRESENT' | 'ABSENT' | 'NOT_MARKED'> = {};
-    stData.forEach((s) => {
-      map[s.id] = s.feeStatus === 'PAID' ? 'PRESENT' : 'NOT_MARKED';
-    });
-    setAttendanceMap(map);
-    setIsLoading(false);
   };
 
-  const selectedHall = halls.find((h) => h.id === selectedHallId) || halls[0];
+  useEffect(() => {
+    let active = true;
+    setStudents([]);
+    setRosterHallId('');
+    setRosterError('');
+    if (!selectedHallId) return;
+    mockApi.getExamHall(selectedHallId).then(hall => {
+      if (active) { setStudents(hall.assignedStudents); setRosterHallId(hall.id); }
+    }).catch(error => { if (active) setRosterError(error.message); });
+    return () => { active = false; };
+  }, [selectedHallId, rosterRevision]);
 
-  // Candidates placed / assigned to this specific Hall & Room
-  const hallStudents = students.filter((s) => {
-    if (s.assignedHallId) return s.assignedHallId === selectedHall.id;
-    if (s.assignedHall) {
-      return (
-        s.assignedHall.toLowerCase().includes(selectedHall.name.toLowerCase()) ||
-        selectedHall.name.toLowerCase().includes(s.assignedHall.toLowerCase())
-      );
-    }
-    // Default class match if not explicitly assigned elsewhere
-    const sClass = (s.currentClass || '').toLowerCase();
-    const tClass = selectedHall.targetClass.toLowerCase();
+  useEffect(() => {
+    let active = true;
+    if (!isPlaceModalOpen) return;
+    setPlaceLoading(true);
+    setPlaceError('');
+    setPlacementCandidates([]);
+    mockApi.getHallCandidates({ search: placeSearchQuery, class: placeClassFilter === 'ALL' ? undefined : placeClassFilter,
+      assignment: 'all', page: placePage, limit: 25 }).then(result => {
+      if (!active) return;
+      setPlacementCandidates(result.candidates);
+      setPlaceTotal(result.pagination.total);
+      setPlaceTotalPages(result.pagination.totalPages);
+    }).catch(error => { if (active) setPlaceError(error.message); })
+      .finally(() => { if (active) setPlaceLoading(false); });
+    return () => { active = false; };
+  }, [isPlaceModalOpen, placeSearchQuery, placeClassFilter, placePage]);
 
-    if (tClass.includes('6') && (sClass.includes('6') || sClass.includes('six'))) return true;
-    if (tClass.includes('7') && (sClass.includes('7') || sClass.includes('seven'))) return true;
-    if (tClass.includes('8') && (sClass.includes('8') || sClass.includes('eight'))) return true;
-    if (tClass.includes('9') && (sClass.includes('9') || sClass.includes('nine') || sClass.includes('ssc-i'))) return true;
-    if (tClass.includes('10') && (sClass.includes('10') || sClass.includes('ten') || sClass.includes('matric') || sClass.includes('ssc-ii'))) return true;
-    if (tClass.includes('1st') || tClass.includes('2nd') || tClass.includes('intermediate') || tClass.includes('college')) {
-      if (sClass.includes('11') || sClass.includes('12') || sClass.includes('fsc') || sClass.includes('ics') || sClass.includes('fa')) return true;
-    }
-    return false;
-  });
-
-  const filteredStudents = hallStudents.filter((s) => {
-    const matchesSearch =
-      s.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.rollNumber && s.rollNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (s.applicationNo && s.applicationNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (s.cnicOrBForm && s.cnicOrBForm.includes(searchQuery));
-
-    const status = attendanceMap[s.id] || 'NOT_MARKED';
-    const matchesStatus =
-      filterStatus === 'all' ||
-      (filterStatus === 'present' && status === 'PRESENT') ||
-      (filterStatus === 'absent' && status === 'ABSENT') ||
-      (filterStatus === 'pending' && status === 'NOT_MARKED');
-
-    return matchesSearch && matchesStatus;
-  });
-
-  const totalAssigned = hallStudents.length;
-  const presentCount = hallStudents.filter((s) => attendanceMap[s.id] === 'PRESENT').length;
-  const absentCount = hallStudents.filter((s) => attendanceMap[s.id] === 'ABSENT').length;
-  const pendingCount = totalAssigned - presentCount - absentCount;
-  const attendanceRate = totalAssigned > 0 ? Math.round((presentCount / totalAssigned) * 100) : 0;
-
-  const toggleAttendance = (studentId: string, status: 'PRESENT' | 'ABSENT') => {
-    setAttendanceMap((prev) => ({
-      ...prev,
-      [studentId]: prev[studentId] === status ? 'NOT_MARKED' : status,
-    }));
-  };
-
-  const markAllPresent = () => {
-    const newMap = { ...attendanceMap };
-    hallStudents.forEach((s) => {
-      newMap[s.id] = 'PRESENT';
-    });
-    setAttendanceMap(newMap);
-  };
+  const selectedHall = halls.find(h => h.id === selectedHallId) || halls[0];
+  const hallStudents = students.filter(s => s.assignedHallId === selectedHall?.id);
+  const filteredStudents = hallStudents.filter(s => [s.fullName, s.rollNumber, s.applicationNo]
+    .some(value => value?.toLowerCase().includes(searchQuery.toLowerCase())));
+  const totalAssigned = selectedHall?.assignedCount ?? 0;
 
   // Custom Place Candidates Handler
   const handleBatchPlace = async () => {
@@ -262,16 +164,16 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
     }
     setIsSubmittingPlacement(true);
     try {
-      await mockApi.batchAssignStudentsToHall(
+      const assignedCount = await mockApi.batchAssignStudentsToHall(
         selectedHall.id,
         {
           hallName: selectedHall.name,
           roomNumber: selectedHall.roomNumber,
-          testCenterName: selectedHall.centerName || 'Main Campus Examination Center, Mansehra',
+          testCenterName: selectedHall.centerName || undefined,
         },
         selectedStudentIdsToPlace
       );
-      alert(`Successfully placed ${selectedStudentIdsToPlace.length} candidate(s) into ${selectedHall.name} (${selectedHall.roomNumber})!`);
+      alert(`Successfully placed ${assignedCount} candidate(s) into ${selectedHall.name} (${selectedHall.roomNumber})!`);
       setSelectedStudentIdsToPlace([]);
       setIsPlaceModalOpen(false);
       await loadData();
@@ -291,7 +193,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
         assignedHallId: targetHall.id,
         assignedHall: targetHall.name,
         assignedRoom: targetHall.roomNumber,
-        testCenterName: targetHall.centerName || 'Main Campus Examination Center, Mansehra',
+        testCenterName: targetHall.centerName || undefined,
       });
       await loadData();
     } catch (err: any) {
@@ -302,8 +204,12 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
   // Unassign Student from this Hall
   const handleUnassignStudent = async (studentId: string, studentName: string) => {
     if (confirm(`Remove ${studentName} from ${selectedHall.roomNumber}?`)) {
-      await mockApi.unassignStudentFromHall(studentId);
-      await loadData();
+      try {
+        await mockApi.unassignStudentFromHall(studentId);
+        await loadData();
+      } catch (error: any) {
+        alert(error.message || 'Failed to unassign candidate.');
+      }
     }
   };
 
@@ -311,8 +217,12 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
   const handleUpdateSeatNo = async (studentId: string, currentSeat: string) => {
     const newSeat = prompt(`Enter Desk / Seat Number for candidate:`, currentSeat || 'Seat #01');
     if (newSeat !== null && newSeat.trim()) {
-      await mockApi.updateStudentAllocation(studentId, { seatNo: newSeat.trim() });
-      await loadData();
+      try {
+        await mockApi.updateStudentAllocation(studentId, { seatNo: newSeat.trim() });
+        await loadData();
+      } catch (error: any) {
+        alert(error.message || 'Failed to update seat.');
+      }
     }
   };
 
@@ -322,34 +232,21 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
       alert('Please provide hall name and room number.');
       return;
     }
-    const created: ExamHall = {
-      id: `hall_${Date.now()}`,
-      ...newHallData,
-      capacity: Number(newHallData.capacity) || 50,
-    };
     try {
-      await mockApi.createExamHall(created);
-    } catch (err) {}
-    const updated = [...halls, created];
-    setHalls(updated);
-    setSelectedHallId(created.id);
-    setIsAddModalOpen(false);
-    setNewHallData({
-      name: '',
-      roomNumber: '',
-      targetClass: 'Class 6th',
-      wing: '',
-      capacity: 60,
-      invigilatorName: '',
-      invigilatorPhone: '0305-1755551',
-      reportingTime: '09:00 AM',
-      examDate: 'Sunday, 15 Nov 2026',
-      centerName: 'Main Campus Examination Center, Mansehra',
-    });
-    loadData();
+      const { testCenterId, reportingTime, examDate, ...fields } = newHallData;
+      const created = await mockApi.createExamHall({ ...fields, testCenterId: testCenterId || null,
+        reportingTime: reportingTime || undefined, examDate: examDate || undefined });
+      await loadData();
+      setSelectedHallId(created.id);
+      setIsAddModalOpen(false);
+      setNewHallData({ name: '', roomNumber: '', targetClass: 'Class 6th', wing: '', capacity: 60,
+        invigilatorName: '', invigilatorPhone: '', reportingTime: '', examDate: '', testCenterId: '' });
+    } catch (error: any) {
+      alert(error.message || 'Failed to create hall.');
+    }
   };
 
-  const printHallAttendanceSheet = () => {
+  const printHallRoster = () => {
     const printWin = window.open('', '_blank');
     if (!printWin) {
       alert('Please allow popups to print the Hall Gate Seating Roster.');
@@ -409,23 +306,17 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
         <th style="width: 55px;">Desk #</th>
         <th style="width: 110px;">Roll Number</th>
         <th>Candidate Name</th>
-        <th>Father Name</th>
         <th>Enrolled Class</th>
-        <th style="width: 70px; text-align: center;">Fee Status</th>
         <th style="width: 120px;">Candidate Signature</th>
       </tr>
     </thead>
     <tbody>
       ${hallStudents.map((s, idx) => `
         <tr>
-          <td style="font-weight: bold; text-align: center; color: #185b9d;">${s.seatNo || (idx + 1).toString().padStart(2, '0')}</td>
+          <td style="font-weight: bold; text-align: center; color: #185b9d;">${s.seatNo || 'Not allocated'}</td>
           <td style="font-family: monospace; font-weight: bold;">${s.rollNumber || s.applicationNo || 'PENDING'}</td>
           <td style="font-weight: bold;">${s.fullName}</td>
-          <td>${s.fatherName}</td>
-          <td>${s.currentClass || selectedHall.targetClass}</td>
-          <td style="text-align: center; font-weight: bold; color: ${s.feeStatus === 'PAID' ? '#15803d' : '#b91c1c'};">
-            ${s.feeStatus || 'UNPAID'}
-          </td>
+          <td>${s.currentClass || 'Unknown'}</td>
           <td><div class="sign-box"></div></td>
         </tr>
       `).join('')}
@@ -457,19 +348,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
   };
 
   // Candidates available for placement modal
-  const candidatesForPlacement = students.filter((s) => {
-    const matchQuery =
-      s.fullName.toLowerCase().includes(placeSearchQuery.toLowerCase()) ||
-      (s.rollNumber && s.rollNumber.toLowerCase().includes(placeSearchQuery.toLowerCase())) ||
-      (s.applicationNo && s.applicationNo.toLowerCase().includes(placeSearchQuery.toLowerCase())) ||
-      (s.cnicOrBForm && s.cnicOrBForm.includes(placeSearchQuery));
-
-    const matchClass =
-      placeClassFilter === 'ALL' ||
-      (s.currentClass && s.currentClass.toLowerCase().includes(placeClassFilter.toLowerCase()));
-
-    return matchQuery && matchClass;
-  });
+  const candidatesForPlacement = placementCandidates;
 
   return (
     <div className="space-y-6">
@@ -494,7 +373,8 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
         <div className="flex flex-wrap items-center gap-2">
           {/* Custom Place Candidates Button */}
           <button
-            onClick={() => setIsPlaceModalOpen(true)}
+            disabled={!selectedHall || isLoading || !!loadError}
+            onClick={() => { setSelectedStudentIdsToPlace([]); setPlacePage(1); setIsPlaceModalOpen(true); }}
             className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
@@ -512,7 +392,8 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
           )}
 
           <button
-            onClick={printHallAttendanceSheet}
+            disabled={!selectedHall || isLoading || !!loadError || rosterHallId !== selectedHall.id}
+            onClick={printHallRoster}
             className="px-3.5 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white font-bold text-xs shadow-xs flex items-center gap-2 transition cursor-pointer"
           >
             <Printer className="w-4 h-4" />
@@ -533,11 +414,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {halls.map((hall) => {
           const isSelected = hall.id === selectedHallId;
-          const assignedCount = students.filter((s) => {
-            if (s.assignedHallId) return s.assignedHallId === hall.id;
-            if (s.assignedHall) return s.assignedHall.toLowerCase().includes(hall.name.toLowerCase());
-            return s.currentClass?.toLowerCase().includes(hall.targetClass.toLowerCase().replace('class ', ''));
-          }).length;
+          const assignedCount = hall.assignedCount;
 
           return (
             <button
@@ -581,7 +458,11 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
         })}
       </div>
 
-      {/* Selected Hall Info Card & Live Attendance KPIs */}
+      {isLoading && <p role="status">Loading exam halls...</p>}
+      {loadError && <p role="alert">{loadError} <button onClick={loadData}>Retry</button></p>}
+      {!isLoading && !loadError && halls.length === 0 && <p>No exam halls configured.</p>}
+      {/* Selected Hall allocation details */}
+      {selectedHall && <>
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
           <div className="space-y-1.5">
@@ -596,15 +477,15 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
             <p className="text-xs text-slate-500 flex items-center gap-4 flex-wrap">
               <span className="flex items-center gap-1 font-semibold text-slate-700">
                 <MapPin className="w-3.5 h-3.5 text-[#185b9d]" />
-                {selectedHall.centerName || 'Main Campus Examination Center, Mansehra'} ({selectedHall.wing})
+                {selectedHall.centerName || 'No test center'} {selectedHall.wing ? `(${selectedHall.wing})` : ''}
               </span>
               <span className="flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                Invigilator: <strong>{selectedHall.invigilatorName}</strong>
+                Invigilator: <strong>{selectedHall.invigilatorName || 'Not specified'}</strong>
               </span>
               <span className="flex items-center gap-1 font-mono">
                 <Clock className="w-3.5 h-3.5 text-[#185b9d]" />
-                {selectedHall.reportingTime} ({selectedHall.examDate})
+                {selectedHall.reportingTime || 'Reporting time unknown'} ({selectedHall.examDate || 'Date unknown'})
               </span>
             </p>
           </div>
@@ -612,24 +493,18 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
           {/* Quick Action Buttons */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsPlaceModalOpen(true)}
+              disabled={!selectedHall || isLoading || !!loadError}
+            onClick={() => { setSelectedStudentIdsToPlace([]); setPlacePage(1); setIsPlaceModalOpen(true); }}
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <UserPlus className="w-3.5 h-3.5" />
               <span>+ Place Students into {selectedHall.roomNumber}</span>
             </button>
-            <button
-              onClick={markAllPresent}
-              className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs border border-emerald-200 transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Check className="w-3.5 h-3.5" />
-              <span>Mark All Present</span>
-            </button>
           </div>
         </div>
 
         {/* Live Metrics Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Seated</span>
             <div className="flex items-baseline gap-1 mt-1">
@@ -637,22 +512,6 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
               <span className="text-xs text-slate-400 font-bold">/ {selectedHall.capacity} Seats</span>
             </div>
             <span className="text-[10px] text-slate-500 mt-1 block">Allocated in this Class/Room</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200">
-            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Present Verified</span>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-extrabold text-emerald-900 font-display tabular-nums">{presentCount}</span>
-            </div>
-            <span className="text-[10px] text-emerald-700 font-bold mt-1 block">Biometric &amp; Gate Check-in</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200">
-            <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider block">Absent Candidates</span>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-extrabold text-rose-900 font-display tabular-nums">{absentCount}</span>
-            </div>
-            <span className="text-[10px] text-rose-700 font-bold mt-1 block">Pending Arrival</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200">
@@ -664,7 +523,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
             </div>
             <div className="w-full bg-blue-200 h-1.5 rounded-full mt-2 overflow-hidden">
               <div
-                className="bg-[#185b9d] h-full rounded-full transition-all duration-300"
+                className="bg-[#185b9d] h-full rounded-full"
                 style={{
                   width: `${selectedHall.capacity > 0 ? Math.min(100, Math.round((totalAssigned / selectedHall.capacity) * 100)) : 0}%`,
                 }}
@@ -680,7 +539,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search candidates in this hall by name, roll number, CNIC..."
+                placeholder="Search candidates in this hall by name, roll or application number..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
@@ -688,40 +547,27 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-50 border border-slate-200 text-slate-700 focus:outline-hidden"
-            >
-              <option value="all">All Candidates ({totalAssigned})</option>
-              <option value="present">Present ({presentCount})</option>
-              <option value="absent">Absent ({absentCount})</option>
-              <option value="pending">Pending ({pendingCount})</option>
-            </select>
-          </div>
         </div>
 
+        {rosterError && <p role="alert">{rosterError} <button onClick={() => setRosterRevision(value => value + 1)}>Retry roster</button></p>}
+        {!rosterError && rosterHallId !== selectedHall.id && <p role="status">Loading hall roster...</p>}
         {/* Students Table for Selected Hall */}
         <div className="overflow-x-auto rounded-2xl border border-slate-200">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/80 text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
                 <th className="py-3 px-4">Desk / Seat</th>
-                <th className="py-3 px-4">Candidate Photo &amp; Name</th>
+                <th className="py-3 px-4">Candidate Name</th>
                 <th className="py-3 px-4">Roll / App No</th>
                 <th className="py-3 px-4">Enrolled Class</th>
-                <th className="py-3 px-4">Contact</th>
-                <th className="py-3 px-4 text-center">Fee Status</th>
                 <th className="py-3 px-4 text-right">Reallocate / Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {filteredStudents.length > 0 ? (
                 filteredStudents.map((s, idx) => {
-                  const status = attendanceMap[s.id] || 'NOT_MARKED';
-                  const rollNo = s.rollNumber || s.applicationNo || `APP-2026-${(idx + 1).toString().padStart(4, '0')}`;
-                  const currentSeat = s.seatNo || `Seat #${(idx + 1).toString().padStart(2, '0')}`;
+                  const rollNo = s.rollNumber || s.applicationNo || 'Not issued';
+                  const currentSeat = s.seatNo || 'Not allocated';
 
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/80 transition">
@@ -736,37 +582,10 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                         </button>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={
-                              s.photoUrl ||
-                              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-                            }
-                            alt={s.fullName}
-                            className="w-8 h-8 rounded-lg object-cover border border-slate-200 shadow-2xs shrink-0"
-                          />
-                          <div>
-                            <div className="font-bold text-slate-900">{s.fullName}</div>
-                            <div className="text-[10px] text-slate-500">Father: {s.fatherName}</div>
-                          </div>
-                        </div>
+                        <div className="font-bold text-slate-900">{s.fullName}</div>
                       </td>
                       <td className="py-3 px-4 font-mono font-bold text-slate-900">{rollNo}</td>
-                      <td className="py-3 px-4 font-semibold text-slate-700">{s.currentClass || selectedHall.targetClass}</td>
-                      <td className="py-3 px-4 font-mono text-slate-600">
-                        {s.parentMobile || s.studentMobile || s.whatsapp || 'N/A'}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                            s.feeStatus === 'PAID'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {s.feeStatus || 'UNPAID'}
-                        </span>
-                      </td>
+                      <td className="py-3 px-4 font-semibold text-slate-700">{s.currentClass || 'Unknown'}</td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {/* Move Room Dropdown */}
@@ -803,23 +622,23 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                     </tr>
                   );
                 })
-              ) : (
+              ) : rosterHallId === selectedHall.id ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400">
+                  <td colSpan={5} className="py-8 text-center text-slate-400">
                     <p className="text-xs font-bold text-slate-600">No candidates seated in this room yet.</p>
                     <p className="text-[11px] text-slate-400 mt-1">
                       Click <strong>"+ Place Students into {selectedHall.roomNumber}"</strong> above to custom pick and assign students.
                     </p>
                   </td>
                 </tr>
-              )}
+              ) : null}
             </tbody>
           </table>
         </div>
       </div>
 
       {/* Custom Pick & Place Candidates Modal */}
-      {isPlaceModalOpen && (
+      {isPlaceModalOpen && selectedHall && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl border border-slate-200 space-y-5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -845,26 +664,26 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search by candidate name, roll number, CNIC, app ID..."
+                  placeholder="Search by candidate name, roll or application number..."
                   value={placeSearchQuery}
-                  onChange={(e) => setPlaceSearchQuery(e.target.value)}
+                  onChange={(e) => { setPlacePage(1); setSelectedStudentIdsToPlace([]); setPlaceSearchQuery(e.target.value); }}
                   className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#185b9d] outline-none"
                 />
               </div>
 
               <select
                 value={placeClassFilter}
-                onChange={(e) => setPlaceClassFilter(e.target.value)}
+                onChange={(e) => { setPlacePage(1); setSelectedStudentIdsToPlace([]); setPlaceClassFilter(e.target.value); }}
                 className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 text-slate-700 outline-none"
               >
-                <option value="ALL">All Classes ({students.length})</option>
-                <option value="6">Class 6th</option>
-                <option value="7">Class 7th</option>
-                <option value="8">Class 8th</option>
-                <option value="9">Class 9th</option>
-                <option value="10">Class 10th</option>
-                <option value="11">Class 11th (1st Year)</option>
-                <option value="12">Class 12th (2nd Year)</option>
+                <option value="ALL">All Classes</option>
+                <option value="Class 6th">Class 6th</option>
+                <option value="Class 7th">Class 7th</option>
+                <option value="Class 8th">Class 8th</option>
+                <option value="Class 9th">Class 9th</option>
+                <option value="Class 10th">Class 10th</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
               </select>
 
               <button
@@ -878,10 +697,17 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                 }}
                 className="px-3 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer whitespace-nowrap"
               >
-                {selectedStudentIdsToPlace.length === candidatesForPlacement.length ? 'Deselect All' : 'Select All Filtered'}
+                {selectedStudentIdsToPlace.length === candidatesForPlacement.length ? 'Deselect All' : 'Select This Page'}
               </button>
             </div>
 
+            {placeLoading && <p role="status">Loading candidates...</p>}
+            {placeError && <p role="alert">{placeError}</p>}
+            <div className="flex items-center gap-3 text-xs">
+              <button disabled={placePage <= 1 || placeLoading} onClick={() => { setSelectedStudentIdsToPlace([]); setPlacePage(p => p - 1); }}>Previous</button>
+              <span>Page {placePage} of {placeTotalPages || 1} — {placeTotal} candidates</span>
+              <button disabled={placePage >= placeTotalPages || placeLoading} onClick={() => { setSelectedStudentIdsToPlace([]); setPlacePage(p => p + 1); }}>Next</button>
+            </div>
             {/* Candidates Selection Table */}
             <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-2xl">
               <table className="w-full text-left text-xs border-collapse">
@@ -908,7 +734,6 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                     <th className="p-3">Roll / App No</th>
                     <th className="p-3">Class</th>
                     <th className="p-3">Current Hall</th>
-                    <th className="p-3 text-center">Fee Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -945,30 +770,20 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                           </td>
                           <td className="p-3 font-bold text-slate-900">
                             <div>{s.fullName}</div>
-                            <div className="text-[10px] text-slate-400 font-normal">S/D/O {s.fatherName}</div>
                           </td>
                           <td className="p-3 font-mono text-slate-700">{s.rollNumber || s.applicationNo || 'N/A'}</td>
-                          <td className="p-3 font-semibold text-slate-700">{s.currentClass || 'SSC'}</td>
+                          <td className="p-3 font-semibold text-slate-700">{s.currentClass || 'Unknown'}</td>
                           <td className="p-3">
                             <span
                               className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
                                 isCurrentHall
                                   ? 'bg-emerald-100 text-emerald-800'
-                                  : s.assignedRoom
+                                  : s.assignedHallId
                                   ? 'bg-slate-100 text-slate-700'
                                   : 'bg-amber-50 text-amber-700'
                               }`}
                             >
-                              {s.assignedRoom ? `${s.assignedRoom}` : 'Unassigned'}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center">
-                            <span
-                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                                s.feeStatus === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                              }`}
-                            >
-                              {s.feeStatus || 'UNPAID'}
+                              {s.assignedHallId ? s.assignedRoom || 'Assigned' : 'Unassigned'}
                             </span>
                           </td>
                         </tr>
@@ -976,7 +791,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                     })
                   ) : (
                     <tr>
-                      <td colSpan={6} className="p-6 text-center text-slate-400">
+                      <td colSpan={5} className="p-6 text-center text-slate-400">
                         No candidates match your search filter.
                       </td>
                     </tr>
@@ -1001,7 +816,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                 </button>
                 <button
                   type="button"
-                  disabled={selectedStudentIdsToPlace.length === 0 || isSubmittingPlacement}
+                  disabled={selectedStudentIdsToPlace.length === 0 || isSubmittingPlacement || placeLoading || !!placeError}
                   onClick={handleBatchPlace}
                   className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-900/10 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
@@ -1018,34 +833,27 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
         </div>
       )}
 
+      </>}
+
       {/* Add Custom Examination Hall Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-200 space-y-5">
             <div className="border-b border-slate-100 pb-3">
               <h3 className="text-base font-extrabold text-slate-900">Add Custom Examination Hall / Room</h3>
-              <p className="text-xs text-slate-500">Configure room capacity and class allocation for Session V (2026).</p>
+              <p className="text-xs text-slate-500">Configure room capacity and candidate allocation.</p>
             </div>
 
             <form onSubmit={handleCreateHall} className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Test Center / Campus</label>
                 <select
-                  value={newHallData.centerName}
-                  onChange={(e) => setNewHallData({ ...newHallData, centerName: e.target.value })}
+                  value={newHallData.testCenterId}
+                  onChange={(e) => setNewHallData({ ...newHallData, testCenterId: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#185b9d]"
                 >
-                  {testCenters.length > 0 ? (
-                    testCenters.map((tc) => (
-                      <option key={tc.id} value={tc.name}>
-                        {tc.name} ({tc.district})
-                      </option>
-                    ))
-                  ) : (
-                    <option value="Main Campus Examination Center, Mansehra">
-                      Main Campus Examination Center, Mansehra
-                    </option>
-                  )}
+                  <option value="">No test center — schedule unknown</option>
+                  {testCenters.map(tc => <option key={tc.id} value={tc.id}>{tc.name} ({tc.district})</option>)}
                 </select>
               </div>
 
@@ -1106,7 +914,7 @@ export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner })
                   <label className="block font-bold text-slate-700 mb-1">Seating Capacity</label>
                   <input
                     type="number"
-                    min="10"
+                    min="1"
                     max="500"
                     value={newHallData.capacity}
                     onChange={(e) => setNewHallData({ ...newHallData, capacity: Number(e.target.value) })}

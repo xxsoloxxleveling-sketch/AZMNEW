@@ -126,11 +126,11 @@ async function runTests() {
     // -------------------------------------------------------------
     console.log('\n--- 2. Testing Test Centers ---');
 
-    // 2.1 Public listing
-    const getCentersRes = await fetch(`${baseUrl}/api/test-centers`);
+    // 2.1 Admin listing
+    const getCentersRes = await fetch(`${baseUrl}/api/test-centers`, { headers: { Authorization: `Bearer ${adminToken}` } });
     const centersData = (await getCentersRes.json()) as any;
-    assert(getCentersRes.status === 200 && Array.isArray(centersData.data), 'Public / authenticated listing of test centers');
-    assert(centersData.data.length >= 4, 'Includes 4 seeded regional test centers (Mansehra, Abbottabad, Haripur, Battagram)');
+    assert(getCentersRes.status === 200 && Array.isArray(centersData.data), 'Admin listing of persisted test centers');
+    assert((await fetch(`${baseUrl}/api/test-centers`)).status === 401, 'Unauthenticated center listing rejected');
 
     // 2.2 Create Test Center (Admin)
     const testCode = `TC-TEST-${Date.now().toString().slice(-4)}`;
@@ -181,10 +181,10 @@ async function runTests() {
     console.log('\n--- 3. Testing Exam Halls ---');
 
     // 3.1 Listing halls
-    const getHallsRes = await fetch(`${baseUrl}/api/exam-halls`);
+    const getHallsRes = await fetch(`${baseUrl}/api/exam-halls`, { headers: { Authorization: `Bearer ${adminToken}` } });
     const hallsData = (await getHallsRes.json()) as any;
     assert(getHallsRes.status === 200 && Array.isArray(hallsData.data), 'Can fetch exam halls list');
-    assert(hallsData.data.length >= 6, 'Includes 6 seeded examination halls (Hall A through Hall F)');
+    assert((await fetch(`${baseUrl}/api/exam-halls`)).status === 401, 'Unauthenticated hall listing rejected');
 
     // 3.2 Create Custom Room
     const createHallRes = await fetch(`${baseUrl}/api/exam-halls`, {
