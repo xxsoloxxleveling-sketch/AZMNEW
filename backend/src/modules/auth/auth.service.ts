@@ -1,7 +1,7 @@
 import { prisma } from '../../lib/prisma';
-import { comparePassword } from '../../lib/hash';
+import { comparePassword, hashPassword } from '../../lib/hash';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt';
-import { LoginInput } from './auth.schema';
+import { LoginInput, ChangePasswordInput } from './auth.schema';
 import { AppError } from '../../middleware/error.middleware';
 
 export class AuthService {
@@ -34,10 +34,11 @@ export class AuthService {
       email: user.email,
       role: user.role,
       name: user.name,
+      tokenVersion: user.tokenVersion,
     };
 
     const accessToken = signAccessToken(payload);
-    const refreshToken = signRefreshToken({ userId: user.id });
+    const refreshToken = signRefreshToken({ userId: user.id, tokenVersion: user.tokenVersion });
 
     return {
       accessToken,
@@ -47,6 +48,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
+        status: user.status,
       },
     };
   }
@@ -70,15 +72,22 @@ export class AuthService {
         throw error;
       }
 
+      if (decoded.tokenVersion !== user.tokenVersion) {
+        const error: AppError = new Error('Session expired or invalidated. Please log in again.');
+        error.statusCode = 401;
+        throw error;
+      }
+
       const payload = {
         userId: user.id,
         email: user.email,
         role: user.role,
         name: user.name,
+        tokenVersion: user.tokenVersion,
       };
 
       const newAccessToken = signAccessToken(payload);
-      const newRefreshToken = signRefreshToken({ userId: user.id });
+      const newRefreshToken = signRefreshToken({ userId: user.id, tokenVersion: user.tokenVersion });
 
       return {
         accessToken: newAccessToken,
@@ -97,6 +106,52 @@ export class AuthService {
   logout() {
     return {
       message: 'Logged out successfully',
+    };
+  }
+
+  async changePassword(userId: string, input: ChangePasswordInput) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      const error: AppError = new Error('User associated with session not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (user.status !== 'ACTIVE') {
+      const error: AppError = new Error('This account is inactive. Contact the system administrator.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    const isCurrentValid = await comparePassword(input.currentPassword, user.passwordHash);
+    if (!isCurrentValid) {
+      const error: AppError = new Error('Current password is incorrect.');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const isSamePassword = await comparePassword(input.newPassword, user.passwordHash);
+    if (isSamePassword) {
+      const error: AppError = new Error('New password must be different from the current password.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const newPasswordHash = await hashPassword(input.newPassword);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash: newPasswordHash,
+        tokenVersion: { increment: 1 },
+      },
+    });
+
+    return {
+      message: 'Password changed successfully. Please sign in again.',
     };
   }
 }

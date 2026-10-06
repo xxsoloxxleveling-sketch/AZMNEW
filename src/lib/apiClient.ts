@@ -1,4 +1,4 @@
-import { getToken, setToken, clearToken, getRefreshToken, setRefreshToken, clearRefreshToken } from './auth';
+import { getToken, setToken, clearToken, getRefreshToken, setRefreshToken, clearRefreshToken, clearUser } from './auth';
 
 export const API_BASE_URL =
   (import.meta as any).env?.VITE_API_URL ||
@@ -152,7 +152,7 @@ export async function apiFetch<T = any>(
   }
 
   // Handle 401 Unauthorized by attempting automatic token refresh
-  if (response.status === 401 && !endpoint.includes('/api/auth/login') && !endpoint.includes('/api/auth/refresh')) {
+  if (response.status === 401 && !endpoint.includes('/api/auth/login') && !endpoint.includes('/api/auth/refresh') && !endpoint.includes('/api/auth/change-password')) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       headers['Authorization'] = `Bearer ${newToken}`;
@@ -163,6 +163,7 @@ export async function apiFetch<T = any>(
     } else {
       clearToken();
       clearRefreshToken();
+      clearUser();
     }
   }
 
@@ -199,6 +200,12 @@ export async function apiFetch<T = any>(
       if (detailsList.length > 0 && !errorMsg.includes(':')) {
         errorMsg = `${errorMsg} (${detailsList.join('; ')})`;
       }
+    }
+
+    if (response.status === 403 && (errorMsg.includes('inactive') || errorMsg.includes('Inactive'))) {
+      clearToken();
+      clearRefreshToken();
+      clearUser();
     }
 
     const err: any = new Error(errorMsg);

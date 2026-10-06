@@ -51,28 +51,18 @@ export class AuthController {
     }
   }
 
-  async testProtected(req: Request, res: Response, next: NextFunction) {
+  async changePassword(req: Request, res: Response, next: NextFunction) {
     try {
+      const userId = req.user?.id;
+      if (!userId) {
+        const error: any = new Error('Authentication required');
+        error.statusCode = 401;
+        throw error;
+      }
+      const result = await authService.changePassword(userId, req.body);
       res.status(200).json({
         success: true,
-        message: 'Protected route accessed successfully',
-        data: {
-          user: req.user,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async superAdminOnly(req: Request, res: Response, next: NextFunction) {
-    try {
-      res.status(200).json({
-        success: true,
-        message: 'Super admin only route accessed successfully',
-        data: {
-          user: req.user,
-        },
+        message: result.message,
       });
     } catch (error) {
       next(error);

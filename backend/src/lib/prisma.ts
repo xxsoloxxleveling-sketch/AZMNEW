@@ -61,10 +61,21 @@ class MemoryStore {
         return arg;
       },
       user: {
-        findUnique: async ({ where }: { where: { email?: string; id?: string } }) => {
+        findUnique: async ({ where, select }: { where: { email?: string; id?: string }; select?: any }) => {
           for (const u of this.users.values()) {
-            if (where.email && u.email.toLowerCase() === where.email.toLowerCase()) return { ...u };
-            if (where.id && u.id === where.id) return { ...u };
+            if (
+              (where.email && u.email.toLowerCase() === where.email.toLowerCase()) ||
+              (where.id && u.id === where.id)
+            ) {
+              if (select) {
+                const projected: any = {};
+                for (const k of Object.keys(select)) {
+                  if (select[k]) projected[k] = u[k];
+                }
+                return projected;
+              }
+              return { ...u };
+            }
           }
           return null;
         },
@@ -76,16 +87,61 @@ class MemoryStore {
           }
           return null;
         },
-        findMany: async ({ where }: { where?: any } = {}) => {
-          const results: any[] = [];
-          for (const u of this.users.values()) {
-            if (!where || (where.role && u.role === where.role)) {
-              results.push({ ...u });
-            }
+        findMany: async ({
+          where,
+          skip = 0,
+          take,
+          orderBy,
+          select,
+        }: {
+          where?: any;
+          skip?: number;
+          take?: number;
+          orderBy?: any;
+          select?: any;
+        } = {}) => {
+          let results = Array.from(this.users.values());
+          if (where?.role) {
+            results = results.filter((u) => u.role === where.role);
           }
-          return results;
+          if (where?.status) {
+            results = results.filter((u) => u.status === where.status);
+          }
+          if (where?.OR && Array.isArray(where.OR)) {
+            results = results.filter((u) => {
+              return where.OR.some((cond: any) => {
+                if (cond.name?.contains) {
+                  const term = cond.name.contains.toLowerCase();
+                  if (u.name && u.name.toLowerCase().includes(term)) return true;
+                }
+                if (cond.email?.contains) {
+                  const term = cond.email.contains.toLowerCase();
+                  if (u.email && u.email.toLowerCase().includes(term)) return true;
+                }
+                return false;
+              });
+            });
+          }
+          if (orderBy) {
+            const key = Object.keys(orderBy)[0];
+            const dir = orderBy[key] === 'desc' ? -1 : 1;
+            results.sort((a, b) => (a[key] > b[key] ? dir : -dir));
+          }
+          const start = skip || 0;
+          const end = take !== undefined ? start + take : results.length;
+          const sliced = results.slice(start, end);
+          if (select) {
+            return sliced.map((u) => {
+              const projected: any = {};
+              for (const k of Object.keys(select)) {
+                if (select[k]) projected[k] = u[k];
+              }
+              return projected;
+            });
+          }
+          return sliced.map((u) => ({ ...u }));
         },
-        create: async ({ data }: { data: any }) => {
+        create: async ({ data, select }: { data: any; select?: any }) => {
           const id = data.id || generateId();
           const record = {
             id,
@@ -94,7 +150,48 @@ class MemoryStore {
             updatedAt: new Date(),
           };
           this.users.set(id, record);
+          if (select) {
+            const projected: any = {};
+            for (const k of Object.keys(select)) {
+              if (select[k]) projected[k] = record[k];
+            }
+            return projected;
+          }
           return { ...record };
+        },
+        update: async ({ where, data, select }: { where: { id?: string; email?: string }; data: any; select?: any }) => {
+          let target = null;
+          for (const u of this.users.values()) {
+            if ((where.id && u.id === where.id) || (where.email && u.email === where.email)) {
+              target = u;
+              break;
+            }
+          }
+          if (!target) throw new Error('User not found');
+          const updated = { ...target, ...data, updatedAt: new Date() };
+          this.users.set(target.id, updated);
+          if (select) {
+            const projected: any = {};
+            for (const k of Object.keys(select)) {
+              if (select[k]) projected[k] = updated[k];
+            }
+            return projected;
+          }
+          return { ...updated };
+        },
+        delete: async ({ where }: { where: { id?: string } }) => {
+          let target = null;
+          for (const u of this.users.values()) {
+            if (where.id && u.id === where.id) {
+              target = u;
+              break;
+            }
+          }
+          if (target) {
+            this.users.delete(target.id);
+            return { ...target };
+          }
+          throw new Error('User not found');
         },
         upsert: async ({ where, update, create }: { where: any; update: any; create: any }) => {
           let existing = null;
@@ -113,7 +210,31 @@ class MemoryStore {
             return { ...record };
           }
         },
-        count: async () => this.users.size,
+        count: async ({ where }: { where?: any } = {}) => {
+          let results = Array.from(this.users.values());
+          if (where?.role) {
+            results = results.filter((u) => u.role === where.role);
+          }
+          if (where?.status) {
+            results = results.filter((u) => u.status === where.status);
+          }
+          if (where?.OR && Array.isArray(where.OR)) {
+            results = results.filter((u) => {
+              return where.OR.some((cond: any) => {
+                if (cond.name?.contains) {
+                  const term = cond.name.contains.toLowerCase();
+                  if (u.name && u.name.toLowerCase().includes(term)) return true;
+                }
+                if (cond.email?.contains) {
+                  const term = cond.email.contains.toLowerCase();
+                  if (u.email && u.email.toLowerCase().includes(term)) return true;
+                }
+                return false;
+              });
+            });
+          }
+          return results.length;
+        },
         deleteMany: async () => {
           const count = this.users.size;
           this.users.clear();
@@ -1015,7 +1136,11 @@ export const prisma = new Proxy(realPrisma, {
             logger.error(`🚨 CRITICAL: Database operation "${String(prop)}" failed in production:`, err.message || err);
             throw err;
           }
-          isDbAvailable = false;
+          if (err.message && (err.message.includes("Can't reach database server") || err.code === 'P1001')) {
+            isDbAvailable = false;
+          } else {
+            throw err;
+          }
         }
         return (memoryPrisma as any)[prop]?.(...args);
       };

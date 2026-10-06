@@ -50,7 +50,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   isMobileOpen = false,
   onCloseMobile,
 }) => {
-  const { user, role, logout, switchRole } = useAuth();
+  const { user, role, logout } = useAuth();
 
   const navItems = [
     {
@@ -117,18 +117,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'settings' as AdminTab,
       label: 'Settings & Security',
       icon: IconSettings,
-      roles: ['SUPER_ADMIN', 'ADMIN'],
+      roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER'],
     },
   ];
 
+  const filteredNavItems = navItems.filter((item) => role !== null && item.roles.includes(role));
 
-  const filteredNavItems = navItems.filter((item) => item.roles.includes(role));
-
-  const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    switchRole(e.target.value as Role);
-  };
-
-  const getRoleBadgeStyle = (r: Role) => {
+  const getRoleBadgeStyle = (r: Role | null) => {
     switch (r) {
       case 'SUPER_ADMIN':
         return 'bg-purple-100 text-purple-800 border-purple-200';
@@ -138,6 +133,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         return 'bg-amber-100 text-amber-800 border-amber-200';
       case 'TEACHER':
         return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      default:
+        return 'bg-slate-100 text-slate-600 border-slate-200';
     }
   };
 
@@ -173,11 +170,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             </div>
           </div>
 
-          {/* Role Indicator & Test Switcher */}
-          <div className="p-3.5 mx-3 my-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
-            <div className="flex items-center justify-between text-xs mb-1.5">
+          {/* Active Role Indicator */}
+          {role && (
+            <div className="px-3.5 py-2.5 mx-3 my-2 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between text-xs">
               <span className="text-slate-500 font-medium flex items-center gap-1.5">
-                <IconShield size={14} className="text-[#185b9d]" /> Active Role:
+                <IconShield size={14} className="text-[#185b9d]" /> System Role:
               </span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getRoleBadgeStyle(
@@ -187,17 +184,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 {role}
               </span>
             </div>
-            <select
-              value={role}
-              onChange={handleRoleChange}
-              className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d]"
-            >
-              <option value="SUPER_ADMIN">Switch to SUPER_ADMIN</option>
-              <option value="ADMIN">Switch to ADMIN</option>
-              <option value="ACCOUNTANT">Switch to ACCOUNTANT</option>
-              <option value="TEACHER">Switch to TEACHER</option>
-            </select>
-          </div>
+          )}
 
           {/* Navigation Items */}
           <nav className="px-3 space-y-1 mt-1">

@@ -4,12 +4,12 @@ import { getUser, clearAll, setUser as persistUser } from './auth';
 
 interface AuthContextType {
   user: CurrentUser | null;
-  role: Role;
+  role: Role | null;
   isLoading: boolean;
   login: (email: string, pass: string) => Promise<LoginResponse>;
   logout: () => void;
-  switchRole: (role: Role) => Promise<void>;
   isAuthenticated: boolean;
+  refreshCurrentUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,15 +53,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const switchRole = async (newRole: Role) => {
-    setIsLoading(true);
+  const refreshCurrentUser = async (): Promise<void> => {
     try {
       const { mockApi } = await import('./mockApi');
-      const u = await mockApi.switchRole(newRole);
+      const u = await mockApi.getCurrentUser();
       setUser(u);
-      persistUser(u);
-    } finally {
-      setIsLoading(false);
+      if (u) {
+        persistUser(u);
+      } else {
+        clearAll();
+      }
+    } catch {
+      // If error or invalid session, clear user
     }
   };
 
@@ -69,12 +72,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
-        role: user?.role || 'SUPER_ADMIN',
+        role: user?.role ?? null,
         isLoading,
         login,
         logout,
-        switchRole,
         isAuthenticated: !!user,
+        refreshCurrentUser,
       }}
     >
       {children}

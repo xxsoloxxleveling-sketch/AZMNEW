@@ -9,6 +9,7 @@ export interface CurrentUser {
   name: string;
   email: string;
   role: Role;
+  status?: string;
   avatarUrl?: string;
 }
 
@@ -454,6 +455,51 @@ export interface CreateManualTransactionPayload {
   referenceNumber?: string | null;
 }
 
+export type UserStatus = 'ACTIVE' | 'INACTIVE';
+
+export interface UserAccountRecord {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  status: UserStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserQueryParams {
+  search?: string;
+  role?: Role | 'ALL';
+  status?: UserStatus | 'ALL';
+  page?: number;
+  limit?: number;
+}
+
+export interface UserPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface UserListResponse {
+  users: UserAccountRecord[];
+  pagination: UserPagination;
+}
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  role: Role;
+  password: string;
+  status?: UserStatus;
+}
+
+export type UpdateUserPayload =
+  | { name?: string; role?: Role }
+  | { status: UserStatus }
+  | { password: string };
+
 export interface MockUserAccount {
   id: string;
   name: string;
@@ -461,6 +507,7 @@ export interface MockUserAccount {
   role: Role;
   status: 'ACTIVE' | 'INACTIVE';
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface MockTestCenter {
@@ -715,60 +762,41 @@ export const mockApi = {
   // 1. Authentication
 
   async login(email: string, password: string): Promise<LoginResponse> {
-    try {
-      const res = await apiFetch<{
-        accessToken: string;
-        refreshToken: string;
-        user: {
-          id: string;
-          email: string;
-          role: Role;
-          name: string;
-        };
-      }>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
+    const res = await apiFetch<{
+      accessToken: string;
+      refreshToken: string;
+      user: {
+        id: string;
+        email: string;
+        role: Role;
+        name: string;
+      };
+    }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
 
-      const user: CurrentUser = {
-        id: res.user.id,
-        name: res.user.name || res.user.email.split('@')[0],
-        email: res.user.email,
-        role: res.user.role,
-        avatarUrl:
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-      };
+    const user: CurrentUser = {
+      id: res.user.id,
+      name: res.user.name || res.user.email.split('@')[0],
+      email: res.user.email,
+      role: res.user.role,
+      avatarUrl:
+        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+    };
 
-      setToken(res.accessToken);
-      if (res.refreshToken) {
-        setRefreshToken(res.refreshToken);
-      }
-      setUser(user);
-      currentUser = user;
-
-      return {
-        user,
-        token: res.accessToken,
-        role: user.role,
-      };
-    } catch (err) {
-      console.warn('Backend login unavailable or credentials rejected, activating authenticated admin session:', err);
-      const fallbackUser: CurrentUser = {
-        id: 'usr_super_admin_01',
-        name: 'Chief Administrative Officer',
-        email: email || 'chief.admin@azmaio.com',
-        role: 'SUPER_ADMIN',
-        avatarUrl:
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-      };
-      setUser(fallbackUser);
-      currentUser = fallbackUser;
-      return {
-        user: fallbackUser,
-        token: 'demo_token_super_admin',
-        role: fallbackUser.role,
-      };
+    setToken(res.accessToken);
+    if (res.refreshToken) {
+      setRefreshToken(res.refreshToken);
     }
+    setUser(user);
+    currentUser = user;
+
+    return {
+      user,
+      token: res.accessToken,
+      role: user.role,
+    };
   },
 
   async getCurrentUser(): Promise<CurrentUser | null> {
@@ -795,26 +823,7 @@ export const mockApi = {
     return currentUser;
   },
 
-  async switchRole(role: Role): Promise<CurrentUser> {
-    currentUser = {
-      ...(currentUser || {
-        id: 'usr_001',
-        email: 'chief.admin@azmaio.com',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-      }),
-      role,
-      name:
-        role === 'SUPER_ADMIN'
-          ? 'AZM Super Administrator'
-          : role === 'ADMIN'
-          ? 'Examination Officer (Admin)'
-          : role === 'ACCOUNTANT'
-          ? 'Finance & Accounts Officer'
-          : 'Invigilator / Examiner',
-    };
-    setUser(currentUser);
-    return currentUser;
-  },
+
 
 
   // 2. Dashboard Overview Aggregation
@@ -1884,20 +1893,76 @@ export const mockApi = {
   },
 
   // 10. User Management (Super Admin)
-  async getUsers(): Promise<MockUserAccount[]> {
-    const res = await apiFetch<any>('/api/users');
-    const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
-    return list.map((u: any) => ({
+  async getUsers(query?: UserQueryParams): Promise<MockUserAccount[]> {
+    const listRes = await this.getUserDirectory(query);
+    return listRes.users.map((u) => ({
       id: u.id,
-      name: u.name || u.email.split('@')[0],
+      name: u.name,
       email: u.email,
       role: u.role,
-      status: u.status || 'ACTIVE',
-      createdAt: u.createdAt || new Date().toISOString(),
+      status: u.status,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
     }));
   },
 
-  async createUser(payload: { name: string; email: string; role: Role; password: string }): Promise<MockUserAccount> {
+  async getUserDirectory(query?: UserQueryParams): Promise<UserListResponse> {
+    const params = new URLSearchParams();
+    if (query?.search?.trim()) params.set('search', query.search.trim());
+    if (query?.role && query.role !== 'ALL') params.set('role', query.role);
+    if (query?.status && query.status !== 'ALL') params.set('status', query.status);
+    if (query?.page) params.set('page', String(query.page));
+    if (query?.limit) params.set('limit', String(query.limit));
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const res: any = await apiFetch<any>(`/api/users${queryString}`);
+
+    const raw = res?.data ?? res;
+    const rawList = Array.isArray(raw?.users)
+      ? raw.users
+      : Array.isArray(raw?.items)
+      ? raw.items
+      : Array.isArray(raw)
+      ? raw
+      : [];
+
+    const rawPagination = raw?.pagination || res?.pagination;
+
+    const users: UserAccountRecord[] = rawList.map((u: any) => ({
+      id: u.id,
+      name: u.name || (u.email ? u.email.split('@')[0] : ''),
+      email: u.email || '',
+      role: u.role,
+      status: u.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      createdAt: u.createdAt || '',
+      updatedAt: u.updatedAt || '',
+    }));
+
+    const pagination: UserPagination = {
+      page: Number(rawPagination?.page) || 1,
+      limit: Number(rawPagination?.limit) || (query?.limit || 20),
+      total: Number(rawPagination?.total) || users.length,
+      totalPages: Number(rawPagination?.totalPages) || (rawPagination?.total ? Math.ceil(rawPagination.total / (Number(rawPagination?.limit) || 20)) : 1),
+    };
+
+    return { users, pagination };
+  },
+
+  async getUserById(id: string): Promise<UserAccountRecord> {
+    const res: any = await apiFetch<any>(`/api/users/${id}`);
+    const u = res?.data ?? res;
+    return {
+      id: u.id,
+      name: u.name || '',
+      email: u.email || '',
+      role: u.role,
+      status: u.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      createdAt: u.createdAt || '',
+      updatedAt: u.updatedAt || '',
+    };
+  },
+
+  async createUser(payload: CreateUserPayload): Promise<UserAccountRecord> {
     const res = await apiFetch<any>('/api/users', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -1910,6 +1975,24 @@ export const mockApi = {
       role: u.role || payload.role,
       status: u.status || 'ACTIVE',
       createdAt: u.createdAt || new Date().toISOString(),
+      updatedAt: u.updatedAt || new Date().toISOString(),
+    };
+  },
+
+  async updateUserAccount(id: string, payload: UpdateUserPayload): Promise<UserAccountRecord> {
+    const res = await apiFetch<any>(`/api/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    const u = res?.data || res;
+    return {
+      id: u.id || id,
+      name: u.name || '',
+      email: u.email || '',
+      role: u.role,
+      status: u.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      createdAt: u.createdAt || '',
+      updatedAt: u.updatedAt || new Date().toISOString(),
     };
   },
 

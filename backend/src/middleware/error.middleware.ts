@@ -30,6 +30,8 @@ export function errorHandler(
         clientMessage = 'An application with this Application Number already exists.';
       } else if (target.includes('rollNumber')) {
         clientMessage = 'A student with this Roll Number is already registered.';
+      } else if (target.includes('email')) {
+        clientMessage = 'A user with this email already exists.';
       } else {
         clientMessage = `A record with this ${target} already exists.`;
       }

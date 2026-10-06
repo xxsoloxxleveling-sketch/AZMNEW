@@ -1,13 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { usersService } from './users.service';
+import { UserQueryInput } from './users.schema';
 
 export class UsersController {
-  async getAll(_req: Request, res: Response, next: NextFunction) {
+  async getAll(req: Request, res: Response, next: NextFunction) {
     try {
-      const users = await usersService.getUsers();
+      const result = await usersService.getUsers(req.query as unknown as UserQueryInput);
       res.status(200).json({
         success: true,
-        data: users,
+        data: result,
       });
     } catch (error) {
       next(error);

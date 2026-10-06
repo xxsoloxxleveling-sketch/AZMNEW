@@ -55,6 +55,13 @@ import type {
   StaffDetailRecord,
   CreateStaffPayload,
   UpdateStaffPayload,
+  UserStatus,
+  UserAccountRecord,
+  UserQueryParams,
+  UserPagination,
+  UserListResponse,
+  CreateUserPayload,
+  UpdateUserPayload,
 } from '../lib/mockApi';
 
 export { API_BASE_URL };
@@ -90,6 +97,13 @@ export type {
   StaffDetailRecord,
   CreateStaffPayload,
   UpdateStaffPayload,
+  UserStatus,
+  UserAccountRecord,
+  UserQueryParams,
+  UserPagination,
+  UserListResponse,
+  CreateUserPayload,
+  UpdateUserPayload,
 };
 export const USE_MOCK_FALLBACK = true;
 
@@ -541,6 +555,24 @@ export const api = {
     update: async (id: string, data: UpdateStaffPayload): Promise<StaffDetailRecord> => {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.updateStaffMember(id, data);
+    },
+  },
+  users: {
+    getAll: async (query?: UserQueryParams): Promise<UserListResponse> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getUserDirectory(query);
+    },
+    getById: async (id: string): Promise<UserAccountRecord> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.getUserById(id);
+    },
+    create: async (data: CreateUserPayload): Promise<UserAccountRecord> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.createUser(data);
+    },
+    update: async (id: string, data: UpdateUserPayload): Promise<UserAccountRecord> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.updateUserAccount(id, data);
     },
   },
 };

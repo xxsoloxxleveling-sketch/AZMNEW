@@ -9,7 +9,17 @@ const noopLimiter = (_req: Request, _res: Response, next: NextFunction) => next(
 /**
  * Rate limiter for authentication / login (Disabled).
  */
-export const loginRateLimiter = noopLimiter;
+export const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { message: 'Too many failed login attempts. Please wait 15 minutes and try again.' },
+  },
+});
 
 /**
  * Rate limiter for student and partner registrations (Disabled).

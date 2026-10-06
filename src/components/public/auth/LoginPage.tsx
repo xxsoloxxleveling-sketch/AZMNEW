@@ -33,6 +33,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
   // Validation & Error states
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
   const [serverError, setServerError] = useState<string | null>(null);
+  const [redirectNotice, setRedirectNotice] = useState<string | null>(() => {
+    try {
+      const notice = sessionStorage.getItem('auth_redirect_notice');
+      if (notice) {
+        sessionStorage.removeItem('auth_redirect_notice');
+        return notice;
+      }
+    } catch {}
+    return null;
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [forgotPasswordModal, setForgotPasswordModal] = useState(false);
 
@@ -259,6 +269,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onNavigate
                 )}
               </button>
             </form>
+
+            {/* Session Expired / Role Changed Notice Banner */}
+            {redirectNotice && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-800 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex-1 leading-relaxed">
+                  <p className="font-bold text-amber-900">Session Expired</p>
+                  <p className="text-amber-700 mt-0.5">{redirectNotice}</p>
+                </div>
+              </div>
+            )}
 
             {/* Inline Error Banner */}
             {serverError && (
