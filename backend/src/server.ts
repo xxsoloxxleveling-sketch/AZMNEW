@@ -5,12 +5,19 @@ import { prisma } from './lib/prisma';
 
 async function bootstrap() {
   // Synchronize new credentials and purge legacy accounts
+  const host = process.env.HOST || (env.NODE_ENV === 'production' ? '127.0.0.1' : undefined);
 
-  const server = app.listen(env.PORT, () => {
-    logger.info(`🚀 Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);
-    logger.info(`🩺 Health check available at http://localhost:${env.PORT}/api/health`);
-    logger.info(`🔐 Auth endpoints available at http://localhost:${env.PORT}/api/auth`);
-  });
+  const server = host
+    ? app.listen(env.PORT, host, () => {
+        logger.info(`🚀 Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);
+        logger.info(`🩺 Health check available at http://${host}:${env.PORT}/api/health`);
+        logger.info(`🔐 Auth endpoints available at http://${host}:${env.PORT}/api/auth`);
+      })
+    : app.listen(env.PORT, () => {
+        logger.info(`🚀 Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);
+        logger.info(`🩺 Health check available at http://localhost:${env.PORT}/api/health`);
+        logger.info(`🔐 Auth endpoints available at http://localhost:${env.PORT}/api/auth`);
+      });
 
   const handleShutdown = async () => {
     logger.info('Shutting down server gracefully...');
