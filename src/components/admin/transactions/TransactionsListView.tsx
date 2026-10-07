@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  IconSearch,
-  IconClose,
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronsUpDown,
-  IconRefresh,
-  IconAlertTriangle,
-  IconCheck,
-  IconLedger,
-  IconLoader,
-  IconPlus,
-} from '../../common/icons';
+  Search as IconSearch,
+  X as IconClose,
+  ChevronLeft as IconChevronLeft,
+  ChevronRight as IconChevronRight,
+  ChevronsUpDown as IconChevronsUpDown,
+  RefreshCw as IconRefresh,
+  AlertTriangle as IconAlertTriangle,
+  Check as IconCheck,
+  History as IconLedger,
+  Loader2 as IconLoader,
+  Plus as IconPlus,
+} from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { api } from '../../../services/api';
 import type {
@@ -336,7 +336,7 @@ export const TransactionsListView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Workspace Header Strip */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1">
         <div>
@@ -538,12 +538,12 @@ export const TransactionsListView: React.FC = () => {
       </div>
 
       {/* Main Roster Container */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
         {/* Operational Filter Toolbar */}
-        <div className="p-3.5 border-b border-slate-100 flex flex-col gap-2.5 bg-slate-50/50">
+        <div className="p-4 border-b border-slate-100 flex flex-col gap-2.5 bg-slate-50/50">
           <div className="flex flex-wrap items-center gap-2">
             {/* Search Input */}
-            <div className="relative min-w-[200px] flex-1 max-w-sm">
+            <div className="relative min-w-0 w-full sm:min-w-[200px] flex-1 max-w-sm">
               <IconSearch size={14} className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -688,13 +688,13 @@ export const TransactionsListView: React.FC = () => {
 
         {/* Desktop Table View (>= 768px) */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-600 font-semibold select-none">
                 {/* Date Header (Sortable) */}
                 <th
                   onClick={() => handleSort('transactionDate')}
-                  className="py-2.5 px-3 cursor-pointer hover:text-slate-900 transition min-w-[130px]"
+                  className="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition min-w-[130px]"
                   aria-sort={sortBy === 'transactionDate' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
                   <div className="flex items-center gap-1">
@@ -704,21 +704,21 @@ export const TransactionsListView: React.FC = () => {
                 </th>
 
                 {/* Reference & Description */}
-                <th className="py-2.5 px-3 min-w-[260px]">Description &amp; Reference</th>
+                <th className="py-3.5 px-4 min-w-[260px]">Description &amp; Reference</th>
 
                 {/* Type */}
-                <th className="py-2.5 px-3 min-w-[120px]">Type</th>
+                <th className="py-3.5 px-4 min-w-[120px]">Type</th>
 
                 {/* Source */}
-                <th className="py-2.5 px-3 min-w-[90px]">Source</th>
+                <th className="py-3.5 px-4 min-w-[90px]">Source</th>
 
                 {/* Payment Method */}
-                <th className="py-2.5 px-3 min-w-[110px]">Method</th>
+                <th className="py-3.5 px-4 min-w-[110px]">Method</th>
 
                 {/* Amount (Sortable, Numeric) */}
                 <th
                   onClick={() => handleSort('amount')}
-                  className="py-2.5 px-3 text-right cursor-pointer hover:text-slate-900 transition min-w-[130px]"
+                  className="py-3.5 px-4 text-right cursor-pointer hover:text-slate-900 transition min-w-[130px]"
                   aria-sort={sortBy === 'amount' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
                   <div className="flex items-center justify-end gap-1">
@@ -728,13 +728,13 @@ export const TransactionsListView: React.FC = () => {
                 </th>
 
                 {/* Status */}
-                <th className="py-2.5 px-3 min-w-[100px]">Status</th>
+                <th className="py-3.5 px-4 min-w-[100px]">Status</th>
 
                 {/* Operator */}
-                <th className="py-2.5 px-3 min-w-[130px]">Operator</th>
+                <th className="py-3.5 px-4 min-w-[130px]">Operator</th>
 
                 {/* Actions */}
-                <th className="py-2.5 px-3 text-right min-w-[100px]">Actions</th>
+                <th className="py-3.5 px-4 text-right min-w-[100px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -760,7 +760,7 @@ export const TransactionsListView: React.FC = () => {
                       className="hover:bg-slate-50/70 transition-colors h-[48px] cursor-pointer"
                     >
                       {/* Date & Time */}
-                      <td className="py-2 px-3">
+                      <td className="py-3.5 px-4">
                         <div className="leading-tight">
                           <span className="font-semibold text-slate-800 text-xs block">
                             {formatDate(tx.transactionDate)}
@@ -772,7 +772,7 @@ export const TransactionsListView: React.FC = () => {
                       </td>
 
                       {/* Description & Reference */}
-                      <td className="py-2 px-3">
+                      <td className="py-3.5 px-4">
                         <div className="min-w-0 max-w-md">
                           <span
                             className="font-medium text-slate-900 text-xs block leading-snug truncate"
@@ -813,7 +813,7 @@ export const TransactionsListView: React.FC = () => {
                       </td>
 
                       {/* Type Badge */}
-                      <td className="py-2 px-3">
+                      <td className="py-3.5 px-4">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${typeMeta.badgeClass}`}
                         >
@@ -822,21 +822,21 @@ export const TransactionsListView: React.FC = () => {
                       </td>
 
                       {/* Source */}
-                      <td className="py-2 px-3">
+                      <td className="py-3.5 px-4">
                         <span className="text-xs font-medium text-slate-700">
                           {formatSource(tx.source)}
                         </span>
                       </td>
 
                       {/* Payment Method */}
-                      <td className="py-2 px-3">
+                      <td className="py-3.5 px-4">
                         <span className="text-xs text-slate-700">
                           {formatPaymentMethod(tx.paymentMethod)}
                         </span>
                       </td>
 
                       {/* Amount (Directional & Numeric) */}
-                      <td className="py-2 px-3 text-right">
+                      <td className="py-3.5 px-4 text-right">
                         <span
                           className={`font-bold font-mono text-xs block ${
                             typeMeta.isIncome ? 'text-emerald-700' : 'text-rose-700'
@@ -847,7 +847,7 @@ export const TransactionsListView: React.FC = () => {
                       </td>
 
                       {/* Status */}
-                      <td className="py-2 px-3">
+                      <td className="py-3.5 px-4">
                         {isPosted ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             Posted
@@ -863,7 +863,7 @@ export const TransactionsListView: React.FC = () => {
                       </td>
 
                       {/* Operator Attribution */}
-                      <td className="py-2 px-3">
+                      <td className="py-3.5 px-4">
                         <span
                           className="text-xs text-slate-700 block truncate max-w-[120px]"
                           title={operatorName}
@@ -873,7 +873,7 @@ export const TransactionsListView: React.FC = () => {
                       </td>
 
                       {/* Actions: View Details */}
-                      <td className="py-2 px-3 text-right">
+                      <td className="py-3.5 px-4 text-right">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1035,7 +1035,7 @@ export const TransactionsListView: React.FC = () => {
         </div>
 
         {/* Server Pagination Bar */}
-        <div className="p-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 bg-slate-50/30">
+        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 bg-slate-50/30">
           <div className="flex items-center gap-2">
             <span>
               Showing{' '}

@@ -1,23 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  IconSearch,
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronsUpDown,
-  IconAlertTriangle,
-  IconRefresh,
-  IconZap,
-  IconClock,
-  IconLoader,
-  IconMessageSquare,
-  IconFileText,
-  IconMoreHorizontal,
-  IconPrintSlip,
-  IconDownloadSlip,
-  IconEditStudent,
-  IconDeleteCandidate,
-  IconApproveFee,
-} from '../../common/icons';
+  Search as IconSearch,
+  ChevronLeft as IconChevronLeft,
+  ChevronRight as IconChevronRight,
+  ChevronsUpDown as IconChevronsUpDown,
+  AlertTriangle as IconAlertTriangle,
+  RefreshCw as IconRefresh,
+  Zap as IconZap,
+  Clock as IconClock,
+  Loader2 as IconLoader,
+  MessageSquare as IconMessageSquare,
+  FileText as IconFileText,
+  MoreHorizontal as IconMoreHorizontal,
+  Printer as IconPrintSlip,
+  Download as IconDownloadSlip,
+  Pencil as IconEditStudent,
+  Trash2 as IconDeleteCandidate,
+  CheckCircle2 as IconApproveFee,
+} from 'lucide-react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
 import { AdminWalkInModal } from './AdminWalkInModal';
@@ -351,7 +351,7 @@ export const StudentsListView: React.FC = () => {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {errorMessage && (
         <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
@@ -369,12 +369,12 @@ export const StudentsListView: React.FC = () => {
       )}
 
       {/* Main Roster Card */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
         {/* Toolbar: Search, Filters, and Operations */}
-        <div className="p-3.5 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-50/50">
+        <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-50/50">
           {/* Search & Filters */}
           <div className="flex flex-wrap items-center gap-2 flex-1">
-            <div className="relative min-w-[200px] flex-1 max-w-sm">
+            <div className="relative min-w-0 w-full sm:min-w-[200px] flex-1 max-w-sm">
               <IconSearch size={16} className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -524,10 +524,10 @@ export const StudentsListView: React.FC = () => {
 
           {/* Desktop & Tablet Table View (hidden on narrow screens < 768px) */}
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
-                  <th className="py-2.5 px-3 w-10 text-center">
+                  <th className="py-3.5 px-4 w-10 text-center">
                     <input
                       type="checkbox"
                       checked={allCurrentSelected}
@@ -537,7 +537,7 @@ export const StudentsListView: React.FC = () => {
                   </th>
                   <th
                     onClick={() => handleSort('rollNumber')}
-                    className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-900"
+                    className="py-3.5 px-4 cursor-pointer select-none hover:text-slate-900"
                   >
                     <div className="flex items-center gap-1">
                       <span>Roll / App No</span>
@@ -546,7 +546,7 @@ export const StudentsListView: React.FC = () => {
                   </th>
                   <th
                     onClick={() => handleSort('fullName')}
-                    className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-900"
+                    className="py-3.5 px-4 cursor-pointer select-none hover:text-slate-900"
                   >
                     <div className="flex items-center gap-1">
                       <span>Student Identity</span>
@@ -555,17 +555,17 @@ export const StudentsListView: React.FC = () => {
                   </th>
                   <th
                     onClick={() => handleSort('currentClass')}
-                    className="py-2.5 px-3 cursor-pointer select-none hover:text-slate-900"
+                    className="py-3.5 px-4 cursor-pointer select-none hover:text-slate-900"
                   >
                     <div className="flex items-center gap-1">
                       <span>Class & Level</span>
                       <IconChevronsUpDown size={12} className="text-slate-400" />
                     </div>
                   </th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">Fee Status</th>
-                  <th className="py-2.5 px-3">Assigned Seating</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4">Fee Status</th>
+                  <th className="py-3.5 px-4">Assigned Seating</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -586,7 +586,7 @@ export const StudentsListView: React.FC = () => {
                         className="hover:bg-slate-50/70 transition-colors cursor-pointer h-[52px]"
                       >
                         {/* Checkbox */}
-                        <td onClick={(e) => e.stopPropagation()} className="py-2 px-3 text-center">
+                        <td onClick={(e) => e.stopPropagation()} className="py-3.5 px-4 text-center">
                           <input
                             type="checkbox"
                             checked={selectedStudentIds.includes(student.id)}
@@ -600,7 +600,7 @@ export const StudentsListView: React.FC = () => {
                         </td>
 
                         {/* Roll / App No */}
-                        <td className="py-2 px-3">
+                        <td className="py-3.5 px-4">
                           <div className="font-mono tabular-nums leading-tight">
                             {isOfficial ? (
                               <span className="font-bold text-[#185b9d] text-xs block leading-tight">{student.rollNumber}</span>
@@ -619,10 +619,10 @@ export const StudentsListView: React.FC = () => {
                         </td>
 
                         {/* Student Identity: Real Photo Thumbnail (32-36px) + Name + Father Name */}
-                        <td className="py-2 px-3">
+                        <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
                             <div
-                              className="w-8 h-8 rounded-md bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
+                              className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
                               aria-hidden="true"
                             >
                               {thumbnailUrls[student.id] ? (
@@ -643,7 +643,7 @@ export const StudentsListView: React.FC = () => {
                         </td>
 
                         {/* Class & Level */}
-                        <td className="py-2 px-3">
+                        <td className="py-3.5 px-4">
                           <div className="leading-tight">
                             <span className="font-semibold text-slate-800 text-xs block leading-tight">{student.currentClass}</span>
                             <span className="text-[10px] text-slate-400 block truncate max-w-[140px] leading-tight mt-0.5">
@@ -653,12 +653,12 @@ export const StudentsListView: React.FC = () => {
                         </td>
 
                         {/* Status */}
-                        <td className="py-2 px-3">
+                        <td className="py-3.5 px-4">
                           <StatusBadge status={student.status} size="sm" />
                         </td>
 
                         {/* Fee Status: Semantic Badge */}
-                        <td className="py-2 px-3">
+                        <td className="py-3.5 px-4">
                           <span
                             className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold leading-none ${
                               isPaid
@@ -672,7 +672,7 @@ export const StudentsListView: React.FC = () => {
                         </td>
 
                         {/* Assigned Seating */}
-                        <td className="py-2 px-3">
+                        <td className="py-3.5 px-4">
                           {seating !== 'Unallocated' ? (
                             <span className="font-mono text-xs font-medium text-slate-800 leading-tight block">{seating}</span>
                           ) : (
@@ -681,7 +681,7 @@ export const StudentsListView: React.FC = () => {
                         </td>
 
                         {/* Consolidated Row Actions */}
-                        <td className="py-2 px-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5 leading-none">
                             {/* Visible View Profile Button */}
                             <button
@@ -771,7 +771,7 @@ export const StudentsListView: React.FC = () => {
                       </div>
 
                       <div
-                        className="w-9 h-9 rounded-md bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
+                        className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
                         aria-hidden="true"
                       >
                         {thumbnailUrls[student.id] ? (
@@ -878,7 +878,7 @@ export const StudentsListView: React.FC = () => {
         </div>
 
         {/* Unified Pagination Footer */}
-        <div className="p-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 bg-slate-50/50">
+        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 bg-slate-50/50">
           <div>
             Showing{' '}
             <span className="font-semibold text-slate-700">
@@ -1011,7 +1011,7 @@ export const StudentsListView: React.FC = () => {
       {showBatchRollModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
           <div className="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl border border-slate-100 space-y-5">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
               <div className="w-10 h-10 bg-blue-50 text-[#185b9d] rounded-xl flex items-center justify-center border border-blue-100">
                 <IconZap size={20} />
               </div>

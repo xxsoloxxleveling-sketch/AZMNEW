@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  IconSearch,
-  IconClose,
-  IconChevronLeft,
-  IconChevronRight,
-  IconRefresh,
-  IconAlertTriangle,
-  IconStaff,
-  IconLoader,
-  IconPlus,
-  IconCheck,
-} from '../../common/icons';
+  Search as IconSearch,
+  X as IconClose,
+  ChevronLeft as IconChevronLeft,
+  ChevronRight as IconChevronRight,
+  RefreshCw as IconRefresh,
+  AlertTriangle as IconAlertTriangle,
+  Users as IconStaff,
+  Loader2 as IconLoader,
+  Plus as IconPlus,
+  Check as IconCheck,
+} from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { api } from '../../../services/api';
 import type {
@@ -190,7 +190,7 @@ export const StaffListView: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Workspace Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-slate-200/80">
         <div>
@@ -264,12 +264,12 @@ export const StaffListView: React.FC = () => {
       )}
 
       {/* Main Directory Container */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
         {/* Operational Filter Toolbar */}
-        <div className="p-3 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5 bg-slate-50/50">
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5 bg-slate-50/50">
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto flex-1">
             {/* Search Input */}
-            <div className="relative min-w-[220px] flex-1 max-w-sm">
+            <div className="relative min-w-0 w-full sm:min-w-[220px] flex-1 max-w-sm">
               <IconSearch size={14} className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -341,15 +341,15 @@ export const StaffListView: React.FC = () => {
 
         {/* Desktop Table View (>= 768px) */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 border-collapse">
+          <table className="w-full text-left text-sm text-slate-600 border-collapse">
             <thead className="bg-slate-50/80 text-slate-700 uppercase tracking-wider text-[11px] font-semibold border-b border-slate-200">
               <tr>
-                <th className="py-2.5 px-3 min-w-[220px]">Personnel</th>
-                <th className="py-2.5 px-3 min-w-[160px]">CNIC</th>
-                <th className="py-2.5 px-3 min-w-[140px]">Contact</th>
-                <th className="py-2.5 px-3 min-w-[120px]">Joined</th>
-                <th className="py-2.5 px-3 min-w-[100px]">Status</th>
-                <th className="py-2.5 px-3 text-right min-w-[110px]">Actions</th>
+                <th className="py-3.5 px-4 min-w-[220px]">Personnel</th>
+                <th className="py-3.5 px-4 min-w-[160px]">CNIC</th>
+                <th className="py-3.5 px-4 min-w-[140px]">Contact</th>
+                <th className="py-3.5 px-4 min-w-[120px]">Joined</th>
+                <th className="py-3.5 px-4 min-w-[100px]">Status</th>
+                <th className="py-3.5 px-4 text-right min-w-[110px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -370,7 +370,7 @@ export const StaffListView: React.FC = () => {
                     className="hover:bg-slate-50/70 transition-colors h-[48px] cursor-pointer"
                   >
                     {/* Personnel Name & Role */}
-                    <td className="py-2 px-3">
+                    <td className="py-3.5 px-4">
                       <div className="min-w-0">
                         <span className="font-semibold text-slate-900 block truncate">
                           {member.fullName}
@@ -382,27 +382,27 @@ export const StaffListView: React.FC = () => {
                     </td>
 
                     {/* Masked CNIC */}
-                    <td className="py-2 px-3 font-mono text-slate-700 text-xs">
+                    <td className="py-3.5 px-4 font-mono text-slate-700 text-xs">
                       {member.cnic || '—'}
                     </td>
 
                     {/* Phone Contact */}
-                    <td className="py-2 px-3 text-slate-600">
+                    <td className="py-3.5 px-4 text-slate-600">
                       {member.phone || '—'}
                     </td>
 
                     {/* Join Date */}
-                    <td className="py-2 px-3 text-slate-600">
+                    <td className="py-3.5 px-4 text-slate-600">
                       {formatDate(member.joinDate)}
                     </td>
 
                     {/* Status */}
-                    <td className="py-2 px-3">
+                    <td className="py-3.5 px-4">
                       <StaffStatusBadge status={member.status} />
                     </td>
 
                     {/* Actions: View Details */}
-                    <td className="py-2 px-3 text-right">
+                    <td className="py-3.5 px-4 text-right">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -545,7 +545,7 @@ export const StaffListView: React.FC = () => {
         </div>
 
         {/* Server Pagination Bar */}
-        <div className="p-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 bg-slate-50/30">
+        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 bg-slate-50/30">
           <div className="flex items-center gap-2">
             <span>
               Showing{' '}

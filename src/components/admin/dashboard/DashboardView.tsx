@@ -7,6 +7,8 @@ import {
   IconLedger,
   IconLoader,
 } from '../../common/icons';
+import { GraduationCap, CalendarCheck, Receipt, Users, QrCode, UserPlus, RefreshCw, School, Banknote, ArrowDownRight, ArrowUpRight, AlertTriangle, Clock } from 'lucide-react';
+import { StatCard } from '../shared/StatCard';
 import { StatusBadge } from '../shared/StatusBadge';
 import { mockApi } from '../../../lib/mockApi';
 import { AdminTab } from '../layout/AdminSidebar';
@@ -25,7 +27,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenMarkAttendance,
   onOpenGenerateFee,
 }) => {
-  const { isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading, role } = useAuth();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -152,164 +154,76 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const hasRegisteredStudents = (stats.totalStudents ?? 0) > 0;
 
   return (
-    <div className="space-y-4">
-      {/* 1. Core Administrative KPI Summary Surface (Unified Restrained Container) */}
-      <div className="bg-white border border-slate-200/90 rounded-xl shadow-2xs overflow-hidden">
-        {/* Subtle Operational Header Bar */}
-        <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-700">Administrative Overview</span>
-            <span className="text-slate-300">|</span>
-            <span className="text-[11px] font-medium text-slate-500">Key Performance Indicators</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => loadDashboard(false)}
-            disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 rounded border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer disabled:opacity-50"
-            title="Refresh metrics from central database"
-          >
-            <IconRefresh size={13} className={`text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>{isRefreshing ? 'Syncing...' : 'Sync Data'}</span>
-          </button>
+    <div className="space-y-6">
+      {/* Top Banner & Quick Action Launchpad */}
+      <div className="bg-[#185b9d] rounded-xl p-6 sm:p-8 text-white shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+        <div className="space-y-2 z-10">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
+            Welcome to AZMAIO Administration Desk
+          </h2>
+          <p className="text-xs text-blue-100/90 max-w-xl leading-relaxed">
+            Student scholarship registry, partner institutions, staff records, and financial ledger.
+          </p>
         </div>
 
-        {/* Metric Cells with Restrained Dividers (Option A: 2-col on mobile with 5th spanning) */}
-        <div className="grid grid-cols-2 lg:grid-cols-5">
-          {/* Cell 1: Registered Students */}
+        {/* Action Buttons in Hero */}
+        <div className="flex flex-wrap items-center gap-2.5 z-10">
           <button
-            type="button"
-            onClick={() => onNavigate('students')}
-            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 border-r border-slate-100 hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
-            aria-label={`Navigate to Student Management. Total students: ${stats.totalStudents}`}
+            onClick={() => loadDashboard(true)}
+            disabled={isRefreshing}
+            className="px-3.5 py-2.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold backdrop-blur-xs border border-white/20 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Refresh metrics from central database"
           >
-            <div>
-              <span className="text-xs font-medium text-slate-500 block">Registered Students</span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
-                {stats.totalStudents.toLocaleString()}
-              </span>
-            </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
-              <span className="truncate">
-                {hasRegisteredStudents ? 'Active Candidates' : 'No active candidates'}
-              </span>
-              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
-                View →
-              </span>
-            </div>
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Syncing...' : 'Sync Live'}</span>
           </button>
-
-          {/* Cell 2: Partner Institutions */}
-          <button
-            type="button"
-            onClick={() => onNavigate('partners')}
-            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100 hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
-            aria-label={`Navigate to Partner Institutions. Total: ${stats.totalPartners ?? 0}`}
+          {onOpenMarkAttendance && (<button
+            onClick={onOpenMarkAttendance}
+            className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-900/20 transition flex items-center gap-2"
           >
-            <div>
-              <span className="text-xs font-medium text-slate-500 block">Partner Institutions</span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
-                {(stats.totalPartners ?? 0).toLocaleString()}
-              </span>
-            </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
-              <span className="truncate">
-                {!hasPartnerInstitutions
-                  ? 'No partner institutions'
-                  : stats.pendingPartners > 0
-                  ? `${stats.pendingPartners} Pending Review`
-                  : 'Active Accredited'}
-              </span>
-              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
-                View →
-              </span>
-            </div>
-          </button>
-
-          {/* Cell 3: Today's Attendance */}
-          <div
-            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 border-r border-slate-100"
+            <QrCode className="w-4 h-4" />
+            <span>Scan QR Code</span>
+          </button>)}
+          {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (<button
+            onClick={onOpenAddStudent}
+            className="px-4 py-2.5 bg-white text-[#185b9d] hover:bg-blue-50 rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2"
           >
-            <div>
-              <span className="text-xs font-medium text-slate-500 block">Today's Attendance</span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
-                {hasTodaySession ? `${stats.attendancePercentage}%` : '—'}
-              </span>
-            </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
-              <span className="truncate">
-                {hasTodaySession ? `${todayMarkedCount} Marked Present` : 'No Session Conducted'}
-              </span>
-              <span className="text-[10px] font-medium text-slate-400">
-                Daily Metric
-              </span>
-            </div>
-          </div>
-
-          {/* Cell 4: Fee Collection Rate */}
-          <div
-            className="text-left p-3.5 sm:p-4 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-100"
-          >
-            <div>
-              <span className="text-xs font-medium text-slate-500 block">Fee Collection Rate</span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
-                {hasBilledFees ? `${stats.feeCollectionPercentage ?? 0}%` : '—'}
-              </span>
-            </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
-              <span className="truncate">
-                {hasBilledFees
-                  ? `PKR ${(stats.totalCollected ?? 0).toLocaleString()} Collected`
-                  : 'No fees billed this cycle'}
-              </span>
-              <span className="text-[10px] font-medium text-slate-400">
-                Cycle Metric
-              </span>
-            </div>
-          </div>
-
-          {/* Cell 5: Active Faculty & Staff (Spans 2 cols on mobile) */}
-          <button
-            type="button"
-            onClick={() => onNavigate('staff')}
-            className="col-span-2 lg:col-span-1 text-left p-3.5 sm:p-4 flex flex-col justify-between hover:bg-slate-50/60 focus-visible:bg-slate-50/80 transition cursor-pointer group"
-            aria-label={`Navigate to Staff Directory. Total: ${stats.activeStaffCount ?? 0}`}
-          >
-            <div>
-              <span className="text-xs font-medium text-slate-500 block">Active Faculty & Staff</span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums block mt-1">
-                {(stats.activeStaffCount ?? 0).toLocaleString()}
-              </span>
-            </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
-              <span className="truncate">
-                {hasActiveStaff ? 'Invigilators & Officers' : 'No active staff recorded'}
-              </span>
-              <span className="text-[10px] font-medium text-slate-400 group-hover:text-[#185b9d] transition-colors">
-                View →
-              </span>
-            </div>
-          </button>
+            <UserPlus className="w-4 h-4" />
+            <span>Add Student</span>
+          </button>)}
         </div>
       </div>
 
-      {/* 3. Middle Operational Tier: Attendance Matrix + Financial Ledger */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Attendance Matrix (2 Cols) */}
-        <div className="lg:col-span-2 bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      {/* Core KPI cards, using current production data only. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 [&>div]:rounded-xl [&>button>div]:rounded-xl [&>div]:duration-150 [&>button>div]:duration-150">
+        <button type="button" disabled={role === 'ACCOUNTANT'} onClick={() => onNavigate('students')} className="text-left min-w-0 rounded-xl focus-visible:outline-2 focus-visible:outline-[#185b9d]">
+          <StatCard title="Registered Students" value={stats.totalStudents ?? 0} icon={GraduationCap} subtitle={hasRegisteredStudents ? 'Active Candidates' : 'No active candidates'} />
+        </button>
+        <button type="button" disabled={role === 'ACCOUNTANT'} onClick={() => onNavigate('partners')} className="text-left min-w-0 rounded-xl focus-visible:outline-2 focus-visible:outline-[#185b9d]">
+          <StatCard title="Partner Institutions" value={stats.totalPartners ?? 0} icon={School} subtitle={`${stats.pendingPartners ?? 0} Pending Verification`} />
+        </button>
+        <StatCard title="Today's Attendance" value={hasTodaySession ? `${stats.attendancePercentage}%` : '—'} icon={CalendarCheck} color="emerald" subtitle={hasTodaySession ? `${todayMarkedCount} Marked Present` : 'No Session Conducted'} />
+        <StatCard title="Fee Collection Rate" value={hasBilledFees ? `${stats.feeCollectionPercentage ?? 0}%` : '—'} icon={Receipt} subtitle={hasBilledFees ? `PKR ${(stats.totalCollected ?? 0).toLocaleString()} Collected` : 'No fees billed this cycle'} />
+        <button type="button" onClick={() => onNavigate('staff')} className="text-left min-w-0 rounded-xl focus-visible:outline-2 focus-visible:outline-[#185b9d]">
+          <StatCard title="Active Staff & Faculty" value={stats.activeStaffCount ?? 0} icon={Users} subtitle={hasActiveStaff ? 'Teachers & Officers' : 'No active staff recorded'} />
+        </button>
+      </div>
+
+      {/* 2. Middle Row: Attendance Trend + Financial Cash Flow */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Attendance Trends Bar Chart */}
+        <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Weekly Attendance Matrix</h3>
-              <p className="text-xs text-slate-500">Daily verification status across all examination classes</p>
+              <h3 className="text-sm font-bold text-slate-900">Attendance Trends (Weekly)</h3>
+              <p className="text-xs text-slate-400">Daily presence percentage across all active classes</p>
             </div>
-            <span className="text-[11px] font-medium text-slate-400 bg-slate-50 border border-slate-200/60 px-2.5 py-1 rounded-md">
-              7-Day Activity
-            </span>
+
           </div>
 
           {/* Differentiated Weekly Visualization (Decision #2) */}
           <div className="py-2">
-            <div className="h-28 flex items-end justify-between gap-3 pt-2">
+            <div className="h-44 flex items-end justify-between gap-3 pt-2">
               {attendanceTrends.map((bar: any, idx: number) => {
                 const isToday = Boolean(bar.isToday);
                 const hasSession = Boolean(bar.hasSession);
@@ -320,7 +234,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <span className="text-[10px] font-semibold text-slate-600 tabular-nums">
                       {hasSession && rate !== null ? `${rate}%` : ''}
                     </span>
-                    <div className="w-full max-w-[42px] h-20 rounded-md overflow-hidden flex items-end justify-center">
+                    <div className="w-full max-w-[42px] h-36 rounded-md overflow-hidden flex items-end justify-center">
                       {hasSession && rate !== null ? (
                         <div
                           style={{ height: `${Math.max(rate, 6)}%` }}
@@ -375,211 +289,184 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Monthly Financial Ledger Summary (1 Col - No Nested Cards) */}
-        <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+        {/* Financial Flow Card */}
+        <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Financial Ledger Summary</h3>
-              <p className="text-xs text-slate-500">Current month collections & payroll</p>
+              <h3 className="text-sm font-bold text-slate-900">Financial Cash Flow</h3>
+              <p className="text-xs text-slate-400">Current Month Ledger Summary</p>
             </div>
-            <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200/80 text-slate-600 flex items-center justify-center">
-              <IconLedger size={16} className="text-[#185b9d]" />
-            </div>
-          </div>
-
-          {/* Clean Ledger Rows (No Card-in-Card Nesting) */}
-          <div className="space-y-2.5 py-1">
-            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50/70 border border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
-                <span className="text-xs font-medium text-slate-700">Fee Income Collected</span>
-              </div>
-              <span className="text-sm font-bold text-slate-900 tabular-nums">
-                PKR {(stats.feeIncome ?? 0).toLocaleString()}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50/70 border border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-rose-600 shrink-0" />
-                <span className="text-xs font-medium text-slate-700">Salary Disbursements</span>
-              </div>
-              <span className="text-sm font-bold text-slate-900 tabular-nums">
-                PKR {(stats.salaryExpenses ?? 0).toLocaleString()}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-100/80 border border-slate-200">
-              <span className="text-xs font-semibold text-slate-800">Net Operating Balance</span>
-              <span
-                className={`text-sm font-extrabold tabular-nums ${
-                  (stats.netCashFlow ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'
-                }`}
-              >
-                PKR {(stats.netCashFlow ?? 0).toLocaleString()}
-              </span>
-            </div>
-          </div>
-
-          {/* Action Row */}
-          <div className="pt-2 border-t border-slate-100">
-            <button
-              onClick={() => onNavigate('transactions')}
-              className="w-full py-2 text-center text-xs font-semibold text-[#185b9d] hover:text-[#13497d] hover:bg-slate-50 border border-slate-200 rounded-lg transition cursor-pointer"
-            >
-              View Financial Ledger →
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Bottom Operational Tier: Defaulters Table, Demographics, Activity Log */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Pending Fee Defaulters Queue (Compact Table - Decision #3) */}
-        <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-            <div className="flex items-center gap-1.5">
-              <IconAlertTriangle size={16} className="text-amber-600" />
-              <h3 className="text-sm font-bold text-slate-900">Pending Fee Defaulters</h3>
-            </div>
-            <span className="text-[11px] font-medium text-slate-400 bg-slate-50 border border-slate-200/60 px-2.5 py-1 rounded-md">
-              Collections Queue
+            <span className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600">
+              <Banknote className="w-4 h-4 text-[#185b9d]" />
             </span>
           </div>
 
-          <div className="overflow-x-auto min-h-[160px]">
-            {feeDefaulters.length > 0 ? (
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">
-                    <th className="py-1.5 px-2">Student</th>
-                    <th className="py-1.5 px-2">Class</th>
-                    <th className="py-1.5 px-2 text-right">Due</th>
-                    <th className="py-1.5 px-2 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y border-slate-100">
-                  {feeDefaulters.map((item: any) => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-2 px-2">
-                        <span className="font-semibold text-slate-900 block truncate max-w-[110px]">
-                          {item.studentName}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-mono block">
-                          {item.rollNumber}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
-                        {item.currentClass}
-                      </td>
-                      <td className="py-2 px-2 text-right font-bold text-rose-700 tabular-nums whitespace-nowrap">
-                        PKR {(item.amountDue ?? 0).toLocaleString()}
-                      </td>
-                      <td className="py-2 px-2 text-right whitespace-nowrap">
-                        <span className="text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
-                          Unpaid
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="py-8 text-center text-xs text-slate-500 space-y-1">
-                <IconFileText size={20} className="text-slate-300 mx-auto" />
-                <p className="font-medium text-slate-600">No overdue fee accounts</p>
+          <div className="space-y-3.5">
+            <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-100 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-semibold text-emerald-700 block">Fee Income Collected</span>
+                <span className="text-lg font-bold text-emerald-950">PKR {(stats.feeIncome ?? 0).toLocaleString()}</span>
               </div>
-            )}
-          </div>
-        </div>
+              <div className="p-2 rounded-lg bg-emerald-500 text-white">
+                <ArrowDownRight className="w-4 h-4" />
+              </div>
+            </div>
 
+            <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-100 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-semibold text-rose-700 block">Salary Disbursements</span>
+                <span className="text-lg font-bold text-rose-950">PKR {(stats.salaryExpenses ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="p-2 rounded-lg bg-rose-500 text-white">
+                <ArrowUpRight className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-semibold text-slate-500 block">Net Monthly Balance</span>
+                <span className={`text-base font-extrabold ${(stats.netCashFlow ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  PKR {(stats.netCashFlow ?? 0).toLocaleString()}
+                </span>
+              </div>
+              <button
+                onClick={() => onNavigate('transactions')}
+                className="text-xs font-bold text-[#185b9d] hover:underline"
+              >
+                Ledger →
+              </button>
+            </div>
+          </div>
+
+          {onOpenGenerateFee && (<button
+            onClick={onOpenGenerateFee}
+            className="w-full py-2.5 text-xs font-bold text-center bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-xs transition"
+          >
+            Generate Next Month Challans
+          </button>)}
+        </div>
+      </div>
+
+      {/* 3. Bottom Row: Demographics + Fee Defaulters + Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Student Demographics Breakdown */}
-        <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+        <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h3 className="text-sm font-bold text-slate-900">Student Demographics</h3>
-            <button
-              onClick={() => onNavigate('students')}
-              className="text-xs font-semibold text-[#185b9d] hover:underline cursor-pointer"
-            >
+            <button disabled={role === 'ACCOUNTANT'} onClick={() => onNavigate('students')} className="text-xs font-semibold text-[#185b9d] hover:underline">
               All Students
             </button>
           </div>
 
           {/* Gender Split */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-              <span>Gender Split</span>
-              <span className="font-semibold text-slate-800 tabular-nums">
-                M: {demographics?.byGender?.MALE || 0} ({malePct}%) | F:{' '}
-                {demographics?.byGender?.FEMALE || 0} ({femalePct}%)
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-medium text-slate-600">
+              <span>Gender Distribution</span>
+              <span className="font-bold text-slate-800">
+                Male: {demographics?.byGender?.MALE || 0} | Female: {demographics?.byGender?.FEMALE || 0}
               </span>
             </div>
-            <div className="h-2 rounded-full bg-slate-100 flex overflow-hidden">
-              <div style={{ width: `${malePct}%` }} className="bg-[#185b9d]" />
-              <div style={{ width: `${femalePct}%` }} className="bg-purple-500" />
+            <div className="h-3 rounded-full bg-slate-100 flex overflow-hidden">
+              <div
+                style={{
+                  width: `${
+                    ((demographics?.byGender?.MALE || 0) /
+                      Math.max((demographics?.byGender?.MALE || 0) + (demographics?.byGender?.FEMALE || 0), 1)) *
+                    100
+                  }%`,
+                }}
+                className="bg-[#185b9d]"
+              />
+              <div
+                style={{
+                  width: `${
+                    ((demographics?.byGender?.FEMALE || 0) /
+                      Math.max((demographics?.byGender?.MALE || 0) + (demographics?.byGender?.FEMALE || 0), 1)) *
+                    100
+                  }%`,
+                }}
+                className="bg-purple-500"
+              />
             </div>
           </div>
 
-          {/* Enrollment by Class Level */}
-          <div className="pt-2 border-t border-slate-100 space-y-1.5">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-              Enrollment by Class
-            </span>
-            <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-              {Object.keys(demographics?.byClassLevel || {}).length > 0 ? (
-                Object.entries(demographics.byClassLevel).map(([className, count]: any, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between py-1 px-2 rounded-md bg-slate-50 text-xs"
-                  >
-                    <span className="font-medium text-slate-700">{className}</span>
-                    <span className="font-bold text-slate-900 tabular-nums">
-                      {count} {count === 1 ? 'student' : 'students'}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-slate-400 py-3 text-center">
-                  No class enrollment records yet.
-                </p>
-              )}
+          {/* Class Breakdown List */}
+          <div className="space-y-2 pt-2">
+            <span className="text-xs font-semibold text-slate-500 block">Enrollment by Class Level</span>
+            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+              {Object.keys(demographics?.byClassLevel || {}).length === 0 && <p className="text-xs text-slate-500 py-3">No class enrollment records yet.</p>}
+              {Object.entries(demographics?.byClassLevel || {}).map(([className, count]: any, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs"
+                >
+                  <span className="font-medium text-slate-700">{className}</span>
+                  <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                    {count} {count === 1 ? 'student' : 'students'}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* System Activity & Audit Trail */}
-        <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-900">Recent Activity Log</h3>
-            <button
-              onClick={() => onNavigate('transactions')}
-              className="text-xs font-semibold text-[#185b9d] hover:underline cursor-pointer"
-            >
-              View Audit Log
-            </button>
+        {/* Fee Defaulters Alert Widget */}
+        <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-bold text-slate-900">Pending Fee Defaulters</h3>
+            </div>
+
           </div>
 
-          <div className="min-h-[140px]">
-            {recentActivity.length > 0 ? (
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 divide-y divide-slate-100">
-                {recentActivity.map((act: any) => (
-                  <div key={act.id} className="pt-2 first:pt-0 flex items-start gap-2 text-xs">
-                    <span className="text-[10px] font-mono text-slate-400 shrink-0 w-10 mt-0.5">
-                      {act.time}
-                    </span>
-                    <p className="text-slate-700 font-normal leading-snug flex-1">
-                      {act.text}
+          <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+            {feeDefaulters.length > 0 ? (
+              feeDefaulters.map((item: any) => (
+                <div
+                  key={item.id}
+                  className="p-3 rounded-xl bg-slate-50/70 border border-slate-200/80 flex items-center justify-between gap-3 text-xs"
+                >
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-900 truncate">{item.studentName}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {item.rollNumber} • {item.currentClass}
                     </p>
                   </div>
-                ))}
-              </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-bold text-rose-600">PKR {(item.amountDue ?? 0).toLocaleString()}</p>
+                    <StatusBadge status={item.status} size="sm" />
+                  </div>
+                </div>
+              ))
             ) : (
-              <div className="py-8 text-center text-xs text-slate-500 space-y-1">
-                <IconFileText size={20} className="text-slate-300 mx-auto" />
-                <p className="font-medium text-slate-600">No recent audit events</p>
-                <p className="text-[11px] text-slate-400">Administrative activity will appear here as operations occur.</p>
-              </div>
+              <p className="text-xs text-slate-400 text-center py-8">No overdue fee challans.</p>
             )}
+          </div>
+        </div>
+
+        {/* Recent Activity Feed */}
+        <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-slate-400" />
+              <h3 className="text-sm font-bold text-slate-900">Recent Activity Feed</h3>
+            </div>
+          </div>
+
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+            {recentActivity.length === 0 && <p className="text-xs text-slate-500 py-8 text-center">No recent audit events.</p>}
+            {recentActivity.map((act: any) => (
+              <div key={act.id} className="flex items-start gap-3 text-xs">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#185b9d] flex items-center justify-center shrink-0 mt-0.5 border border-blue-100">
+                  <Clock className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-slate-700 font-medium leading-relaxed">{act.text}</p>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">{act.time}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

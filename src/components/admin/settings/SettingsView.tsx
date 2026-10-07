@@ -35,7 +35,7 @@ export const SettingsView: React.FC = () => {
     <div className="space-y-6">
       {/* Settings Navigation Bar */}
       <div
-        className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-white border border-slate-200/80 shadow-xs max-w-4xl"
+        className="flex flex-wrap items-center gap-2 p-1.5 rounded-xl bg-white border border-slate-200/80 shadow-xs max-w-4xl"
         role="tablist"
         aria-label="Settings navigation"
       >
@@ -44,13 +44,13 @@ export const SettingsView: React.FC = () => {
           role="tab"
           aria-selected={resolvedTab === 'my-account'}
           onClick={() => setActiveTab('my-account')}
-          className={`flex-1 min-w-[130px] py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-[130px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
             resolvedTab === 'my-account'
               ? 'bg-[#185b9d] text-white shadow-xs'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <User className="w-3.5 h-3.5" />
+          <User className="w-4 h-4" />
           <span>My Account</span>
         </button>
 
@@ -60,13 +60,13 @@ export const SettingsView: React.FC = () => {
             role="tab"
             aria-selected={resolvedTab === 'users'}
             onClick={() => setActiveTab('users')}
-            className={`flex-1 min-w-[130px] py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[130px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
               resolvedTab === 'users'
                 ? 'bg-[#185b9d] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
+            <Users className="w-4 h-4" />
             <span>User Accounts</span>
           </button>
         )}
@@ -77,13 +77,13 @@ export const SettingsView: React.FC = () => {
             role="tab"
             aria-selected={resolvedTab === 'schedule'}
             onClick={() => setActiveTab('schedule')}
-            className={`flex-1 min-w-[140px] py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
               resolvedTab === 'schedule'
                 ? 'bg-[#185b9d] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            <Calendar className="w-3.5 h-3.5" />
+            <Calendar className="w-4 h-4" />
             <span>Roll No. Schedule</span>
           </button>
         )}
@@ -94,13 +94,13 @@ export const SettingsView: React.FC = () => {
             role="tab"
             aria-selected={resolvedTab === 'centers'}
             onClick={() => setActiveTab('centers')}
-            className={`flex-1 min-w-[130px] py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[130px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
               resolvedTab === 'centers'
                 ? 'bg-[#185b9d] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            <MapPin className="w-3.5 h-3.5" />
+            <MapPin className="w-4 h-4" />
             <span>Test Centers</span>
           </button>
         )}
@@ -111,13 +111,13 @@ export const SettingsView: React.FC = () => {
             role="tab"
             aria-selected={resolvedTab === 'announcements'}
             onClick={() => setActiveTab('announcements')}
-            className={`flex-1 min-w-[130px] py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[130px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
               resolvedTab === 'announcements'
                 ? 'bg-[#185b9d] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            <BellRing className="w-3.5 h-3.5" />
+            <BellRing className="w-4 h-4" />
             <span>Announcements</span>
           </button>
         )}

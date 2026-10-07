@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  IconSearch,
-  IconClose,
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronsUpDown,
-  IconMoreHorizontal,
-  IconRefresh,
-  IconAlertTriangle,
-  IconLoader,
-  IconMessageSquare,
-  IconDownloadSlip,
-  IconCheck,
-  IconPartners,
-  IconPlus,
-  IconEditStudent,
-} from '../../common/icons';
+  Search as IconSearch,
+  X as IconClose,
+  ChevronLeft as IconChevronLeft,
+  ChevronRight as IconChevronRight,
+  ChevronsUpDown as IconChevronsUpDown,
+  MoreHorizontal as IconMoreHorizontal,
+  RefreshCw as IconRefresh,
+  AlertTriangle as IconAlertTriangle,
+  Loader2 as IconLoader,
+  MessageSquare as IconMessageSquare,
+  Download as IconDownloadSlip,
+  Check as IconCheck,
+  School as IconPartners,
+  Plus as IconPlus,
+  Pencil as IconEditStudent,
+} from 'lucide-react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { MockPartner, PartnerPagination } from '../../../lib/mockApi';
 import { api } from '../../../services/api';
@@ -303,7 +303,7 @@ export const AdminPartnersListView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Error Banner */}
       {errorMessage && (
         <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between gap-4">
@@ -358,13 +358,13 @@ export const AdminPartnersListView: React.FC = () => {
       )}
 
       {/* Main Roster Container */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
         {/* Unified Operational Toolbar */}
-        <div className="p-3.5 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-50/50">
+        <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-50/50">
           {/* Search & Filters */}
           <div className="flex flex-wrap items-center gap-2 flex-1">
             {/* Search Input */}
-            <div className="relative min-w-[220px] flex-1 max-w-sm">
+            <div className="relative min-w-0 w-full sm:min-w-[220px] flex-1 max-w-sm">
               <IconSearch size={15} className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -489,33 +489,33 @@ export const AdminPartnersListView: React.FC = () => {
 
           {/* Desktop & Tablet Table (>= 768px) */}
           <div className="hidden md:block overflow-x-auto min-h-[280px] pb-28">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold text-slate-600 uppercase tracking-wider select-none">
                   <th
                     onClick={() => handleSort('institutionName')}
-                    className="py-2.5 px-3 cursor-pointer hover:text-slate-900 transition"
+                    className="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition"
                   >
                     <div className="flex items-center gap-1">
                       <span>Institution & Code</span>
                       <IconChevronsUpDown size={12} className="text-slate-400" />
                     </div>
                   </th>
-                  <th className="py-2.5 px-3">Category & Campus</th>
+                  <th className="py-3.5 px-4">Category & Campus</th>
                   <th
                     onClick={() => handleSort('district')}
-                    className="py-2.5 px-3 cursor-pointer hover:text-slate-900 transition"
+                    className="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition"
                   >
                     <div className="flex items-center gap-1">
                       <span>Location</span>
                       <IconChevronsUpDown size={12} className="text-slate-400" />
                     </div>
                   </th>
-                  <th className="py-2.5 px-3 hidden lg:table-cell">Focal Contact</th>
-                  <th className="py-2.5 px-3 hidden min-[1360px]:table-cell">Academic Scope</th>
+                  <th className="py-3.5 px-4 hidden lg:table-cell">Focal Contact</th>
+                  <th className="py-3.5 px-4 hidden min-[1360px]:table-cell">Academic Scope</th>
                   <th
                     onClick={() => handleSort('status')}
-                    className="py-2.5 px-3 cursor-pointer hover:text-slate-900 transition"
+                    className="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition"
                   >
                     <div className="flex items-center gap-1">
                       <span>Status</span>
@@ -524,14 +524,14 @@ export const AdminPartnersListView: React.FC = () => {
                   </th>
                   <th
                     onClick={() => handleSort('createdAt')}
-                    className="py-2.5 px-3 cursor-pointer hover:text-slate-900 transition hidden xl:table-cell"
+                    className="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition hidden xl:table-cell"
                   >
                     <div className="flex items-center gap-1">
                       <span>Registered</span>
                       <IconChevronsUpDown size={12} className="text-slate-400" />
                     </div>
                   </th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -546,7 +546,7 @@ export const AdminPartnersListView: React.FC = () => {
                         className="hover:bg-slate-50/70 transition-colors cursor-pointer h-[50px]"
                       >
                         {/* Institution & Partner Code */}
-                        <td className="py-2.5 px-3">
+                        <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2">
                             <div
                               className="w-8 h-8 rounded bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0 tracking-tight"
@@ -586,7 +586,7 @@ export const AdminPartnersListView: React.FC = () => {
                         </td>
 
                         {/* Category & Campus */}
-                        <td className="py-2.5 px-3">
+                        <td className="py-3.5 px-4">
                           <div className="leading-tight">
                             <span className="text-xs font-medium text-slate-800 block">
                               {formatCategory(partner.institutionType)}
@@ -598,7 +598,7 @@ export const AdminPartnersListView: React.FC = () => {
                         </td>
 
                         {/* Location */}
-                        <td className="py-2.5 px-3">
+                        <td className="py-3.5 px-4">
                           <div className="leading-tight">
                             <span className="text-xs font-medium text-slate-800 block">
                               {partner.district}
@@ -610,7 +610,7 @@ export const AdminPartnersListView: React.FC = () => {
                         </td>
 
                         {/* Focal Contact */}
-                        <td className="py-2.5 px-3 hidden lg:table-cell">
+                        <td className="py-3.5 px-4 hidden lg:table-cell">
                           <div className="leading-tight">
                             <span className="text-xs font-semibold text-slate-900 block truncate max-w-[140px] min-[1360px]:max-w-[180px]">
                               {partner.contactName}
@@ -625,7 +625,7 @@ export const AdminPartnersListView: React.FC = () => {
                         </td>
 
                         {/* Academic Scope - Collapses on narrower desktop */}
-                        <td className="py-2.5 px-3 hidden min-[1360px]:table-cell">
+                        <td className="py-3.5 px-4 hidden min-[1360px]:table-cell">
                           <div className="leading-tight">
                             <div className="flex flex-wrap gap-1 mb-1">
                               {partner.classesOffered && partner.classesOffered.length > 0 ? (
@@ -658,12 +658,12 @@ export const AdminPartnersListView: React.FC = () => {
                         </td>
 
                         {/* Status */}
-                        <td className="py-2.5 px-3 whitespace-nowrap">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
                           <StatusBadge status={partner.status} size="sm" />
                         </td>
 
                         {/* Registered Date */}
-                        <td className="py-2.5 px-3 whitespace-nowrap hidden xl:table-cell">
+                        <td className="py-3.5 px-4 whitespace-nowrap hidden xl:table-cell">
                           <span className="text-xs text-slate-600 block">
                             {partner.createdAt
                               ? new Date(partner.createdAt).toLocaleDateString('en-US', {
@@ -676,7 +676,7 @@ export const AdminPartnersListView: React.FC = () => {
                         </td>
 
                         {/* Actions */}
-                        <td className="py-2.5 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5 leading-none">
                             {/* Direct View Dossier Button */}
                             <button
@@ -880,7 +880,7 @@ export const AdminPartnersListView: React.FC = () => {
         </div>
 
         {/* Server-Driven Pagination Footer */}
-        <div className="p-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 bg-slate-50/50">
+        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 bg-slate-50/50">
           <div>
             Showing{' '}
             <span className="font-semibold text-slate-700">

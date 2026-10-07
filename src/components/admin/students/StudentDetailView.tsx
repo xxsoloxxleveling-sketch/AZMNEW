@@ -1,30 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import {
-  IconArrowLeft,
-  IconDownloadSlip,
-  IconQrCode,
-  IconFileText,
-  IconUser,
-  IconBookOpen,
-  IconAward,
-  IconFileCheck,
-  IconEye,
-  IconCheck,
-  IconClose,
-  IconPrinter,
-  IconDeleteCandidate,
-  IconAlertTriangle,
-  IconMapPin,
-  IconBuilding,
-  IconSave,
-  IconCheckCircle,
-  IconPrintSlip,
-  IconLoader,
-  IconMessageSquare,
-  IconImageIcon,
-  IconEditStudent,
-  IconApproveFee,
-} from '../../common/icons';
+  ArrowLeft as IconArrowLeft,
+  Download as IconDownloadSlip,
+  QrCode as IconQrCode,
+  FileText as IconFileText,
+  User as IconUser,
+  BookOpen as IconBookOpen,
+  Award as IconAward,
+  FileCheck as IconFileCheck,
+  Eye as IconEye,
+  Check as IconCheck,
+  X as IconClose,
+  Printer as IconPrinter,
+  Trash2 as IconDeleteCandidate,
+  AlertTriangle as IconAlertTriangle,
+  MapPin as IconMapPin,
+  Building2 as IconBuilding,
+  Save as IconSave,
+  CheckCircle2 as IconCheckCircle,
+  Printer as IconPrintSlip,
+  Loader2 as IconLoader,
+  MessageSquare as IconMessageSquare,
+  Image as IconImageIcon,
+  Pencil as IconEditStudent,
+  CheckCircle2 as IconApproveFee,
+} from 'lucide-react';
 import {
   MockStudent,
   MockStudentDocument,
@@ -411,10 +411,10 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
   return (
     <div className="space-y-6">
       {/* Top Action Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-2xs">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-xl border border-slate-200/80 shadow-xs">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl transition cursor-pointer shadow-2xs"
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl transition cursor-pointer shadow-xs"
         >
           <IconArrowLeft size={16} />
           <span>Back to Students List</span>
@@ -473,7 +473,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                     ? wa.disabledReason || 'No contact number on file'
                     : `Contact ${student.fullName} on WhatsApp (${wa.formattedPhone})`
                 }
-                className={`px-3 py-2 text-xs font-medium rounded-xl border transition flex items-center gap-1.5 shadow-2xs ${
+                className={`px-3 py-2 text-xs font-medium rounded-xl border transition flex items-center gap-1.5 shadow-xs ${
                   !wa.isDisabled
                     ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-emerald-700 cursor-pointer'
                     : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed opacity-50'
@@ -491,7 +491,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
               type="button"
               onClick={() => setIsEditModalOpen(true)}
               title="Edit candidate profile and registration details"
-              className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
               <IconEditStudent size={16} className="text-slate-500" />
               <span>Edit Student</span>
@@ -502,7 +502,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
           <button
             onClick={handlePrintDossier}
             title="Direct Print or Save Candidate Dossier as A4 PDF"
-            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <IconPrinter size={16} className="text-slate-500" />
             <span>Print Dossier (A4)</span>
@@ -513,7 +513,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
             onClick={handlePrintRegistrationPdf}
             disabled={isDownloading}
             title="Open the official registration PDF with the candidate's stored photo, ready to print."
-            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-60"
+            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
           >
             <IconFileText size={16} className="text-slate-500" />
             <span>{isDownloading ? 'Preparing...' : 'Registration PDF'}</span>
@@ -523,7 +523,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
           <button
             onClick={() => setIsOmrModalOpen(true)}
             title="Preview & Print MCQs OMR Bubble Sheet (100 Questions) with Photo and QR"
-            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <IconFileText size={16} className="text-slate-500" />
             <span>OMR Sheet</span>
@@ -533,7 +533,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
           <button
             onClick={handleDownloadPdf}
             disabled={isDownloading}
-            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-60"
+            className="px-3 py-2 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
           >
             <IconDownloadSlip size={16} className="text-slate-500" />
             <span>Download PDF</span>
@@ -543,7 +543,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
           {role === 'SUPER_ADMIN' && (
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="px-3 py-2 text-xs font-medium bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="px-3 py-2 text-xs font-medium bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
               <IconDeleteCandidate size={16} className="text-rose-600" />
               <span>Delete Candidate</span>
@@ -607,7 +607,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
 
         {/* Biometric QR Token Card */}
         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col items-center gap-2 text-center min-w-[160px]">
-          <div className="p-2 bg-white rounded-xl shadow-2xs border border-slate-200">
+          <div className="p-2 bg-white rounded-xl shadow-xs border border-slate-200">
             {student.qrImageUrl ? (
               <img src={student.qrImageUrl} alt="QR Matrix" className="w-24 h-24 object-contain" />
             ) : (
@@ -900,13 +900,13 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                 return (
                   <div
                     key={doc.id}
-                    className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-blue-200 transition-all flex flex-col justify-between gap-3 shadow-2xs"
+                    className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-blue-200 transition-all flex flex-col justify-between gap-3 shadow-xs"
                   >
                     <div className="flex items-start gap-3">
                       {/* Document Preview Thumbnail */}
                       <div
                         onClick={() => openDocument(doc)}
-                        className="w-12 h-14 rounded-xl overflow-hidden bg-white border border-slate-200 shadow-2xs flex-shrink-0 cursor-pointer flex items-center justify-center relative group"
+                        className="w-12 h-14 rounded-xl overflow-hidden bg-white border border-slate-200 shadow-xs flex-shrink-0 cursor-pointer flex items-center justify-center relative group"
                       >
                         {isPdf ? (
                           <div className="flex flex-col items-center justify-center text-[10px] font-black text-rose-600">
@@ -949,7 +949,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                       <button
                         onClick={() => openDocument(doc)}
-                        className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-2xs cursor-pointer flex items-center gap-1"
+                        className="px-2.5 py-1 text-[11px] font-bold text-[#185b9d] bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-xs cursor-pointer flex items-center gap-1"
                       >
                         <IconEye size={12} />
                         <span>Inspect</span>
