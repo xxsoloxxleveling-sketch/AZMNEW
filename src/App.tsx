@@ -546,7 +546,7 @@ function AppContent() {
         case 'storage':
           return { title: 'Candidate Document Storage Vault', subtitle: 'Digital repository of photos, CNIC/B-Forms, DMCs, and payment receipts' };
         case 'attendance':
-          return { title: 'Attendance & QR Verification Hub', subtitle: 'Biometric scanning & daily roll registry' };
+          return { title: 'Attendance Sessions', subtitle: 'Hall-scoped candidate attendance' };
         case 'fees':
           return { title: 'Fee Challans & Collections', subtitle: 'Automated billing, receipt generation, and income ledger' };
         case 'staff':

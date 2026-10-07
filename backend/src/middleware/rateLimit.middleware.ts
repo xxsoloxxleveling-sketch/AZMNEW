@@ -27,9 +27,17 @@ export const loginRateLimiter = rateLimit({
 export const registrationRateLimiter = noopLimiter;
 
 /**
- * Rate limiter for attendance scanning (Disabled).
+ * Authenticated high-throughput exam attendance marking protection.
  */
-export const attendanceScanRateLimiter = noopLimiter;
+export const attendanceScanRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  keyGenerator: req => req.user!.id,
+  skip: req => !req.user?.id,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { message: 'Too many examination attendance requests. Please wait a moment and retry.' } },
+});
 
 const standardRateLimitResponse = {
   success: false,

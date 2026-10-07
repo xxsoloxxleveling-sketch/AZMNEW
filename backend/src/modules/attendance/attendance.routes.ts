@@ -1,38 +1,22 @@
 import { Router } from 'express';
+import { Role } from '@prisma/client';
 import { attendanceController } from './attendance.controller';
-import { validateBody } from '../../middleware/validate.middleware';
-import { attendanceScanRateLimiter } from '../../middleware/rateLimit.middleware';
-import { scanAttendanceSchema } from './attendance.schema';
 import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
-import { Role } from '@prisma/client';
-
+import { validateBody, validateQuery } from '../../middleware/validate.middleware';
+import { attendanceScanRateLimiter } from '../../middleware/rateLimit.middleware';
+import { openSessionSchema, closeSessionSchema, markAttendanceSchema, scanAttendanceSchema, sessionQuerySchema, rosterQuerySchema, todayAttendanceQuerySchema } from './attendance.schema';
 const router = Router();
-
-// Protect all attendance routes
-router.use(authenticate);
-
-// Unified QR Scan & Manual Attendance Marking
-router.post(
-  '/scan',
-  attendanceScanRateLimiter,
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
-  validateBody(scanAttendanceSchema),
-  attendanceController.scan
-);
-
-// Today's summary & live attendance list
-router.get(
-  '/today',
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER, Role.ACCOUNTANT),
-  attendanceController.getToday
-);
-
-// Student attendance history
-router.get(
-  '/student/:id',
-  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER),
-  attendanceController.getStudentHistory
-);
-
+router.use(authenticate, authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER));
+const administrators = authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN);
+router.post('/sessions', administrators, validateBody(openSessionSchema), attendanceController.open);
+router.get('/sessions', validateQuery(sessionQuerySchema), attendanceController.list);
+router.get('/sessions/:sessionId/candidates', validateQuery(rosterQuerySchema), attendanceController.candidates);
+router.get('/sessions/:sessionId', attendanceController.detail);
+router.post('/sessions/:sessionId/mark', attendanceScanRateLimiter, validateBody(markAttendanceSchema), attendanceController.mark);
+router.post('/sessions/:sessionId/close', administrators, validateBody(closeSessionSchema), attendanceController.close);
+// Compatibility writes still require an explicit examination session.
+router.post('/scan', attendanceScanRateLimiter, validateBody(scanAttendanceSchema), attendanceController.scan);
+router.get('/today', validateQuery(todayAttendanceQuerySchema), attendanceController.getToday);
+router.get('/student/:id', validateQuery(rosterQuerySchema), attendanceController.getStudentHistory);
 export default router;
