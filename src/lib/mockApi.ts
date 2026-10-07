@@ -3,6 +3,7 @@ import { apiFetch, apiDownloadPdf, apiOpenPdfForPrint, API_BASE_URL } from './ap
 export { API_BASE_URL };
 
 export interface HallCandidate {
+  legacyAllocationNeedsReview?: boolean;
   id: string;
   fullName: string;
   rollNumber: string | null;

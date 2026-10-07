@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { buildStudentClassWhere } from '../students/students.service';
 import { AppError } from '../../middleware/error.middleware';
 import { CreateExamHallInput, UpdateExamHallInput, BatchAssignInput, UpdateAllocationInput, CandidateQueryInput } from './examHalls.schema';
 
@@ -100,14 +101,16 @@ export class ExamHallsService {
   async getCandidates(query: CandidateQueryInput) {
     const { page, limit, search, assignment } = query;
     const where: Prisma.StudentWhereInput = {};
-    if (query.class) where.currentClass = query.class;
+    const classWhere = buildStudentClassWhere(query.class);
+    if (classWhere) where.AND = [classWhere];
     if (assignment === 'assigned') where.assignedHallId = { not: null };
     if (assignment === 'unassigned') where.assignedHallId = null;
     if (search) where.OR = ['fullName', 'rollNumber', 'applicationNo'].map(key => ({ [key]: { contains: search, mode: 'insensitive' } }));
     return this.transaction(async tx => {
       const total = await tx.student.count({ where });
-      const candidates = await tx.student.findMany({ where, select: candidateSelect, orderBy: [{ fullName: 'asc' }, { id: 'asc' }], skip: (page - 1) * limit, take: limit });
-      return { candidates, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+      const candidates = await tx.student.findMany({ where, select: { ...candidateSelect, assignedHall: true }, orderBy: [{ fullName: 'asc' }, { id: 'asc' }], skip: (page - 1) * limit, take: limit });
+      const placementCandidates = candidates.map(({ assignedHall, ...candidate }) => ({ ...candidate, legacyAllocationNeedsReview: !candidate.assignedHallId && !!(assignedHall || candidate.assignedRoom || candidate.seatNo) }));
+      return { candidates: placementCandidates, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
     });
   }
 

@@ -1,969 +1,237 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Building2,
-  Users,
-  CheckCircle2,
-  XCircle,
-  QrCode,
-  Printer,
-  Search,
-  Plus,
-  Filter,
-  ArrowUpDown,
-  Clock,
-  MapPin,
-  ShieldCheck,
-  Sparkles,
-  Download,
-  Check,
-  AlertCircle,
-  Eye,
-  UserPlus,
-  ArrowRightLeft,
-  Trash2,
-  X,
-  Edit3,
-} from 'lucide-react';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { Building2, Users, Armchair, Plus, Printer, Search, X, Loader2, Pencil, Trash2, UserPlus } from 'lucide-react';
 import { mockApi, HallCandidate, MockTestCenter } from '../../../lib/mockApi';
 import { useAuth } from '../../../lib/authContext';
 
 export interface ExamHall {
-  id: string;
-  name: string;
-  roomNumber: string;
-  targetClass: string;
-  wing: string;
-  capacity: number;
-  invigilatorName: string;
-  invigilatorPhone: string;
-  reportingTime: string;
-  examDate: string;
-  assignedCount: number;
-  availableSeats: number;
-  utilizationPercent: number | null;
-  isOverCapacity: boolean;
-  testCenterId?: string;
-  centerName?: string;
+  id: string; name: string; roomNumber: string; targetClass: string; wing: string | null;
+  capacity: number; assignedCount: number; availableSeats: number; utilizationPercent: number | null; isOverCapacity: boolean;
+  testCenterId: string | null; centerName: string | null; reportingTime: string; examDate: string;
+  invigilatorName: string | null; invigilatorPhone: string | null;
+}
+type HallForm = Record<'name' | 'roomNumber' | 'targetClass' | 'wing' | 'capacity' | 'testCenterId' | 'examDate' | 'reportingTime' | 'invigilatorName' | 'invigilatorPhone', string>;
+type Dialog = { kind: 'place' | 'create' } | { kind: 'edit' | 'delete'; hall: ExamHall } | { kind: 'move' | 'seat' | 'unassign'; candidate: HallCandidate };
+const blankForm = (): HallForm => ({ name: '', roomNumber: '', targetClass: '', wing: '', capacity: '', testCenterId: '', examDate: '', reportingTime: '', invigilatorName: '', invigilatorPhone: '' });
+const classes = [['CLASS_6', 'Class 6th'], ['CLASS_7', 'Class 7th'], ['CLASS_8', 'Class 8th'], ['CLASS_9', 'Class 9th'], ['CLASS_10', 'Class 10th'], ['HSSC_1', 'First Year'], ['HSSC_2', 'Second Year']];
+const primary = 'inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold bg-[#185b9d] text-white hover:bg-[#13497d] disabled:opacity-50 disabled:cursor-not-allowed';
+const secondary = 'inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
+const field = 'w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#185b9d]/30 focus:border-[#185b9d]';
+const knownCapacity = (hall: ExamHall) => Number.isFinite(hall.capacity) && hall.capacity > 0;
+const remaining = (hall: ExamHall) => knownCapacity(hall) ? Math.max(hall.capacity - hall.assignedCount, 0) : null;
+const hallState = (hall: ExamHall) => !knownCapacity(hall) ? 'Capacity unknown' : hall.assignedCount > hall.capacity ? 'Over Capacity' : hall.assignedCount === hall.capacity ? 'Full' : 'Available';
+const escapeHtml = (value: unknown) => String(value ?? '—').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+export function buildHallRosterHtml(hall: ExamHall, candidates: HallCandidate[]) {
+  const rows = candidates.filter(candidate => candidate.assignedHallId === hall.id);
+  const meta = [['Center', hall.centerName], ['Hall', hall.name], ['Room', hall.roomNumber], ['Target Class', hall.targetClass],
+    ['Exam Date', hall.examDate || null], ['Reporting Time', hall.reportingTime || null], ['Capacity', knownCapacity(hall) ? hall.capacity : null],
+    ['Assigned Candidates', rows.length], ['Recorded Invigilator', hall.invigilatorName]];
+  return '<!doctype html><html><head><meta charset="utf-8"><title>Official Examination Seating Roster</title><style>' +
+    '@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;color:#0f172a;margin:0}h1{font-size:20px;color:#185b9d;margin:0}h2{font-size:14px;margin:5px 0 14px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border:1px solid #cbd5e1;padding:10px;margin-bottom:14px}.meta b{display:block;margin-top:3px}table{width:100%;border-collapse:collapse}th{background:#e2e8f0;text-align:left}td,th{border:1px solid #cbd5e1;padding:7px}thead{display:table-header-group}tr{break-inside:avoid}.signature{height:24px;min-width:90px}.footer{margin-top:22px;display:flex;justify-content:space-between}</style></head><body>' +
+    '<h1>AZM.AIO</h1><h2>Official Examination Seating Roster</h2><div class="meta">' +
+    meta.map(([label, value]) => '<div>' + escapeHtml(label) + '<b>' + escapeHtml(value) + '</b></div>').join('') +
+    '</div><table><thead><tr><th>Seat</th><th>Roll Number</th><th>Candidate Name</th><th>Class</th><th>Candidate Signature</th></tr></thead><tbody>' +
+    rows.map(c => '<tr><td>' + escapeHtml(c.seatNo || 'Unassigned') + '</td><td>' + escapeHtml(c.rollNumber || null) + '</td><td>' + escapeHtml(c.fullName) + '</td><td>' + escapeHtml(c.currentClass || null) + '</td><td class="signature"></td></tr>').join('') +
+    '</tbody></table><div class="footer"><span>Recorded Invigilator Signature: __________________</span><span>Center Superintendent: __________________</span></div></body></html>';
 }
 
-interface ExamHallsViewProps {
-  onOpenQrScanner?: () => void;
-}
-
-export const ExamHallsView: React.FC<ExamHallsViewProps> = ({ onOpenQrScanner }) => {
-  const [halls, setHalls] = useState<ExamHall[]>([]);
-
-  const [testCenters, setTestCenters] = useState<MockTestCenter[]>([]);
-  const [selectedHallId, setSelectedHallId] = useState<string>('');
-  const [students, setStudents] = useState<HallCandidate[]>([]);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  const [loadError, setLoadError] = useState('');
-  const [rosterError, setRosterError] = useState('');
-  const [rosterHallId, setRosterHallId] = useState('');
-  const [rosterRevision, setRosterRevision] = useState(0);
-  const [placementCandidates, setPlacementCandidates] = useState<HallCandidate[]>([]);
-  const [placePage, setPlacePage] = useState(1);
-  const [placeTotal, setPlaceTotal] = useState(0);
-  const [placeTotalPages, setPlaceTotalPages] = useState(0);
-  const [placeLoading, setPlaceLoading] = useState(false);
-  const [placeError, setPlaceError] = useState('');
-
-  // Custom Student Placement Modal State
-  const [isPlaceModalOpen, setIsPlaceModalOpen] = useState<boolean>(false);
-  const [placeSearchQuery, setPlaceSearchQuery] = useState<string>('');
-  const [placeClassFilter, setPlaceClassFilter] = useState<string>('ALL');
-  const [selectedStudentIdsToPlace, setSelectedStudentIdsToPlace] = useState<string[]>([]);
-  const [isSubmittingPlacement, setIsSubmittingPlacement] = useState<boolean>(false);
-
-  // Add Custom Hall Modal State
-  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
-  const [newHallData, setNewHallData] = useState({
-    name: '',
-    roomNumber: '',
-    targetClass: 'Class 6th',
-    wing: '',
-    capacity: 60,
-    invigilatorName: '',
-    invigilatorPhone: '',
-    reportingTime: '',
-    examDate: '',
-    testCenterId: '',
-  });
-
-  const { isLoading: authLoading } = useAuth();
-
+// Local equivalent of the classic confirmation shell, with focus containment,
+// Escape dismissal, semantic title, and focus restoration. Shared modals stay unchanged.
+function HallDialog({ title, busy, onClose, children }: { title: string; busy: boolean; onClose: () => void; children: React.ReactNode }) {
+  const id = useId(); const panel = useRef<HTMLDivElement>(null);
+  const latest = useRef({ busy, onClose }); latest.current = { busy, onClose };
   useEffect(() => {
-    if (!authLoading) {
-      loadData();
-    }
-  }, [authLoading]);
-
-  const loadData = async () => {
-    if (authLoading) return;
-    setIsLoading(true);
-    setLoadError('');
-    try {
-      const [tcData, hallsData] = await Promise.all([mockApi.getTestCenters(), mockApi.getExamHalls()]);
-      setTestCenters(tcData);
-      setHalls(hallsData);
-      const id = hallsData.some(h => h.id === selectedHallId) ? selectedHallId : hallsData[0]?.id || '';
-      setSelectedHallId(id);
-      setRosterRevision(value => value + 1);
-    } catch (error: any) {
-      setLoadError(error.message || 'Unable to load exam halls.');
-      setHalls([]);
-      setStudents([]);
-      setSelectedHallId('');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let active = true;
-    setStudents([]);
-    setRosterHallId('');
-    setRosterError('');
-    if (!selectedHallId) return;
-    mockApi.getExamHall(selectedHallId).then(hall => {
-      if (active) { setStudents(hall.assignedStudents); setRosterHallId(hall.id); }
-    }).catch(error => { if (active) setRosterError(error.message); });
-    return () => { active = false; };
-  }, [selectedHallId, rosterRevision]);
-
-  useEffect(() => {
-    let active = true;
-    if (!isPlaceModalOpen) return;
-    setPlaceLoading(true);
-    setPlaceError('');
-    setPlacementCandidates([]);
-    mockApi.getHallCandidates({ search: placeSearchQuery, class: placeClassFilter === 'ALL' ? undefined : placeClassFilter,
-      assignment: 'all', page: placePage, limit: 25 }).then(result => {
-      if (!active) return;
-      setPlacementCandidates(result.candidates);
-      setPlaceTotal(result.pagination.total);
-      setPlaceTotalPages(result.pagination.totalPages);
-    }).catch(error => { if (active) setPlaceError(error.message); })
-      .finally(() => { if (active) setPlaceLoading(false); });
-    return () => { active = false; };
-  }, [isPlaceModalOpen, placeSearchQuery, placeClassFilter, placePage]);
-
-  const selectedHall = halls.find(h => h.id === selectedHallId) || halls[0];
-  const hallStudents = students.filter(s => s.assignedHallId === selectedHall?.id);
-  const filteredStudents = hallStudents.filter(s => [s.fullName, s.rollNumber, s.applicationNo]
-    .some(value => value?.toLowerCase().includes(searchQuery.toLowerCase())));
-  const totalAssigned = selectedHall?.assignedCount ?? 0;
-
-  // Custom Place Candidates Handler
-  const handleBatchPlace = async () => {
-    if (selectedStudentIdsToPlace.length === 0) {
-      alert('Please select at least one candidate to place into this hall.');
-      return;
-    }
-    setIsSubmittingPlacement(true);
-    try {
-      const assignedCount = await mockApi.batchAssignStudentsToHall(
-        selectedHall.id,
-        {
-          hallName: selectedHall.name,
-          roomNumber: selectedHall.roomNumber,
-          testCenterName: selectedHall.centerName || undefined,
-        },
-        selectedStudentIdsToPlace
-      );
-      alert(`Successfully placed ${assignedCount} candidate(s) into ${selectedHall.name} (${selectedHall.roomNumber})!`);
-      setSelectedStudentIdsToPlace([]);
-      setIsPlaceModalOpen(false);
-      await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to assign candidates.');
-    } finally {
-      setIsSubmittingPlacement(false);
-    }
-  };
-
-  // Move Single Student to Another Hall
-  const handleMoveStudentToHall = async (studentId: string, targetHallId: string) => {
-    const targetHall = halls.find((h) => h.id === targetHallId);
-    if (!targetHall) return;
-    try {
-      await mockApi.updateStudentAllocation(studentId, {
-        assignedHallId: targetHall.id,
-        assignedHall: targetHall.name,
-        assignedRoom: targetHall.roomNumber,
-        testCenterName: targetHall.centerName || undefined,
-      });
-      await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to move student.');
-    }
-  };
-
-  // Unassign Student from this Hall
-  const handleUnassignStudent = async (studentId: string, studentName: string) => {
-    if (confirm(`Remove ${studentName} from ${selectedHall.roomNumber}?`)) {
-      try {
-        await mockApi.unassignStudentFromHall(studentId);
-        await loadData();
-      } catch (error: any) {
-        alert(error.message || 'Failed to unassign candidate.');
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    const focusables = (): HTMLElement[] => Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]') || []) as HTMLElement[];
+    (panel.current?.querySelector<HTMLElement>('input,select') || focusables()[0])?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !latest.current.busy) { event.preventDefault(); latest.current.onClose(); }
+      if (event.key === 'Tab') {
+        const items = focusables(), first = items[0], last = items[items.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
       }
-    }
-  };
-
-  // Quick Edit Seat Number
-  const handleUpdateSeatNo = async (studentId: string, currentSeat: string) => {
-    const newSeat = prompt(`Enter Desk / Seat Number for candidate:`, currentSeat || 'Seat #01');
-    if (newSeat !== null && newSeat.trim()) {
-      try {
-        await mockApi.updateStudentAllocation(studentId, { seatNo: newSeat.trim() });
-        await loadData();
-      } catch (error: any) {
-        alert(error.message || 'Failed to update seat.');
-      }
-    }
-  };
-
-  const handleCreateHall = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newHallData.name.trim() || !newHallData.roomNumber.trim()) {
-      alert('Please provide hall name and room number.');
-      return;
-    }
-    try {
-      const { testCenterId, reportingTime, examDate, ...fields } = newHallData;
-      const created = await mockApi.createExamHall({ ...fields, testCenterId: testCenterId || null,
-        reportingTime: reportingTime || undefined, examDate: examDate || undefined });
-      await loadData();
-      setSelectedHallId(created.id);
-      setIsAddModalOpen(false);
-      setNewHallData({ name: '', roomNumber: '', targetClass: 'Class 6th', wing: '', capacity: 60,
-        invigilatorName: '', invigilatorPhone: '', reportingTime: '', examDate: '', testCenterId: '' });
-    } catch (error: any) {
-      alert(error.message || 'Failed to create hall.');
-    }
-  };
-
-  const printHallRoster = () => {
-    const printWin = window.open('', '_blank');
-    if (!printWin) {
-      alert('Please allow popups to print the Hall Gate Seating Roster.');
-      return;
-    }
-
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>AZM Examination Gate Seating Chart - ${selectedHall.name}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; }
-    body { padding: 24px; background: #fff; }
-    .header { border-bottom: 2px solid #185b9d; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 18px; font-weight: 900; color: #185b9d; }
-    .header p { font-size: 11px; color: #64748b; margin-top: 2px; }
-    .hall-banner { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 11px; }
-    .hall-banner div strong { display: block; font-size: 12px; color: #0f172a; margin-top: 2px; }
-    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-    th { background: #0f172a; color: #fff; padding: 8px 6px; text-align: left; font-size: 10px; text-transform: uppercase; }
-    td { padding: 6px; border: 1px solid #cbd5e1; }
-    tr:nth-child(even) { background: #f8fafc; }
-    .sign-box { height: 28px; border-bottom: 1px dotted #94a3b8; }
-    .footer { margin-top: 24px; padding-top: 14px; border-top: 2px solid #0f172a; display: flex; justify-content: space-between; font-size: 11px; }
-    .btn-bar { text-align: center; margin-top: 20px; }
-    .btn { background: #185b9d; color: #fff; border: none; padding: 8px 20px; border-radius: 6px; font-weight: 700; cursor: pointer; }
-    @media print {
-      body { padding: 0; }
-      .btn-bar { display: none; }
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div>
-      <h1>AZM ACADEMIC INITIATIVE ORGANIZATION</h1>
-      <p>Official Examination Center Room Seating Chart &amp; Invigilator Desk</p>
-    </div>
-    <div style="text-align: right;">
-      <div style="font-weight: 900; font-size: 13px; color: #185b9d;">${selectedHall.roomNumber}</div>
-      <div style="font-size: 10px; color: #64748b;">${selectedHall.examDate}</div>
-    </div>
-  </div>
-
-  <div class="hall-banner">
-    <div>Hall Name: <strong>${selectedHall.name}</strong></div>
-    <div>Target Class: <strong>${selectedHall.targetClass}</strong></div>
-    <div>Room Invigilator: <strong>${selectedHall.invigilatorName}</strong></div>
-    <div>Capacity / Seated: <strong>${selectedHall.capacity} / ${totalAssigned}</strong></div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th style="width: 55px;">Desk #</th>
-        <th style="width: 110px;">Roll Number</th>
-        <th>Candidate Name</th>
-        <th>Enrolled Class</th>
-        <th style="width: 120px;">Candidate Signature</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${hallStudents.map((s, idx) => `
-        <tr>
-          <td style="font-weight: bold; text-align: center; color: #185b9d;">${s.seatNo || 'Not allocated'}</td>
-          <td style="font-family: monospace; font-weight: bold;">${s.rollNumber || s.applicationNo || 'PENDING'}</td>
-          <td style="font-weight: bold;">${s.fullName}</td>
-          <td>${s.currentClass || 'Unknown'}</td>
-          <td><div class="sign-box"></div></td>
-        </tr>
-      `).join('')}
-    </tbody>
-  </table>
-
-  <div class="footer">
-    <div>Total Seated Candidates: <strong>${totalAssigned}</strong></div>
-    <div>Invigilator Signature: _______________________</div>
-    <div>Center Superintendent: _______________________</div>
-  </div>
-
-  <div class="btn-bar">
-    <button class="btn" onclick="window.print()">🖨️ Print Gate Seating Chart</button>
-  </div>
-
-  <script>
-    window.onload = function() {
-      setTimeout(function() { window.print(); }, 400);
     };
-  </script>
-</body>
-</html>
-    `;
-
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
-  };
-
-  // Candidates available for placement modal
-  const candidatesForPlacement = placementCandidates;
-
-  return (
-    <div className="space-y-6">
-      {/* Top Banner & Quick Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2.5 rounded-2xl bg-[#185b9d]/10 text-[#185b9d]">
-              <Building2 className="w-5 h-5" />
-            </span>
-            <div>
-              <h2 className="text-xl font-extrabold text-slate-900 font-display">
-                Examination Centers &amp; Hall Seating Management
-              </h2>
-              <p className="text-xs text-slate-500">
-                Custom place candidates into specific test centers, examination halls, classes, and desk numbers.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Custom Place Candidates Button */}
-          <button
-            disabled={!selectedHall || isLoading || !!loadError}
-            onClick={() => { setSelectedStudentIdsToPlace([]); setPlacePage(1); setIsPlaceModalOpen(true); }}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>+ Custom Pick &amp; Place Candidates</span>
-          </button>
-
-          {onOpenQrScanner && (
-            <button
-              onClick={onOpenQrScanner}
-              className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs flex items-center gap-2 transition cursor-pointer"
-            >
-              <QrCode className="w-4 h-4 text-emerald-400" />
-              <span>QR Scanner</span>
-            </button>
-          )}
-
-          <button
-            disabled={!selectedHall || isLoading || !!loadError || rosterHallId !== selectedHall.id}
-            onClick={printHallRoster}
-            className="px-3.5 py-2.5 rounded-xl bg-[#185b9d] hover:bg-[#13497d] text-white font-bold text-xs shadow-xs flex items-center gap-2 transition cursor-pointer"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Print Seating Chart (A4)</span>
-          </button>
-
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs shadow-2xs flex items-center gap-1.5 transition cursor-pointer"
-          >
-            <Plus className="w-4 h-4 text-[#185b9d]" />
-            <span>Add Custom Room</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Class / Examination Hall Selector Carousel / Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {halls.map((hall) => {
-          const isSelected = hall.id === selectedHallId;
-          const assignedCount = hall.assignedCount;
-
-          return (
-            <button
-              key={hall.id}
-              onClick={() => setSelectedHallId(hall.id)}
-              className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer ${
-                isSelected
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-[#185b9d]/30'
-                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200 shadow-xs'
-              }`}
-            >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
-                      isSelected ? 'bg-amber-400 text-slate-950' : 'bg-blue-100 text-[#185b9d]'
-                    }`}
-                  >
-                    {hall.targetClass}
-                  </span>
-                  <span className={`text-[10px] font-mono font-bold ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
-                    {hall.roomNumber}
-                  </span>
-                </div>
-                <h4 className={`text-xs font-bold truncate mt-2 ${isSelected ? 'text-white' : 'text-slate-900'}`}>
-                  {hall.name.split('(')[0]}
-                </h4>
-                <p className={`text-[10px] truncate ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>
-                  {hall.wing}
-                </p>
-              </div>
-
-              <div className="pt-3 mt-3 border-t border-slate-200/40 flex items-center justify-between text-[10px]">
-                <span className={isSelected ? 'text-slate-400' : 'text-slate-500'}>Seated</span>
-                <span className={`font-mono font-extrabold ${isSelected ? 'text-emerald-400' : 'text-slate-900'}`}>
-                  {assignedCount} / {hall.capacity}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {isLoading && <p role="status">Loading exam halls...</p>}
-      {loadError && <p role="alert">{loadError} <button onClick={loadData}>Retry</button></p>}
-      {!isLoading && !loadError && halls.length === 0 && <p>No exam halls configured.</p>}
-      {/* Selected Hall allocation details */}
-      {selectedHall && <>
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg font-extrabold text-slate-900 font-display">
-                {selectedHall.name} — {selectedHall.roomNumber}
-              </h3>
-              <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-[#185b9d] text-xs font-extrabold">
-                Dedicated for: {selectedHall.targetClass}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 flex items-center gap-4 flex-wrap">
-              <span className="flex items-center gap-1 font-semibold text-slate-700">
-                <MapPin className="w-3.5 h-3.5 text-[#185b9d]" />
-                {selectedHall.centerName || 'No test center'} {selectedHall.wing ? `(${selectedHall.wing})` : ''}
-              </span>
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                Invigilator: <strong>{selectedHall.invigilatorName || 'Not specified'}</strong>
-              </span>
-              <span className="flex items-center gap-1 font-mono">
-                <Clock className="w-3.5 h-3.5 text-[#185b9d]" />
-                {selectedHall.reportingTime || 'Reporting time unknown'} ({selectedHall.examDate || 'Date unknown'})
-              </span>
-            </p>
-          </div>
-
-          {/* Quick Action Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              disabled={!selectedHall || isLoading || !!loadError}
-            onClick={() => { setSelectedStudentIdsToPlace([]); setPlacePage(1); setIsPlaceModalOpen(true); }}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>+ Place Students into {selectedHall.roomNumber}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Live Metrics Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Seated</span>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-extrabold text-slate-900 font-display tabular-nums">{totalAssigned}</span>
-              <span className="text-xs text-slate-400 font-bold">/ {selectedHall.capacity} Seats</span>
-            </div>
-            <span className="text-[10px] text-slate-500 mt-1 block">Allocated in this Class/Room</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200">
-            <span className="text-[10px] font-bold text-[#185b9d] uppercase tracking-wider block">Room Occupancy</span>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-extrabold text-[#185b9d] font-display tabular-nums">
-                {selectedHall.capacity > 0 ? Math.round((totalAssigned / selectedHall.capacity) * 100) : 0}%
-              </span>
-            </div>
-            <div className="w-full bg-blue-200 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div
-                className="bg-[#185b9d] h-full rounded-full"
-                style={{
-                  width: `${selectedHall.capacity > 0 ? Math.min(100, Math.round((totalAssigned / selectedHall.capacity) * 100)) : 0}%`,
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Search & Filter Header for Hall Table */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
-          <div className="flex items-center gap-2 flex-1 max-w-md">
-            <div className="relative w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search candidates in this hall by name, roll or application number..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
-              />
-            </div>
-          </div>
-
-        </div>
-
-        {rosterError && <p role="alert">{rosterError} <button onClick={() => setRosterRevision(value => value + 1)}>Retry roster</button></p>}
-        {!rosterError && rosterHallId !== selectedHall.id && <p role="status">Loading hall roster...</p>}
-        {/* Students Table for Selected Hall */}
-        <div className="overflow-x-auto rounded-2xl border border-slate-200">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-100/80 text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
-                <th className="py-3 px-4">Desk / Seat</th>
-                <th className="py-3 px-4">Candidate Name</th>
-                <th className="py-3 px-4">Roll / App No</th>
-                <th className="py-3 px-4">Enrolled Class</th>
-                <th className="py-3 px-4 text-right">Reallocate / Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {filteredStudents.length > 0 ? (
-                filteredStudents.map((s, idx) => {
-                  const rollNo = s.rollNumber || s.applicationNo || 'Not issued';
-                  const currentSeat = s.seatNo || 'Not allocated';
-
-                  return (
-                    <tr key={s.id} className="hover:bg-slate-50/80 transition">
-                      <td className="py-3 px-4">
-                        <button
-                          onClick={() => handleUpdateSeatNo(s.id, currentSeat)}
-                          title="Click to edit seat number"
-                          className="inline-flex items-center gap-1 font-mono font-bold text-[#185b9d] bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg border border-blue-200 cursor-pointer"
-                        >
-                          <span>{currentSeat}</span>
-                          <Edit3 className="w-3 h-3 text-slate-400" />
-                        </button>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{s.fullName}</div>
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900">{rollNo}</td>
-                      <td className="py-3 px-4 font-semibold text-slate-700">{s.currentClass || 'Unknown'}</td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Move Room Dropdown */}
-                          <select
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                handleMoveStudentToHall(s.id, e.target.value);
-                              }
-                            }}
-                            defaultValue=""
-                            className="px-2 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 cursor-pointer"
-                          >
-                            <option value="" disabled>
-                              Move Room ▾
-                            </option>
-                            {halls
-                              .filter((h) => h.id !== selectedHall.id)
-                              .map((h) => (
-                                <option key={h.id} value={h.id}>
-                                  To {h.roomNumber} ({h.name.split('(')[0]})
-                                </option>
-                              ))}
-                          </select>
-
-                          <button
-                            onClick={() => handleUnassignStudent(s.id, s.fullName)}
-                            title="Unseat from this room"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : rosterHallId === selectedHall.id ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400">
-                    <p className="text-xs font-bold text-slate-600">No candidates seated in this room yet.</p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Click <strong>"+ Place Students into {selectedHall.roomNumber}"</strong> above to custom pick and assign students.
-                    </p>
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Custom Pick & Place Candidates Modal */}
-      {isPlaceModalOpen && selectedHall && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl border border-slate-200 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900">
-                  Custom Pick &amp; Place Candidates into {selectedHall.name}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Target Room: <strong className="text-[#185b9d]">{selectedHall.roomNumber}</strong> ({selectedHall.targetClass}) • Capacity: {selectedHall.capacity} Seats
-                </p>
-              </div>
-              <button
-                onClick={() => setIsPlaceModalOpen(false)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Search & Class Filter */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search by candidate name, roll or application number..."
-                  value={placeSearchQuery}
-                  onChange={(e) => { setPlacePage(1); setSelectedStudentIdsToPlace([]); setPlaceSearchQuery(e.target.value); }}
-                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#185b9d] outline-none"
-                />
-              </div>
-
-              <select
-                value={placeClassFilter}
-                onChange={(e) => { setPlacePage(1); setSelectedStudentIdsToPlace([]); setPlaceClassFilter(e.target.value); }}
-                className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 text-slate-700 outline-none"
-              >
-                <option value="ALL">All Classes</option>
-                <option value="Class 6th">Class 6th</option>
-                <option value="Class 7th">Class 7th</option>
-                <option value="Class 8th">Class 8th</option>
-                <option value="Class 9th">Class 9th</option>
-                <option value="Class 10th">Class 10th</option>
-                <option value="1st Year">1st Year</option>
-                <option value="2nd Year">2nd Year</option>
-              </select>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedStudentIdsToPlace.length === candidatesForPlacement.length) {
-                    setSelectedStudentIdsToPlace([]);
-                  } else {
-                    setSelectedStudentIdsToPlace(candidatesForPlacement.map((s) => s.id));
-                  }
-                }}
-                className="px-3 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer whitespace-nowrap"
-              >
-                {selectedStudentIdsToPlace.length === candidatesForPlacement.length ? 'Deselect All' : 'Select This Page'}
-              </button>
-            </div>
-
-            {placeLoading && <p role="status">Loading candidates...</p>}
-            {placeError && <p role="alert">{placeError}</p>}
-            <div className="flex items-center gap-3 text-xs">
-              <button disabled={placePage <= 1 || placeLoading} onClick={() => { setSelectedStudentIdsToPlace([]); setPlacePage(p => p - 1); }}>Previous</button>
-              <span>Page {placePage} of {placeTotalPages || 1} — {placeTotal} candidates</span>
-              <button disabled={placePage >= placeTotalPages || placeLoading} onClick={() => { setSelectedStudentIdsToPlace([]); setPlacePage(p => p + 1); }}>Next</button>
-            </div>
-            {/* Candidates Selection Table */}
-            <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-2xl">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-slate-50 text-slate-600 font-bold sticky top-0 border-b border-slate-200 z-10">
-                  <tr>
-                    <th className="p-3 w-10 text-center">
-                      <input
-                        type="checkbox"
-                        checked={
-                          candidatesForPlacement.length > 0 &&
-                          selectedStudentIdsToPlace.length === candidatesForPlacement.length
-                        }
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedStudentIdsToPlace(candidatesForPlacement.map((s) => s.id));
-                          } else {
-                            setSelectedStudentIdsToPlace([]);
-                          }
-                        }}
-                        className="rounded text-[#185b9d] cursor-pointer"
-                      />
-                    </th>
-                    <th className="p-3">Candidate</th>
-                    <th className="p-3">Roll / App No</th>
-                    <th className="p-3">Class</th>
-                    <th className="p-3">Current Hall</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {candidatesForPlacement.length > 0 ? (
-                    candidatesForPlacement.map((s) => {
-                      const isChecked = selectedStudentIdsToPlace.includes(s.id);
-                      const isCurrentHall = s.assignedHallId === selectedHall.id;
-
-                      return (
-                        <tr
-                          key={s.id}
-                          onClick={() => {
-                            setSelectedStudentIdsToPlace((prev) =>
-                              prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]
-                            );
-                          }}
-                          className={`cursor-pointer transition ${
-                            isChecked ? 'bg-blue-50/70' : 'hover:bg-slate-50'
-                          }`}
-                        >
-                          <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedStudentIdsToPlace((prev) => [...prev, s.id]);
-                                } else {
-                                  setSelectedStudentIdsToPlace((prev) => prev.filter((id) => id !== s.id));
-                                }
-                              }}
-                              className="rounded text-[#185b9d] cursor-pointer"
-                            />
-                          </td>
-                          <td className="p-3 font-bold text-slate-900">
-                            <div>{s.fullName}</div>
-                          </td>
-                          <td className="p-3 font-mono text-slate-700">{s.rollNumber || s.applicationNo || 'N/A'}</td>
-                          <td className="p-3 font-semibold text-slate-700">{s.currentClass || 'Unknown'}</td>
-                          <td className="p-3">
-                            <span
-                              className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
-                                isCurrentHall
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : s.assignedHallId
-                                  ? 'bg-slate-100 text-slate-700'
-                                  : 'bg-amber-50 text-amber-700'
-                              }`}
-                            >
-                              {s.assignedHallId ? s.assignedRoom || 'Assigned' : 'Unassigned'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="p-6 text-center text-slate-400">
-                        No candidates match your search filter.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
-              <span className="text-xs font-bold text-slate-600">
-                Selected: <strong className="text-[#185b9d] font-mono text-sm">{selectedStudentIdsToPlace.length}</strong> Candidate(s)
-              </span>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPlaceModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={selectedStudentIdsToPlace.length === 0 || isSubmittingPlacement || placeLoading || !!placeError}
-                  onClick={handleBatchPlace}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-900/10 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>
-                    {isSubmittingPlacement
-                      ? 'Placing Candidates...'
-                      : `Place ${selectedStudentIdsToPlace.length} Candidate(s) into ${selectedHall.roomNumber}`}
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      </>}
-
-      {/* Add Custom Examination Hall Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-200 space-y-5">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-extrabold text-slate-900">Add Custom Examination Hall / Room</h3>
-              <p className="text-xs text-slate-500">Configure room capacity and candidate allocation.</p>
-            </div>
-
-            <form onSubmit={handleCreateHall} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Test Center / Campus</label>
-                <select
-                  value={newHallData.testCenterId}
-                  onChange={(e) => setNewHallData({ ...newHallData, testCenterId: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#185b9d]"
-                >
-                  <option value="">No test center — schedule unknown</option>
-                  {testCenters.map(tc => <option key={tc.id} value={tc.id}>{tc.name} ({tc.district})</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Hall / Room Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Hall G (Post-Graduate Wing)"
-                  value={newHallData.name}
-                  onChange={(e) => setNewHallData({ ...newHallData, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#185b9d]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Room Number</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Room 401"
-                    value={newHallData.roomNumber}
-                    onChange={(e) => setNewHallData({ ...newHallData, roomNumber: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#185b9d]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Target Class</label>
-                  <select
-                    value={newHallData.targetClass}
-                    onChange={(e) => setNewHallData({ ...newHallData, targetClass: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#185b9d]"
-                  >
-                    <option value="Class 6th">Class 6th</option>
-                    <option value="Class 7th">Class 7th</option>
-                    <option value="Class 8th">Class 8th</option>
-                    <option value="Class 9th">Class 9th</option>
-                    <option value="Class 10th">Class 10th</option>
-                    <option value="1st Year">1st Year (College)</option>
-                    <option value="2nd Year">2nd Year (College)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Campus Wing / Location</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 2nd Floor, Science Block"
-                    value={newHallData.wing}
-                    onChange={(e) => setNewHallData({ ...newHallData, wing: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#185b9d]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Seating Capacity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="500"
-                    value={newHallData.capacity}
-                    onChange={(e) => setNewHallData({ ...newHallData, capacity: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#185b9d]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Invigilator Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Sir Asif Ali"
-                    value={newHallData.invigilatorName}
-                    onChange={(e) => setNewHallData({ ...newHallData, invigilatorName: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#185b9d]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Invigilator Contact</label>
-                  <input
-                    type="text"
-                    value={newHallData.invigilatorPhone}
-                    onChange={(e) => setNewHallData({ ...newHallData, invigilatorPhone: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#185b9d]"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#185b9d] text-white font-bold hover:bg-[#13497d] shadow-sm cursor-pointer"
-                >
-                  Create Examination Room
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+    document.addEventListener('keydown', keydown);
+    return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', keydown); previous?.focus(); };
+  }, []);
+  return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 p-4 flex items-start sm:items-center justify-center">
+    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={id} className="my-auto w-full max-w-3xl min-w-0 max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xl">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-3 mb-4"><h2 id={id} className="text-base font-bold text-slate-900">{title}</h2>
+        <button type="button" aria-label="Close dialog" title="Close dialog" disabled={busy} className={secondary} onClick={onClose}><X size={16}/></button></div>
+      {children}
     </div>
-  );
+  </div>;
+}
+
+export const ExamHallsView: React.FC<{ onOpenQrScanner?: () => void }> = () => {
+  const { isLoading: authLoading } = useAuth();
+  const [halls, setHalls] = useState<ExamHall[]>([]), [centers, setCenters] = useState<MockTestCenter[]>([]);
+  const [centerFilter, setCenterFilter] = useState('all'), [selectedId, setSelectedId] = useState('');
+  const [unassigned, setUnassigned] = useState<number | null>(null), [loading, setLoading] = useState(true), [loadError, setLoadError] = useState('');
+  const [roster, setRoster] = useState<HallCandidate[]>([]), [rosterId, setRosterId] = useState(''), [rosterError, setRosterError] = useState('');
+  const [refresh, setRefresh] = useState(0), [rosterSearch, setRosterSearch] = useState('');
+  const [dialog, setDialog] = useState<Dialog | null>(null), [busy, setBusy] = useState(false), [modalError, setModalError] = useState(''), [notice, setNotice] = useState('');
+  const [form, setForm] = useState<HallForm>(blankForm), [targetId, setTargetId] = useState(''), [newSeat, setNewSeat] = useState('');
+  const [search, setSearch] = useState(''), [classFilter, setClassFilter] = useState(''), [assignment, setAssignment] = useState<'unassigned' | 'assigned' | 'all'>('unassigned'), [page, setPage] = useState(1);
+  const [candidates, setCandidates] = useState<HallCandidate[]>([]), [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 0 });
+  const [candidateLoading, setCandidateLoading] = useState(false), [candidateError, setCandidateError] = useState(''), [candidateRetry, setCandidateRetry] = useState(0);
+  const [selected, setSelected] = useState<Record<string, HallCandidate>>({});
+  const loadVersion = useRef(0);
+  const visibleHalls = halls.filter(h => centerFilter === 'all' || h.testCenterId === centerFilter);
+  const hall = visibleHalls.find(h => h.id === selectedId);
+
+  const load = async () => {
+    const version = ++loadVersion.current; setLoading(true); setLoadError('');
+    try {
+      const [nextCenters, nextHalls, count] = await Promise.all([mockApi.getTestCenters(), mockApi.getExamHalls(), mockApi.getHallCandidates({ assignment: 'unassigned', limit: 1 })]);
+      if (version !== loadVersion.current) return;
+      setCenters(nextCenters); setHalls(nextHalls); setUnassigned(count.pagination.total);
+      setRefresh(value => value + 1);
+    } catch (error: any) { if (version === loadVersion.current) setLoadError(error.message || 'Unable to load Hall workspace.'); }
+    finally { if (version === loadVersion.current) setLoading(false); }
+  };
+  useEffect(() => { if (!authLoading) load(); return () => { loadVersion.current++; }; }, [authLoading]);
+  useEffect(() => {
+    if (!visibleHalls.some(h => h.id === selectedId)) setSelectedId(visibleHalls[0]?.id || '');
+  }, [halls, centerFilter, selectedId]);
+  useEffect(() => {
+    let active = true; setRoster([]); setRosterId(''); setRosterError('');
+    if (!selectedId) return;
+    mockApi.getExamHall(selectedId).then(detail => { if (active) { setRoster(detail.assignedStudents); setRosterId(detail.id); } })
+      .catch(error => { if (active) setRosterError(error.message); });
+    return () => { active = false; };
+  }, [selectedId, refresh]);
+  useEffect(() => {
+    let active = true;
+    if (dialog?.kind !== 'place') return;
+    setCandidateLoading(true); setCandidateError(''); setCandidates([]);
+    mockApi.getHallCandidates({ search, class: classFilter || undefined, assignment, page, limit: 25 })
+      .then(result => { if (active) { setCandidates(result.candidates); setPagination(result.pagination); } })
+      .catch(error => { if (active) setCandidateError(error.message); })
+      .finally(() => { if (active) setCandidateLoading(false); });
+    return () => { active = false; };
+  }, [dialog?.kind, search, classFilter, assignment, page, refresh, candidateRetry]);
+
+  const open = (next: Dialog) => {
+    setModalError(''); setNotice(''); setDialog(next); setTargetId('');
+    if (next.kind === 'create') setForm(blankForm());
+    if (next.kind === 'edit') setForm(Object.fromEntries(Object.keys(blankForm()).map(key => [key, String((next.hall as any)[key] ?? '')])) as HallForm);
+    if (next.kind === 'seat') setNewSeat(next.candidate.seatNo || '');
+    if (next.kind === 'place') { setSearch(''); setClassFilter(''); setAssignment('unassigned'); setPage(1); setSelected({}); }
+  };
+  const close = () => { if (!busy) setDialog(null); };
+  const mutate = async (operation: () => Promise<string>, keepOpen = false) => {
+    setBusy(true); setModalError('');
+    try {
+      const message = await operation(); setNotice(message);
+      setSelected({}); if (!keepOpen) setDialog(null); else setPage(1);
+      await load();
+    } catch (error: any) { setModalError(error.message || 'Operation failed. Please retry.'); }
+    finally { setBusy(false); }
+  };
+  const print = () => {
+    if (!hall || rosterId !== hall.id || rosterError) return;
+    const popup = window.open('', '_blank');
+    if (!popup) { setLoadError('Allow popups to print the seating roster, then retry.'); return; }
+    popup.document.open(); popup.document.write(buildHallRosterHtml(hall, roster)); popup.document.close();
+    popup.focus(); popup.print();
+  };
+  const seats = hall ? remaining(hall) : null;
+  const selection = Object.values(selected), excess = seats === null || selection.length > seats;
+  const totalAssigned = halls.reduce((sum, h) => sum + h.assignedCount, 0);
+  const totalAvailable = halls.every(knownCapacity) ? halls.reduce((sum, h) => sum + (remaining(h) ?? 0), 0) : null;
+  const filteredRoster = roster.filter(c => c.assignedHallId === hall?.id && [c.fullName, c.rollNumber, c.applicationNo].some(value => value?.toLowerCase().includes(rosterSearch.toLowerCase())));
+  const showEmpty = !loading && !loadError;
+  const updateFilter = (change: () => void) => { change(); setPage(1); setSelected({}); };
+  const toggle = (candidate: HallCandidate) => setSelected(previous => { const next = { ...previous }; if (next[candidate.id]) delete next[candidate.id]; else next[candidate.id] = candidate; return next; });
+  const footer = (text: string, action: () => void, disabled = false, danger = false) => <div className="mt-4 pt-3 border-t border-slate-200 flex justify-end gap-2">
+    <button className={secondary} type="button" disabled={busy} onClick={close}>Cancel</button>
+    <button className={danger ? primary.replace('bg-[#185b9d]', 'bg-red-600').replace('hover:bg-[#13497d]', 'hover:bg-red-700') : primary} type="button" disabled={busy || disabled} onClick={action}>{busy && <Loader2 size={14} className="animate-spin"/>}{busy ? 'Saving...' : text}</button></div>;
+
+  return <div className="space-y-4 min-w-0 text-slate-800">
+    <section className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 rounded-xl bg-white border border-slate-200 p-4 shadow-sm">
+      <div className="flex items-center gap-3 min-w-0"><span className="rounded-xl bg-blue-50 text-[#185b9d] p-2"><Building2 size={20}/></span><div><h1 className="text-base sm:text-lg font-bold">Examination Centers &amp; Hall Seating Management</h1><p className="text-xs text-slate-500 mt-1">Manage centers, rooms, candidate placement, and seating rosters.</p></div></div>
+      <div className="flex flex-wrap gap-2"><button className={primary} disabled={!hall || loading || !!loadError} onClick={() => open({ kind: 'place' })}><UserPlus size={15}/>Place Candidates</button>
+        <button className={secondary} disabled={!hall || rosterId !== hall.id || !!rosterError} onClick={print}><Printer size={15}/>Print Seating Roster</button>
+        <button className={secondary} disabled={loading || !!loadError} onClick={() => open({ kind: 'create' })}><Plus size={15}/>Add Hall</button></div>
+    </section>
+    {loading && <p role="status" className="text-xs flex items-center gap-2"><Loader2 size={14} className="animate-spin"/>{halls.length ? 'Refreshing Hall workspace...' : 'Loading Hall workspace...'}</p>}
+    {loadError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm">{loadError} <button className={secondary} onClick={load}>Retry</button></div>}
+    {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">{notice}</p>}
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {([['Examination Centers', centers.length, Building2], ['Configured Halls', halls.length, Building2], ['Assigned Candidates', totalAssigned, Users], ['Unassigned Candidates', unassigned, Users], ['Available Seats', totalAvailable, Armchair]] as const).map(([label, value, Icon]) =>
+        <div key={label} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-center justify-between gap-2 text-xs text-slate-500"><span>{label}</span><Icon size={16} className="text-[#185b9d]"/></div><p className="text-xl font-bold mt-1 tabular-nums">{loading && !halls.length || loadError ? '—' : value ?? '—'}</p></div>)}
+    </div>
+    <section className="rounded-xl bg-white border border-slate-200 p-4 shadow-sm">
+      <label className="block text-xs font-semibold mb-1" htmlFor="hall-center-filter">Examination Center</label>
+      <select id="hall-center-filter" className={field + ' sm:max-w-lg'} value={centerFilter} onChange={e => setCenterFilter(e.target.value)}>
+        <option value="all">All Centers ({halls.length} halls)</option>{centers.map(center => <option key={center.id} value={center.id}>{center.name} · {center.code} · {halls.filter(h => h.testCenterId === center.id).length} halls</option>)}
+      </select>
+      {showEmpty && !centers.length && <p className="text-sm text-slate-500 mt-3">No examination centers have been configured.</p>}
+      {showEmpty && !visibleHalls.length && <p className="text-sm text-slate-500 mt-3">No examination halls have been configured{centerFilter === 'all' ? '.' : ' for this center.'}</p>}
+      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-3">
+        {visibleHalls.map(item => <button key={item.id} type="button" aria-pressed={item.id === selectedId} onClick={() => { setSelectedId(item.id); setRosterSearch(''); }} className={'min-w-0 rounded-xl border p-3 text-left ' + (item.id === selectedId ? 'border-[#185b9d] bg-blue-50 ring-1 ring-[#185b9d]/20' : 'border-slate-200 bg-white hover:bg-slate-50')}>
+          <div className="flex items-start justify-between gap-2"><span className="font-bold text-sm break-words">{item.name}</span><span className={'text-xs font-semibold shrink-0 ' + (item.isOverCapacity ? 'text-red-700' : remaining(item) === 0 ? 'text-amber-700' : 'text-emerald-700')}>{hallState(item)}</span></div>
+          <p className="text-xs text-slate-500 mt-1">{item.roomNumber} · {item.targetClass}</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mt-3"><span>Capacity <b>{knownCapacity(item) ? item.capacity : '—'}</b></span><span>Assigned <b>{item.assignedCount}</b></span><span>Available <b>{remaining(item) ?? '—'}</b></span></div>
+        </button>)}
+      </div>
+    </section>
+    {hall && <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3"><h2 className="text-base font-bold">{hall.name} · {hall.roomNumber}</h2>
+        <div className="flex flex-wrap gap-2"><button className={secondary} onClick={() => open({ kind: 'edit', hall })}><Pencil size={14}/>Edit Hall</button><button className={secondary} onClick={() => open({ kind: 'place' })}>Place Candidates</button><button className={secondary} disabled={rosterId !== hall.id || !!rosterError} onClick={print}>Print Roster</button><button className={secondary + ' text-red-700'} onClick={() => open({ kind: 'delete', hall })}><Trash2 size={14}/>Delete Hall</button></div>
+      </div>
+      <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 py-4 text-xs">
+        {([['Center', hall.centerName], ['Target Class', hall.targetClass], ['Wing', hall.wing], ['Exam Date', hall.examDate], ['Reporting Time', hall.reportingTime], ['Capacity', knownCapacity(hall) ? hall.capacity : null], ['Assigned', hall.assignedCount], ['Available', seats], ['Recorded Invigilator', hall.invigilatorName]] as const).map(([label, value]) => <div key={label}><dt className="text-slate-500">{label}</dt><dd className="font-semibold mt-1 break-words">{value === '' || value == null ? '—' : value}</dd></div>)}
+      </dl>
+      <label htmlFor="hall-roster-search" className="block text-xs font-semibold mb-1">Search seated candidates</label><div className="relative sm:max-w-md"><Search size={15} className="absolute left-3 top-2.5 text-slate-400"/><input id="hall-roster-search" className={field + ' pl-9'} value={rosterSearch} onChange={e => setRosterSearch(e.target.value)} placeholder="Name, roll number or application ID"/></div>
+      {rosterError && <p role="alert" className="text-red-700 text-sm mt-3">{rosterError} <button className={secondary} onClick={() => setRefresh(v => v + 1)}>Retry roster</button></p>}
+      {!rosterError && rosterId !== hall.id && <p role="status" className="text-sm mt-3">Loading Hall roster...</p>}
+      <div className="overflow-x-auto max-w-full rounded-xl border border-slate-200 mt-3"><table className="w-full min-w-[850px] text-left text-xs"><thead className="bg-slate-50 text-slate-600"><tr>{['Seat', 'Candidate', 'Roll Number', 'Application ID', 'Class', 'Room', 'Actions'].map(label => <th key={label} className="px-3 py-2 font-semibold">{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
+        {filteredRoster.map(candidate => <tr key={candidate.id} className="hover:bg-slate-50"><td className="px-3 py-2 font-mono">{candidate.seatNo || 'Unassigned'}</td><td className="px-3 py-2 font-semibold">{candidate.fullName}</td><td className="px-3 py-2 font-mono">{candidate.rollNumber || '—'}</td><td className="px-3 py-2 font-mono">{candidate.applicationNo || '—'}</td><td className="px-3 py-2">{candidate.currentClass || '—'}</td><td className="px-3 py-2">{candidate.assignedRoom || '—'}</td><td className="px-3 py-2"><div className="flex gap-2 whitespace-nowrap"><button className="text-[#185b9d] hover:underline" onClick={() => open({ kind: 'move', candidate })}>Move</button><button className="text-[#185b9d] hover:underline" onClick={() => open({ kind: 'seat', candidate })}>Change Seat</button><button className="text-red-700 hover:underline" onClick={() => open({ kind: 'unassign', candidate })}>Unassign</button></div></td></tr>)}
+        {rosterId === hall.id && !filteredRoster.length && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">{roster.length ? 'No seated candidates match your search.' : 'No candidates are explicitly assigned to this Hall.'}</td></tr>}
+      </tbody></table></div>
+    </section>}
+    {dialog && <HallDialog title={dialog.kind === 'place' ? 'Place Candidates' : dialog.kind === 'create' ? 'Add Hall' : dialog.kind === 'edit' ? 'Edit Hall' : dialog.kind === 'move' ? 'Move Candidate' : dialog.kind === 'seat' ? 'Change Seat' : dialog.kind === 'delete' ? 'Delete Hall?' : 'Unassign candidate from this Hall?'} busy={busy} onClose={close}>
+      {modalError && <p role="alert" className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700 mb-3">{modalError}</p>}
+      {dialog.kind === 'place' && hall && <>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4">{[['Capacity', knownCapacity(hall) ? hall.capacity : '—'], ['Currently Assigned', hall.assignedCount], ['Available Seats', seats ?? '—'], ['Selected Candidates', selection.length]].map(([label, value]) => <div key={label} className="bg-slate-50 rounded-xl p-2"><span className="block text-slate-500">{label}</span><b className="block text-base mt-1">{value}</b></div>)}</div>
+        <div className="grid sm:grid-cols-3 gap-3"><label className="text-xs font-semibold">Search<input className={field + ' mt-1'} value={search} onChange={e => updateFilter(() => setSearch(e.target.value))} placeholder="Candidate name, roll or application"/></label>
+          <label className="text-xs font-semibold">Class<select className={field + ' mt-1'} value={classFilter} onChange={e => updateFilter(() => setClassFilter(e.target.value))}><option value="">All Classes</option>{classes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="text-xs font-semibold">Assignment<select className={field + ' mt-1'} value={assignment} onChange={e => updateFilter(() => setAssignment(e.target.value as any))}><option value="unassigned">Unassigned</option><option value="assigned">Assigned</option><option value="all">All Candidates</option></select></label>
+        </div>
+        {candidateLoading && <p role="status" className="text-xs mt-3">Loading placement candidates...</p>}
+        {candidateError && <p role="alert" className="text-sm text-red-700 mt-3">{candidateError} <button className={secondary} onClick={() => setCandidateRetry(v => v + 1)}>Retry candidates</button></p>}
+        {!candidateLoading && !candidateError && <div className="overflow-x-auto rounded-xl border border-slate-200 mt-3 max-h-72"><table className="w-full min-w-[560px] text-xs text-left"><thead className="bg-slate-50 sticky top-0"><tr><th className="p-2">Select</th><th className="p-2">Name</th><th className="p-2">Roll / Application</th><th className="p-2">Class</th><th className="p-2">Current Hall State</th></tr></thead><tbody className="divide-y divide-slate-100">
+          {candidates.map(candidate => <tr key={candidate.id} className="hover:bg-slate-50"><td className="p-2"><input type="checkbox" aria-label={'Select ' + candidate.fullName} checked={!!selected[candidate.id]} disabled={busy || candidate.assignedHallId === hall.id} onChange={() => toggle(candidate)}/></td><td className="p-2 font-semibold">{candidate.fullName}{candidate.legacyAllocationNeedsReview && <span className="block text-[11px] font-normal text-amber-700">Legacy allocation needs review</span>}</td><td className="p-2 font-mono">{candidate.rollNumber || candidate.applicationNo || '—'}</td><td className="p-2">{candidate.currentClass}</td><td className="p-2">{candidate.assignedHallId === hall.id ? 'Already in this Hall' : candidate.assignedHallId ? halls.find(h => h.id === candidate.assignedHallId)?.name || 'Assigned' : 'Unassigned'}</td></tr>)}
+          {!candidates.length && <tr><td colSpan={5} className="p-5 text-center text-slate-500">No candidates match these filters.</td></tr>}
+        </tbody></table></div>}
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs"><span>Page {page} of {pagination.totalPages || 1} · {pagination.total} candidates</span><div className="flex gap-2"><button className={secondary} disabled={busy || candidateLoading || !!candidateError || page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button><button className={secondary} disabled={busy || candidateLoading || !!candidateError || page >= pagination.totalPages} onClick={() => setPage(p => p + 1)}>Next</button></div></div>
+        {excess && selection.length > 0 && <p role="alert" className="text-sm text-amber-800 mt-3">{seats === null ? 'Hall capacity is unknown.' : 'Only ' + seats + ' seats are available in this hall.'}</p>}
+        {footer('Assign Candidates', () => mutate(async () => { const count = await mockApi.batchAssignStudentsToHall(hall.id, { hallName: hall.name, roomNumber: hall.roomNumber }, Object.keys(selected)); return 'Assigned ' + count + ' candidate(s).'; }, true), !selection.length || excess || candidateLoading || !!candidateError)}
+      </>}
+      {(dialog.kind === 'create' || dialog.kind === 'edit') && <form onSubmit={e => { e.preventDefault(); mutate(async () => {
+        const payload = { ...form, capacity: Number(form.capacity), testCenterId: form.testCenterId || null };
+        if (dialog.kind === 'edit') await mockApi.updateExamHall(dialog.hall.id, payload);
+        else await mockApi.createExamHall({ ...payload, reportingTime: form.reportingTime || undefined, examDate: form.examDate || undefined });
+        return dialog.kind === 'edit' ? 'Hall updated.' : 'Hall created.';
+      }); }}>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="text-xs font-semibold">Test Center<select className={field + ' mt-1'} value={form.testCenterId} disabled={busy} onChange={e => { const center = centers.find(c => c.id === e.target.value); setForm({ ...form, testCenterId: e.target.value, reportingTime: center?.reportingTime || '', examDate: center?.testDate || '' }); }}><option value="">No center — schedule unknown</option>{centers.map(center => <option key={center.id} value={center.id}>{center.name} · {center.code}</option>)}</select></label>
+          {([['name', 'Hall Name'], ['roomNumber', 'Room Number'], ['targetClass', 'Target Class'], ['wing', 'Wing'], ['capacity', 'Capacity'], ['examDate', 'Exam Date'], ['reportingTime', 'Reporting Time'], ['invigilatorName', 'Invigilator Name'], ['invigilatorPhone', 'Invigilator Phone']] as const).map(([key, label]) => <label key={key} className="text-xs font-semibold">{label}<input className={field + ' mt-1'} name={key} value={form[key]} type={key === 'capacity' ? 'number' : key === 'invigilatorPhone' ? 'tel' : 'text'} min={key === 'capacity' ? 1 : undefined} max={key === 'capacity' ? 100000 : undefined} step={key === 'capacity' ? 1 : undefined} required={['name', 'roomNumber', 'targetClass', 'capacity'].includes(key)} disabled={busy} onChange={e => setForm({ ...form, [key]: e.target.value })}/></label>)}
+        </div><p className="text-xs text-slate-500 mt-3">Center schedules are copied when available. Blank schedule fields represent unknown values.</p>
+        <div className="mt-4 border-t border-slate-200 pt-3 flex justify-end gap-2"><button className={secondary} type="button" disabled={busy} onClick={close}>Cancel</button><button className={primary} type="submit" disabled={busy}>{busy ? 'Saving...' : dialog.kind === 'edit' ? 'Save Hall' : 'Create Hall'}</button></div>
+      </form>}
+      {(dialog.kind === 'move' || dialog.kind === 'seat') && hall && <>
+        <dl className="text-sm space-y-1 mb-4"><div><dt className="inline text-slate-500">Candidate: </dt><dd className="inline font-semibold">{dialog.candidate.fullName}</dd></div><div><dt className="inline text-slate-500">Current Hall: </dt><dd className="inline">{hall.name}</dd></div><div><dt className="inline text-slate-500">Current Seat: </dt><dd className="inline">{dialog.candidate.seatNo || 'Unassigned'}</dd></div></dl>
+        {dialog.kind === 'move' ? <label className="text-xs font-semibold">Target Hall<select className={field + ' mt-1'} value={targetId} disabled={busy} onChange={e => setTargetId(e.target.value)}><option value="">Select target Hall</option>{halls.filter(h => h.id !== hall.id).map(item => <option key={item.id} value={item.id} disabled={!remaining(item)}>{item.name} · {item.roomNumber} · {item.centerName || 'No center'} · {remaining(item) ?? 'Unknown'} available</option>)}</select></label> :
+          <label className="text-xs font-semibold">New Seat<input className={field + ' mt-1'} value={newSeat} maxLength={100} disabled={busy} onChange={e => setNewSeat(e.target.value)}/></label>}
+        {footer(dialog.kind === 'move' ? 'Move Candidate' : 'Save Seat', () => mutate(async () => { await mockApi.updateStudentAllocation(dialog.candidate.id, dialog.kind === 'move' ? { assignedHallId: targetId } : { seatNo: newSeat.trim() }); return dialog.kind === 'move' ? 'Candidate moved.' : 'Seat updated.'; }), dialog.kind === 'move' ? !targetId : !newSeat.trim())}
+      </>}
+      {dialog.kind === 'unassign' && <><p className="text-sm font-semibold">{dialog.candidate.fullName}</p><p className="text-sm text-slate-500 mt-2">This removes the current Hall, room, and seat allocation.</p>{footer('Unassign Candidate', () => mutate(async () => { await mockApi.unassignStudentFromHall(dialog.candidate.id); return 'Candidate unassigned.'; }), false, true)}</>}
+      {dialog.kind === 'delete' && <><p className="text-sm font-semibold">{dialog.hall.name} · {dialog.hall.roomNumber}</p><p className="text-sm text-slate-500 mt-2">Only empty Halls may be deleted. Assigned candidates must be reassigned or unassigned first.</p>{footer('Delete Hall', () => mutate(async () => { await mockApi.deleteExamHall(dialog.hall.id); return 'Hall deleted.'; }), false, true)}</>}
+    </HallDialog>}
+  </div>;
 };

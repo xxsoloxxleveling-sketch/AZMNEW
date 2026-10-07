@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';import path from 'node:path';import vm from 'node:vm';import {execFileSync} from 'node:child_process';import ts from 'typescript';
+const root=path.resolve(__dirname,'../..'),source=fs.readFileSync(path.join(root,'src/components/admin/halls/ExamHallsView.tsx'),'utf8');
+let passed=0;const check=(name:string,fn:()=>void)=>{fn();passed++;console.log('PASS: '+name)};
+const helpers=source.split('// Local equivalent')[0].replace(/^import .*;\r?\n/gm,'');
+const js=ts.transpileModule(helpers,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const context={exports:{}};vm.runInNewContext(js,context);const print=(context.exports as any).buildHallRosterHtml;
+const hall={id:'a',name:'Hall <script>alert(1)</script>',roomNumber:'Room A',targetClass:'First Year',capacity:3,centerName:null,examDate:'',reportingTime:'',invigilatorName:null};
+const rows=[{id:'one',fullName:'Jane & John',assignedHallId:'a',seatNo:'Desk Z9',rollNumber:'ROLL-A',applicationNo:'APP-A',currentClass:'First Year'},{id:'two',fullName:'Missing Seat',assignedHallId:'a',seatNo:null,rollNumber:null,applicationNo:'APP-B'},{id:'legacy',fullName:'Legacy Excluded',assignedHallId:null,assignedHall:hall.name,seatNo:'Seat #01'}];
+const html=print(hall,rows);
+check('print escapes dynamic content and excludes implicit membership',()=>{assert(html.includes('&lt;script&gt;'));assert(html.includes('Jane &amp; John'));assert(!html.includes('<script>'));assert(!html.includes('Legacy Excluded'))});
+check('print preserves backend seats and separate roll semantics',()=>{assert(html.includes('Desk Z9'));assert(html.includes('Unassigned'));assert(!html.includes('Seat #02'));assert(!html.includes('APP-B'));assert(html.includes('ROLL-A'))});
+check('print A4 metadata has unknown values and no fees or attendance',()=>{assert(html.includes('size:A4'));assert(html.includes('Recorded Invigilator'));assert(html.includes('Candidate Signature'));assert(!/feeStatus|Attendance|PRESENT|ABSENT/.test(html));assert(!html.includes('2026'))});
+check('no unsafe runtime fallback or native dialogs',()=>{for(const term of ['DEFAULT_HALLS','attendanceMap','attendanceRate','presentCount','absentCount','feeStatus','alert(','prompt(','confirm(','getStudents(','Main Campus Examination Center','15 Nov 2026','0305-1755551'])assert(!source.includes(term),term)});
+check('Student global filters and navigation remain byte-identical to current main',()=>{for(const file of ['backend/src/modules/students/students.service.ts','backend/tests/student-class-filtering.test.ts','src/components/admin/layout/AdminSidebar.tsx']){const baseline=execFileSync('git',['show','origin/main:'+file],{cwd:root,encoding:'utf8'});const current=fs.readFileSync(path.join(root,file),'utf8');assert.equal(current.replace(/\r\n/g,'\n'),baseline.replace(/\r\n/g,'\n'),file)}});
+check('design note explicitly retains classic profile and deferred route',()=>{const note=fs.readFileSync(path.join(root,'design-system/azm-aio/pages/halls.md'),'utf8');assert(note.includes('CLASSIC CLIENT-APPROVED UI PROFILE'));assert(note.includes('7578b2dd'));assert(note.includes('deferred'))});
+console.log('Hall workspace: '+passed+' PASS, 0 FAIL.');

@@ -11,8 +11,8 @@ async function run() {
   // Prisma interprets timestamp-without-time-zone as UTC; match that in assertions.
   types.setTypeParser(1114, value => new Date(value + 'Z'));
   if (process.env.NODE_ENV === 'production') throw new Error('Production tests prohibited.');
-  const localEnv = dotenv.parse(fs.readFileSync(path.resolve(__dirname, '../.env')));
-  const url = new URL(process.env.HALL_TEST_DATABASE_URL || localEnv.DATABASE_URL);
+  const localUrl = process.env.HALL_TEST_DATABASE_URL || dotenv.parse(fs.readFileSync(path.resolve(__dirname, '../.env'))).DATABASE_URL;
+  const url = new URL(localUrl);
   if (!['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname)) throw new Error('Hall fixtures require a local database.');
   const schema = 'hall_test_' + randomUUID().replace(/-/g, '');
   const setup = new Client({ connectionString: url.toString(), connectionTimeoutMillis: 3000 });
@@ -156,6 +156,24 @@ async function run() {
     });
     await check('legacy editor contract does not create Hall membership', async () => { await halls.updateStudentAllocation('s12',{testCenterId:'center-b',testCenterName:'Legacy',assignedHall:'Legacy text',assignedRoom:'Legacy room',seatNo:'Legacy seat'}); const row=(await setup.query(`SELECT "assignedHallId","assignedHall" FROM "Student" WHERE id='s12'`)).rows[0]; assert.equal(row.assignedHallId,null); assert.equal(row.assignedHall,'Legacy text'); });
     await check('no fake runtime Hall or attendance source remains', () => { const source=fs.readFileSync(path.resolve(__dirname,'../../src/components/admin/halls/ExamHallsView.tsx'),'utf8'); for(const term of ['DEFAULT_HALLS','attendanceMap','presentCount','absentCount','attendanceRate','toggleAttendance','markAllPresent','feeStatus','mockApi.getStudents(','Main Campus Examination Center, Mansehra']) assert(!source.includes(term),term); assert.equal(candidateQuerySchema.parse({}).limit,25); });
+    await check('Hall placement canonical aliases preserve search and assignment filters', async () => {
+      const aliases=['First Year','1st Year','HSSC-I (Class 11th)','Class 11th (HSSC-I)','Second Year','2nd Year','HSSC-II (Class 12th)','Class 12th (HSSC-II)'];
+      for(let i=0;i<aliases.length;i++) await setup.query('UPDATE "Student" SET "currentClass"=$1 WHERE id=$2',[aliases[i],'s'+(16+i)]);
+      for(const [canonical,legacy,ids] of [['HSSC_1','First Year',['s16','s17','s18','s19']],['HSSC_2','Second Year',['s20','s21','s22','s23']]] as const){
+        const a=await halls.getCandidates(candidateQuerySchema.parse({class:canonical,assignment:'unassigned'}));
+        const b=await halls.getCandidates(candidateQuerySchema.parse({class:legacy,assignment:'unassigned'}));
+        assert.deepEqual(a.candidates.map(c=>c.id).sort(),[...ids].sort());
+        assert.deepEqual(b.candidates.map(c=>c.id).sort(),[...ids].sort());
+        const searched=await halls.getCandidates(candidateQuerySchema.parse({class:canonical,search:'APP'+ids[0].slice(1),assignment:'unassigned'}));
+        assert.equal(searched.candidates.length,1);assert.equal(searched.candidates[0].id,ids[0]);
+      }
+    });
+    await check('legacy flag reveals no raw mirror text and never creates membership', async () => {
+      const result=await halls.getCandidates(candidateQuerySchema.parse({search:'APP60',assignment:'unassigned'}));
+      assert.equal(result.candidates[0].legacyAllocationNeedsReview,true);
+      assert(!('assignedHall' in result.candidates[0]));assert.equal(result.candidates[0].assignedHallId,null);
+      assert.equal((await setup.query('SELECT "assignedHallId" FROM "Student" WHERE id=$1',['s60'])).rows[0].assignedHallId,null);
+    });
     console.log(`Hall integrity: ${passed} PASS, 0 FAIL (real isolated local PostgreSQL).`);
   } finally {
     if (server) await new Promise<void>(resolve=>server.close(()=>resolve()));
