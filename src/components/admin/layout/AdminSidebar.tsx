@@ -11,7 +11,6 @@ import {
   Banknote as IconPayroll,
   History as IconLedger,
   Settings as IconSettings,
-  QrCode as IconScan,
   School as IconBrandCrest,
   ChevronRight as IconChevronRight,
   ExternalLink as IconExternalLink,
@@ -78,6 +77,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
+      id: 'attendance' as AdminTab,
+      label: 'Examination Attendance',
+      icon: IconAttendance,
+      roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
+    },
+    {
       id: 'transactions' as AdminTab,
       label: 'Financial Ledger',
       icon: IconLedger,
@@ -93,7 +98,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'settings' as AdminTab,
       label: 'Settings & Security',
       icon: IconSettings,
-      roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
+      roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER'],
     },
   ];
 
@@ -195,31 +200,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               );
             })}
 
-            {/* Quick Standalone Examiner Scanner link for teachers or mobile access */}
+            {/* Camera scanning remains deferred; do not advertise it as operational. */}
             <div className="pt-3">
-              <div className="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Direct Portals
-              </div>
-              <button
-                onClick={() => {
-                  onSelectTab('scan');
-                  if (onCloseMobile) onCloseMobile();
-                }}
-                className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-colors duration-150 ${
-                  currentTab === 'scan'
-                    ? 'bg-[#185b9d] text-white shadow-md shadow-blue-500/20'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <IconScan
-                  size={18}
-                  className={`transition-colors shrink-0 ${
-                    currentTab === 'scan' ? 'text-white' : 'text-slate-500 group-hover:text-[#185b9d]'
-                  }`}
-                />
-                <span className="flex-1 text-left truncate">Mobile Scanner (/scan)</span>
-              </button>
-
               {onNavigatePublic && (
                 <>
                   <button

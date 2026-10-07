@@ -32,6 +32,10 @@ Verify 1440×900, 768×1024 and 390×844. Selectors stack on mobile. Tables scro
 
 ## Release gates
 
-#attendance and #scan remain deferred. No live sidebar addition, Teacher workspace enabling, global-shell change or camera release is included. This is local UI work; no production reconciliation, push, deployment or production migration.
+#attendance is enabled locally in the 13C candidate for ADMIN, SUPER_ADMIN and TEACHER. The Classic sidebar exposes Examination Attendance only to those roles. Teachers use the same Hub with restricted permissions. #scan, storage, fees and payroll remain deferred; the dormant scanner entry is hidden. No global-shell redesign or camera release is included. This is local UI work; no production reconciliation, push, deployment or production migration.
+
+Local acceptance uses disposable PostgreSQL databases and synthetic accounts. Migration rehearsals cover both the complete clean chain and an upgrade from 9fef4f57; no additional 13C migration is introduced. Production remains unchanged.
+
+The aggregate production audit at 2026-10-07 22:55:21 Asia/Karachi confirmed 0 Attendance rows, 0 explicit assignedHallId allocations and 18 legacy text allocation footprints inside a read-only transaction. Legacy text does not establish examination membership.
 
 PRODUCTION ATTENDANCE RELEASE REMAINS BLOCKED UNTIL INTENDED EXAM CANDIDATES HAVE EXPLICIT HALL ASSIGNMENTS.
