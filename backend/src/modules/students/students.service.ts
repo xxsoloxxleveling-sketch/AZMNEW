@@ -168,6 +168,183 @@ export function getCandidateNumber(student: { rollNumber?: string | null; applic
   };
 }
 
+/**
+ * Canonical class filter helper.
+ * Maps incoming class filter keys (canonical keys or legacy values) to explicit,
+ * mutually exclusive case-insensitive equals conditions on Student.currentClass.
+ */
+export function buildStudentClassWhere(classLevel?: string | null): any {
+  if (!classLevel) return null;
+  const raw = classLevel.trim();
+  const normalized = raw.toUpperCase().replace(/[\s\-_]+/g, '');
+  if (!normalized || normalized === 'ALL') return null;
+
+  // 1. First Year / HSSC-I (Total 176 on live data)
+  if (
+    normalized === 'HSSC1' ||
+    normalized === 'HSSCI' ||
+    normalized === '1STYEAR' ||
+    normalized === 'FIRSTYEAR' ||
+    normalized === 'CLASS11' ||
+    normalized === 'CLASS11TH' ||
+    normalized === '11TH' ||
+    normalized === '11'
+  ) {
+    const aliases = [
+      'HSSC-I (Class 11th)',
+      'Class 11th (HSSC-I)',
+      '1st Year',
+      'First Year',
+      'HSSC-I',
+      'Class 11th',
+      'Class 11',
+    ];
+    return {
+      OR: aliases.map((val) => ({
+        currentClass: { equals: val, mode: 'insensitive' },
+      })),
+    };
+  }
+
+  // 2. Second Year / HSSC-II (Total 123 on live data)
+  if (
+    normalized === 'HSSC2' ||
+    normalized === 'HSSCII' ||
+    normalized === '2NDYEAR' ||
+    normalized === 'SECONDYEAR' ||
+    normalized === 'CLASS12' ||
+    normalized === 'CLASS12TH' ||
+    normalized === '12TH' ||
+    normalized === '12'
+  ) {
+    const aliases = [
+      'HSSC-II (Class 12th)',
+      'Class 12th (HSSC-II)',
+      '2nd Year',
+      'Second Year',
+      'HSSC-II',
+      'Class 12th',
+      'Class 12',
+    ];
+    return {
+      OR: aliases.map((val) => ({
+        currentClass: { equals: val, mode: 'insensitive' },
+      })),
+    };
+  }
+
+  // 3. Class 9 / SSC-I (Total 204 on live data)
+  if (
+    normalized === 'CLASS9' ||
+    normalized === 'CLASS9TH' ||
+    normalized === '9TH' ||
+    normalized === '9' ||
+    normalized === 'SSC1' ||
+    normalized === 'SSCI'
+  ) {
+    const aliases = [
+      'SSC-I (Class 9th)',
+      'Class 9th (SSC-I)',
+      'Class 9th',
+      'Class 9',
+      'SSC-I',
+    ];
+    return {
+      OR: aliases.map((val) => ({
+        currentClass: { equals: val, mode: 'insensitive' },
+      })),
+    };
+  }
+
+  // 4. Class 10 / SSC-II (Total 188 on live data)
+  if (
+    normalized === 'CLASS10' ||
+    normalized === 'CLASS10TH' ||
+    normalized === '10TH' ||
+    normalized === '10' ||
+    normalized === 'SSC2' ||
+    normalized === 'SSCII'
+  ) {
+    const aliases = [
+      'SSC-II (Class 10th)',
+      'Class 10th (SSC-II)',
+      'Class 10th',
+      'Class 10',
+      'SSC-II',
+    ];
+    return {
+      OR: aliases.map((val) => ({
+        currentClass: { equals: val, mode: 'insensitive' },
+      })),
+    };
+  }
+
+  // 5. Class 6 (Total 123 on live data)
+  if (
+    normalized === 'CLASS6' ||
+    normalized === 'CLASS6TH' ||
+    normalized === '6TH' ||
+    normalized === '6'
+  ) {
+    const aliases = ['Class 6th', 'Class 6'];
+    return {
+      OR: aliases.map((val) => ({
+        currentClass: { equals: val, mode: 'insensitive' },
+      })),
+    };
+  }
+
+  // 6. Class 7 (Total 154 on live data)
+  if (
+    normalized === 'CLASS7' ||
+    normalized === 'CLASS7TH' ||
+    normalized === '7TH' ||
+    normalized === '7'
+  ) {
+    const aliases = ['Class 7th', 'Class 7'];
+    return {
+      OR: aliases.map((val) => ({
+        currentClass: { equals: val, mode: 'insensitive' },
+      })),
+    };
+  }
+
+  // 7. Class 8 (Total 136 on live data)
+  if (
+    normalized === 'CLASS8' ||
+    normalized === 'CLASS8TH' ||
+    normalized === '8TH' ||
+    normalized === '8'
+  ) {
+    const aliases = ['Class 8th', 'Class 8'];
+    return {
+      OR: aliases.map((val) => ({
+        currentClass: { equals: val, mode: 'insensitive' },
+      })),
+    };
+  }
+
+  // 8. BS / Undergraduate (Total 67 on live data)
+  if (
+    normalized === 'BS' ||
+    normalized === 'BSPROGRAM' ||
+    normalized === 'UNDERGRADUATE' ||
+    normalized === 'BSPROGRAMUNDERGRADUATE'
+  ) {
+    const aliases = ['BS Program (Undergraduate)', 'BS', 'Undergraduate'];
+    return {
+      OR: aliases.map((val) => ({
+        currentClass: { equals: val, mode: 'insensitive' },
+      })),
+    };
+  }
+
+  // Fallback for custom / unmapped literal string
+  return {
+    currentClass: { equals: raw, mode: 'insensitive' },
+  };
+}
+
 export class StudentsService {
   private activeThumbnailJobs = new Map<string, Promise<{ buffer: Buffer; contentType: string } | null>>();
 
@@ -1442,30 +1619,37 @@ export class StudentsService {
     const limit = Math.min(parseInt(String(query.limit || 50), 10) || 50, 250);
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const conditions: any[] = [];
 
     if (query.status && (query.status as any) !== 'ALL') {
-      where.status = query.status;
+      conditions.push({ status: query.status });
     }
 
     if (query.gender && (query.gender as any) !== 'ALL') {
-      where.gender = query.gender;
+      conditions.push({ gender: query.gender });
     }
 
     if (query.classLevel && query.classLevel !== 'ALL') {
-      where.currentClass = { contains: query.classLevel, mode: 'insensitive' };
+      const classWhere = buildStudentClassWhere(query.classLevel);
+      if (classWhere) {
+        conditions.push(classWhere);
+      }
     }
 
     if (query.search && query.search.trim()) {
       const s = query.search.trim();
-      where.OR = [
-        { fullName: { contains: s, mode: 'insensitive' } },
-        { rollNumber: { contains: s, mode: 'insensitive' } },
-        { cnicOrBForm: { contains: s, mode: 'insensitive' } },
-        { applicationNo: { contains: s, mode: 'insensitive' } },
-        { fatherName: { contains: s, mode: 'insensitive' } },
-      ];
+      conditions.push({
+        OR: [
+          { fullName: { contains: s, mode: 'insensitive' } },
+          { rollNumber: { contains: s, mode: 'insensitive' } },
+          { cnicOrBForm: { contains: s, mode: 'insensitive' } },
+          { applicationNo: { contains: s, mode: 'insensitive' } },
+          { fatherName: { contains: s, mode: 'insensitive' } },
+        ],
+      });
     }
+
+    const where: any = conditions.length > 0 ? { AND: conditions } : {};
 
     const listStudents = (includeDocumentMetadata: boolean) =>
       prisma.student.findMany({
@@ -1595,30 +1779,37 @@ export class StudentsService {
    * Generates and exports a branded PDF document of students matching applied filters
    */
   async exportStudentsPdf(query: StudentQueryInput): Promise<{ buffer: Buffer; filename: string }> {
-    const where: any = {};
+    const conditions: any[] = [];
 
     if (query.status && (query.status as any) !== 'ALL') {
-      where.status = query.status;
+      conditions.push({ status: query.status });
     }
 
     if (query.gender && (query.gender as any) !== 'ALL') {
-      where.gender = query.gender;
+      conditions.push({ gender: query.gender });
     }
 
     if (query.classLevel && query.classLevel !== 'ALL') {
-      where.currentClass = { contains: query.classLevel, mode: 'insensitive' };
+      const classWhere = buildStudentClassWhere(query.classLevel);
+      if (classWhere) {
+        conditions.push(classWhere);
+      }
     }
 
     if (query.search && query.search.trim()) {
       const s = query.search.trim();
-      where.OR = [
-        { fullName: { contains: s, mode: 'insensitive' } },
-        { rollNumber: { contains: s, mode: 'insensitive' } },
-        { cnicOrBForm: { contains: s, mode: 'insensitive' } },
-        { applicationNo: { contains: s, mode: 'insensitive' } },
-        { fatherName: { contains: s, mode: 'insensitive' } },
-      ];
+      conditions.push({
+        OR: [
+          { fullName: { contains: s, mode: 'insensitive' } },
+          { rollNumber: { contains: s, mode: 'insensitive' } },
+          { cnicOrBForm: { contains: s, mode: 'insensitive' } },
+          { applicationNo: { contains: s, mode: 'insensitive' } },
+          { fatherName: { contains: s, mode: 'insensitive' } },
+        ],
+      });
     }
+
+    const where: any = conditions.length > 0 ? { AND: conditions } : {};
 
     // A roster with embedded portrait thumbnails is intentionally capped. This
     // keeps a single administrative export within the Render memory budget.
