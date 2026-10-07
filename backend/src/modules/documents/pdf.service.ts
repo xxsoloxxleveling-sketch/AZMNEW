@@ -1256,9 +1256,13 @@ export class PdfService {
     const cnic = student.cnicOrBForm || 'N/A';
     const classLevel = student.currentClass || 'SSC-II (Class 10th)';
     const groupOrSubject = student.hsscGroup || student.bsDepartment || 'General Merit / Science';
-    const testCenter = student.officeUse?.testCentre || student.testCenterName || 'To be assigned';
-    const roomNo = student.assignedRoom || 'To be assigned';
-    const seatNo = student.seatNo || 'To be assigned';
+    const assigned = student.placementStatus === 'ASSIGNED' && Boolean(student.assignedHallId);
+    const testCenter = assigned && student.testCenterName || 'To be assigned';
+    const hallName = assigned && student.assignedHall || 'To be assigned';
+    const roomNo = assigned && student.assignedRoom || 'To be assigned';
+    const seatNo = assigned && student.seatNo || 'To be assigned';
+    const examDate = assigned && student.testDate || 'To be announced';
+    const reportingTime = assigned && student.reportingTime || 'To be announced';
 
     const defaultPhoto = `data:image/svg+xml;utf8,${encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
@@ -1799,6 +1803,16 @@ export class PdfService {
           <td class="dt-val">${classLevel} (${groupOrSubject})</td>
           <td class="dt-label">Test Center:</td>
           <td class="dt-val">${testCenter}</td>
+        </tr>
+        <tr>
+          <td class="dt-label">Hall:</td>
+          <td class="dt-val">${hallName}</td>
+          <td class="dt-label">Exam Date:</td>
+          <td class="dt-val">${examDate}</td>
+        </tr>
+        <tr>
+          <td class="dt-label">Reporting Time:</td>
+          <td class="dt-val" colspan="3">${reportingTime}</td>
         </tr>
       </table>
 
