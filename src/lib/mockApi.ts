@@ -250,15 +250,76 @@ export interface AttendanceSessionMetrics {
   attendancePercentage: number | null;
 }
 
+export interface AttendancePagination {
+  page: number; limit: number; total: number; totalPages: number;
+}
+export interface AttendanceSession {
+  id: string;
+  examHallId: string;
+  businessDate: string;
+  status: 'OPEN' | 'CLOSED';
+  openedByUserId: string;
+  openedAt: string;
+  closedByUserId: string | null;
+  closedAt: string | null;
+  hallNameSnapshot: string;
+  roomNumberSnapshot: string;
+  testCenterNameSnapshot: string | null;
+  examDateSnapshot: string;
+  reportingTimeSnapshot: string;
+}
+export interface AttendanceSessionCandidate {
+  studentId: string;
+  fullNameSnapshot: string;
+  rollNumberSnapshot: string | null;
+  applicationNoSnapshot: string;
+  currentClassSnapshot: string;
+  seatNoSnapshot: string | null;
+  status: AttendanceStatus | 'NOT_MARKED';
+  method: 'MANUAL' | 'QR_SCAN' | null;
+  markedAt: string | null;
+  // Operator labels are optional; the 13A roster does not expose them.
+  markedByName?: string | null;
+}
 export interface AttendanceSessionListResponse {
-  sessions: any[];
-  pagination: { page: number; limit: number; total: number; totalPages: number };
+  sessions: (AttendanceSession & { stats: AttendanceSessionMetrics })[];
+  pagination: AttendancePagination;
+}
+export interface AttendanceSessionDetail {
+  session: AttendanceSession;
+  stats: AttendanceSessionMetrics;
+  roster: AttendanceSessionCandidate[];
+}
+export interface AttendanceCandidatesResponse {
+  candidates: AttendanceSessionCandidate[];
+  pagination: AttendancePagination;
+}
+export interface AttendanceMarkResponse {
+  attendance: { id: string; sessionId: string; studentId: string; status: AttendanceStatus; method: 'MANUAL' | 'QR_SCAN'; markedByUserId: string; createdAt: string };
+  student: { id: string; fullName: string; rollNumber: string | null; currentClass: string; status: string };
+  message?: string;
+}
+export interface StudentExamAttendanceHistory {
+  student: { id: string; fullName: string; rollNumber: string | null; currentClass: string };
+  stats: AttendanceSessionMetrics;
+  history: (AttendanceSessionCandidate & { session: AttendanceSession })[];
+  pagination: AttendancePagination;
+  legacyHistory: { id: string; date: string; status: string; method: string; createdAt: string; label: 'Legacy attendance record' }[];
+}
+function validateAttendanceMetrics(value: any): void {
+  const counts = ['expectedCount', 'markedCount', 'presentCount', 'lateCount', 'absentCount', 'unmarkedCount'];
+  if (!value || counts.some(key => !Number.isInteger(value[key]) || value[key] < 0) || !(value.attendancePercentage === null || (Number.isFinite(value.attendancePercentage) && value.attendancePercentage >= 0 && value.attendancePercentage <= 100))) throw new Error('Invalid examination attendance metrics');
+  if (value.markedCount !== value.presentCount + value.lateCount + value.absentCount || value.expectedCount !== value.markedCount + value.unmarkedCount || (value.expectedCount === 0 && value.attendancePercentage !== null)) throw new Error('Inconsistent examination attendance metrics');
+}
+function validateAttendancePagination(value: any): void {
+  if (!value || !Number.isInteger(value.page) || value.page < 1 || !Number.isInteger(value.limit) || value.limit < 1 || !Number.isInteger(value.total) || value.total < 0 || !Number.isInteger(value.totalPages) || value.totalPages < 0) throw new Error('Invalid attendance pagination');
+}
+function validateAttendanceCandidates(value: any): void {
+  if (!Array.isArray(value) || value.some(row => typeof row?.studentId !== 'string' || !['NOT_MARKED', 'PRESENT', 'LATE', 'ABSENT'].includes(row.status))) throw new Error('Invalid frozen attendance roster');
 }
 
-export interface AttendanceSessionDetail {
-  session: any;
-  stats: AttendanceSessionMetrics;
-  roster: any[];
+function validateAttendanceSessionIdentity(value: any): void {
+  if (typeof value?.id !== 'string' || !value.id.trim() || typeof value.examHallId !== 'string' || !value.examHallId.trim()) throw new Error('Invalid attendance session identity');
 }
 
 export interface MockFeeChallan {
@@ -1450,12 +1511,17 @@ export const mockApi = {
     if (query?.status) params.set('status', query.status);
     const res: any = await apiFetch<any>(`/api/attendance/sessions?${params.toString()}`);
     if (!Array.isArray(res?.sessions) || !res?.pagination) throw new Error('Invalid attendance sessions response');
+    validateAttendancePagination(res.pagination);
+    res.sessions.forEach((session: any) => { if (typeof session?.id !== 'string' || typeof session.examHallId !== 'string') throw new Error('Invalid attendance session'); validateAttendanceMetrics(session.stats); });
     return res as AttendanceSessionListResponse;
   },
 
   async getAttendanceSession(id: string): Promise<AttendanceSessionDetail> {
     const res: any = await apiFetch<any>(`/api/attendance/sessions/${encodeURIComponent(id)}`);
     if (!res?.session || !res?.stats || !Array.isArray(res?.roster)) throw new Error('Invalid attendance session detail');
+    validateAttendanceSessionIdentity(res.session);
+    validateAttendanceMetrics(res.stats);
+    validateAttendanceCandidates(res.roster);
     return res as AttendanceSessionDetail;
   },
 
@@ -1464,10 +1530,22 @@ export const mockApi = {
       method: 'POST', body: JSON.stringify(payload),
     });
     if (!res?.session || !res?.stats || !Array.isArray(res?.roster)) throw new Error('Invalid created attendance session');
+    validateAttendanceSessionIdentity(res.session);
+    validateAttendanceMetrics(res.stats);
+    validateAttendanceCandidates(res.roster);
     return res as AttendanceSessionDetail;
   },
 
-  async markAttendanceSession(id: string, payload: { studentId?: string; rollNumber?: string; qrToken?: string; status: AttendanceStatus }): Promise<{ attendance: any; student: any }> {
+  async getAttendanceSessionCandidates(id: string, query?: { page?: number; limit?: number; search?: string }): Promise<AttendanceCandidatesResponse> {
+    const params = new URLSearchParams({ page: String(query?.page ?? 1), limit: String(query?.limit ?? 25) });
+    if (query?.search?.trim()) params.set('search', query.search.trim());
+    const res: any = await apiFetch<any>(`/api/attendance/sessions/${encodeURIComponent(id)}/candidates?${params}`);
+    validateAttendanceCandidates(res?.candidates);
+    validateAttendancePagination(res?.pagination);
+    return res as AttendanceCandidatesResponse;
+  },
+
+  async markAttendanceSession(id: string, payload: { studentId?: string; rollNumber?: string; qrToken?: string; status: AttendanceStatus }): Promise<AttendanceMarkResponse> {
     const identifiers = [payload.studentId, payload.rollNumber, payload.qrToken].filter((value) => typeof value === 'string' && value.trim());
     if (identifiers.length !== 1) throw new Error('Provide exactly one studentId, rollNumber, or qrToken');
     const body = Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]));
@@ -1483,6 +1561,9 @@ export const mockApi = {
       method: 'POST', body: JSON.stringify({ markRemainingAbsent: payload.markRemainingAbsent ?? false }),
     });
     if (!res?.session || !res?.stats || !Array.isArray(res?.roster)) throw new Error('Invalid closed attendance session');
+    validateAttendanceSessionIdentity(res.session);
+    validateAttendanceMetrics(res.stats);
+    validateAttendanceCandidates(res.roster);
     return res as AttendanceSessionDetail;
   },
 
@@ -1493,7 +1574,7 @@ export const mockApi = {
     studentId?: string;
     rollNumber?: string;
     status?: AttendanceStatus;
-  }): Promise<{ attendance: any; student: any }> {
+  }): Promise<AttendanceMarkResponse> {
     if (typeof payload.sessionId !== 'string' || !payload.sessionId.trim()) throw new Error('Attendance session is required');
     const { sessionId, ...mark } = payload;
     return this.markAttendanceSession(sessionId, { ...mark, status: mark.status || 'PRESENT' });
@@ -1506,9 +1587,9 @@ export const mockApi = {
     return res;
   },
 
-  async getStudentAttendanceHistory(studentId: string): Promise<any> {
+  async getStudentAttendanceHistory(studentId: string): Promise<StudentExamAttendanceHistory> {
     const res: any = await apiFetch<any>(`/api/attendance/student/${studentId}`);
-    if (Array.isArray(res?.history) && Array.isArray(res?.legacyHistory)) return res;
+    if (Array.isArray(res?.history) && Array.isArray(res?.legacyHistory)) { validateAttendanceMetrics(res.stats); validateAttendancePagination(res.pagination); return res as StudentExamAttendanceHistory; }
     throw new Error('Invalid student attendance history response');
   },
 
@@ -2943,5 +3024,3 @@ export function printStudentDossier(student: any) {
   printWindow.document.write(html);
   printWindow.document.close();
 }
-
-
