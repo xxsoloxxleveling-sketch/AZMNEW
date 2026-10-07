@@ -150,9 +150,10 @@ async function runUserManagementTests() {
 
   // Backup original service methods
   const origGetUserById = usersService.getUserById.bind(usersService);
-  const origCountActive = usersService.countActiveSuperAdmins.bind(usersService);
+  const origTransaction = prisma.$transaction;
+  let matrixTransactions = 0;
 
-  // Stub getUserById and countActiveSuperAdmins to use the isolated test fixture
+  // Stub the pre-transaction lookup to use the isolated test fixture
   usersService.getUserById = async (id: string) => {
     const user = testUsersMap.get(id);
     if (!user) {
@@ -163,16 +164,27 @@ async function runUserManagementTests() {
     return { ...user };
   };
 
-  usersService.countActiveSuperAdmins = async () => {
-    let count = 0;
-    for (const u of testUsersMap.values()) {
-      if (u.role === Role.SUPER_ADMIN && u.status === 'ACTIVE') {
-        count++;
-      }
-    }
-    return count;
+  // Exercise the actual transaction callback; fixture users never reach the app DB.
+  (prisma as any).$transaction = async (callback: any, options: any) => {
+    if (options?.isolationLevel !== 'Serializable') throw new Error('Super-admin guards require Serializable isolation.');
+    matrixTransactions++;
+    return callback({ user: {
+      count: async ({ where }: any) => [...testUsersMap.values()].filter(user => user.role === where.role && user.status === where.status).length,
+      update: async ({ where, data }: any) => {
+        const user = testUsersMap.get(where.id);
+        if (!user) throw new Error('Missing fixture user.');
+        const updated = { ...user, ...data, tokenVersion: data.tokenVersion?.increment ? (user.tokenVersion || 0) + data.tokenVersion.increment : user.tokenVersion };
+        testUsersMap.set(where.id, updated); return { ...updated };
+      },
+      delete: async ({ where }: any) => {
+        const user = testUsersMap.get(where.id);
+        if (!user) throw new Error('Missing fixture user.');
+        testUsersMap.delete(where.id); return { ...user };
+      },
+    }});
   };
 
+  try {
   // 4.1 Only ONE ACTIVE SUPER_ADMIN exists. Demote it to ADMIN -> REJECTED
   testUsersMap.clear();
   testUsersMap.set('sa-1', {
@@ -193,9 +205,9 @@ async function runUserManagementTests() {
   }
   assert(
     demote1Caught &&
-      demote1Error?.statusCode === 400 &&
+      demote1Error?.statusCode === 409 &&
       demote1Error?.message === 'You cannot change the role of the last active Super Admin.',
-    '1. Only one ACTIVE SUPER_ADMIN exists: Demote to ADMIN -> REJECTED (400)'
+    '1. Only one ACTIVE SUPER_ADMIN exists: Demote to ADMIN -> REJECTED (409)'
   );
 
   // 4.2 Only ONE ACTIVE SUPER_ADMIN exists. Change status to INACTIVE -> REJECTED
@@ -209,9 +221,9 @@ async function runUserManagementTests() {
   }
   assert(
     deact1Caught &&
-      deact1Error?.statusCode === 400 &&
+      deact1Error?.statusCode === 409 &&
       deact1Error?.message === 'You cannot deactivate the last active Super Admin.',
-    '2. Only one ACTIVE SUPER_ADMIN exists: Change status to INACTIVE -> REJECTED (400)'
+    '2. Only one ACTIVE SUPER_ADMIN exists: Change status to INACTIVE -> REJECTED (409)'
   );
 
   // 4.3 TWO ACTIVE SUPER_ADMIN accounts exist. Demote one -> ALLOWED
@@ -235,12 +247,10 @@ async function runUserManagementTests() {
   try {
     await usersService.updateUser('sa-2', { role: Role.ADMIN });
   } catch (err: any) {
-    if (err?.message === 'You cannot change the role of the last active Super Admin.') {
-      demote2Blocked = true;
-    }
+    demote2Blocked = true;
   }
   assert(
-    !demote2Blocked,
+    !demote2Blocked && testUsersMap.get('sa-2')?.role === Role.ADMIN,
     '3. Two ACTIVE SUPER_ADMIN accounts exist: Demote one -> ALLOWED'
   );
 
@@ -265,12 +275,10 @@ async function runUserManagementTests() {
   try {
     await usersService.updateUser('sa-2', { status: 'INACTIVE' }, 'sa-1');
   } catch (err: any) {
-    if (err?.message === 'You cannot deactivate the last active Super Admin.') {
-      deact2Blocked = true;
-    }
+    deact2Blocked = true;
   }
   assert(
-    !deact2Blocked,
+    !deact2Blocked && testUsersMap.get('sa-2')?.status === 'INACTIVE',
     '4. Two ACTIVE SUPER_ADMIN accounts exist: Deactivate one -> ALLOWED'
   );
 
@@ -301,9 +309,9 @@ async function runUserManagementTests() {
   }
   assert(
     demoteActiveBlocked &&
-      demoteActiveError?.statusCode === 400 &&
+      demoteActiveError?.statusCode === 409 &&
       demoteActiveError?.message === 'You cannot change the role of the last active Super Admin.',
-    '5. One ACTIVE + one INACTIVE Super Admin: Demote ACTIVE one -> REJECTED (400)'
+    '5. One ACTIVE + one INACTIVE Super Admin: Demote ACTIVE one -> REJECTED (409)'
   );
 
   // 4.6 ONE ACTIVE SUPER_ADMIN + ONE INACTIVE SUPER_ADMIN. Deactivate the ACTIVE one -> REJECTED
@@ -317,9 +325,9 @@ async function runUserManagementTests() {
   }
   assert(
     deactActiveBlocked &&
-      deactActiveError?.statusCode === 400 &&
+      deactActiveError?.statusCode === 409 &&
       deactActiveError?.message === 'You cannot deactivate the last active Super Admin.',
-    '6. One ACTIVE + one INACTIVE Super Admin: Deactivate ACTIVE one -> REJECTED (400)'
+    '6. One ACTIVE + one INACTIVE Super Admin: Deactivate ACTIVE one -> REJECTED (409)'
   );
 
   // 4.7 ONE ACTIVE SUPER_ADMIN + ONE INACTIVE SUPER_ADMIN. Delete the ACTIVE one -> REJECTED
@@ -333,9 +341,9 @@ async function runUserManagementTests() {
   }
   assert(
     deleteActiveBlocked &&
-      deleteActiveError?.statusCode === 400 &&
+      deleteActiveError?.statusCode === 409 &&
       deleteActiveError?.message === 'Cannot delete the last remaining Super Admin account.',
-    '7. One ACTIVE + one INACTIVE Super Admin: Delete ACTIVE one -> REJECTED (400)'
+    '7. One ACTIVE + one INACTIVE Super Admin: Delete ACTIVE one -> REJECTED (409)'
   );
 
   // 4.8 TWO ACTIVE SUPER_ADMIN accounts. Delete one where self-delete does not apply -> ALLOWED
@@ -359,12 +367,10 @@ async function runUserManagementTests() {
   try {
     await usersService.deleteUser('sa-2', 'sa-1');
   } catch (err: any) {
-    if (err?.message === 'Cannot delete the last remaining Super Admin account.') {
-      deleteAllowedBlocked = true;
-    }
+    deleteAllowedBlocked = true;
   }
   assert(
-    !deleteAllowedBlocked,
+    !deleteAllowedBlocked && !testUsersMap.has('sa-2'),
     '8. Two ACTIVE Super Admin accounts: Delete one (non-self) -> ALLOWED'
   );
 
@@ -400,9 +406,11 @@ async function runUserManagementTests() {
     '10. Existing self-delete protection still passes -> REJECTED (400)'
   );
 
-  // Restore original service methods
-  usersService.getUserById = origGetUserById;
-  usersService.countActiveSuperAdmins = origCountActive;
+  assert(matrixTransactions === 8, 'Super-admin protection matrix exercises all eight Serializable transactions');
+  } finally {
+    usersService.getUserById = origGetUserById;
+    (prisma as any).$transaction = origTransaction;
+  }
 
   // =========================================================================
   // 5. Inactive Account Authentication Enforcement (Login & Refresh)

@@ -284,7 +284,7 @@ function AppContent() {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
-      const deferredTabs = ['halls', 'storage', 'attendance', 'fees', 'payroll', 'scan'];
+      const deferredTabs = ['storage', 'attendance', 'fees', 'payroll', 'scan'];
 
       if (!hash || hash === 'home') {
         setCurrentRoute('public');
@@ -304,12 +304,12 @@ function AppContent() {
         setCurrentRoute('admin');
         setAdminTab('partners');
       } else if (
-        ['dashboard', 'students', 'partners', 'staff', 'transactions', 'settings'].includes(
+        ['dashboard', 'students', 'partners', 'staff', 'transactions', 'settings', 'halls'].includes(
           hash
         )
       ) {
         setCurrentRoute('admin');
-        setAdminTab(hash as AdminTab);
+        setAdminTab(hash === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN' ? 'dashboard' : hash as AdminTab);
       } else if (
         hash === 'apply-test' ||
         hash === 'test-apply' ||
@@ -349,10 +349,11 @@ function AppContent() {
     if (targetRoute === 'scan') {
       targetRoute = 'admin';
       targetTab = 'dashboard';
-    } else if (targetTab && ['halls', 'storage', 'attendance', 'fees', 'payroll', 'scan'].includes(targetTab)) {
+    } else if (targetTab && ['storage', 'attendance', 'fees', 'payroll', 'scan'].includes(targetTab)) {
       targetTab = 'dashboard';
     }
 
+    if (targetTab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN') targetTab = 'dashboard';
     setCurrentRoute(targetRoute);
     if (targetTab) setAdminTab(targetTab);
     window.location.hash = targetRoute === 'admin' ? targetTab || 'dashboard' : targetRoute === 'public' ? activeTab : targetRoute;
@@ -541,7 +542,7 @@ function AppContent() {
         case 'partners':
           return { title: 'Partner Institutions Directory', subtitle: 'Manage affiliated schools, colleges, academies, and exam venue accreditations' };
         case 'halls':
-          return { title: 'Class-Wise Examination Halls & Attendance', subtitle: 'Live room allocations, capacity limits, and real-time attendance matrix' };
+          return { title: 'Examination Halls & Seating', subtitle: 'Centers, rooms, candidate placement, and seating rosters' };
         case 'storage':
           return { title: 'Candidate Document Storage Vault', subtitle: 'Digital repository of photos, CNIC/B-Forms, DMCs, and payment receipts' };
         case 'attendance':
@@ -568,7 +569,7 @@ function AppContent() {
         <AdminLayout
           currentTab={adminTab}
           onSelectTab={(tab) => {
-            if (['halls', 'storage', 'attendance', 'fees', 'payroll', 'scan'].includes(tab)) {
+            if (['storage', 'attendance', 'fees', 'payroll', 'scan'].includes(tab) || (tab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
               setAdminTab('dashboard');
               window.location.hash = 'dashboard';
             } else {
@@ -588,7 +589,7 @@ function AppContent() {
           {adminTab === 'dashboard' && (
             <DashboardView
               onNavigate={(tab) => {
-                if (['halls', 'storage', 'attendance', 'fees', 'payroll', 'scan'].includes(tab)) {
+                if (['storage', 'attendance', 'fees', 'payroll', 'scan'].includes(tab) || (tab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
                   setAdminTab('dashboard');
                   window.location.hash = 'dashboard';
                 } else {
@@ -604,7 +605,8 @@ function AppContent() {
           {adminTab === 'staff' && <StaffListView />}
           {adminTab === 'transactions' && <TransactionsListView />}
           {adminTab === 'settings' && <SettingsView />}
-          {['halls', 'storage', 'attendance', 'fees', 'payroll'].includes(adminTab) && (
+          {adminTab === 'halls' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <ExamHallsView />}
+          {['storage', 'attendance', 'fees', 'payroll'].includes(adminTab) && (
             <DashboardView
               onNavigate={(tab) => {
                 setAdminTab(tab);

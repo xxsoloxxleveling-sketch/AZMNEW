@@ -14,4 +14,4 @@ Empty APIs show truthful center/Hall empty states. Failed APIs show errors and R
 
 Membership comes only from assignedHallId. Legacy text-only allocation is flagged for review without automatic attachment. Seats come only from stored seatNo; missing seats read Unassigned. Printable A4 rosters contain explicitly assigned candidates, actual metadata, and signature columns, with dynamic HTML escaped. No attendance or fee status and no generated row-index seats.
 
-Invigilator fields remain free text and are labeled Recorded Invigilator. Schedule fields start blank and inherit only real selected-center values. Hall routing stays deferred until Step 12C.
+Invigilator fields remain free text and are labeled Recorded Invigilator. Schedule fields start blank and inherit only real selected-center values. Step 12C enables Hall routing locally for SUPER_ADMIN and ADMIN in the Classic integration branch. Storage, attendance, fees, payroll, and scanning remain deferred. Production is unchanged.
