@@ -1218,15 +1218,16 @@ export const mockApi = {
       await this.downloadStudentRollSlipPdf(studentId, rollNumber);
       return;
     } catch (e) {
+      if (e instanceof Error && e.message.includes('PLACEMENT_PENDING')) throw e;
       console.warn('Server-side roll slip PDF fallback to client print:', e);
     }
-    let data = studentObj;
-    if (!data || !data.fullName) {
-      try {
-        data = await this.getStudentById(studentId);
-      } catch {
-        data = { id: studentId, rollNumber };
-      }
+    let data;
+    try {
+      // Revalidate placement rather than trusting a possibly stale caller object.
+      data = await this.getStudentById(studentId);
+    } catch {
+      data = { ...studentObj, id: studentId, rollNumber: rollNumber || studentObj?.rollNumber,
+        placementStatus: 'PLACEMENT_PENDING', assignedHallId: null };
     }
     printRollNumberSlip(data || { id: studentId, rollNumber });
   },
@@ -2606,19 +2607,24 @@ export function printStudentSlip(student: any) {
  * High-definition browser printable Roll Number Slip entry pass generator
  */
 export function printRollNumberSlip(student: any) {
+  const assigned = student.placementStatus === 'ASSIGNED' && Boolean(student.assignedHallId);
+  if (student.rollNumber && (!assigned || !student.assignedRoom || !student.seatNo || !student.testDate || !student.reportingTime)) {
+    alert('PLACEMENT_PENDING: Examination placement is not yet available.');
+    return;
+  }
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
     alert('Please allow popups to open and print your official Roll Number Slip.');
     return;
   }
 
-  const rollNo = student.rollNumber || student.applicationNo || 'AZMVS-2026-0000';
-  const examDate = student.testDate || 'Sunday, 20 November 2026';
-  const reportingTime = student.reportingTime || '09:00 AM';
-  const hall = student.assignedHall || 'Hall A (Main Examination Wing)';
-  const room = student.assignedRoom || 'Room 101';
-  const seat = student.seatNo || 'Seat # 01';
-  const testCenter = student.testCenterName || student.registrationCentre || 'AZM Regional Central Examination Centre, Mansehra';
+  const rollNo = student.rollNumber || student.officeUse?.testRollNo || `PROV-${student.applicationNo || student.id || 'UNASSIGNED'}`;
+  const examDate = assigned && student.testDate || 'To be announced';
+  const reportingTime = assigned && student.reportingTime || 'To be announced';
+  const hall = assigned && student.assignedHall || 'To be assigned';
+  const room = assigned && student.assignedRoom || 'To be assigned';
+  const seat = assigned && student.seatNo || 'To be assigned';
+  const testCenter = assigned && student.testCenterName || 'To be assigned';
 
   const html = `
 <!DOCTYPE html>

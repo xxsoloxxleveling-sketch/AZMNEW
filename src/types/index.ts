@@ -136,17 +136,20 @@ export interface RollNumberSlip {
   cnicBForm: string;
   classLevel: string;
   candidatePhoto: string;
-  testCenter: string;
-  centerAddress: string;
-  examDate: string;
-  reportingTime: string;
-  examStartTime: string;
-  roomNo: string;
-  seatIndex: string;
+  testCenter: string | null;
+  centerAddress: string | null;
+  examDate: string | null;
+  reportingTime: string | null;
+  examStartTime: string | null;
+  roomNo: string | null;
+  seatIndex: string | null;
   securityHash: string;
   qrPayload: string;
   barcode: string;
   specialInstructions: string[];
+  placementStatus?: 'ASSIGNED' | 'PLACEMENT_PENDING';
+  assignedHallId?: string | null;
+  hallName?: string | null;
 }
 
 export interface ResultCard {

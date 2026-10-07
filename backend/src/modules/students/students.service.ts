@@ -118,41 +118,30 @@ export function calculateDurationMinutes(startClock: string, endClock: string): 
   return diff > 0 ? diff : 60;
 }
 
-export function getExamScheduleForStudent(student: any, config: any) {
-  const genderNorm = String(student?.gender || '').trim().toUpperCase();
-  if (genderNorm !== 'FEMALE' && genderNorm !== 'MALE') {
-    throw new Error('Candidate gender is missing or invalid; examination schedule cannot be resolved.');
-  }
-  const isFemale = genderNorm === 'FEMALE';
-
-  const rawReporting = isFemale
-    ? (config?.femaleReportingTime || '08:00')
-    : (config?.maleReportingTime || '11:00');
-  const rawStart = isFemale
-    ? (config?.femaleTestStartTime || '09:00')
-    : (config?.maleTestStartTime || '12:00');
-  const rawEnd = isFemale
-    ? (config?.femaleTestEndTime || '10:00')
-    : (config?.maleTestEndTime || '13:00');
-
-  const reportingTime = formatClockTime12h(rawReporting);
-  const testStartTime = formatClockTime12h(rawStart);
-  const testEndTime = formatClockTime12h(rawEnd);
-  const testTimeLabel = `${testStartTime} - ${testEndTime}`;
-  const durationMinutes = calculateDurationMinutes(rawStart, rawEnd);
-  const testDate = formatExamDateDisplay(config?.examDate || '2026-11-15');
-  const testCenterName = config?.examCenterName || 'Dubai International School and College Boys Campus Mansehra';
-
+export function getExamScheduleForStudent(student: any, hall: any | null) {
+  const assigned = Boolean(student.assignedHallId && hall?.id === student.assignedHallId);
+  const center = assigned && hall.testCenterId && hall.testCenter?.id === hall.testCenterId ? hall.testCenter : null;
   return {
-    testCenterName,
-    testDate,
-    reportingTime,
-    testStartTime,
-    testEndTime,
-    testTimeLabel,
-    durationMinutes,
+    placementStatus: assigned ? 'ASSIGNED' as const : 'PLACEMENT_PENDING' as const,
+    assignedHallId: assigned ? hall.id : null,
+    assignedHall: assigned ? hall.name : null,
+    assignedRoom: assigned ? hall.roomNumber || null : null,
+    seatNo: assigned ? student.seatNo || null : null,
+    testCenterName: center?.name || null,
+    testCenterAddress: center?.address || null,
+    testDate: assigned ? hall.examDate || null : null,
+    reportingTime: assigned ? hall.reportingTime || null : null,
+    // Hall configuration has no authoritative examination start/end time.
+    examStartTime: null, testStartTime: null, testEndTime: null, testTimeLabel: null, durationMinutes: null,
   };
 }
+
+export function isRollSlipPlacementReady(student: any) {
+  return Boolean(student.placementStatus === 'ASSIGNED' && student.assignedHallId &&
+    student.assignedRoom && student.seatNo && student.testDate && student.reportingTime);
+}
+
+const placementPendingMessage = 'Your Roll Number is issued, but your examination Center/Hall assignment is not yet available. Please check again after seating is finalized.';
 
 export function getCandidateNumber(student: { rollNumber?: string | null; applicationNo?: string | null; id?: string; officeUse?: { testRollNo?: string | null } | null }) {
   if (student?.rollNumber) {
@@ -367,15 +356,30 @@ export class StudentsService {
     }, { timeout: 15000 });
   }
 
+  async resolveExamPlacement(student: any) {
+    const hall = student.assignedHallId
+      ? await prisma.examHall.findUnique({ where: { id: student.assignedHallId }, include: { testCenter: true } })
+      : null;
+    return getExamScheduleForStudent(student, hall);
+  }
+
+  private assertOfficialRollSlipPlacement(student: any) {
+    if (student.rollNumber && !isRollSlipPlacementReady(student)) {
+      const error: AppError = new Error('PLACEMENT_PENDING: ' + placementPendingMessage);
+      error.statusCode = 409;
+      throw error;
+    }
+  }
+
   async preparePrintStudent(id: string) {
     const student = await this.getStudentById(id);
     await this.reserveCandidateNumber(student.id);
     const refreshed = await this.getStudentById(student.id);
-    const releaseConfig = await this.getReleaseConfig();
-    const schedule = getExamScheduleForStudent(refreshed, releaseConfig);
+    const schedule = await this.resolveExamPlacement(refreshed);
 
     return {
       ...refreshed,
+      ...schedule,
       testCenterName: schedule.testCenterName,
       testDate: schedule.testDate,
       reportingTime: schedule.reportingTime,
@@ -1434,7 +1438,10 @@ export class StudentsService {
     }
 
     const rollNo = student.rollNumber;
-    const schedule = getExamScheduleForStudent(student, releaseConfig);
+    const schedule = await this.resolveExamPlacement(student);
+    if (!isRollSlipPlacementReady(schedule)) {
+      return { success: false, code: 'PLACEMENT_PENDING', error: placementPendingMessage };
+    }
 
     return {
       success: true,
@@ -1448,13 +1455,16 @@ export class StudentsService {
         candidatePhoto:
           (student.photoUrl && !student.photoUrl.includes('unsplash') ? student.photoUrl : null) ||
           `/api/students/${student.id}/photo-thumbnail`,
+        placementStatus: schedule.placementStatus,
+        assignedHallId: schedule.assignedHallId,
+        hallName: schedule.assignedHall,
         testCenter: schedule.testCenterName,
-        centerAddress: '',
+        centerAddress: schedule.testCenterAddress,
         examDate: schedule.testDate,
         reportingTime: schedule.reportingTime,
         examStartTime: schedule.testTimeLabel,
-        roomNo: student.assignedRoom || 'HALL-01',
-        seatIndex: student.seatNo || `SEAT-${rollNo.split('-').pop() || '0101'}`,
+        roomNo: schedule.assignedRoom,
+        seatIndex: schedule.seatNo,
         instructions: [
           'Bring this original printed Roll Number Slip along with your original CNIC or B-Form to the examination center.',
           'Candidate must report at the Reporting Time printed above. Late entry may not be permitted.',
@@ -1919,7 +1929,7 @@ export class StudentsService {
       throw error;
     }
 
-    return this.formatStudentWithDocuments(student);
+    return { ...this.formatStudentWithDocuments(student), ...await this.resolveExamPlacement(student) };
   }
 
   /**
@@ -2193,7 +2203,9 @@ export class StudentsService {
    * Supports both official issued roll numbers and pre-issue provisional slips.
    */
   async getRollSlipPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
+    this.assertOfficialRollSlipPlacement(await this.getStudentById(id));
     const student = await this.preparePrintStudent(id);
+    this.assertOfficialRollSlipPlacement(student);
     if (!student) {
       const err: AppError = new Error('Candidate record not found in database.');
       err.statusCode = 404;
@@ -2308,11 +2320,13 @@ export class StudentsService {
       err.statusCode = 400;
       throw err;
     }
+    for (const id of studentIds) this.assertOfficialRollSlipPlacement(await this.getStudentById(id));
     const QRCode = await import('qrcode');
     const slips: Array<{ student: any; qrDataUrl: string; photoBase64?: string }> = [];
 
     for (const id of studentIds) {
       const student = await this.preparePrintStudent(id);
+      this.assertOfficialRollSlipPlacement(student);
       if (!student) continue;
       const candNum = getCandidateNumber(student);
       let qrDataUrl = '';

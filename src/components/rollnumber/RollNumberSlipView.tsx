@@ -39,6 +39,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   const [hasSearched, setHasSearched] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [placementPending, setPlacementPending] = useState(false);
 
   // Pre-warm backend when visiting roll number slips desk
   useEffect(() => {
@@ -73,6 +74,8 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMsg('');
+    setPlacementPending(false);
+    setSelectedSlip(null);
     const cleanQuery = searchQuery.trim();
     const cleanIdentity = cnicOrBForm.trim();
 
@@ -88,9 +91,17 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
     setIsLoading(false);
 
     if (res.success && res.data) {
-      setSelectedSlip(res.data);
+      const data = res.data;
+      if (data.placementStatus !== 'ASSIGNED' || !data.assignedHallId ||
+          !data.roomNo || !data.seatIndex || !data.examDate || !data.reportingTime) {
+        setPlacementPending(true);
+        setErrorMsg('Your Roll Number is issued, but your examination Center/Hall assignment is not yet available. Please check again after seating is finalized.');
+        return;
+      }
+      setSelectedSlip(data);
     } else {
       setSelectedSlip(null);
+      setPlacementPending((res as any).code === 'PLACEMENT_PENDING');
       setErrorMsg(
         res.error ||
           (cleanQuery
@@ -188,7 +199,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
           </button>
         </div>
 
-        {errorMsg && !errorMsg.startsWith('SCHEDULED_RELEASE:::') && (
+        {errorMsg && !placementPending && !errorMsg.startsWith('SCHEDULED_RELEASE:::') && (
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-3">
             <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
@@ -272,8 +283,14 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
         </div>
       )}
 
+      {placementPending && (
+        <section role="status" className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 no-print">
+          <h2 className="font-semibold">Examination placement pending</h2>
+          <p className="mt-1">{errorMsg}</p>
+        </section>
+      )}
       {/* Explicit Not Found State */}
-      {hasSearched && !selectedSlip && !isLoading && errorMsg && !errorMsg.startsWith('SCHEDULED_RELEASE:::') && (
+      {hasSearched && !selectedSlip && !isLoading && errorMsg && !placementPending && !errorMsg.startsWith('SCHEDULED_RELEASE:::') && (
         <div className="bg-white rounded-3xl border border-slate-200/90 p-8 sm:p-10 text-center space-y-4 shadow-sm no-print max-w-2xl mx-auto">
           <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
             <AlertTriangle className="w-7 h-7" />
@@ -424,7 +441,8 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
                   <div className="col-span-2 pt-2 border-t border-slate-100">
                     <span className="text-slate-500 text-[10px] uppercase font-bold block">Assigned Examination Centre:</span>
-                    <span className="text-xs font-bold text-slate-900 block">{selectedSlip.testCenter}</span>
+                    <span className="text-xs font-bold text-slate-900 block">{selectedSlip.testCenter || 'To be assigned'}</span>
+                    <span className="text-[11px] text-slate-600 block">Hall: {selectedSlip.hallName || 'To be assigned'} · Room: {selectedSlip.roomNo || 'To be assigned'}</span>
                     {selectedSlip.centerAddress && (
                       <span className="text-[11px] text-slate-600 block">{selectedSlip.centerAddress}</span>
                     )}
@@ -437,7 +455,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 <div className="p-3 rounded-2xl bg-slate-900 text-white w-full max-w-[180px] text-center">
                   <span className="text-[9px] uppercase font-bold text-amber-300 tracking-wider block">Official Roll No</span>
                   <span className="text-base font-extrabold font-mono text-white block tabular-nums">{selectedSlip.rollNo}</span>
-                  <span className="text-[9px] text-emerald-400 font-mono mt-0.5 block">{selectedSlip.seatIndex || 'SEAT-0101'}</span>
+                  <span className="text-[9px] text-emerald-400 font-mono mt-0.5 block">{selectedSlip.seatIndex || 'To be assigned'}</span>
                 </div>
 
                 {/* Real Scannable Biometric QR Code Matrix */}
@@ -469,7 +487,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Examination Date:</span>
                 <span className="text-xs font-extrabold text-slate-900 font-mono flex items-center justify-center gap-1 mt-0.5">
                   <Calendar className="w-3.5 h-3.5 text-[#185b9d]" />
-                  {selectedSlip.examDate || 'Sunday, 15 November 2026'}
+                  {selectedSlip.examDate || 'To be announced'}
                 </span>
               </div>
 
@@ -477,14 +495,14 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Reporting Time:</span>
                 <span className="text-xs font-extrabold text-rose-700 font-mono flex items-center justify-center gap-1 mt-0.5">
                   <Clock className="w-3.5 h-3.5 text-rose-600" />
-                  {selectedSlip.reportingTime} (Strict)
+                  {selectedSlip.reportingTime || 'To be announced'}
                 </span>
               </div>
 
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Test Time:</span>
                 <span className="text-xs font-extrabold text-[#185b9d] font-mono block mt-0.5">
-                  {selectedSlip.examStartTime}
+                  {selectedSlip.examStartTime || 'To be announced'}
                 </span>
               </div>
             </div>
@@ -514,7 +532,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
             <div className="mt-8 pt-4 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-slate-500">
               <div>
                 <span>Security Token: </span>
-                <span className="font-mono font-bold text-slate-800">{selectedSlip.securityHash || `AUTH-${selectedSlip.rollNo}`}</span>
+                <span className="font-mono font-bold text-slate-800">{selectedSlip.securityHash || 'Not available'}</span>
               </div>
               <div className="text-center sm:text-right">
                 <p className="font-bold text-slate-900">Director General (Examinations)</p>

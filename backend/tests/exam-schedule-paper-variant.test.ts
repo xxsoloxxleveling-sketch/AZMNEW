@@ -163,57 +163,24 @@ async function runTests() {
   console.log('   ✓ Clock, duration, and date formatting verified.');
 
   // =========================================================================
-  // 8. Gender-Specific Examination Schedule (Preserved)
-  // =========================================================================
-  console.log('8. Testing gender-specific examination schedule resolution...');
-  const defaultConfig = {
-    examCenterName: 'Dubai International School and College Boys Campus Mansehra',
-    examDate: '2026-11-15',
-    femaleReportingTime: '08:00',
-    femaleTestStartTime: '09:00',
-    femaleTestEndTime: '10:00',
-    maleReportingTime: '11:00',
-    maleTestStartTime: '12:00',
-    maleTestEndTime: '13:00',
-  };
-
-  const femaleCandidate = { id: 'female-1', gender: 'FEMALE' as const, currentClass: '10th' };
-  const femaleSchedule = getExamScheduleForStudent(femaleCandidate, defaultConfig);
-  assert.strictEqual(femaleSchedule.reportingTime, '08:00 AM');
-  assert.strictEqual(femaleSchedule.testStartTime, '09:00 AM');
-  assert.strictEqual(femaleSchedule.testEndTime, '10:00 AM');
-  assert.strictEqual(femaleSchedule.testTimeLabel, '09:00 AM - 10:00 AM');
-  assert.strictEqual(femaleSchedule.durationMinutes, 60);
-  assert.strictEqual(femaleSchedule.testCenterName, 'Dubai International School and College Boys Campus Mansehra');
-  assert.strictEqual(femaleSchedule.testDate, 'Sunday, 15 November 2026');
-  console.log('   ✓ Female candidate schedule verified (Reporting: 08:00 AM, Exam: 09:00 AM - 10:00 AM).');
-
-  const maleCandidate = { id: 'male-1', gender: 'MALE' as const, currentClass: '10th' };
-  const maleSchedule = getExamScheduleForStudent(maleCandidate, defaultConfig);
-  assert.strictEqual(maleSchedule.reportingTime, '11:00 AM');
-  assert.strictEqual(maleSchedule.testStartTime, '12:00 PM');
-  assert.strictEqual(maleSchedule.testEndTime, '01:00 PM');
-  assert.strictEqual(maleSchedule.testTimeLabel, '12:00 PM - 01:00 PM');
-  assert.strictEqual(maleSchedule.durationMinutes, 60);
-  assert.strictEqual(maleSchedule.testCenterName, 'Dubai International School and College Boys Campus Mansehra');
-  assert.strictEqual(maleSchedule.testDate, 'Sunday, 15 November 2026');
-  console.log('   ✓ Male candidate schedule verified (Reporting: 11:00 AM, Exam: 12:00 PM - 01:00 PM).');
-
-  // Missing gender throws
-  assert.throws(
-    () => getExamScheduleForStudent({ id: 'missing-1', currentClass: '10th' }, defaultConfig),
-    /Candidate gender is missing or invalid; examination schedule cannot be resolved\./,
-    'Missing gender must throw controlled error'
-  );
-  console.log('   ✓ Missing gender rejection verified.');
-
-  // Unknown gender throws
-  assert.throws(
-    () => getExamScheduleForStudent({ id: 'unknown-1', gender: 'UNKNOWN' as any, currentClass: '10th' }, defaultConfig),
-    /Candidate gender is missing or invalid; examination schedule cannot be resolved\./,
-    'Unknown gender must throw controlled error'
-  );
-  console.log('   ✓ Unknown gender rejection verified.');
+  // 8. Candidate placement must not come from release config or gender.
+  console.log('8. Testing authoritative Hall schedule resolution...');
+  const legacyConfig = { examCenterName: 'Old venue', examDate: '2026-11-15', femaleReportingTime: '08:00' };
+  for (const gender of ['FEMALE', 'MALE', 'UNKNOWN', undefined]) {
+    const pending = getExamScheduleForStudent({ id: 'unassigned', gender }, legacyConfig);
+    assert.strictEqual(pending.placementStatus, 'PLACEMENT_PENDING');
+    assert.strictEqual(pending.testCenterName, null);
+    assert.strictEqual(pending.testDate, null);
+    assert.strictEqual(pending.reportingTime, null);
+    assert.strictEqual(pending.testStartTime, null);
+  }
+  const hall = { id: 'hall-real', name: 'Confirmed Hall', roomNumber: 'Room North', examDate: 'Confirmed date', reportingTime: '08:15 AM' };
+  const assigned = getExamScheduleForStudent({ assignedHallId: hall.id, seatNo: 'N-7' }, hall);
+  assert.strictEqual(assigned.reportingTime, hall.reportingTime);
+  assert.strictEqual(assigned.testDate, hall.examDate);
+  assert.strictEqual(assigned.testCenterName, null);
+  assert.strictEqual(assigned.testTimeLabel, null);
+  console.log('   ✓ Release config and gender cannot fabricate candidate placement.');
 
   // =========================================================================
   // 9. Roll Slip HTML Generation (Preserved)
@@ -228,6 +195,11 @@ async function runTests() {
     cnicOrBForm: '13501-8888888-1',
     currentClass: 'SSC-I (Class 9th)',
     gender: 'MALE' as const,
+    placementStatus: 'ASSIGNED',
+    assignedHallId: 'confirmed-hall',
+    assignedHall: 'Confirmed Hall',
+    assignedRoom: 'Room North',
+    seatNo: 'N-7',
     testCenterName: 'Dubai International School and College Boys Campus Mansehra',
     testDate: 'Sunday, 15 November 2026',
     reportingTime: '11:00 AM',

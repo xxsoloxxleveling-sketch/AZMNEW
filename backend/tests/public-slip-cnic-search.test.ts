@@ -20,6 +20,8 @@ async function runSlipSearchTests() {
   }
 
   const testIdsToClean: string[] = [];
+  let fixtureHallId: string | undefined;
+  let fixtureCenterId: string | undefined;
 
   try {
     const testSuffix = Math.floor(1000000 + Math.random() * 9000000); // 7 digits
@@ -34,9 +36,14 @@ async function runSlipSearchTests() {
     const cnicUnpaid = `99999${testSuffix}3`;
     const appNoUnpaid = `TEST-APP-${testSuffix}-C`;
 
+    const center = await prisma.testCenter.create({ data: { name: 'Confirmed Test Venue', code: 'SLIP-' + testSuffix, address: 'Test venue address', district: 'Test district' } });
+    fixtureCenterId = center.id;
+    const hall = await prisma.examHall.create({ data: { name: 'Confirmed Test Hall', roomNumber: 'Room N', targetClass: 'Test', capacity: 20, testCenterId: center.id, examDate: 'Confirmed exam date', reportingTime: '08:15 AM' } });
+    fixtureHallId = hall.id;
     // Candidate A: Active, Fee Paid, Roll Number Issued, Unscheduled / Released
     const studentA = await prisma.student.create({
       data: {
+        assignedHallId: hall.id, seatNo: 'N-7',
         applicationNo: appNoA,
         fullName: 'Test Candidate Slip Alpha',
         fatherName: 'Father Alpha',
@@ -291,6 +298,8 @@ async function runSlipSearchTests() {
       await prisma.student.delete({ where: { id } }).catch(() => {});
     }
     console.log(`Cleaned up ${testIdsToClean.length} test record(s).`);
+    if (fixtureHallId) await prisma.examHall.delete({ where: { id: fixtureHallId } });
+    if (fixtureCenterId) await prisma.testCenter.delete({ where: { id: fixtureCenterId } });
   }
 
   console.log(`\n========================================`);

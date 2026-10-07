@@ -21,9 +21,9 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
     if (!isOpen || !initialStudent) return;
     let active = true;
     setPrepared(null);
-    apiFetch<MockStudent>(`/api/students/${initialStudent.id}/prepare-print`, { method: 'POST' })
+    apiFetch<MockStudent>(`/api/students/${initialStudent.id}`)
       .then(value => { if (active) setPrepared(value); })
-      .catch(error => { if (active) alert(error.message || 'Unable to reserve roll number.'); });
+      .catch(error => { if (active) alert(error.message || 'Unable to load the read-only preview.'); });
     return () => { active = false; };
   }, [initialStudent?.id, isOpen]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -32,7 +32,8 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
   const printRef = useRef<HTMLDivElement>(null);
 
   const isProvisional = !student?.rollNumber || student?.rollNumberStatus === 'PROVISIONAL';
-  const displayRoll = prepared?.displayRollNumber || student?.rollNumber || 'Reserving…';
+  const hasReservation = Boolean(student?.officeUse?.testRollNo);
+  const displayRoll = student?.rollNumber || student?.officeUse?.testRollNo || `PROV-${student?.applicationNo || student?.id || 'UNASSIGNED'}`;
 
   // Load photo
   useEffect(() => {
@@ -71,7 +72,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
 
   // Generate verification QR code
   useEffect(() => {
-    if (!student || !isOpen || !prepared) return;
+    if (!student || !isOpen) return;
 
     const qrPayload = JSON.stringify({
       type: 'AZM_SLIP',
@@ -110,20 +111,21 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
     }
   };
 
-  const examDate = (student as any)?.testDate || ((student?.officeUse as any)?.testDate ? new Date((student.officeUse as any).testDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'To be announced');
-  const reportingTime = (student as any)?.reportingTime || (student?.officeUse as any)?.testReportingTime || 'To be announced';
-  const startTime = (student as any).examStartTime || 'To be announced';
-  const testCenter = (student as any)?.testCenterName || student?.officeUse?.testCentre || 'To be assigned';
-  const hall = student.assignedHall || 'To be assigned';
-  const room = student.assignedRoom || 'To be assigned';
-  const seat = student.seatNo || 'To be assigned';
+  const hasPlacement = Boolean(prepared && (student as any).placementStatus === 'ASSIGNED' && student.assignedHallId);
+  const examDate = hasPlacement && (student as any).testDate || 'To be announced';
+  const reportingTime = hasPlacement && (student as any).reportingTime || 'To be announced';
+  const startTime = hasPlacement && (student as any).examStartTime || 'To be announced';
+  const testCenter = hasPlacement && (student as any).testCenterName || 'To be assigned';
+  const hall = hasPlacement && student.assignedHall || 'To be assigned';
+  const room = hasPlacement && student.assignedRoom || 'To be assigned';
+  const seat = hasPlacement && student.seatNo || 'To be assigned';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
       {/* Container */}
       <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[96vh]">
         {/* Modal Top Header (Screen Only) */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50 print:hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 bg-slate-50 print:hidden">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 text-[#185b9d] rounded-xl font-bold">
               <Printer className="w-5 h-5" />
@@ -162,6 +164,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
 
             <button
               onClick={onClose}
+              aria-label="Close roll slip preview"
               className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -210,8 +213,9 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
                     PRE-ISSUE COPY — OFFICIAL ROLL NUMBER NOT YET ISSUED
                   </div>
                   <div className="text-[11px] text-amber-800 mt-0.5 leading-relaxed font-medium">
-                    This document is a provisional pre-issue admit copy generated for verification and preliminary hall arrangement.
-                    The reserved roll number will remain the same when officially released.
+                    {hasReservation
+                      ? 'This pre-issue copy uses an existing reserved number, which will remain the same when officially released.'
+                      : 'This is a read-only provisional preview. No roll number has been reserved by opening it.'}
                   </div>
                 </div>
               </div>
@@ -248,9 +252,9 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
               <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200">
                 <div className="text-left sm:text-right">
                   <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    {isProvisional ? 'Reserved Roll Number' : 'Examination Roll No.'}
+                    {isProvisional ? (hasReservation ? 'Reserved Roll Number' : 'Provisional Preview Number') : 'Examination Roll No.'}
                   </div>
-                  <div className="text-xl font-black font-mono text-[#185b9d] tracking-wide">
+                  <div className="text-base sm:text-xl break-all font-black font-mono text-[#185b9d] tracking-wide">
                     {displayRoll}
                   </div>
                   <div className="text-[10px] text-slate-400 font-mono">App #{student.applicationNo}</div>

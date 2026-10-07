@@ -594,23 +594,15 @@ export class PdfService {
     const fatherName = (student.fatherName || '').toUpperCase();
     const cnic = student.cnicOrBForm || 'N/A';
     const classLevel = student.currentClass || 'SSC-II (Class 10th)';
-    const testCenter = student.testCenterName || student.officeUse?.testCentre || 'To be assigned';
-    const centerAddress = student.testCenterAddress || '';
-    const roomNo = student.assignedRoom || 'To be assigned';
-    const seatNo = student.seatNo || 'To be assigned';
-
-    const examDate = student.testDate
-      ? student.testDate
-      : student.officeUse?.testDate
-      ? new Date(student.officeUse.testDate).toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
-      : 'To be announced';
-    const reportingTime = student.reportingTime || student.officeUse?.testReportingTime || 'To be announced';
-    const examTiming = student.examStartTime || 'To be announced';
+    const assigned = student.placementStatus === 'ASSIGNED' && Boolean(student.assignedHallId);
+    const testCenter = assigned && student.testCenterName || 'To be assigned';
+    const centerAddress = assigned && student.testCenterAddress || '';
+    const hallName = assigned && student.assignedHall || 'To be assigned';
+    const roomNo = assigned && student.assignedRoom || 'To be assigned';
+    const seatNo = assigned && student.seatNo || 'To be assigned';
+    const examDate = assigned && student.testDate || 'To be announced';
+    const reportingTime = assigned && student.reportingTime || 'To be announced';
+    const examTiming = assigned && student.examStartTime || 'To be announced';
 
     const defaultPhoto = `data:image/svg+xml;utf8,${encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="150" viewBox="0 0 120 150">
@@ -792,7 +784,7 @@ export class PdfService {
     <!-- Center Allocation Box -->
     <div class="center-box">
       <div class="center-title">Assigned Examination Centre & Room Allocation:</div>
-      <div class="center-name">${testCenter} &mdash; <span style="color: #1e3a8a;">${roomNo} (${seatNo})</span></div>
+      <div class="center-name">${testCenter} — Hall: ${hallName} &mdash; <span style="color: #1e3a8a;">${roomNo} (${seatNo})</span></div>
       <div class="center-addr">${centerAddress}</div>
     </div>
 
