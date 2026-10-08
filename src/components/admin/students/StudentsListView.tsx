@@ -46,6 +46,7 @@ export const StudentsListView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_STUDENTS_PER_PAGE);
+  const compactListMode = pageSize > 20;
   const [pagination, setPagination] = useState({ page: 1, limit: DEFAULT_STUDENTS_PER_PAGE, total: 0, totalPages: 1 });
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -148,10 +149,18 @@ export const StudentsListView: React.FC = () => {
     setSelectedStudentIds([]);
   }, [classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize]);
 
-  // Fetch private thumbnail files only for the rows currently displayed.
+  // Fetch thumbnails only for smaller pages. Large page sizes use compact list mode
+  // to avoid dozens/hundreds of protected image requests and object URLs.
   useEffect(() => {
     let cancelled = false;
     const loadedUrls: string[] = [];
+
+    if (compactListMode) {
+      setThumbnailUrls({});
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const loadThumbnails = async () => {
       const results = await Promise.all(
@@ -189,7 +198,7 @@ export const StudentsListView: React.FC = () => {
       cancelled = true;
       loadedUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [students]);
+  }, [students, compactListMode]);
 
   const handleConfirmDelete = async () => {
     if (!studentToDelete) return;
@@ -678,7 +687,7 @@ export const StudentsListView: React.FC = () => {
                       <tr
                         key={student.id}
                         onClick={() => setSelectedStudent(student)}
-                        className="hover:bg-slate-50/70 transition-colors cursor-pointer h-[52px]"
+                        className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${compactListMode ? 'h-[42px]' : 'h-[52px]'}`}
                       >
                         {/* Checkbox */}
                         <td onClick={(e) => e.stopPropagation()} className="py-3.5 px-4 text-center">
@@ -713,23 +722,25 @@ export const StudentsListView: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Student Identity: Real Photo Thumbnail (32-36px) + Name + Father Name */}
-                        <td className="py-3.5 px-4">
+                        {/* Student Identity: thumbnails are intentionally disabled in compact large-page mode */}
+                        <td className={`${compactListMode ? 'py-2' : 'py-3.5'} px-4`}>
                           <div className="flex items-center gap-2.5">
-                            <div
-                              className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
-                              aria-hidden="true"
-                            >
-                              {thumbnailUrls[student.id] ? (
-                                <img
-                                  src={thumbnailUrls[student.id]}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                student.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'
-                              )}
-                            </div>
+                            {!compactListMode && (
+                              <div
+                                className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
+                                aria-hidden="true"
+                              >
+                                {thumbnailUrls[student.id] ? (
+                                  <img
+                                    src={thumbnailUrls[student.id]}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  student.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'
+                                )}
+                              </div>
+                            )}
                             <div className="min-w-0 leading-tight">
                               <span className="font-bold text-slate-900 text-xs block truncate leading-tight">{student.fullName}</span>
                               <span className="text-[11px] text-slate-500 block truncate leading-tight mt-0.5">S/D/O {student.fatherName}</span>
@@ -848,9 +859,9 @@ export const StudentsListView: React.FC = () => {
                   <div
                     key={student.id}
                     onClick={() => setSelectedStudent(student)}
-                    className="p-3.5 hover:bg-slate-50/70 transition cursor-pointer space-y-2.5"
+                    className={`${compactListMode ? 'p-2.5 space-y-1.5' : 'p-3.5 space-y-2.5'} hover:bg-slate-50/70 transition cursor-pointer`}
                   >
-                    {/* Line 1: Checkbox + Photo Thumbnail (36-40px) + Candidate Name + Status */}
+                    {/* Line 1: compact large-page mode omits photos entirely */}
                     <div className="flex items-center gap-3">
                       <div onClick={(e) => e.stopPropagation()} className="shrink-0">
                         <input
@@ -865,20 +876,22 @@ export const StudentsListView: React.FC = () => {
                         />
                       </div>
 
-                      <div
-                        className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
-                        aria-hidden="true"
-                      >
-                        {thumbnailUrls[student.id] ? (
-                          <img
-                            src={thumbnailUrls[student.id]}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          student.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'
-                        )}
-                      </div>
+                      {!compactListMode && (
+                        <div
+                          className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-600 shrink-0"
+                          aria-hidden="true"
+                        >
+                          {thumbnailUrls[student.id] ? (
+                            <img
+                              src={thumbnailUrls[student.id]}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            student.fullName?.trim()?.charAt(0)?.toUpperCase() || '?'
+                          )}
+                        </div>
+                      )}
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1.5">
@@ -1005,6 +1018,12 @@ export const StudentsListView: React.FC = () => {
                 ))}
               </select>
             </label>
+
+            {compactListMode && (
+              <span className="hidden sm:inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-500">
+                Compact list · photos off
+              </span>
+            )}
 
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
