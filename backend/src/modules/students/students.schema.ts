@@ -143,6 +143,12 @@ export const updateStudentSchema = createStudentSchema.partial().extend({
   status: z.nativeEnum(StudentStatus).optional(),
 });
 
+// A selected roster is explicit and bounded. Never fall back to exporting the full roster.
+export const selectedStudentsPdfSchema = z.object({
+  studentIds: z.array(z.string().trim().min(1).max(128)).min(1).max(250)
+    .refine((ids) => new Set(ids).size === ids.length, 'Student IDs must be unique'),
+}).strict();
+
 export const studentQuerySchema = z.object({
   search: z.string().optional(),
   classLevel: z.string().optional(),
