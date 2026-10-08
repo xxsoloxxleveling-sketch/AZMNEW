@@ -54,6 +54,14 @@ async function run() {
         "testDate" timestamp, "interviewDate" timestamp, "interviewTime" text, "panelNo" text,
         "finalStatus" text, "officeRemarks" text, "authorizedBy" text
       );
+      CREATE TYPE "AttendanceSessionStatus" AS ENUM ('OPEN', 'CLOSED');
+      CREATE TABLE "AttendanceSession" (
+        id text PRIMARY KEY, status "AttendanceSessionStatus" NOT NULL
+      );
+      CREATE TABLE "AttendanceSessionCandidate" (
+        id text PRIMARY KEY, "sessionId" text NOT NULL REFERENCES "AttendanceSession"(id),
+        "studentId" text NOT NULL REFERENCES "Student"(id)
+      );
       CREATE TABLE "User" (
         id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, role text NOT NULL,
         status text NOT NULL, "tokenVersion" integer NOT NULL DEFAULT 0

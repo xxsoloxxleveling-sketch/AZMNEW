@@ -1,479 +1,184 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  QrCode,
-  Camera,
-  CameraOff,
-  SwitchCamera,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  RefreshCw,
-  Sparkles,
-  Zap,
-  Volume2,
-  VolumeX,
-} from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
-import { mockApi, MockStudent, MockAttendance } from '../../../lib/mockApi';
+import { Camera, CheckCircle2, UserRound } from 'lucide-react';
+import { mockApi, type AttendanceMarkResponse, type AttendanceSessionDetail } from '../../../lib/mockApi';
+import { attendancePrimary, attendanceSecondary, attendanceValue } from './AttendanceDialog';
 
-interface QrScannerTabProps {
-  onAttendanceMarked?: () => void;
+type ScanResult = AttendanceMarkResponse & { alreadyMarked?: boolean };
+type ScanError = { title: string; message: string };
+type Props = { detail?: AttendanceSessionDetail; onManualAttendance?: () => void; onBusyChange?: (busy: boolean) => void };
+// Protect an outstanding request even if the scanner is unmounted/reopened.
+let requestPending = false;
+
+function scanError(error: unknown): ScanError {
+  const failure = error as { status?: number; code?: string; message?: string };
+  if (failure.code === 'INVALID_QR' || failure.status === 400) return { title: 'Invalid Candidate QR', message: 'Use the candidate’s signed AZM attendance QR, or mark attendance manually.' };
+  if (failure.status === 401 || failure.status === 403) return { title: 'Attendance NOT saved', message: 'Your attendance access has expired or is unavailable. Sign in again before retrying.' };
+  if (failure.status === 404) return { title: 'Candidate or session not found', message: 'The candidate QR or selected session is unavailable. Check the candidate and session before retrying.' };
+  if (failure.status === 409) return { title: 'Attendance NOT saved', message: /CLOSED/.test(failure.message ?? '') ? 'This examination session is closed. Refresh the workspace.' : /ACTIVE/.test(failure.message ?? '') ? 'This candidate is not active. Check the candidate record.' : /frozen Hall/.test(failure.message ?? '') ? 'This candidate is not in the selected Hall’s frozen session roster.' : 'The attendance operation conflicted. Check the session and retry.' };
+  return { title: 'Attendance NOT saved', message: 'The server could not confirm this attendance. Keep the candidate at the desk and retry.' };
 }
 
-export const QrScannerTab: React.FC<QrScannerTabProps> = ({ onAttendanceMarked }) => {
-  const [tokenInput, setTokenInput] = useState('');
-  const [isScanning, setIsScanning] = useState(false);
-  const [lastResult, setLastResult] = useState<{
-    attendance: MockAttendance;
-    student: MockStudent;
-  } | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+function cameraError(error: unknown): string {
+  switch ((error as { name?: string }).name) {
+    case 'NotAllowedError': case 'SecurityError': return 'Camera permission was denied. Allow camera access in your browser and reconnect.';
+    case 'NotFoundError': case 'OverconstrainedError': return 'The requested camera is unavailable. Try the other camera or use manual attendance.';
+    case 'NotReadableError': case 'AbortError': return 'The camera could not start. Close other apps using it, then reconnect.';
+    default: return 'The camera could not connect. Try reconnecting or use manual attendance.';
+  }
+}
 
-  // Camera State
-  const [isCameraActive, setIsCameraActive] = useState<boolean>(true);
-  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [hasScannedRecent, setHasScannedRecent] = useState<boolean>(false);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+function successFeedback() {
+  try { navigator.vibrate?.(60); } catch { /* Feedback must not affect persistence. */ }
+  try {
+    const context = new AudioContext();
+    const oscillator = context.createOscillator(), gain = context.createGain();
+    oscillator.frequency.value = 880; gain.gain.value = 0.06;
+    oscillator.connect(gain); gain.connect(context.destination);
+    oscillator.onended = () => { void context.close().catch(() => {}); };
+    void context.resume().then(() => { oscillator.start(); oscillator.stop(context.currentTime + 0.1); }).catch(() => { void context.close().catch(() => {}); });
+  } catch { /* Audio is optional. */ }
+}
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const lastScannedTokenRef = useRef<string>('');
-  const lastScanTimestampRef = useRef<number>(0);
+export const QrScannerTab: React.FC<Props> = ({ detail, onManualAttendance, onBusyChange }) => {
+  const videoRef = useRef<HTMLVideoElement>(null), canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null), frameRef = useRef<number | null>(null);
+  const generationRef = useRef(0), mountedRef = useRef(false), lockedRef = useRef(false), tokenRef = useRef('');
+  const submitRef = useRef<(token: string) => Promise<void>>(async () => {});
+  const busyCallbackRef = useRef(onBusyChange); busyCallbackRef.current = onBusyChange;
+  const [cameraEnabled, setCameraEnabled] = useState(false), [facing, setFacing] = useState<'environment' | 'user'>('environment');
+  const [cameraStarting, setCameraStarting] = useState(false), [cameraMessage, setCameraMessage] = useState('');
+  const [pending, setPending] = useState(false), [result, setResult] = useState<ScanResult | null>(null), [error, setError] = useState<ScanError | null>(null);
+  const ready = detail?.session.status === 'OPEN';
 
-  // Simple Web Audio API success beep
-  const playBeep = useCallback(() => {
-    if (!soundEnabled) return;
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start();
-      osc.stop(ctx.currentTime + 0.18);
-    } catch (e) {}
-  }, [soundEnabled]);
-
-  // Process Scanned Token
-  const handleScanToken = useCallback(
-    async (rawToken: string) => {
-      if (!rawToken || !rawToken.trim()) return;
-      const token = rawToken.trim();
-
-      // Debounce duplicate scans within 3 seconds
-      const now = Date.now();
-      if (token === lastScannedTokenRef.current && now - lastScanTimestampRef.current < 3000) {
-        return;
-      }
-
-      lastScannedTokenRef.current = token;
-      lastScanTimestampRef.current = now;
-
-      setIsScanning(true);
-      setErrorMessage(null);
-      setHasScannedRecent(true);
-      playBeep();
-
-      if (navigator.vibrate) {
-        try {
-          navigator.vibrate([100, 50, 100]);
-        } catch (e) {}
-      }
-
-      try {
-        const res = await mockApi.scanAttendance({
-          qrToken: token,
-          status: 'PRESENT',
-        });
-        setLastResult(res);
-        if (onAttendanceMarked) onAttendanceMarked();
-      } catch (err: any) {
-        setErrorMessage(err.message || 'Scan verification failed.');
-      } finally {
-        setIsScanning(false);
-        setTimeout(() => {
-          setHasScannedRecent(false);
-        }, 1200);
-      }
-    },
-    [onAttendanceMarked, playBeep]
-  );
-
-  // Stop camera media tracks
-  const stopCamera = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
 
-  // Start camera media stream
-  const startCamera = useCallback(async () => {
-    stopCamera();
-    setCameraError(null);
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setCameraError('Camera access is not supported by your browser or requires HTTPS.');
-      return;
-    }
-
+  submitRef.current = async (token: string) => {
+    if (lockedRef.current || requestPending || !ready || !detail) return;
+    // Synchronous guards precede every asynchronous operation and React state update.
+    lockedRef.current = true; requestPending = true; tokenRef.current = token;
+    setPending(true); setResult(null); setError(null); busyCallbackRef.current?.(true);
+    let confirmationTimedOut = false;
+    const watchdog = window.setTimeout(() => {
+      confirmationTimedOut = true;
+      if (mountedRef.current) setError(scanError(new Error('Confirmation timeout')));
+    }, 20000);
     try {
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-    } catch (err: any) {
-      console.warn('Camera initialization error:', err);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setCameraError('Camera permission was denied. Please allow camera access in your browser settings.');
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setCameraError('No camera device detected on this system.');
-      } else {
-        setCameraError(`Camera error: ${err.message || 'Unable to access device camera.'}`);
-      }
+      const confirmed = await mockApi.scanAttendance({ sessionId: detail.session.id, qrToken: token, status: 'PRESENT' });
+      if (!mountedRef.current || confirmationTimedOut) return;
+      setResult(confirmed);
+      if (!confirmed.alreadyMarked) successFeedback();
+    } catch (failure) {
+      if (mountedRef.current) setError(scanError(failure));
+    } finally {
+      window.clearTimeout(watchdog); requestPending = false;
+      if (mountedRef.current) { setPending(false); busyCallbackRef.current?.(false); }
+      // Terminal results stay locked until the operator explicitly re-arms scanning.
     }
-  }, [facingMode, stopCamera]);
+  };
 
-  // Frame scanner loop using jsQR
   useEffect(() => {
-    if (!isCameraActive) {
-      stopCamera();
-      return;
+    const generation = ++generationRef.current;
+    const release = () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+      streamRef.current?.getTracks().forEach(track => { track.onended = null; track.stop(); });
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+    };
+    release();
+    if (!cameraEnabled || !ready) { setCameraStarting(false); return release; }
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setCameraMessage('Camera scanning requires a supported browser on HTTPS or localhost. Use manual attendance here.');
+      setCameraEnabled(false); return release;
     }
-
-    startCamera();
-
-    let isSubscribed = true;
-
-    const scanFrame = () => {
-      if (!isSubscribed) return;
-
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-
-      if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (ctx) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert',
-          });
-
-          if (code && code.data && code.data.trim()) {
-            handleScanToken(code.data);
+    setCameraStarting(true); setCameraMessage('');
+    const current = () => mountedRef.current && generationRef.current === generation;
+    const start = async () => {
+      let acquired: MediaStream | null = null;
+      try {
+        acquired = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+        if (!current() || !videoRef.current) { acquired.getTracks().forEach(track => track.stop()); return; }
+        streamRef.current = acquired;
+        videoRef.current.srcObject = acquired;
+        await videoRef.current.play();
+        if (!current()) { acquired.getTracks().forEach(track => track.stop()); return; }
+        setCameraStarting(false);
+        acquired.getVideoTracks().forEach(track => { track.onended = () => {
+          if (current()) { setCameraMessage('Camera disconnected. Reconnect or use manual attendance.'); setCameraEnabled(false); }
+        }; });
+        let lastDecode = 0;
+        const frame = (now: number) => {
+          if (!current()) return;
+          const video = videoRef.current, canvas = canvasRef.current;
+          if (!lockedRef.current && !requestPending && video && canvas && video.readyState >= 2 && video.videoWidth > 0 && now - lastDecode >= 150) {
+            lastDecode = now;
+            canvas.width = Math.min(960, video.videoWidth); canvas.height = Math.round(video.videoHeight * canvas.width / video.videoWidth);
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            if (context) {
+              try {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const image = context.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'attemptBoth' });
+                if (code?.data) void submitRef.current(code.data);
+              } catch {
+                setCameraMessage('The camera image could not be read. Reconnect or use manual attendance.'); setCameraEnabled(false); return;
+              }
+            }
           }
-        }
+          frameRef.current = requestAnimationFrame(frame);
+        };
+        frameRef.current = requestAnimationFrame(frame);
+      } catch (failure) {
+        acquired?.getTracks().forEach(track => track.stop());
+        if (current()) { release(); setCameraStarting(false); setCameraEnabled(false); setCameraMessage(cameraError(failure)); }
       }
-
-      animationFrameRef.current = requestAnimationFrame(scanFrame);
     };
+    void start();
+    return () => { ++generationRef.current; release(); };
+  }, [cameraEnabled, facing, ready]);
 
-    animationFrameRef.current = requestAnimationFrame(scanFrame);
-
-    return () => {
-      isSubscribed = false;
-      stopCamera();
-    };
-  }, [isCameraActive, facingMode, startCamera, stopCamera, handleScanToken]);
-
-  const toggleCamera = () => {
-    setIsCameraActive((prev) => !prev);
+  const nextCandidate = () => {
+    if (pending || requestPending) return;
+    setResult(null); setError(null); tokenRef.current = ''; lockedRef.current = false;
   };
-
-  const flipCamera = () => {
-    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
-  };
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* Left: Camera Scanner Viewport */}
-      <div className="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Biometric QR Scanner</h3>
-            <p className="text-xs text-slate-400">Live hardware camera stream with real-time OMR QR detection</p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSoundEnabled((prev) => !prev)}
-              className={`p-2 rounded-xl text-xs font-semibold border transition ${
-                soundEnabled
-                  ? 'bg-blue-50 text-[#185b9d] border-blue-200'
-                  : 'bg-slate-50 text-slate-400 border-slate-200'
-              }`}
-              title={soundEnabled ? 'Mute Scan Sound' : 'Unmute Scan Sound'}
-            >
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
-
-            <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition ${
-                isCameraActive && !cameraError
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'bg-rose-50 text-rose-700 border-rose-200'
-              }`}
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  isCameraActive && !cameraError ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'
-                }`}
-              />
-              {isCameraActive && !cameraError ? 'Camera Live' : 'Camera Paused'}
-            </span>
-          </div>
-        </div>
-
-        {/* Viewport Frame */}
-        <div className="relative aspect-4/3 bg-slate-950 rounded-2xl overflow-hidden flex flex-col items-center justify-center text-center text-white border-4 border-slate-800 shadow-inner">
-          {/* Hidden Canvas for Frame Processing */}
-          <canvas ref={canvasRef} className="hidden" />
-
-          {/* Live Video Feed */}
-          <video
-            ref={videoRef}
-            playsInline
-            muted
-            autoPlay
-            className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''} ${
-              !isCameraActive || cameraError ? 'hidden' : 'block'
-            }`}
-          />
-
-
-          {/* Fallback View when Camera is Off or Errored */}
-          {(!isCameraActive || cameraError) && (
-            <div className="p-6 space-y-3 max-w-sm mx-auto z-10">
-              <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
-                <CameraOff className="w-7 h-7" />
-              </div>
-              <h4 className="text-sm font-bold text-slate-200">
-                {cameraError ? 'Camera Access Notice' : 'Camera Feed Paused'}
-              </h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                {cameraError || 'The live device camera stream is paused. Click below to reconnect.'}
-              </p>
-              <button
-                onClick={() => {
-                  setIsCameraActive(true);
-                  startCamera();
-                }}
-                className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl text-xs font-bold shadow-md transition"
-              >
-                Reconnect Camera
-              </button>
-            </div>
-          )}
-
-          {/* Holographic Overlay when Camera is Active */}
-          {isCameraActive && !cameraError && (
-            <>
-              <div className="absolute inset-0 bg-radial from-transparent via-slate-950/20 to-slate-950/60 pointer-events-none" />
-
-              {/* Scanning Reticle */}
-              <div
-                className={`w-56 h-56 sm:w-64 sm:h-64 border-2 rounded-2xl relative flex items-center justify-center transition-all duration-300 pointer-events-none ${
-                  hasScannedRecent
-                    ? 'border-emerald-400 scale-105 shadow-2xl shadow-emerald-500/50 bg-emerald-500/10'
-                    : 'border-emerald-400/80 shadow-lg shadow-emerald-500/20'
-                }`}
-              >
-                <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg" />
-                <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg" />
-                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg" />
-                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-emerald-400 rounded-br-lg" />
-
-                {/* Laser Animation */}
-                <div className="absolute left-2 right-2 h-0.5 bg-emerald-400 shadow-md shadow-emerald-400 animate-bounce" />
-
-                {hasScannedRecent ? (
-                  <CheckCircle2 className="w-16 h-16 text-emerald-400 animate-in zoom-in" />
-                ) : (
-                  <QrCode className="w-16 h-16 text-white/20" />
-                )}
-              </div>
-
-              {/* Status Hint */}
-              <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-[11px] font-medium text-slate-300 z-10">
-                <span className="bg-slate-900/80 px-2.5 py-1 rounded-lg backdrop-blur-xs">
-                  {hasScannedRecent ? '✓ QR Code Recognized' : 'Align Candidate QR Code in Viewport'}
-                </span>
-
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={flipCamera}
-                    className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-white backdrop-blur-xs transition"
-                    title="Flip Camera (Front/Rear)"
-                  >
-                    <SwitchCamera className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={toggleCamera}
-                    className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-white backdrop-blur-xs transition"
-                    title="Pause Camera"
-                  >
-                    <CameraOff className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Quick Simulator Buttons */}
-        <div className="space-y-2 pt-2">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-            Simulate Instant QR Scan:
-          </span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            <button
-              onClick={() => handleScanToken('qr_AZMVS-2026-0001_signed_token_991823')}
-              disabled={isScanning}
-              className="p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white text-left font-semibold text-slate-800 transition flex items-center justify-between shadow-2xs hover:border-slate-300"
-            >
-              <span>Scan AZMVS-2026-0001 (Hamza Tariq)</span>
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-            </button>
-            <button
-              onClick={() => handleScanToken('qr_AZMVS-2026-0003_signed_token_776123')}
-              disabled={isScanning}
-              className="p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white text-left font-semibold text-slate-800 transition flex items-center justify-between shadow-2xs hover:border-slate-300"
-            >
-              <span>Scan AZMVS-2026-0003 (Bilal Ahmed)</span>
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-            </button>
-          </div>
-        </div>
-
-        {/* Manual Input Fallback */}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Paste raw QR token or roll number (e.g. AZMVS-2026-0001)..."
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-            className="flex-1 px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#185b9d]/20"
-          />
-          <button
-            onClick={() => handleScanToken(tokenInput)}
-            disabled={isScanning || !tokenInput.trim()}
-            className="px-4 py-2 bg-[#185b9d] text-white rounded-xl text-xs font-bold shadow-xs hover:bg-[#13497d] transition disabled:opacity-50"
-          >
-            {isScanning ? 'Verifying...' : 'Verify Token'}
-          </button>
-        </div>
+  if (!ready || !detail) return <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600"><h2 className="font-semibold text-slate-900">QR attendance</h2><p className="mt-1">Select an OPEN examination Hall session before scanning attendance.</p>{onManualAttendance && <button className={attendanceSecondary + ' mt-3'} onClick={onManualAttendance}>Can't scan? Mark attendance manually</button>}</section>;
+  const candidate = result && detail.roster.find(row => row.studentId === result.student.id);
+  const fields = result ? [
+    ['Candidate', result.student.fullName], ['Roll number', result.student.rollNumber], ['Class', result.student.currentClass],
+    ['Attendance status', result.attendance.status], ['Original attendance time', new Date(result.attendance.createdAt).toLocaleString('en-PK', { timeZone: 'Asia/Karachi' }) + ' PKT'],
+    ['Attendance method', result.attendance.method], ['Test Center', detail.session.testCenterNameSnapshot], ['Hall', detail.session.hallNameSnapshot],
+    ['Room', detail.session.roomNumberSnapshot], ['Seat', candidate?.seatNoSnapshot],
+  ] : [];
+  return <section aria-labelledby="qr-attendance-title" className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="qr-attendance-title" className="text-sm font-bold">QR attendance</h2><p className="mt-1 text-xs text-slate-500">Scan a signed AZM candidate QR for this frozen Hall session.</p></div><div className="flex flex-wrap gap-2">
+      <button className={attendanceSecondary} disabled={pending} onClick={() => setCameraEnabled(value => !value)}>{cameraEnabled ? 'Stop camera' : 'Connect camera'}</button>
+      <button className={attendanceSecondary} disabled={!cameraEnabled || pending} onClick={() => setFacing(value => value === 'environment' ? 'user' : 'environment')}>Switch camera</button>
+    </div></div>
+    <div className="mt-3 grid min-w-0 gap-4 lg:grid-cols-2">
+      <div><div className="relative aspect-video overflow-hidden rounded-lg bg-slate-900">
+        <video ref={videoRef} muted playsInline className="h-full w-full object-contain" aria-label="Live candidate QR camera" />
+        {!cameraEnabled && <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-slate-200"><Camera size={24} aria-hidden="true" /><span>Connect the camera to scan</span></div>}
+      </div><canvas ref={canvasRef} hidden />
+        {cameraStarting && <p role="status" className="mt-2 text-sm text-slate-600">Connecting camera…</p>}
+        {cameraMessage && <div role="alert" className="mt-2 text-sm text-red-700"><p>{cameraMessage}</p><button className={attendanceSecondary + ' mt-2'} disabled={pending || cameraStarting} onClick={() => { setCameraMessage(''); setCameraEnabled(true); }}>Reconnect camera</button></div>}
+        <p className="mt-2 text-xs text-slate-500">Hold the candidate QR within the camera view. Verify the candidate before scanning the next person.</p>
       </div>
-
-      {/* Right: Instant Scan Confirmation Card & Verification Result */}
-      <div className="lg:col-span-5 space-y-4">
-        {errorMessage && (
-          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1 animate-in fade-in">
-            <div className="flex items-center gap-2 font-bold text-rose-900">
-              <AlertCircle className="w-4 h-4 text-rose-600" />
-              <span>Attendance Verification Error</span>
-            </div>
-            <p className="leading-relaxed">{errorMessage}</p>
-          </div>
-        )}
-
-        {lastResult ? (
-          <div className="bg-white rounded-3xl p-6 sm:p-7 border border-emerald-200 shadow-lg shadow-emerald-500/10 space-y-5 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white text-xs font-bold shadow-xs">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Marked Present ✓
-              </span>
-              <span className="text-[11px] font-semibold text-slate-400 font-mono">
-                {new Date(lastResult.attendance.createdAt).toLocaleTimeString()}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <img
-                src={
-                  lastResult.student.photoUrl ||
-                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-                }
-                alt="Student"
-                className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 shadow-md bg-slate-100"
-              />
-              <div className="min-w-0">
-                <h4 className="text-base font-extrabold text-slate-900 truncate">
-                  {lastResult.student.fullName}
-                </h4>
-                <p className="text-xs text-slate-500 font-medium truncate">
-                  S/D/O {lastResult.student.fatherName}
-                </p>
-                <div className="flex items-center gap-2 mt-1 text-xs">
-                  <span className="font-bold text-[#185b9d] font-mono">{lastResult.student.rollNumber}</span>
-                  <span className="text-slate-300">•</span>
-                  <span className="font-semibold text-slate-600">{lastResult.student.currentClass}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 text-slate-600">
-              <div className="flex justify-between">
-                <span>Method:</span>
-                <strong className="text-slate-800">{lastResult.attendance.method}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Examiner / Officer:</span>
-                <strong className="text-slate-800">{lastResult.attendance.markedByName}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Scholarship Stream:</span>
-                <strong className="text-[#185b9d]">{lastResult.student.scholarshipCategory}</strong>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-3xl p-8 border border-dashed border-slate-200 text-center space-y-3 text-slate-400">
-            <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto text-slate-400">
-              <QrCode className="w-6 h-6" />
-            </div>
-            <h4 className="text-sm font-bold text-slate-700">Awaiting Scan</h4>
-            <p className="text-xs text-slate-400 max-w-xs mx-auto">
-              Hold any candidate Roll Number Slip with its QR barcode in front of your camera to verify and mark attendance automatically.
-            </p>
-          </div>
-        )}
+      <div className="min-w-0" aria-live="polite" aria-atomic="true">
+        {pending && !error && <p role="status" className="text-sm text-slate-700">QR detected — verifying attendance…</p>}
+        {error && <div role="alert" className="border-l-4 border-red-600 pl-3 text-sm"><h3 className="font-bold text-red-800">{error.title}</h3><p className="mt-1 text-slate-700">{error.message}</p>{pending && <p className="mt-2 text-xs text-slate-600">Waiting for the outstanding request to finish. Further scans remain blocked.</p>}</div>}
+        {result && <><div className={'flex items-center gap-2 text-sm font-bold ' + (result.alreadyMarked ? 'text-slate-800' : 'text-emerald-800')}>{!result.alreadyMarked && <CheckCircle2 size={18} aria-hidden="true" />}<h3>{result.alreadyMarked ? 'Already Marked — ' + result.attendance.status : 'Attendance Marked'}</h3></div>
+          <p className="mt-1 text-xs text-slate-500">{result.alreadyMarked ? 'Original attendance is unchanged.' : 'The server confirmed a persisted attendance record.'}</p>
+          <div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><UserRound size={20} aria-hidden="true" />Photo unavailable</div>
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">{fields.map(([label, value]) => <div key={label}><dt className="text-slate-500">{label}</dt><dd className="mt-1 break-words font-semibold">{attendanceValue(value) === '—' ? 'Not available' : attendanceValue(value)}</dd></div>)}</dl>
+        </>}
+        {!pending && !result && !error && <p className="text-sm text-slate-600">Ready for a candidate QR. Attendance is confirmed only after the server saves it.</p>}
+        {(result || error) && <button className={attendancePrimary + ' mt-4'} disabled={pending} onClick={nextCandidate}>Scan Next Candidate</button>}
       </div>
     </div>
-  );
+    {onManualAttendance && <button className={attendanceSecondary + ' mt-4'} disabled={pending} onClick={onManualAttendance}>Can't scan? Mark attendance manually</button>}
+  </section>;
 };
-

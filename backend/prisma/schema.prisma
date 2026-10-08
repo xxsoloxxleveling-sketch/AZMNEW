@@ -114,6 +114,7 @@ model Student {
   documents        DocumentChecklist?
   officeUse        OfficeUseRecord?
   attendance       Attendance[]
+  attendanceSessionCandidates AttendanceSessionCandidate[]
   feeRecords       FeeRecord[]
   studentDocuments StudentDocument[]
 }
@@ -286,8 +287,59 @@ enum AttendanceMethod {
   MANUAL
 }
 
+enum AttendanceSessionStatus {
+  OPEN
+  CLOSED
+}
+
+model AttendanceSession {
+  id                       String @id @default(cuid())
+  examHallId               String
+  examHall                 ExamHall @relation(fields: [examHallId], references: [id], onDelete: Restrict)
+  businessDate             DateTime @db.Date
+  status                   AttendanceSessionStatus @default(OPEN)
+  openedByUserId           String
+  openedAt                 DateTime @default(now())
+  closedByUserId           String?
+  closedAt                 DateTime?
+  hallNameSnapshot         String
+  roomNumberSnapshot       String
+  testCenterNameSnapshot   String?
+  examDateSnapshot         String
+  reportingTimeSnapshot    String
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @default(now()) @updatedAt
+  candidates               AttendanceSessionCandidate[]
+  attendance               Attendance[]
+
+  @@unique([examHallId, businessDate])
+  @@index([businessDate])
+  @@index([status])
+}
+
+model AttendanceSessionCandidate {
+  id                      String @id @default(cuid())
+  sessionId               String
+  session                 AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  studentId               String
+  student                 Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  fullNameSnapshot        String
+  rollNumberSnapshot      String?
+  applicationNoSnapshot   String
+  currentClassSnapshot    String
+  seatNoSnapshot          String?
+  createdAt               DateTime @default(now())
+  attendance              Attendance? @relation("FrozenRosterAttendance")
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+}
+
 model Attendance {
   id             String           @id @default(cuid())
+  sessionId      String?
+  session        AttendanceSession? @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  rosterCandidate AttendanceSessionCandidate? @relation("FrozenRosterAttendance", fields: [sessionId, studentId], references: [sessionId, studentId], onDelete: Restrict)
   studentId      String
   student        Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
   date           DateTime         @default(now())
@@ -296,7 +348,8 @@ model Attendance {
   method         AttendanceMethod
   createdAt      DateTime         @default(now())
 
-  @@unique([studentId, date])
+  @@unique([sessionId, studentId])
+  @@index([studentId])
 }
 
 enum FeeStatus {
@@ -458,6 +511,7 @@ model ExamHall {
   examDate         String      @default("Sunday, 15 November 2026")
   testCenterId     String?
   testCenter       TestCenter? @relation(fields: [testCenterId], references: [id], onDelete: SetNull)
+  attendanceSessions AttendanceSession[]
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @default(now()) @updatedAt
 }
