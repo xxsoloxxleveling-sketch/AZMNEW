@@ -1249,7 +1249,7 @@ export const mockApi = {
     return res;
   },
 
-  async getHallCandidates(query: { search?: string; class?: string; assignment?: 'unassigned' | 'assigned' | 'all'; page?: number; limit?: number }): Promise<HallCandidatePage> {
+  async getHallCandidates(query: { search?: string; class?: string; gender?: 'MALE' | 'FEMALE'; assignment?: 'unassigned' | 'assigned' | 'all'; page?: number; limit?: number }): Promise<HallCandidatePage> {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, String(value));
     const res = await apiFetch<HallCandidatePage>(`/api/exam-halls/candidates?${params}`);
