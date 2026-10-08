@@ -13,6 +13,7 @@ import type {
   StaffStatus,
 } from '../../../lib/mockApi';
 import { useStaffFocusTrap } from './useStaffFocusTrap';
+import { StaffSalaryPaymentModal } from './StaffSalaryPaymentModal';
 import { StaffStatusModal } from './StaffStatusModal';
 
 function formatCurrency(val: string | number): string {
@@ -82,6 +83,7 @@ function StaffStatusBadge({ status }: { status: StaffStatus }) {
 export interface StaffDetailDrawerProps {
   staffId: string | null;
   canEdit?: boolean;
+  canPay?: boolean;
   onClose: () => void;
   onEditClick?: (staff: StaffDetailRecord) => void;
   onStatusChanged?: (updated: StaffDetailRecord) => void;
@@ -91,6 +93,7 @@ export interface StaffDetailDrawerProps {
 export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
   staffId,
   canEdit = false,
+  canPay = false,
   onClose,
   onEditClick,
   onStatusChanged,
@@ -99,8 +102,11 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
   const [staff, setStaff] = useState<StaffDetailRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const [copiedCnic, setCopiedCnic] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+
+  useEffect(() => { setPaymentOpen(false); }, [staffId]);
 
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -163,8 +169,8 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
         className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 overflow-hidden"
       >
         {/* Drawer Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50/50">
-          <div className="min-w-0 flex-1">
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-wrap items-start justify-between gap-3 bg-slate-50/50">
+          <div className="min-w-0 flex-1 basis-full sm:basis-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 id="staff-drawer-title" className="text-base font-bold text-slate-900 tracking-tight truncate">
                 {isLoading ? 'Loading Personnel Profile...' : staff?.fullName || 'Staff Member'}
@@ -177,8 +183,8 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
             {staff && (
               <p className="text-[11px] text-slate-500 mt-0.5">
                 {staff.status === 'ACTIVE'
-                  ? 'Included in future payroll runs.'
-                  : 'Excluded from future payroll runs.'}
+                  ? 'Eligible for staff operations and one-time salary payments.'
+                  : 'Inactive staff cannot receive new salary payments.'}
               </p>
             )}
           </div>
@@ -318,24 +324,30 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
                   Compensation
                 </span>
                 <div className="bg-slate-50/70 border border-slate-200/70 rounded-lg p-3">
-                  <span className="text-[11px] text-slate-500 block">Monthly Salary</span>
+                  <span className="text-[11px] text-slate-500 block">Default Salary Amount</span>
                   <div className="mt-1">
                     <span className="text-lg font-bold text-slate-900 font-mono tracking-tight block">
                       PKR {formatCurrency(staff.salary)}
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Authorized monthly base compensation
+                    Default amount used when recording a one-time salary payment.
                   </span>
                 </div>
               </div>
 
+              {staff.portalAccount && <section className="space-y-2 text-xs border-t pt-3"><h3 className="font-semibold">Portal Account</h3><p className="break-all">{staff.portalAccount.email}</p><p>Role: {staff.portalAccount.role} · {staff.portalAccount.status === 'ACTIVE' ? 'Active' : 'Inactive'}</p></section>}
+              <section className="space-y-2 border-t pt-3">
+                <div className="flex flex-wrap justify-between gap-2 items-center"><h3 className="text-sm font-semibold">One-time Salary Payments</h3>{canPay && staff.status === 'ACTIVE' && <button type="button" className="text-xs bg-[#185b9d] text-white rounded px-3 py-2" onClick={() => setPaymentOpen(true)}>Pay Salary Once</button>}</div>
+                {staff.salaryPayments?.length ? <div className="overflow-x-auto"><table className="text-xs min-w-[620px] w-full"><thead><tr>{['Date','Amount','Method','Reference','Recorded by','Status'].map(h => <th key={h} className="text-left p-2">{h}</th>)}</tr></thead><tbody>{staff.salaryPayments.map(p => <tr key={p.id} className="border-t"><td className="p-2">{formatDateTime(p.transactionDate)}</td><td className="p-2">PKR {formatCurrency(p.amount)}</td><td className="p-2">{p.paymentMethod?.replace(/_/g,' ') || '—'}</td><td className="p-2">{p.referenceNumber || '—'}</td><td className="p-2">{p.createdByName || '—'}</td><td className="p-2">{p.status}</td></tr>)}</tbody></table></div> : <p className="text-xs text-slate-500">No one-time salary payments have been recorded.</p>}
+              </section>
               {/* Read-Only Payroll History Section */}
-              <div className="space-y-2">
+              {staff.payroll.length > 0 && <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                    Payroll History
+                    Legacy Monthly Payroll History
                   </span>
+                  <p className="text-xs text-slate-500">Historical records from the previous monthly payroll workflow.</p>
                   <span className="text-[11px] text-slate-500">
                     {staff.payroll.length} {staff.payroll.length === 1 ? 'Record' : 'Records'}
                   </span>
@@ -390,7 +402,7 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
                     <p>No payroll history has been recorded for this staff member.</p>
                   </div>
                 )}
-              </div>
+              </div>}
 
               {/* Record Metadata Section */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
@@ -417,6 +429,7 @@ export const StaffDetailDrawer: React.FC<StaffDetailDrawerProps> = ({
         </div>
       </div>
 
+      {paymentOpen && staff && canPay && <StaffSalaryPaymentModal staff={staff} onClose={() => setPaymentOpen(false)} onSuccess={() => void fetchStaffDetail()} />}
       {/* Staff Status Confirmation Modal */}
       {staff && (
         <StaffStatusModal

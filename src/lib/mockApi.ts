@@ -382,7 +382,15 @@ export interface StaffPayrollRecord {
   updatedAt: string;
 }
 
+export interface StaffPortalAccount { id: string; email: string; role: 'TEACHER'; status: string; }
+export interface StaffPortalCredentials { email: string; temporaryPassword: string; role: 'TEACHER'; }
+export interface StaffSalaryPayment { id: string; amount: string; transactionDate: string; status: 'POSTED' | 'VOIDED'; paymentMethod: PaymentMethod | null; referenceNumber: string | null; description: string; createdByName: string | null; }
+export interface OneTimeSalaryPaymentInput { amount: number; paymentMethod?: PaymentMethod; referenceNumber?: string; note?: string; paidAt?: string; }
+export interface StaffCreateRecord extends StaffDetailRecord { portalCredentials?: StaffPortalCredentials; }
+export interface TeacherExportRecord { id: string; fullName: string; role: string; phone: string; cnic: string; joinDate: string; status: StaffStatus; salary: string; createdAt: string; portalAccount: StaffPortalAccount | null; }
 export interface StaffDetailRecord {
+  portalAccount?: StaffPortalAccount | null;
+  salaryPayments?: StaffSalaryPayment[];
   id: string;
   fullName: string;
   role: string;
@@ -441,7 +449,7 @@ export interface MockPayrollRecord {
 
 export type TransactionType = 'FEE_INCOME' | 'SALARY_EXPENSE' | 'OTHER_INCOME' | 'OTHER_EXPENSE';
 export type TransactionStatus = 'POSTED' | 'VOIDED';
-export type TransactionSource = 'MANUAL' | 'FEE' | 'PAYROLL';
+export type TransactionSource = 'MANUAL' | 'FEE' | 'PAYROLL' | 'STAFF_PAYMENT';
 export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'ONLINE' | 'OTHER';
 
 export interface TransactionFeeRecord {
@@ -1762,6 +1770,8 @@ export const mockApi = {
     const res: any = await apiFetch<any>(`/api/staff/${id}`);
     const data = res?.data || res;
     return {
+      portalAccount: data.portalAccount ?? null,
+      salaryPayments: Array.isArray(data.salaryPayments) ? data.salaryPayments : [],
       id: data.id,
       fullName: data.fullName || '',
       role: data.role || '',
@@ -1787,13 +1797,15 @@ export const mockApi = {
     };
   },
 
-  async createStaffMember(payload: CreateStaffPayload): Promise<StaffDetailRecord> {
+  async createStaffMember(payload: CreateStaffPayload): Promise<StaffCreateRecord> {
     const res: any = await apiFetch<any>('/api/staff', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
     const data = res?.data || res;
     return {
+      portalAccount: data.portalAccount ?? null,
+      salaryPayments: Array.isArray(data.salaryPayments) ? data.salaryPayments : [],
       id: data.id,
       fullName: data.fullName || '',
       role: data.role || '',
@@ -1805,6 +1817,7 @@ export const mockApi = {
       createdAt: data.createdAt || '',
       updatedAt: data.updatedAt || '',
       payroll: [],
+      ...(data.portalCredentials ? { portalCredentials: data.portalCredentials } : {}),
     };
   },
 
@@ -1815,6 +1828,8 @@ export const mockApi = {
     });
     const data = res?.data || res;
     return {
+      portalAccount: data.portalAccount ?? null,
+      salaryPayments: Array.isArray(data.salaryPayments) ? data.salaryPayments : [],
       id: data.id,
       fullName: data.fullName || '',
       role: data.role || '',
@@ -1838,6 +1853,15 @@ export const mockApi = {
           }))
         : [],
     };
+  },
+
+  async payStaffSalaryOnce(id: string, payload: OneTimeSalaryPaymentInput, idempotencyKey: string): Promise<StaffSalaryPayment> {
+    const res: any = await apiFetch('/api/staff/' + encodeURIComponent(id) + '/payments', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(payload) });
+    return res.data || res;
+  },
+  async exportTeachers(): Promise<TeacherExportRecord[]> {
+    const res: any = await apiFetch('/api/staff/teachers/export?format=json');
+    return (res.data || res).teachers;
   },
 
   async getStaff(): Promise<MockStaff[]> {
