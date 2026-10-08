@@ -576,7 +576,7 @@ export const StudentsListView: React.FC = () => {
                 <IconDownloadSlip size={14} />
                 <span aria-live="polite">{isExportingAllPdf ? `Elapsed ${elapsedPdfLabel}` : 'Export All Students PDF'}</span>
               </button>
-            )>
+            )}
           </div>
 
           {/* Operational Toolbar Actions (Add Student removed - authoritative in AdminHeader) */}
