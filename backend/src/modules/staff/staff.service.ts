@@ -283,8 +283,13 @@ export class StaffService {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'staff-payment:' + key}))`;
       const prior = await tx.idempotencyRecord.findUnique({ where: { key } });
       if (prior) {
-        if (prior.action !== 'STAFF_ONE_TIME_SALARY_PAYMENT' || prior.payloadHash !== payloadHash) throw staffError('Idempotency-Key was already used for a different request.', 409);
-        return JSON.parse(prior.response);
+        if (prior.action !== 'STAFF_ONE_TIME_SALARY_PAYMENT') throw staffError('Idempotency-Key was already used for a different request.', 409);
+        if (prior.expiresAt > new Date()) {
+          if (prior.payloadHash !== payloadHash) throw staffError('Idempotency-Key was already used for a different request.', 409);
+          return JSON.parse(prior.response);
+        }
+        // Only retire this action's expired key, atomically under the advisory lock.
+        await tx.idempotencyRecord.delete({ where: { key } });
       }
       const staff = await lockStaff(tx, id);
       if (staff.status !== 'ACTIVE') throw staffError('Inactive staff cannot receive new salary payments.', 409);
@@ -296,7 +301,7 @@ export class StaffService {
         createdById: actor.userId, createdByName: actor.name, createdByEmail: actor.email,
       }, select: paymentSelect });
       const response = JSON.parse(JSON.stringify(payment));
-      await tx.idempotencyRecord.create({ data: { key, action: 'STAFF_ONE_TIME_SALARY_PAYMENT', payloadHash, response: JSON.stringify(response), statusCode: 201, expiresAt: new Date('9999-12-31T23:59:59.999Z') } });
+      await tx.idempotencyRecord.create({ data: { key, action: 'STAFF_ONE_TIME_SALARY_PAYMENT', payloadHash, response: JSON.stringify(response), statusCode: 201, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
       return response;
     });
   }
