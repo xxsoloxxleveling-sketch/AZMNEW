@@ -16,6 +16,7 @@ enum Role {
 }
 
 model User {
+  staff        Staff?
   id           String   @id @default(cuid())
   name         String
   email        String   @unique
@@ -381,6 +382,9 @@ enum StaffStatus {
 }
 
 model Staff {
+  userId    String? @unique
+  user      User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  salaryPayments Transaction[]
   id        String          @id @default(cuid())
   fullName  String
   role      String
@@ -425,6 +429,7 @@ enum TransactionStatus {
 }
 
 enum TransactionSource {
+  STAFF_PAYMENT
   MANUAL
   FEE
   PAYROLL
@@ -463,6 +468,8 @@ model Transaction {
   voidReason       String?
 
   // Relations
+  relatedStaffId   String?
+  staff            Staff? @relation(fields: [relatedStaffId], references: [id], onDelete: Restrict)
   relatedFeeId     String?
   feeRecord        FeeRecord?        @relation(fields: [relatedFeeId], references: [id], onDelete: SetNull)
   relatedPayrollId String?
@@ -477,6 +484,7 @@ model Transaction {
   @@index([source])
   @@index([relatedFeeId])
   @@index([relatedPayrollId])
+  @@index([relatedStaffId])
 }
 
 model TestCenter {

@@ -85,6 +85,8 @@ function formatSource(source: string): string {
   switch (source) {
     case 'FEE':
       return 'Fee Collection';
+    case 'STAFF_PAYMENT':
+      return 'Staff Payment';
     case 'PAYROLL':
       return 'Payroll Disbursement';
     case 'MANUAL':

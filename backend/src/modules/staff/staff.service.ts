@@ -1,3 +1,7 @@
+import crypto from 'node:crypto';
+import { hashPassword } from '../../lib/hash';
+import { passwordPolicySchema } from '../../lib/passwordPolicy';
+import { OneTimeSalaryPaymentInput } from './staff.schema';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { CreateStaffInput, UpdateStaffInput, StaffQueryInput } from './staff.schema';
@@ -47,6 +51,21 @@ export function maskCnic(cnic: string): string {
   return '*****';
 }
 
+export const isTeachingDesignation = (designation: string) => /\b(teacher|lecturer|instructor)\b/i.test(designation);
+const portalSelect = { id: true, email: true, role: true, status: true } as const;
+const paymentSelect = { id: true, amount: true, transactionDate: true, status: true, paymentMethod: true, referenceNumber: true, description: true, createdByName: true } as const;
+function staffError(message: string, statusCode: number, code?: string): AppError & { code?: string } { return Object.assign(new Error(message), { statusCode, code }); }
+export function teacherEmail(name: string): string {
+  const normalized = name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 40).replace(/\.+$/g, '') || 'staff';
+  return 'teacher.' + normalized + '.' + crypto.randomBytes(8).toString('hex') + '@azmaio.com';
+}
+async function lockStaff(tx: Prisma.TransactionClient, id: string) {
+  await tx.$queryRaw`SELECT id FROM "Staff" WHERE id = ${id} FOR UPDATE`;
+  const staff = await tx.staff.findUnique({ where: { id } });
+  if (!staff) throw staffError('Staff member not found.', 404);
+  return staff;
+}
+
 export class StaffService {
   /**
    * Registers a new personnel / staff member profile.
@@ -54,43 +73,29 @@ export class StaffService {
    */
   async createStaff(input: CreateStaffInput) {
     const canonicalCnic = normalizeCnic(input.cnic);
-    const variants = cnicVariants(canonicalCnic);
-
-    const existing = await prisma.staff.findFirst({
-      where: {
-        cnic: { in: variants },
-      },
-    });
-
-    if (existing) {
-      const error: AppError = new Error(
-        `Staff member with CNIC '${input.cnic}' is already registered (${existing.fullName}).`
-      );
-      error.statusCode = 409;
-      throw error;
-    }
-
-    try {
-      const staff = await prisma.staff.create({
-        data: {
-          ...input,
-          cnic: canonicalCnic,
-          status: 'ACTIVE',
-          joinDate: input.joinDate || new Date(),
-        },
-      });
-
-      return staff;
-    } catch (err: any) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        const error: AppError = new Error(
-          `Staff member with CNIC '${input.cnic}' is already registered.`
-        );
-        error.statusCode = 409;
+    const teaching = isTeachingDesignation(input.role);
+    const temporaryPassword = teaching ? crypto.randomBytes(24).toString('base64url') : null;
+    const passwordHash = temporaryPassword ? await hashPassword(passwordPolicySchema.parse(temporaryPassword)) : null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const email = teaching ? teacherEmail(input.fullName) : null;
+      try {
+        return await prisma.$transaction(async tx => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'staff-cnic:' + canonicalCnic}))`;
+          const existing = await tx.staff.findFirst({ where: { cnic: { in: cnicVariants(canonicalCnic) } } });
+          if (existing) throw staffError('A staff member with this CNIC is already registered.', 409);
+          if (email && await tx.user.findUnique({ where: { email } })) throw staffError('Teacher email collision.', 409, 'EMAIL_COLLISION');
+          const user = email && passwordHash ? await tx.user.create({ data: { name: input.fullName, email, passwordHash, role: 'TEACHER', status: 'ACTIVE' }, select: portalSelect }) : null;
+          const staff = await tx.staff.create({ data: { fullName: input.fullName!, role: input.role!, phone: input.phone!, salary: input.salary!, cnic: canonicalCnic, status: 'ACTIVE', joinDate: input.joinDate || new Date(), userId: user?.id } });
+          return { ...staff, ...(user ? { portalAccount: user, portalCredentials: { email: user.email, temporaryPassword: temporaryPassword!, role: 'TEACHER' as const } } : {}) };
+        });
+      } catch (error: any) {
+        const emailCollision = error.code === 'EMAIL_COLLISION' || (error.code === 'P2002' && String(error.meta?.target).includes('email'));
+        if (emailCollision && attempt < 4) continue;
+        if (error.code === 'P2002' || emailCollision) throw staffError('Staff registration conflicts with an existing record. Please retry.', 409);
         throw error;
       }
-      throw err;
     }
+    throw staffError('Teacher account could not be created.', 409);
   }
 
   /**
@@ -209,6 +214,8 @@ export class StaffService {
     const staff = await prisma.staff.findUnique({
       where: { id },
       include: {
+        user: { select: portalSelect },
+        salaryPayments: { where: { source: 'STAFF_PAYMENT' }, orderBy: [{ transactionDate: 'desc' }, { createdAt: 'desc' }], select: paymentSelect },
         payroll: {
           orderBy: { createdAt: 'desc' },
         },
@@ -221,94 +228,93 @@ export class StaffService {
       throw error;
     }
 
-    return staff;
+    const { user, ...record } = staff;
+    return { ...record, portalAccount: user };
   }
 
   /**
    * Updates staff details with canonical CNIC normalization and collision safety.
    */
   async updateStaff(id: string, input: UpdateStaffInput) {
-    await this.getStaffById(id);
-
-    const dataToUpdate: any = { ...input };
-
-    if (input.cnic) {
-      const canonicalCnic = normalizeCnic(input.cnic);
-      const variants = cnicVariants(canonicalCnic);
-
-      const existing = await prisma.staff.findFirst({
-        where: {
-          cnic: { in: variants },
-        },
-      });
-
-      if (existing && existing.id !== id) {
-        const error: AppError = new Error(
-          `Staff member with CNIC '${input.cnic}' is already registered (${existing.fullName}).`
-        );
-        error.statusCode = 409;
-        throw error;
-      }
-
-      dataToUpdate.cnic = canonicalCnic;
-    }
-
     try {
-      const updated = await prisma.staff.update({
-        where: { id },
-        data: dataToUpdate,
+      return await prisma.$transaction(async tx => {
+        const staff = await lockStaff(tx, id);
+        const data = { ...input, ...(input.cnic ? { cnic: normalizeCnic(input.cnic) } : {}) };
+        if (input.cnic) {
+          const duplicate = await tx.staff.findFirst({ where: { id: { not: id }, cnic: { in: cnicVariants(data.cnic!) } } });
+          if (duplicate) throw staffError('A staff member with this CNIC is already registered.', 409);
+        }
+        const updated = await tx.staff.update({ where: { id }, data });
+        if (staff.userId) {
+          const deactivate = (staff.status === 'ACTIVE' && updated.status === 'INACTIVE') || (isTeachingDesignation(staff.role) && !isTeachingDesignation(updated.role));
+          const reactivate = staff.status === 'INACTIVE' && updated.status === 'ACTIVE' && isTeachingDesignation(updated.role);
+          await tx.user.update({ where: { id: staff.userId }, data: {
+            ...(input.fullName !== undefined ? { name: updated.fullName } : {}),
+            ...(deactivate ? { status: 'INACTIVE', tokenVersion: { increment: 1 } } : reactivate ? { status: 'ACTIVE' } : {}),
+          } });
+        }
+        return updated;
       });
-
-      return updated;
-    } catch (err: any) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        const error: AppError = new Error(
-          `Staff member with CNIC '${input.cnic}' is already registered.`
-        );
-        error.statusCode = 409;
-        throw error;
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Deletes a staff record safely.
-   * Blocks deletion if historical payroll records exist to protect the financial audit trail.
-   */
-  async deleteStaff(id: string) {
-    await this.getStaffById(id);
-
-    const payrollCount = await prisma.payrollRecord.count({
-      where: { staffId: id },
-    });
-
-    if (payrollCount > 0) {
-      const error: AppError = new Error(
-        'This staff member has payroll history and cannot be deleted. Set the staff member to Inactive instead.'
-      );
-      error.statusCode = 409;
+    } catch (error: any) {
+      if (error.code === 'P2002') throw staffError('A staff member with this CNIC is already registered.', 409);
       throw error;
     }
+  }
 
+  async deleteStaff(id: string) {
     try {
-      return await prisma.staff.delete({
-        where: { id },
+      return await prisma.$transaction(async tx => {
+        const staff = await lockStaff(tx, id);
+        if (staff.userId || await tx.transaction.count({ where: { relatedStaffId: id } }) || await tx.payrollRecord.count({ where: { staffId: id } })) {
+          throw staffError('This staff member has account or payment history. Deactivate the staff member instead.', 409);
+        }
+        return tx.staff.delete({ where: { id } });
       });
-    } catch (err: any) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        (err.code === 'P2003' || err.code === 'P2014')
-      ) {
-        const error: AppError = new Error(
-          'This staff member has payroll history and cannot be deleted. Set the staff member to Inactive instead.'
-        );
-        error.statusCode = 409;
-        throw error;
-      }
-      throw err;
+    } catch (error: any) {
+      if (error.code === 'P2003' || error.code === 'P2014') throw staffError('This staff member has account or payment history. Deactivate the staff member instead.', 409);
+      throw error;
     }
   }
+
+  async paySalaryOnce(id: string, input: OneTimeSalaryPaymentInput, actor: { userId: string; name?: string; email: string }, key: string) {
+    const payload = { staffId: id, actorId: actor.userId, amount: new Prisma.Decimal(input.amount).toString(), paymentMethod: input.paymentMethod ?? null, referenceNumber: input.referenceNumber ?? null, note: input.note ?? null, paidAt: input.paidAt?.toISOString() ?? null };
+    const payloadHash = crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+    return prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'staff-payment:' + key}))`;
+      const prior = await tx.idempotencyRecord.findUnique({ where: { key } });
+      if (prior) {
+        if (prior.action !== 'STAFF_ONE_TIME_SALARY_PAYMENT') throw staffError('Idempotency-Key was already used for a different request.', 409);
+        if (prior.expiresAt > new Date()) {
+          if (prior.payloadHash !== payloadHash) throw staffError('Idempotency-Key was already used for a different request.', 409);
+          return JSON.parse(prior.response);
+        }
+        // Only retire this action's expired key, atomically under the advisory lock.
+        await tx.idempotencyRecord.delete({ where: { key } });
+      }
+      const staff = await lockStaff(tx, id);
+      if (staff.status !== 'ACTIVE') throw staffError('Inactive staff cannot receive new salary payments.', 409);
+      const payment = await tx.transaction.create({ data: {
+        type: 'SALARY_EXPENSE', source: 'STAFF_PAYMENT', status: 'POSTED', relatedStaffId: id,
+        amount: input.amount, transactionDate: input.paidAt || new Date(), category: 'Staff Salary',
+        paymentMethod: input.paymentMethod, referenceNumber: input.referenceNumber,
+        description: 'One-time salary payment — ' + staff.fullName + (input.note ? ' — ' + input.note : ''),
+        createdById: actor.userId, createdByName: actor.name, createdByEmail: actor.email,
+      }, select: paymentSelect });
+      const response = JSON.parse(JSON.stringify(payment));
+      await tx.idempotencyRecord.create({ data: { key, action: 'STAFF_ONE_TIME_SALARY_PAYMENT', payloadHash, response: JSON.stringify(response), statusCode: 201, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
+      return response;
+    });
+  }
+
+  async exportTeachers() {
+    // Complete authoritative query; never use the paginated frontend roster.
+    const records = await prisma.staff.findMany({ orderBy: [{ fullName: 'asc' }, { id: 'asc' }], select: {
+      id: true, fullName: true, role: true, phone: true, cnic: true, joinDate: true, status: true, salary: true, createdAt: true, user: { select: portalSelect },
+    } });
+    return records.filter(s => isTeachingDesignation(s.role)).map(({ user, ...s }) => ({ ...s, cnic: maskCnic(s.cnic), salary: s.salary.toString(), portalAccount: user }));
+  }
+
+
 }
 
 export const staffService = new StaffService();

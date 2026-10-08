@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { StaffStatus } from '@prisma/client';
+import { StaffStatus, PaymentMethod } from '@prisma/client';
 
 export const createStaffSchema = z.object({
   fullName: z
@@ -136,3 +136,12 @@ export const staffQuerySchema = z.object({
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export type UpdateStaffInput = z.infer<typeof updateStaffSchema>;
 export type StaffQueryInput = z.infer<typeof staffQuerySchema>;
+
+export const oneTimeSalaryPaymentSchema = z.object({
+  amount: z.number().finite().positive().max(10000000),
+  paymentMethod: z.nativeEnum(PaymentMethod).optional(),
+  referenceNumber: z.string().trim().max(100).optional(),
+  note: z.string().trim().max(500).optional(),
+  paidAt: z.union([z.string().datetime({ offset: true }), z.date()]).transform(v => new Date(v)).refine(v => !Number.isNaN(v.getTime()), 'Payment date must be valid').optional(),
+}).strict();
+export type OneTimeSalaryPaymentInput = z.infer<typeof oneTimeSalaryPaymentSchema>;

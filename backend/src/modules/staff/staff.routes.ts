@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { staffController } from './staff.controller';
 import { validateBody, validateQuery } from '../../middleware/validate.middleware';
-import { createStaffSchema, updateStaffSchema, staffQuerySchema } from './staff.schema';
+import { createStaffSchema, updateStaffSchema, staffQuerySchema, oneTimeSalaryPaymentSchema } from './staff.schema';
 import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
 import { Role } from '@prisma/client';
@@ -24,6 +24,9 @@ router.post(
   validateBody(createStaffSchema),
   staffController.create
 );
+
+router.get('/teachers/export', authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT), staffController.exportTeachers);
+router.post('/:id/payments', authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT), validateBody(oneTimeSalaryPaymentSchema), staffController.paySalaryOnce);
 
 router.get(
   '/:id',

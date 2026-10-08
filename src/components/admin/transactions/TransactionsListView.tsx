@@ -86,6 +86,8 @@ function formatSource(source: TransactionSource): string {
   switch (source) {
     case 'FEE':
       return 'Fee';
+    case 'STAFF_PAYMENT':
+      return 'Staff Payment';
     case 'PAYROLL':
       return 'Payroll';
     case 'MANUAL':
@@ -650,6 +652,7 @@ export const TransactionsListView: React.FC = () => {
               <option value="ALL">All Sources</option>
               <option value="FEE">Fee Collections</option>
               <option value="PAYROLL">Payroll Disbursements</option>
+              <option value="STAFF_PAYMENT">Staff Payments</option>
               <option value="MANUAL">Manual Entries</option>
             </select>
 

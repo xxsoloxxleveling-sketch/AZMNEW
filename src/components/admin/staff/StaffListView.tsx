@@ -20,6 +20,7 @@ import type {
   StaffDetailRecord,
 } from '../../../lib/mockApi';
 import { AddEditStaffModal } from './AddEditStaffModal';
+import { downloadTeacherDirectory, openTeacherDirectoryPrint, printTeacherDirectory } from './staffPrint';
 import { StaffDetailDrawer } from './StaffDetailDrawer';
 
 /**
@@ -65,6 +66,16 @@ export const StaffListView: React.FC = () => {
   const isAuthorized = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'ACCOUNTANT';
   const canWrite = role === 'SUPER_ADMIN' || role === 'ADMIN';
 
+  const [exporting, setExporting] = useState(false);
+  const [exportMenu, setExportMenu] = useState(false);
+  const exportTeachers = async (print: boolean) => {
+    const win = print ? openTeacherDirectoryPrint() : null;
+    if (print && !win) { setFeedbackNotice({ type: 'error', message: 'Allow pop-ups to print the teacher directory.' }); return; }
+    setExporting(true); setExportMenu(false);
+    try { const records = await api.staff.exportTeachers(); if (win) printTeacherDirectory(win, records); else downloadTeacherDirectory(records); }
+    catch { win?.close(); setFeedbackNotice({ type: 'error', message: 'Teacher directory export failed. Please retry.' }); }
+    finally { setExporting(false); }
+  };
   // Directory and pagination state
   const [staffList, setStaffList] = useState<StaffDirectoryRecord[]>([]);
   const [pagination, setPagination] = useState<StaffPagination>({
@@ -208,6 +219,7 @@ export const StaffListView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {isAuthorized && <div className="relative"><button type="button" disabled={exporting} aria-expanded={exportMenu} className="border border-slate-200 bg-white rounded-lg px-3 py-2 text-xs" onClick={() => setExportMenu(v => !v)}>{exporting ? 'Exporting…' : 'Export Teachers'}</button>{exportMenu && <div className="absolute right-0 top-full z-20 bg-white border rounded-lg p-1 w-44 shadow-sm"><button type="button" className="block w-full text-left p-2 text-xs" onClick={() => void exportTeachers(false)}>Download CSV</button><button type="button" className="block w-full text-left p-2 text-xs" onClick={() => void exportTeachers(true)}>Print / Save PDF</button></div>}</div>}
           {canWrite && (
             <button
               type="button"
@@ -594,6 +606,7 @@ export const StaffListView: React.FC = () => {
       <StaffDetailDrawer
         staffId={selectedStaffId}
         canEdit={canWrite}
+        canPay={isAuthorized}
         onClose={() => setSelectedStaffId(null)}
         onEditClick={(staff) => {
           setSelectedStaffDetail(staff);

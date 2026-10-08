@@ -54,6 +54,10 @@ import type {
   StaffPayrollRecord,
   StaffDetailRecord,
   CreateStaffPayload,
+  StaffCreateRecord,
+  StaffSalaryPayment,
+  OneTimeSalaryPaymentInput,
+  TeacherExportRecord,
   UpdateStaffPayload,
   UserStatus,
   UserAccountRecord,
@@ -96,6 +100,10 @@ export type {
   StaffPayrollRecord,
   StaffDetailRecord,
   CreateStaffPayload,
+  StaffCreateRecord,
+  StaffSalaryPayment,
+  OneTimeSalaryPaymentInput,
+  TeacherExportRecord,
   UpdateStaffPayload,
   UserStatus,
   UserAccountRecord,
@@ -552,6 +560,14 @@ export const api = {
     },
   },
   staff: {
+    paySalaryOnce: async (id: string, payload: OneTimeSalaryPaymentInput, key: string): Promise<StaffSalaryPayment> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.payStaffSalaryOnce(id, payload, key);
+    },
+    exportTeachers: async (): Promise<TeacherExportRecord[]> => {
+      const { mockApi } = await import('../lib/mockApi');
+      return mockApi.exportTeachers();
+    },
     getAll: async (query?: StaffQueryParams): Promise<StaffListResponse> => {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.getStaffDirectory(query);
@@ -560,7 +576,7 @@ export const api = {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.getStaffById(id);
     },
-    create: async (data: CreateStaffPayload): Promise<StaffDetailRecord> => {
+    create: async (data: CreateStaffPayload): Promise<StaffCreateRecord> => {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.createStaffMember(data);
     },

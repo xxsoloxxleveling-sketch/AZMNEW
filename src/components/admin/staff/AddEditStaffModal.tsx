@@ -11,6 +11,8 @@ import type {
   CreateStaffPayload,
   UpdateStaffPayload,
 } from '../../../lib/mockApi';
+import { printTeacherPass } from './staffPrint';
+import type { StaffPortalCredentials } from '../../../lib/mockApi';
 import { useStaffFocusTrap } from './useStaffFocusTrap';
 
 export interface AddEditStaffModalProps {
@@ -42,6 +44,15 @@ export const AddEditStaffModal: React.FC<AddEditStaffModalProps> = ({
   const modalRef = useRef<HTMLDivElement>(null);
   const initialInputRef = useRef<HTMLInputElement>(null);
 
+  const [handoff, setHandoff] = useState<{ staff: StaffDetailRecord; credentials: StaffPortalCredentials } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [handoffMessage, setHandoffMessage] = useState('');
+  const printWindows = useRef<Window[]>([]);
+  const clearHandoff = () => { setHandoff(null); setShowPassword(false); setHandoffMessage(''); printWindows.current.forEach(w => { if (!w.closed) w.close(); }); printWindows.current = []; };
+  const closeModal = () => { clearHandoff(); onClose(); };
+  useEffect(() => { if (!isOpen) clearHandoff(); }, [isOpen]);
+  useEffect(() => () => { printWindows.current.forEach(w => { if (!w.closed) w.close(); }); }, []);
+  useEffect(() => { if (handoff) modalRef.current?.querySelector<HTMLInputElement>('input')?.focus(); }, [handoff]);
   // Form field state
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('');
@@ -94,11 +105,29 @@ export const AddEditStaffModal: React.FC<AddEditStaffModalProps> = ({
     containerRef: modalRef,
     initialFocusRef: initialInputRef,
     onEscape: () => {
-      if (!isSubmitting) onClose();
+      if (!isSubmitting) closeModal();
     },
   });
 
   if (!isOpen) return null;
+  if (handoff) {
+    const copy = async (value: string) => { try { await navigator.clipboard.writeText(value); setHandoffMessage('Copied.'); } catch { setHandoffMessage('Copy failed. Select and copy the value manually.'); } };
+    return <div className="fixed inset-0 z-[60] bg-slate-900/50 flex items-center justify-center p-4"><section ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="teacher-created-title" className="bg-white border border-slate-200 rounded-lg p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4">
+      <h2 id="teacher-created-title" className="text-base font-bold">Teacher Account Created</h2>
+      <p className="text-sm">{handoff.staff.fullName} · Teacher Portal Account</p>
+      <label className="block text-xs">Email<input readOnly value={handoff.credentials.email} className="block w-full border rounded p-2 mt-1" /></label>
+      <label className="block text-xs">Temporary Password<input readOnly type={showPassword ? 'text' : 'password'} value={handoff.credentials.temporaryPassword} className="block w-full border rounded p-2 mt-1 font-mono" /></label>
+      <button type="button" onClick={() => setShowPassword(v => !v)} className="text-xs text-[#185b9d] underline">{showPassword ? 'Hide' : 'Show'} password</button>
+      <p className="text-xs text-amber-900 border border-amber-200 bg-amber-50 p-3">Save or print these credentials now. The temporary password cannot be viewed again after you close this screen.</p>
+      <div className="flex flex-wrap gap-2 text-xs">
+        <button type="button" className="border rounded px-3 py-2" onClick={() => void copy(handoff.credentials.email)}>Copy Email</button>
+        <button type="button" className="border rounded px-3 py-2" onClick={() => void copy(handoff.credentials.temporaryPassword)}>Copy Password</button>
+        <button type="button" className="border rounded px-3 py-2" onClick={() => void copy('Email: ' + handoff.credentials.email + '\nTemporary Password: ' + handoff.credentials.temporaryPassword)}>Copy All</button>
+        <button type="button" className="border rounded px-3 py-2" onClick={() => { const win = printTeacherPass(handoff.staff, handoff.credentials); if (win) printWindows.current.push(win); else setHandoffMessage('Allow pop-ups to print the teacher pass.'); }}>Print Teacher Pass</button>
+        <button type="button" className="bg-[#185b9d] text-white rounded px-3 py-2" onClick={closeModal}>Done</button>
+      </div><p role="status" className="text-xs">{handoffMessage}</p>
+    </section></div>;
+  }
 
   // Validate form fields client-side before submission
   const validateForm = (): boolean => {
@@ -133,7 +162,7 @@ export const AddEditStaffModal: React.FC<AddEditStaffModalProps> = ({
 
     const salaryNum = parseFloat(salary);
     if (!salary || isNaN(salaryNum) || salaryNum <= 0) {
-      errors.salary = 'Monthly salary must be a positive number greater than 0.';
+      errors.salary = 'Default salary amount must be a positive number greater than 0.';
     } else if (salaryNum > 10000000) {
       errors.salary = 'Salary exceeds maximum allowable limit.';
     }
@@ -162,8 +191,10 @@ export const AddEditStaffModal: React.FC<AddEditStaffModalProps> = ({
         };
 
         const created = await api.staff.create(payload);
-        onSuccess(created);
-        onClose();
+        const { portalCredentials, ...safeStaff } = created;
+        onSuccess(safeStaff);
+        if (portalCredentials) setHandoff({ staff: safeStaff, credentials: portalCredentials });
+        else closeModal();
       } else if (mode === 'edit' && staffDetail) {
         const payload: UpdateStaffPayload = {
           fullName: fullName.trim(),
@@ -241,7 +272,7 @@ export const AddEditStaffModal: React.FC<AddEditStaffModalProps> = ({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeModal}
             disabled={isSubmitting}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50"
             aria-label="Close form"
@@ -384,10 +415,11 @@ export const AddEditStaffModal: React.FC<AddEditStaffModalProps> = ({
 
           {/* Salary and Join Date Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Monthly Salary */}
+            {/* Default Salary Amount */}
+            <p className="text-xs text-slate-500 col-span-full">Used to prefill one-time salary payments. No monthly payroll is scheduled automatically.</p>
             <div>
               <label htmlFor="staff-salary" className="block text-xs font-semibold text-slate-700 mb-1">
-                Monthly Salary (PKR) <span className="text-rose-600">*</span>
+                Default Salary Amount (PKR) <span className="text-rose-600">*</span>
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
@@ -450,7 +482,7 @@ export const AddEditStaffModal: React.FC<AddEditStaffModalProps> = ({
           <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeModal}
               disabled={isSubmitting}
               className="px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg transition cursor-pointer disabled:opacity-50"
             >

@@ -161,13 +161,11 @@ export const StaffStatusModal: React.FC<StaffStatusModalProps> = ({
           <div id="staff-status-modal-description" className="text-xs text-slate-600 leading-relaxed">
             {isDeactivating ? (
               <p>
-                This keeps the staff record and payroll history intact. The staff member will be
-                excluded from future payroll runs.
+                This preserves staff and payment history. Inactive staff cannot receive new salary payments. A linked teacher account is deactivated and existing sessions are revoked.
               </p>
             ) : (
               <p>
-                This restores the staff member to Active status and makes them eligible for future
-                payroll runs.
+                This restores eligibility for one-time salary payments. A linked teacher account is reactivated when the designation remains teaching.
               </p>
             )}
           </div>
