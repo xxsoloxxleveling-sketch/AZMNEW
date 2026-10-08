@@ -1574,10 +1574,30 @@ export const mockApi = {
     studentId?: string;
     rollNumber?: string;
     status?: AttendanceStatus;
-  }): Promise<AttendanceMarkResponse> {
+  }): Promise<AttendanceMarkResponse & { alreadyMarked?: boolean }> {
     if (typeof payload.sessionId !== 'string' || !payload.sessionId.trim()) throw new Error('Attendance session is required');
     const { sessionId, ...mark } = payload;
-    return this.markAttendanceSession(sessionId, { ...mark, status: mark.status || 'PRESENT' });
+    // Preserve legacy manual callers; camera scans exclusively use signed tokens.
+    if (!mark.qrToken) return this.markAttendanceSession(sessionId, { ...mark, status: mark.status || 'PRESENT' });
+    const invalidQr = () => Object.assign(new Error('Invalid Candidate QR'), { code: 'INVALID_QR' });
+    if (mark.studentId || mark.rollNumber || (mark.status && mark.status !== 'PRESENT')) throw invalidQr();
+    let qrToken = mark.qrToken.trim();
+    if (qrToken.length > 4096) throw invalidQr();
+    if (!qrToken.startsWith('qr_')) {
+      let url: URL;
+      try { url = new URL(qrToken, 'https://azmaio.com'); } catch { throw invalidQr(); }
+      if (url.protocol !== 'https:' || !['azmaio.com', 'www.azmaio.com'].includes(url.hostname) || url.port || url.username || url.password || url.pathname !== '/attend' || url.hash || url.searchParams.getAll('token').length !== 1) throw invalidQr();
+      qrToken = url.searchParams.get('token') ?? '';
+    }
+    if (!/^qr_[^\s.]{1,1024}\.[a-fA-F0-9]{64}$/.test(qrToken)) throw invalidQr();
+    const res: AttendanceMarkResponse & { alreadyMarked?: boolean } = await apiFetch('/api/attendance/scan', {
+      method: 'POST', timeoutMs: 15000,
+      body: JSON.stringify({ sessionId: sessionId.trim(), qrToken, status: 'PRESENT' }),
+    });
+    const attendance = res?.attendance, student = res?.student;
+    const nonempty = (value: unknown) => typeof value === 'string' && !!value.trim();
+    if (!attendance || !student || !nonempty(attendance.id) || attendance.sessionId !== sessionId.trim() || !nonempty(attendance.studentId) || student.id !== attendance.studentId || !nonempty(student.fullName) || student.status !== 'ACTIVE' || !nonempty(attendance.markedByUserId) || !nonempty(attendance.createdAt) || !Number.isFinite(Date.parse(attendance.createdAt)) || !['PRESENT', 'LATE', 'ABSENT'].includes(attendance.status) || !['MANUAL', 'QR_SCAN'].includes(attendance.method) || (res.alreadyMarked !== undefined && typeof res.alreadyMarked !== 'boolean') || (!res.alreadyMarked && (attendance.status !== 'PRESENT' || attendance.method !== 'QR_SCAN'))) throw new Error('The server did not confirm a persisted attendance record for this session.');
+    return res;
   },
 
 

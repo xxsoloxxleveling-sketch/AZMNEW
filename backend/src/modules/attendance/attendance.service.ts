@@ -86,7 +86,7 @@ export class AttendanceService {
       return this.detail(tx, session.id);
     });
   }
-  async mark(sessionId: string, input: MarkAttendanceInput, userId: string) {
+  async mark(sessionId: string, input: MarkAttendanceInput, userId: string, returnQrDuplicate = false) {
     this.operator(userId);
     return this.transaction(async tx => {
       const session = await this.lockSession(tx, sessionId);
@@ -107,13 +107,17 @@ export class AttendanceService {
       if (!roster) fail(409, 'Candidate does not belong to this frozen Hall session roster. No attendance was marked.');
       const student = await tx.student.findUnique({ where: { id: roster.studentId }, select: { id: true, status: true } });
       if (!student || student.status !== 'ACTIVE') fail(409, 'Only ACTIVE candidates may be marked in this examination session.');
-      if (await tx.attendance.findUnique({ where: { sessionId_studentId: { sessionId, studentId: student.id } } })) fail(409, 'Attendance is already marked for this candidate in this session.');
+      const existing = await tx.attendance.findUnique({ where: { sessionId_studentId: { sessionId, studentId: student.id } } });
+      if (existing) {
+        if (!returnQrDuplicate || method !== 'QR_SCAN') fail(409, 'Attendance is already marked for this candidate in this session.');
+        return { attendance: existing, student: { id: student.id, fullName: roster.fullNameSnapshot, rollNumber: roster.rollNumberSnapshot, currentClass: roster.currentClassSnapshot, status: student.status }, alreadyMarked: true, message: 'Attendance is already marked for this candidate in this session.' };
+      }
       const attendance = await tx.attendance.create({ data: { sessionId, studentId: student.id, date: session.businessDate, status: input.status ?? 'PRESENT', method, markedByUserId: userId } });
       return { attendance, student: { id: student.id, fullName: roster.fullNameSnapshot, rollNumber: roster.rollNumberSnapshot, currentClass: roster.currentClassSnapshot, status: student.status }, message: 'Examination attendance marked successfully.' };
     });
   }
   async scanOrMarkAttendance(input: ScanAttendanceInput, userId: string) {
-    return this.mark(input.sessionId, input, userId);
+    return this.mark(input.sessionId, input, userId, !!input.qrToken);
   }
   async closeSession(sessionId: string, markRemainingAbsent: boolean, userId: string) {
     this.operator(userId);

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../../lib/authContext';
 import { mockApi, type AttendanceSession, type AttendanceSessionListResponse, type AttendanceSessionDetail } from '../../../lib/mockApi';
 import { ManualAttendanceTab } from './ManualAttendanceTab';
+import { QrScannerTab } from './QrScannerTab';
 import { AttendanceDialog, attendancePrimary, attendanceSecondary, attendanceField, attendanceValue } from './AttendanceDialog';
 
 type HallOption = { id: string; name: string | null; roomNumber: string | null; examDate: string | null; reportingTime: string | null; testCenterId: string | null; centerName: string | null; assignedCount: number | null };
@@ -27,10 +28,11 @@ function AttendanceWorkspace({ role }: { role: string }) {
   const [historyPage, setHistoryPage] = useState(1), [historyStatus, setHistoryStatus] = useState(''), [historyDate, setHistoryDate] = useState('');
   const [sessionId, setSessionId] = useState(''), [detail, setDetail] = useState<AttendanceSessionDetail | null>(null), [detailLoading, setDetailLoading] = useState(false), [detailError, setDetailError] = useState('');
   const [refresh, setRefresh] = useState(0), [notice, setNotice] = useState('');
+  const [attendanceTab, setAttendanceTab] = useState<'manual' | 'scan'>('manual'), [scanBusy, setScanBusy] = useState(false);
   const [dialog, setDialog] = useState<'open' | 'close' | null>(null), [busy, setBusy] = useState(false), [modalError, setModalError] = useState(''), [convertAbsent, setConvertAbsent] = useState(false), [markDialog, setMarkDialog] = useState(false);
   const hall = halls.find(item => item.id === hallId);
   const visibleHalls = halls.filter(item => centerId === 'all' || (item.testCenterId ?? 'unknown') === centerId);
-  const locked = !!dialog || markDialog;
+  const locked = !!dialog || markDialog || scanBusy;
   const desiredSession = useRef('');
   useEffect(() => {
     let active = true; setLoading(true); setSourceError('');
@@ -139,7 +141,13 @@ function AttendanceWorkspace({ role }: { role: string }) {
           <dl className="mt-4 grid grid-cols-2 divide-x divide-slate-100 border-y border-slate-100 py-3 sm:grid-cols-4 lg:grid-cols-7">{[detail.stats.expectedCount, detail.stats.markedCount, detail.stats.presentCount, detail.stats.lateCount, detail.stats.absentCount, detail.stats.unmarkedCount, detail.stats.attendancePercentage === null ? '—' : `${detail.stats.attendancePercentage}%`].map((value, index) => <div key={summaryLabels[index]} className="px-3 py-1"><dt className="text-xs text-slate-500">{summaryLabels[index]}</dt><dd className="mt-1 text-lg font-bold tabular-nums text-slate-900">{value}</dd></div>)}</dl>
         </>}
       </section>
-      {sessionReady && <ManualAttendanceTab key={detail.session.id} detail={detail} canMark={permitted.includes(role)} refresh={refresh} onRecorded={() => { setNotice('Attendance recorded successfully.'); setRefresh(value => value + 1); }} onDialogChange={setMarkDialog} />}
+      {sessionReady && <>
+        <div className="flex flex-wrap gap-2" aria-label="Attendance method">
+          <button aria-pressed={attendanceTab === 'manual'} className={attendanceTab === 'manual' ? attendancePrimary : attendanceSecondary} disabled={locked} onClick={() => { setAttendanceTab('manual'); if (attendanceTab === 'scan') setRefresh(value => value + 1); }}>Manual attendance</button>
+          <button aria-pressed={attendanceTab === 'scan'} className={attendanceTab === 'scan' ? attendancePrimary : attendanceSecondary} disabled={locked || detail.session.status !== 'OPEN'} onClick={() => setAttendanceTab('scan')}>QR attendance</button>
+        </div>
+        {attendanceTab === 'scan' ? <QrScannerTab key={detail.session.id} detail={detail} onBusyChange={setScanBusy} onManualAttendance={() => { setAttendanceTab('manual'); setRefresh(value => value + 1); }} /> : <ManualAttendanceTab key={detail.session.id} detail={detail} canMark={permitted.includes(role)} refresh={refresh} onRecorded={() => { setNotice('Attendance recorded successfully.'); setRefresh(value => value + 1); }} onDialogChange={setMarkDialog} />}
+      </>}
       <section className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="attendance-history-title">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 p-4"><div><h2 id="attendance-history-title" className="text-sm font-bold">Hall Session History</h2><p className="mt-1 text-xs text-slate-500">Session snapshots and recorded metrics.</p></div><div className="flex flex-wrap gap-3"><div><label className="mb-1 block text-xs font-semibold" htmlFor="attendance-history-date">Business date</label><input id="attendance-history-date" type="date" className={attendanceField} value={historyDate} disabled={locked} onChange={event => { setHistoryDate(event.target.value); setHistoryPage(1); setSessionId(''); }} /></div><div><label className="mb-1 block text-xs font-semibold" htmlFor="attendance-history-status">Session status</label><select id="attendance-history-status" className={attendanceField} value={historyStatus} disabled={locked} onChange={event => { setHistoryStatus(event.target.value); setHistoryPage(1); setSessionId(''); }}><option value="">All statuses</option><option value="OPEN">Open</option><option value="CLOSED">Closed</option></select></div></div></div>
         {historyLoading && <p role="status" className="p-4 text-sm text-slate-600">Loading session history…</p>}

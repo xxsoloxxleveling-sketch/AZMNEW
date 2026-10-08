@@ -16,7 +16,12 @@ export class AttendanceController {
   candidates = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getCandidates(req.params.sessionId, rosterQuerySchema.parse(req.query)));
   mark = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.mark(req.params.sessionId, req.body, operator(req)), 201);
   close = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.closeSession(req.params.sessionId, req.body.markRemainingAbsent, operator(req)));
-  scan = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.scanOrMarkAttendance(req.body, operator(req)), 201);
+  scan = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const data = await attendanceService.scanOrMarkAttendance(req.body, operator(req));
+      res.status('alreadyMarked' in data && data.alreadyMarked ? 200 : 201).json({ success: true, data });
+    } catch (error) { next(error); }
+  };
   getToday = (_req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getTodayAttendance());
   getStudentHistory = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getStudentAttendanceHistory(req.params.id, rosterQuerySchema.parse(req.query)));
 }
