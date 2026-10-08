@@ -1452,6 +1452,11 @@ export const mockApi = {
     await apiDownloadPdf(`/api/students/export-pdf?${params.toString()}`, suggestedFilename);
   },
 
+  async downloadAllStudentsListPdf(): Promise<void> {
+    const filename = `AZM-Students-All-${new Date().toISOString().split('T')[0]}.pdf`;
+    await apiDownloadPdf('/api/students/export-all-pdf', filename);
+  },
+
   async downloadSelectedStudentsListPdf(studentIds: string[]): Promise<void> {
     if (!Array.isArray(studentIds) || studentIds.length < 1 || studentIds.length > 250 || new Set(studentIds).size !== studentIds.length) {
       throw new Error('Select between 1 and 250 unique students to export.');
