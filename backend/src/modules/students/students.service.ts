@@ -1823,8 +1823,13 @@ export class StudentsService {
   /**
    * Generates and exports a branded PDF document of students matching applied filters
    */
-  async exportStudentsPdf(query: StudentQueryInput): Promise<{ buffer: Buffer; filename: string }> {
+  async exportStudentsPdf(query: StudentQueryInput, selectedStudentIds?: string[]): Promise<{ buffer: Buffer; filename: string }> {
     const conditions: any[] = [];
+    if (selectedStudentIds) {
+      // Only the explicitly requested students may enter the PDF; never use
+      // search/pagination as a substitute for an exact selection.
+      conditions.push({ id: { in: selectedStudentIds } });
+    }
 
     if (query.status && (query.status as any) !== 'ALL') {
       conditions.push({ status: query.status });
@@ -1871,6 +1876,12 @@ export class StudentsService {
       },
     });
 
+    if (selectedStudentIds && students.length !== selectedStudentIds.length) {
+      const error: AppError = new Error('One or more selected students could not be found. Refresh the list and select again.');
+      error.statusCode = 404;
+      throw error;
+    }
+
     const formattedStudents = students.map((s) => this.formatStudentWithDocuments(s));
 
     // Fetch only the already-created 160px private thumbnail.  Do not fetch
@@ -1900,6 +1911,9 @@ export class StudentsService {
 
     // Generate descriptive filename: AZM-Students-Class10-Female-2026-08-28.pdf
     const parts: string[] = ['AZM', 'Students'];
+    if (selectedStudentIds) {
+      parts.push('Selected', String(selectedStudentIds.length));
+    }
     if (query.classLevel && query.classLevel !== 'ALL') {
       parts.push(query.classLevel.replace(/[^a-zA-Z0-9]/g, ''));
     }

@@ -1452,6 +1452,17 @@ export const mockApi = {
     await apiDownloadPdf(`/api/students/export-pdf?${params.toString()}`, suggestedFilename);
   },
 
+  async downloadSelectedStudentsListPdf(studentIds: string[]): Promise<void> {
+    if (!Array.isArray(studentIds) || studentIds.length < 1 || studentIds.length > 250 || new Set(studentIds).size !== studentIds.length) {
+      throw new Error('Select between 1 and 250 unique students to export.');
+    }
+    const filename = `AZM-Students-Selected-${studentIds.length}-${new Date().toISOString().split('T')[0]}.pdf`;
+    await apiDownloadPdf('/api/students/export-selected-pdf', filename, {
+      method: 'POST',
+      body: { studentIds },
+    });
+  },
+
 
   // 4. Partner Institutions
   async getPartners(query?: PartnerQueryParams): Promise<PartnerListResponse> {

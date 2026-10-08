@@ -50,6 +50,7 @@ export const StudentsListView: React.FC = () => {
   const [pagination, setPagination] = useState({ page: 1, limit: DEFAULT_STUDENTS_PER_PAGE, total: 0, totalPages: 1 });
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingSelectedPdf, setIsExportingSelectedPdf] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [rollStatus, setRollStatus] = useState<{ readyCount: number; issuedCount: number; totalPaidCount: number; scheduledDate?: string } | null>(null);
@@ -128,6 +129,27 @@ export const StudentsListView: React.FC = () => {
       alert(err.message || 'Failed to generate and download filtered candidate roster PDF.');
     } finally {
       setIsExportingPdf(false);
+    }
+  };
+
+  // A selected export is different from the filtered roster export: only IDs
+  // belonging to currently visible, checked rows are sent to the server.
+  const handleExportSelectedPdf = async () => {
+    if (isExportingSelectedPdf) return;
+    const selectedIds = students
+      .filter((student) => selectedStudentIds.includes(student.id))
+      .map((student) => student.id);
+    if (selectedIds.length === 0) {
+      alert('Select at least one student on this page to export.');
+      return;
+    }
+    setIsExportingSelectedPdf(true);
+    try {
+      await mockApi.downloadSelectedStudentsListPdf(selectedIds);
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate the PDF for selected students.');
+    } finally {
+      setIsExportingSelectedPdf(false);
     }
   };
 
@@ -507,10 +529,10 @@ export const StudentsListView: React.FC = () => {
               onClick={handleExportPdf}
               disabled={isExportingPdf}
               className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 h-9"
-              title="Download printable candidate roster PDF"
+              title="Download filtered candidate roster PDF (up to 250 matching students)"
             >
               <IconDownloadSlip size={14} className="text-[#185b9d]" />
-              <span>{isExportingPdf ? 'Exporting...' : 'Export PDF'}</span>
+              <span>{isExportingPdf ? 'Exporting...' : 'Export Filtered PDF'}</span>
             </button>
           </div>
 
@@ -606,6 +628,19 @@ export const StudentsListView: React.FC = () => {
                 <IconPrintSlip size={14} />
                 <span>Print Roll Slips ({selectedStudentIds.length})</span>
               </button>
+
+              {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
+                <button
+                  type="button"
+                  onClick={handleExportSelectedPdf}
+                  disabled={isExportingSelectedPdf || isExportingPdf || isLoading || !students.some((student) => selectedStudentIds.includes(student.id))}
+                  className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-[#185b9d] rounded-md text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Download one roster PDF containing only the checked students on this page"
+                >
+                  {isExportingSelectedPdf ? <IconLoader size={14} className="animate-spin" /> : <IconDownloadSlip size={14} />}
+                  <span>{isExportingSelectedPdf ? 'Exporting Selected...' : `Export Selected PDF (${selectedStudentIds.length})`}</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setSelectedStudentIds([])}

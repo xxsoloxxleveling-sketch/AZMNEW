@@ -7,6 +7,7 @@ import {
   updateStudentSchema,
   officeUseUpdateSchema,
   studentQuerySchema,
+  selectedStudentsPdfSchema,
   uploadDocumentSchema,
 } from './students.schema';
 import { authenticate } from '../../middleware/auth.middleware';
@@ -140,6 +141,15 @@ router.get(
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateQuery(studentQuerySchema),
   studentsController.exportPdf
+);
+
+// Exact, bounded selected-student roster export (SUPER_ADMIN, ADMIN).
+// POST keeps private student identifiers out of the URL.
+router.post(
+  '/export-selected-pdf',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateBody(selectedStudentsPdfSchema),
+  studentsController.exportSelectedPdf
 );
 
 // Bulk OMR Sheet PDF export (SUPER_ADMIN, ADMIN)
