@@ -51,6 +51,10 @@ export const StudentsListView: React.FC = () => {
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingSelectedPdf, setIsExportingSelectedPdf] = useState(false);
+  const [isExportingAllPdf, setIsExportingAllPdf] = useState(false);
+  const [pdfExportElapsedSeconds, setPdfExportElapsedSeconds] = useState(0);
+  const anyPdfExporting = isExportingPdf || isExportingSelectedPdf || isExportingAllPdf;
+  const elapsedPdfLabel = `${String(Math.floor(pdfExportElapsedSeconds / 60)).padStart(2, '0')}:${String(pdfExportElapsedSeconds % 60).padStart(2, '0')}`;
   const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [rollStatus, setRollStatus] = useState<{ readyCount: number; issuedCount: number; totalPaidCount: number; scheduledDate?: string } | null>(null);
@@ -114,6 +118,7 @@ export const StudentsListView: React.FC = () => {
   };
 
   const handleExportPdf = async () => {
+    if (anyPdfExporting) return;
     setIsExportingPdf(true);
     try {
       await mockApi.downloadStudentsListPdf(
@@ -132,10 +137,22 @@ export const StudentsListView: React.FC = () => {
     }
   };
 
+  const handleExportAllPdf = async () => {
+    if (anyPdfExporting) return;
+    setIsExportingAllPdf(true);
+    try {
+      await mockApi.downloadAllStudentsListPdf();
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate the complete student directory PDF.');
+    } finally {
+      setIsExportingAllPdf(false);
+    }
+  };
+
   // A selected export is different from the filtered roster export: only IDs
   // belonging to currently visible, checked rows are sent to the server.
   const handleExportSelectedPdf = async () => {
-    if (isExportingSelectedPdf) return;
+    if (anyPdfExporting) return;
     const selectedIds = students
       .filter((student) => selectedStudentIds.includes(student.id))
       .map((student) => student.id);
@@ -152,6 +169,20 @@ export const StudentsListView: React.FC = () => {
       setIsExportingSelectedPdf(false);
     }
   };
+
+  // Show truthful elapsed time while exporting, not an ungrounded completion ETA.
+  useEffect(() => {
+    if (!anyPdfExporting) {
+      setPdfExportElapsedSeconds(0);
+      return;
+    }
+    const started = Date.now();
+    setPdfExportElapsedSeconds(0);
+    const timer = window.setInterval(() => {
+      setPdfExportElapsedSeconds(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [anyPdfExporting]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -527,13 +558,25 @@ export const StudentsListView: React.FC = () => {
 
             <button
               onClick={handleExportPdf}
-              disabled={isExportingPdf}
+              disabled={anyPdfExporting}
               className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 h-9"
               title="Download filtered candidate roster PDF (up to 250 matching students)"
             >
               <IconDownloadSlip size={14} className="text-[#185b9d]" />
-              <span>{isExportingPdf ? 'Exporting...' : 'Export Filtered PDF'}</span>
+              <span aria-live="polite">{isExportingPdf ? `Elapsed ${elapsedPdfLabel}` : 'Export Filtered PDF'}</span>
             </button>
+            {(role === 'SUPER_ADMIN' || role === 'ADMIN') && (
+              <button
+                type="button"
+                onClick={handleExportAllPdf}
+                disabled={anyPdfExporting}
+                className="px-2.5 py-1.5 text-xs font-semibold text-[#185b9d] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 h-9"
+                title="Export every student in the live database, including inactive records, without photos or a 250-row cap"
+              >
+                <IconDownloadSlip size={14} />
+                <span aria-live="polite">{isExportingAllPdf ? `Elapsed ${elapsedPdfLabel}` : 'Export All Students PDF'}</span>
+              </button>
+            )>
           </div>
 
           {/* Operational Toolbar Actions (Add Student removed - authoritative in AdminHeader) */}
@@ -633,12 +676,12 @@ export const StudentsListView: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleExportSelectedPdf}
-                  disabled={isExportingSelectedPdf || isExportingPdf || isLoading || !students.some((student) => selectedStudentIds.includes(student.id))}
+                  disabled={anyPdfExporting || isLoading || !students.some((student) => selectedStudentIds.includes(student.id))}
                   className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-[#185b9d] rounded-md text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Download one roster PDF containing only the checked students on this page"
                 >
                   {isExportingSelectedPdf ? <IconLoader size={14} className="animate-spin" /> : <IconDownloadSlip size={14} />}
-                  <span>{isExportingSelectedPdf ? 'Exporting Selected...' : `Export Selected PDF (${selectedStudentIds.length})`}</span>
+                  <span aria-live="polite">{isExportingSelectedPdf ? `Elapsed ${elapsedPdfLabel}` : `Export Selected PDF (${selectedStudentIds.length})`}</span>
                 </button>
               )}
 
