@@ -16,6 +16,7 @@ import {
   ExternalLink as IconExternalLink,
   LogOut as IconLogOut,
   Shield as IconShield,
+  QrCode as IconScanner,
 } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { Role } from '../../../lib/mockApi';
@@ -80,6 +81,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'attendance' as AdminTab,
       label: 'Examination Attendance',
       icon: IconAttendance,
+      roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
+    },
+    {
+      id: 'scan' as AdminTab,
+      label: 'Mobile Scanner',
+      icon: IconScanner,
       roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
     },
     {
@@ -200,7 +207,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               );
             })}
 
-            {/* Camera scanning remains deferred; do not advertise it as operational. */}
             <div className="pt-3">
               {onNavigatePublic && (
                 <>

@@ -284,7 +284,7 @@ function AppContent() {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
-      const deferredTabs = ['storage', 'fees', 'payroll', 'scan'];
+      const deferredTabs = ['storage', 'fees', 'payroll'];
 
       if (!hash || hash === 'home') {
         setCurrentRoute('public');
@@ -295,6 +295,8 @@ function AppContent() {
         setCurrentRoute('register');
       } else if (hash === 'partner-registration' || hash === 'partner-register') {
         setCurrentRoute('partner-registration');
+      } else if (hash === 'scan') {
+        setCurrentRoute('scan');
       } else if (deferredTabs.includes(hash)) {
         setCurrentRoute('admin');
         const fallbackTab: AdminTab = role === 'TEACHER' ? 'attendance' : 'dashboard';
@@ -355,10 +357,13 @@ function AppContent() {
     let targetRoute = route;
     let targetTab = tab;
 
-    if (targetRoute === 'scan') {
-      targetRoute = 'admin';
-      targetTab = role === 'TEACHER' ? 'attendance' : 'dashboard';
-    } else if (targetTab && ['storage', 'fees', 'payroll', 'scan'].includes(targetTab)) {
+    if (targetRoute === 'scan' || targetTab === 'scan') {
+      setCurrentRoute('scan');
+      window.location.hash = 'scan';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (targetTab && ['storage', 'fees', 'payroll'].includes(targetTab)) {
       targetTab = role === 'TEACHER' ? 'attendance' : 'dashboard';
     }
 
@@ -437,30 +442,25 @@ function AppContent() {
     );
   }
 
-  // Route 4: Standalone Teacher QR Scanner (/scan) - DEFERRED IN THIS RELEASE
+  // Route 4: Standalone mobile QR scanner (/scan)
   if (currentRoute === 'scan') {
     if (!isAuthenticated) {
       return (
         <Suspense fallback={<ViewLoadingFallback />}>
           <LoginPage
-            onLoginSuccess={() => navigateTo('admin', 'dashboard')}
+            onLoginSuccess={() => navigateTo('scan')}
             onNavigateHome={() => navigateTo('public')}
           />
         </Suspense>
       );
     }
-    if (role === 'TEACHER') {
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'TEACHER') {
       return (
-        <TeacherReleaseNotice
-          user={user}
-          onLogout={logout}
-          onNavigateHome={() => navigateTo('public')}
-          onOpenSettings={() => {
-            setCurrentRoute('admin');
-            setAdminTab('settings');
-            window.location.hash = 'settings';
-          }}
-        />
+        <Suspense fallback={<ViewLoadingFallback />}>
+          <TeacherScanView
+            onBackToDashboard={() => navigateTo('admin', role === 'TEACHER' ? 'attendance' : 'dashboard')}
+          />
+        </Suspense>
       );
     }
     return (
@@ -577,7 +577,9 @@ function AppContent() {
         <AdminLayout
           currentTab={adminTab}
           onSelectTab={(tab) => {
-            if (['storage', 'fees', 'payroll', 'scan'].includes(tab) || (tab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
+            if (tab === 'scan') {
+              navigateTo('scan');
+            } else if (['storage', 'fees', 'payroll'].includes(tab) || (tab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
               setAdminTab('dashboard');
               window.location.hash = 'dashboard';
             } else {
@@ -597,7 +599,9 @@ function AppContent() {
           {adminTab === 'dashboard' && (
             <DashboardView
               onNavigate={(tab) => {
-                if (['storage', 'fees', 'payroll', 'scan'].includes(tab) || (tab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
+                if (tab === 'scan') {
+                  navigateTo('scan');
+                } else if (['storage', 'fees', 'payroll'].includes(tab) || (tab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
                   setAdminTab('dashboard');
                   window.location.hash = 'dashboard';
                 } else {
