@@ -686,9 +686,57 @@ export interface CreateAnnouncementPayload {
 
 export type UpdateAnnouncementPayload = Partial<CreateAnnouncementPayload>;
 
+// Release scheduling uses Pakistan time (UTC+05:00), never the host timezone.
+// Current saves are canonical UTC ISO; legacy naive datetimes are PKT wall-clock values.
+export function parseReleaseDateTime(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:\d{2})?$/.exec(value);
+  if (!match) return null;
+  const [, y, mo, d, h, mi, s = '0', ms = '0', zone] = match;
+  const parts = [+y, +mo, +d, +h, +mi, +s, +ms.padEnd(3, '0')];
+  const wall = new Date(0);
+  wall.setUTCFullYear(parts[0], parts[1] - 1, parts[2]);
+  wall.setUTCHours(parts[3], parts[4], parts[5], parts[6]);
+  if (wall.getUTCFullYear() !== parts[0] || wall.getUTCMonth() !== parts[1] - 1 ||
+      wall.getUTCDate() !== parts[2] || wall.getUTCHours() !== parts[3] ||
+      wall.getUTCMinutes() !== parts[4] || wall.getUTCSeconds() !== parts[5]) return null;
+  let offset = 300;
+  if (zone === 'Z') offset = 0;
+  else if (zone) {
+    const hours = +zone.slice(1, 3), minutes = +zone.slice(4, 6);
+    if (hours > 23 || minutes > 59) return null;
+    offset = (hours * 60 + minutes) * (zone[0] === '+' ? 1 : -1);
+  }
+  return new Date(wall.getTime() - offset * 60000);
+}
+
+export function canonicalReleaseDateTime(value: unknown): string | null {
+  return parseReleaseDateTime(value)?.toISOString() ?? null;
+}
+
+export function isReleaseConfigReleased(config: { isScheduled: boolean; releaseDateTime: string }, now = Date.now()): boolean {
+  const instant = parseReleaseDateTime(config.releaseDateTime);
+  return !config.isScheduled || (instant !== null && now >= instant.getTime());
+}
+
+export function formatReleaseDateTime(value: unknown): string {
+  const instant = parseReleaseDateTime(value);
+  if (!instant) return 'Official release time requires correction';
+  const date = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', weekday: 'long',
+    year: 'numeric', month: 'long', day: 'numeric' }).format(instant);
+  const time = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: '2-digit',
+    minute: '2-digit', hour12: true }).format(instant);
+  return `${date} at ${time} PKT`;
+}
+
+export function releaseDateTimeToPakistanInput(value: unknown): string {
+  const instant = parseReleaseDateTime(value);
+  return instant ? new Date(instant.getTime() + 300 * 60000).toISOString().slice(0, 16) : '';
+}
+
 export interface RollNumberReleaseConfig {
   isScheduled: boolean; // true = schedule on/after releaseDateTime; false = immediate on payment approval
-  releaseDateTime: string; // ISO string e.g. "2026-10-15T09:00:00"
+  releaseDateTime: string; // Canonical UTC ISO on save; legacy timezone-less strings mean Asia/Karachi.
   announcementTitle: string;
   announcementMessage: string;
   emergencyNotice?: string;
@@ -745,7 +793,9 @@ export function getRollNumberReleaseConfig(): RollNumberReleaseConfig {
 export async function saveRollNumberReleaseConfig(
   config: Partial<RollNumberReleaseConfig>
 ): Promise<RollNumberReleaseConfig> {
-  const merged = { ...inMemoryReleaseConfig, ...config, updatedAt: new Date().toISOString() };
+  const releaseDateTime = canonicalReleaseDateTime(config.releaseDateTime ?? inMemoryReleaseConfig.releaseDateTime);
+  if (!releaseDateTime) throw new Error('Invalid release date/time. Enter a valid Pakistan release time.');
+  const merged = { ...inMemoryReleaseConfig, ...config, releaseDateTime, updatedAt: new Date().toISOString() };
   inMemoryReleaseConfig = merged;
   try {
     const res: any = await apiFetch<any>('/api/students/release-config', {
@@ -762,10 +812,7 @@ export async function saveRollNumberReleaseConfig(
 }
 
 export function isRollNumberReleased(): boolean {
-  if (!inMemoryReleaseConfig.isScheduled) return true;
-  if (!inMemoryReleaseConfig.releaseDateTime) return true;
-  const targetDate = new Date(inMemoryReleaseConfig.releaseDateTime).getTime();
-  return Date.now() >= targetDate;
+  return isReleaseConfigReleased(inMemoryReleaseConfig);
 }
 
 

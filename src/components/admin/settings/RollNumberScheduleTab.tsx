@@ -16,6 +16,9 @@ import {
   saveRollNumberReleaseConfig,
   fetchRollNumberReleaseConfig,
   isRollNumberReleased,
+  isReleaseConfigReleased,
+  releaseDateTimeToPakistanInput,
+  formatReleaseDateTime,
 } from '../../../lib/mockApi';
 
 export const RollNumberScheduleTab: React.FC = () => {
@@ -31,7 +34,7 @@ export const RollNumberScheduleTab: React.FC = () => {
       const current = await fetchRollNumberReleaseConfig();
       if (isMounted) {
         setConfig(current);
-        setIsLiveNow(!current.isScheduled || (current.releaseDateTime && Date.now() >= new Date(current.releaseDateTime).getTime()));
+        setIsLiveNow(isReleaseConfigReleased(current));
       }
     })();
     return () => {
@@ -45,7 +48,7 @@ export const RollNumberScheduleTab: React.FC = () => {
     try {
       const updated = await saveRollNumberReleaseConfig(config);
       setConfig(updated);
-      setIsLiveNow(!updated.isScheduled || (updated.releaseDateTime && Date.now() >= new Date(updated.releaseDateTime).getTime()));
+      setIsLiveNow(isReleaseConfigReleased(updated));
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (err: any) {
@@ -87,7 +90,7 @@ export const RollNumberScheduleTab: React.FC = () => {
         isScheduled: true,
       });
       setConfig(updated);
-      setIsLiveNow(!updated.isScheduled || (updated.releaseDateTime && Date.now() >= new Date(updated.releaseDateTime).getTime()));
+      setIsLiveNow(isReleaseConfigReleased(updated));
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (err: any) {
@@ -212,21 +215,28 @@ export const RollNumberScheduleTab: React.FC = () => {
             {/* Date & Time Picker */}
             {config.isScheduled && (
               <div className="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <label htmlFor="release-date-time" className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Calendar className="w-4 h-4 text-[#185b9d]" />
-                  <span>Official Release Date &amp; Time (PST)</span>
+                  <span>Official Release Date &amp; Time (Pakistan Time — PKT)</span>
                 </label>
                 <input
+                  id="release-date-time"
                   type="datetime-local"
-                  value={config.releaseDateTime}
+                  value={releaseDateTimeToPakistanInput(config.releaseDateTime)}
                   onChange={(e) => setConfig((prev) => ({ ...prev, releaseDateTime: e.target.value }))}
                   required
                   className="w-full sm:w-80 px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none"
                 />
                 <p className="text-[11px] text-slate-500">
-                  Select the exact date and hour when the testing organization releases the roll numbers.
+                  Times are saved and released according to Asia/Karachi (UTC+05:00).
                 </p>
               </div>
+            )}
+
+            {config.isScheduled && /\b(immediate|live|active)\b/i.test(`${config.announcementTitle} ${config.announcementMessage}`) && (
+              <p role="alert" className="text-xs text-amber-900 bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                Scheduled release is enabled, but the announcement describes an immediate or live release. Review the announcement before saving; its text has not been changed automatically.
+              </p>
             )}
 
             {/* Candidate Public Notice */}
@@ -256,143 +266,11 @@ export const RollNumberScheduleTab: React.FC = () => {
               </div>
             </div>
 
-            {/* Examination Schedule Printed on Candidate Slips */}
-            <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-[#185b9d]" />
-                <span>Examination Schedule Printed on Candidate Slips</span>
-              </h3>
+            <p className="text-xs text-slate-600 pt-4 border-t border-slate-100">
+              Candidate examination Center, Hall, room, seat, exam date and reporting time are managed from Examination Centers &amp; Halls. They are not controlled by the Roll Number Release Schedule.
+            </p>
 
-              {/* Test Centre & Exam Date Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5 sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Test Centre
-                  </label>
-                  <input
-                    type="text"
-                    value={config.examCenterName || ''}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, examCenterName: e.target.value }))}
-                    placeholder="Dubai International School and College Boys Campus Mansehra"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-[#185b9d]" />
-                    <span>Examination Date</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={config.examDate || '2026-11-15'}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, examDate: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-[#185b9d] outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Gender Schedules: Female & Male */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                {/* Female Candidates */}
-                <div className="p-4 rounded-2xl bg-pink-50/50 border border-pink-200/70 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-pink-500" />
-                    <span className="font-bold text-xs text-pink-950 uppercase tracking-wider">
-                      Female Candidates
-                    </span>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-[11px] font-bold text-slate-600">
-                      Reporting Time
-                    </label>
-                    <input
-                      type="time"
-                      value={config.femaleReportingTime || '08:00'}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, femaleReportingTime: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-600">
-                        Test Start Time
-                      </label>
-                      <input
-                        type="time"
-                        value={config.femaleTestStartTime || '09:00'}
-                        onChange={(e) => setConfig((prev) => ({ ...prev, femaleTestStartTime: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-600">
-                        Test End Time
-                      </label>
-                      <input
-                        type="time"
-                        value={config.femaleTestEndTime || '10:00'}
-                        onChange={(e) => setConfig((prev) => ({ ...prev, femaleTestEndTime: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Male Candidates */}
-                <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/70 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span className="font-bold text-xs text-blue-950 uppercase tracking-wider">
-                      Male Candidates
-                    </span>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-[11px] font-bold text-slate-600">
-                      Reporting Time
-                    </label>
-                    <input
-                      type="time"
-                      value={config.maleReportingTime || '11:00'}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, maleReportingTime: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-600">
-                        Test Start Time
-                      </label>
-                      <input
-                        type="time"
-                        value={config.maleTestStartTime || '12:00'}
-                        onChange={(e) => setConfig((prev) => ({ ...prev, maleTestStartTime: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-600">
-                        Test End Time
-                      </label>
-                      <input
-                        type="time"
-                        value={config.maleTestEndTime || '13:00'}
-                        onChange={(e) => setConfig((prev) => ({ ...prev, maleTestEndTime: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+            <div className="flex flex-wrap gap-3 items-center justify-between pt-4 border-t border-slate-100">
               {isSaved ? (
                 <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
@@ -432,12 +310,7 @@ export const RollNumberScheduleTab: React.FC = () => {
               <p className="text-xs text-slate-400 leading-relaxed">
                 {isLiveNow
                   ? 'All verified candidates can currently search and print their Roll Number Slips.'
-                  : `Slips will automatically become available on ${new Date(
-                      config.releaseDateTime
-                    ).toLocaleDateString()} at ${new Date(config.releaseDateTime).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}.`}
+                  : `Slips will automatically become available on ${formatReleaseDateTime(config.releaseDateTime)}.`}
               </p>
             </div>
 
@@ -448,10 +321,10 @@ export const RollNumberScheduleTab: React.FC = () => {
                   {config.isScheduled ? 'Scheduled Date' : 'Immediate'}
                 </span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-col gap-1">
                 <span className="text-slate-400">Target Time:</span>
                 <span className="font-bold text-blue-300 font-mono">
-                  {new Date(config.releaseDateTime).toLocaleDateString()}
+                  {formatReleaseDateTime(config.releaseDateTime)}
                 </span>
               </div>
             </div>

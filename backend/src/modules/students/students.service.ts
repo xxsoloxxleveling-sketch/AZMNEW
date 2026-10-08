@@ -19,6 +19,49 @@ import {
 } from './students.schema';
 import { AppError } from '../../middleware/error.middleware';
 
+// Release scheduling uses Pakistan time (UTC+05:00), never the host timezone.
+// Current saves are canonical UTC ISO; legacy naive datetimes are PKT wall-clock values.
+export function parseReleaseDateTime(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:\d{2})?$/.exec(value);
+  if (!match) return null;
+  const [, y, mo, d, h, mi, s = '0', ms = '0', zone] = match;
+  const parts = [+y, +mo, +d, +h, +mi, +s, +ms.padEnd(3, '0')];
+  const wall = new Date(0);
+  wall.setUTCFullYear(parts[0], parts[1] - 1, parts[2]);
+  wall.setUTCHours(parts[3], parts[4], parts[5], parts[6]);
+  if (wall.getUTCFullYear() !== parts[0] || wall.getUTCMonth() !== parts[1] - 1 ||
+      wall.getUTCDate() !== parts[2] || wall.getUTCHours() !== parts[3] ||
+      wall.getUTCMinutes() !== parts[4] || wall.getUTCSeconds() !== parts[5]) return null;
+  let offset = 300;
+  if (zone === 'Z') offset = 0;
+  else if (zone) {
+    const hours = +zone.slice(1, 3), minutes = +zone.slice(4, 6);
+    if (hours > 23 || minutes > 59) return null;
+    offset = (hours * 60 + minutes) * (zone[0] === '+' ? 1 : -1);
+  }
+  return new Date(wall.getTime() - offset * 60000);
+}
+
+export function canonicalReleaseDateTime(value: unknown): string | null {
+  return parseReleaseDateTime(value)?.toISOString() ?? null;
+}
+
+export function isReleaseConfigReleased(config: { isScheduled: boolean; releaseDateTime: string }, now = Date.now()): boolean {
+  const instant = parseReleaseDateTime(config.releaseDateTime);
+  return !config.isScheduled || (instant !== null && now >= instant.getTime());
+}
+
+export function formatReleaseDateTime(value: unknown): string {
+  const instant = parseReleaseDateTime(value);
+  if (!instant) return 'Official release time requires correction';
+  const date = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', weekday: 'long',
+    year: 'numeric', month: 'long', day: 'numeric' }).format(instant);
+  const time = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: '2-digit',
+    minute: '2-digit', hour12: true }).format(instant);
+  return `${date} at ${time} PKT`;
+}
+
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
   try {
@@ -1294,9 +1337,17 @@ export class StudentsService {
    */
   async saveReleaseConfig(config: any) {
     const existing = await this.getReleaseConfig();
+    const releaseDateTime = config?.releaseDateTime !== undefined
+      ? canonicalReleaseDateTime(config.releaseDateTime)
+      : canonicalReleaseDateTime(existing.releaseDateTime);
+    if (!releaseDateTime) {
+      const error: AppError = new Error('Invalid release date/time. Enter a valid Pakistan release time.');
+      error.statusCode = 400;
+      throw error;
+    }
     const payload = {
       isScheduled: typeof config?.isScheduled === 'boolean' ? config.isScheduled : existing.isScheduled,
-      releaseDateTime: config?.releaseDateTime || existing.releaseDateTime,
+      releaseDateTime,
       announcementTitle: config?.announcementTitle !== undefined ? config.announcementTitle : existing.announcementTitle,
       announcementMessage: config?.announcementMessage !== undefined ? config.announcementMessage : existing.announcementMessage,
       emergencyNotice: config?.emergencyNotice !== undefined ? config.emergencyNotice : existing.emergencyNotice,
@@ -1411,25 +1462,13 @@ export class StudentsService {
 
     // Check release schedule
     const releaseConfig = await this.getReleaseConfig();
-    const isReleased =
-      !releaseConfig.isScheduled ||
-      !releaseConfig.releaseDateTime ||
-      Date.now() >= new Date(releaseConfig.releaseDateTime).getTime();
+    const isReleased = isReleaseConfigReleased(releaseConfig);
 
     if (!student.rollNumber || !isReleased) {
-      const dateFormatted = releaseConfig.releaseDateTime
-        ? new Date(releaseConfig.releaseDateTime).toLocaleString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })
-        : 'Official Release Schedule';
+      const dateFormatted = formatReleaseDateTime(releaseConfig.releaseDateTime);
       const msg = !student.rollNumber
         ? `Registration fee payment of PKR 300 is confirmed! Official Roll Numbers and examination hall seating plans are scheduled for batch release on ${dateFormatted}. Please return on the release date to download your slip.`
-        : releaseConfig.announcementMessage || 'Official Roll Number Slips are scheduled for release.';
+        : `${releaseConfig.announcementMessage || 'Official Roll Number Slips are scheduled for release.'} Release time: ${dateFormatted}.`;
 
       return {
         success: false,
