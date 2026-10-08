@@ -142,10 +142,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const malePct = totalGender > 0 ? Math.round(((demographics?.byGender?.MALE || 0) / totalGender) * 100) : 0;
   const femalePct = totalGender > 0 ? 100 - malePct : 0;
 
-  // Determine attendance session status honestly (Decision #2)
-  const todayMarkedCount = data.attendanceToday?.markedCount || 0;
-  const totalActiveStudents = data.attendanceToday?.totalActiveStudents || stats.totalStudents || 0;
-  const hasTodaySession = todayMarkedCount > 0 || (stats.totalStudents > 0 && stats.attendancePercentage > 0);
+  const attendanceToday = data.attendanceToday;
+  const hasTodaySession = (attendanceToday?.sessionCount || 0) > 0;
+  const attendanceSubtitle = !hasTodaySession
+    ? 'No Session'
+    : attendanceToday.expectedCount === 0
+      ? 'No Candidates Assigned'
+      : `${attendanceToday.markedCount} Marked · ${attendanceToday.presentCount} Present`;
 
   // Truthful Zero-State Semantics (Step 7.6)
   const hasBilledFees = (stats.totalBilled ?? 0) > 0;
@@ -202,7 +205,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <button type="button" disabled={role === 'ACCOUNTANT'} onClick={() => onNavigate('partners')} className="text-left min-w-0 rounded-xl focus-visible:outline-2 focus-visible:outline-[#185b9d]">
           <StatCard title="Partner Institutions" value={stats.totalPartners ?? 0} icon={School} subtitle={`${stats.pendingPartners ?? 0} Pending Verification`} />
         </button>
-        <StatCard title="Today's Attendance" value={hasTodaySession ? `${stats.attendancePercentage}%` : '—'} icon={CalendarCheck} color="emerald" subtitle={hasTodaySession ? `${todayMarkedCount} Marked Present` : 'No Session Conducted'} />
+        <StatCard title="Today's Attendance" value={hasTodaySession && attendanceToday.attendancePercentage !== null ? `${attendanceToday.attendancePercentage}%` : '—'} icon={CalendarCheck} color="emerald" subtitle={attendanceSubtitle} />
         <StatCard title="Fee Collection Rate" value={hasBilledFees ? `${stats.feeCollectionPercentage ?? 0}%` : '—'} icon={Receipt} subtitle={hasBilledFees ? `PKR ${(stats.totalCollected ?? 0).toLocaleString()} Collected` : 'No fees billed this cycle'} />
         <button type="button" onClick={() => onNavigate('staff')} className="text-left min-w-0 rounded-xl focus-visible:outline-2 focus-visible:outline-[#185b9d]">
           <StatCard title="Active Staff & Faculty" value={stats.activeStaffCount ?? 0} icon={Users} subtitle={hasActiveStaff ? 'Teachers & Officers' : 'No active staff recorded'} />
@@ -275,15 +278,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {/* Real Operational Attendance Summary (No Fake Metrics) */}
           <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2">
             <span>
-              Today's Marked Check-ins:{' '}
+              Candidates Expected:{' '}
               <strong className="text-slate-900 font-bold tabular-nums">
-                {todayMarkedCount} students
+                {attendanceToday?.expectedCount ?? '—'}
               </strong>
             </span>
             <span>
-              Total Candidate Roll:{' '}
+              Marked / Present / Late / Absent / Unmarked:{' '}
               <strong className="text-slate-900 font-bold tabular-nums">
-                {totalActiveStudents} students
+                {attendanceToday?.markedCount ?? '—'} / {attendanceToday?.presentCount ?? '—'} / {attendanceToday?.lateCount ?? '—'} / {attendanceToday?.absentCount ?? '—'} / {attendanceToday?.unmarkedCount ?? '—'}
               </strong>
             </span>
           </div>

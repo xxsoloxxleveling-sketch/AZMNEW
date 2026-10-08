@@ -1,5 +1,6 @@
 import { prisma, TransactionType } from '../../lib/prisma';
 import { TransactionStatus, Prisma } from '@prisma/client';
+import { attendanceService } from '../attendance/attendance.service';
 
 export class DashboardService {
   /**
@@ -54,33 +55,8 @@ export class DashboardService {
       }
     }
 
-    // 2. Today's Attendance Counts via efficient database aggregation
-    const [presentCount, lateCount, absentCount] = await Promise.all([
-      prisma.attendance.count({
-        where: {
-          date: { gte: startOfToday, lte: endOfToday },
-          status: 'PRESENT',
-        },
-      }),
-      prisma.attendance.count({
-        where: {
-          date: { gte: startOfToday, lte: endOfToday },
-          status: 'LATE',
-        },
-      }),
-      prisma.attendance.count({
-        where: {
-          date: { gte: startOfToday, lte: endOfToday },
-          status: 'ABSENT',
-        },
-      }),
-    ]);
-
-    const todayMarkedCount = presentCount + lateCount + absentCount;
-    const todayAttendancePercentage =
-      totalActiveStudents > 0
-        ? parseFloat((((presentCount + lateCount) / totalActiveStudents) * 100).toFixed(1))
-        : 0;
+    // Exam attendance uses frozen Hall session rosters, never global/class population.
+    const attendanceToday = await attendanceService.getTodayAttendance(now);
 
     // 3. Fee Collection Aggregations via database SUM
     const [feeBilledAgg, feePaidAgg] = await Promise.all([
@@ -200,15 +176,7 @@ export class DashboardService {
         totalPartnerStudents,
         totalExpectedApplicants,
       },
-      attendanceToday: {
-        totalActiveStudents,
-        markedCount: todayMarkedCount,
-        presentCount,
-        lateCount,
-        absentCount,
-        unmarkedCount: Math.max(0, totalActiveStudents - todayMarkedCount),
-        attendancePercentage: todayAttendancePercentage,
-      },
+      attendanceToday,
       feeCollection: {
         totalBilled,
         totalCollected,

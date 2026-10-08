@@ -1,45 +1,28 @@
 import { Request, Response, NextFunction } from 'express';
 import { attendanceService } from './attendance.service';
+import { sessionQuerySchema, rosterQuerySchema } from './attendance.schema';
 
-export class AttendanceController {
-  async scan(req: Request, res: Response, next: NextFunction) {
-    try {
-      const markedByUserId = req.user?.id || 'system_scanner';
-      const result = await attendanceService.scanOrMarkAttendance(req.body, markedByUserId);
-
-      res.status(201).json({
-        success: true,
-        message: result.message,
-        data: result,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async getToday(req: Request, res: Response, next: NextFunction) {
-    try {
-      const result = await attendanceService.getTodayAttendance(req.query as any);
-      res.status(200).json({
-        success: true,
-        data: result,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async getStudentHistory(req: Request, res: Response, next: NextFunction) {
-    try {
-      const result = await attendanceService.getStudentAttendanceHistory(req.params.id);
-      res.status(200).json({
-        success: true,
-        data: result,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+function operator(req: Request): string {
+  if (!req.user?.id) throw Object.assign(new Error('Authenticated attendance operator is required.'), { statusCode: 401 });
+  return req.user.id;
 }
-
+export class AttendanceController {
+  private async respond(res: Response, next: NextFunction, work: () => Promise<unknown>, status = 200) {
+    try { const data = await work(); res.status(status).json({ success: true, data }); } catch (error) { next(error); }
+  }
+  open = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.openSession(req.body.examHallId, operator(req)), 201);
+  list = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.listSessions(sessionQuerySchema.parse(req.query)));
+  detail = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getSession(req.params.sessionId));
+  candidates = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getCandidates(req.params.sessionId, rosterQuerySchema.parse(req.query)));
+  mark = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.mark(req.params.sessionId, req.body, operator(req)), 201);
+  close = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.closeSession(req.params.sessionId, req.body.markRemainingAbsent, operator(req)));
+  scan = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const data = await attendanceService.scanOrMarkAttendance(req.body, operator(req));
+      res.status('alreadyMarked' in data && data.alreadyMarked ? 200 : 201).json({ success: true, data });
+    } catch (error) { next(error); }
+  };
+  getToday = (_req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getTodayAttendance());
+  getStudentHistory = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getStudentAttendanceHistory(req.params.id, rosterQuerySchema.parse(req.query)));
+}
 export const attendanceController = new AttendanceController();
