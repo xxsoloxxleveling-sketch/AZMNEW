@@ -6,25 +6,34 @@
   text-align: center;
 }
 
-.page-frame.is-zoomed {
-  background: #eef3f8;
-  cursor: grab;
-  touch-action: pan-y;
+.page-frame {
+  padding: clamp(14px, 2.5vw, 28px);
+  background: #e9edf2;
 }
-
-.page-frame.is-zoomed:active { cursor: grabbing; }
 
 .page-canvas {
   position: relative;
   z-index: 1;
-  width: 100%;
-  transform-origin: center center;
-  transition: transform 120ms ease-out;
+  width: min(100%, 820px);
+  margin: 0 auto;
+  background: white;
+  box-shadow: 0 4px 18px #14213a24;
 }
 
 .page-canvas img {
   display: block;
   width: 100%;
+  height: auto;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+@media (max-width: 520px) {
+  .page-frame {
+    padding: 8px;
+  }
+
+  .page-canvas {
+    width: 100%;
+  }
 }
