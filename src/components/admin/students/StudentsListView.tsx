@@ -29,7 +29,8 @@ import { useAuth } from '../../../lib/authContext';
 import { apiFetchProtectedObjectUrl } from '../../../lib/apiClient';
 import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/whatsapp';
 
-const STUDENTS_PER_PAGE = 10;
+const DEFAULT_STUDENTS_PER_PAGE = 10;
+const STUDENT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 250] as const;
 
 export const StudentsListView: React.FC = () => {
   const { role, isLoading: authLoading } = useAuth();
@@ -44,7 +45,8 @@ export const StudentsListView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pagination, setPagination] = useState({ page: 1, limit: STUDENTS_PER_PAGE, total: 0, totalPages: 1 });
+  const [pageSize, setPageSize] = useState(DEFAULT_STUDENTS_PER_PAGE);
+  const [pagination, setPagination] = useState({ page: 1, limit: DEFAULT_STUDENTS_PER_PAGE, total: 0, totalPages: 1 });
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
@@ -52,6 +54,7 @@ export const StudentsListView: React.FC = () => {
   const [rollStatus, setRollStatus] = useState<{ readyCount: number; issuedCount: number; totalPaidCount: number; scheduledDate?: string } | null>(null);
   const [showBatchRollModal, setShowBatchRollModal] = useState(false);
   const [isIssuingBatch, setIsIssuingBatch] = useState(false);
+  const [isApprovingSelectedFees, setIsApprovingSelectedFees] = useState(false);
 
   // Sorting state
   const [sortField, setSortField] = useState<'rollNumber' | 'fullName' | 'currentClass' | null>(null);
@@ -92,7 +95,7 @@ export const StudentsListView: React.FC = () => {
           status: statusFilter,
           search: searchQuery,
           page: currentPage,
-          limit: STUDENTS_PER_PAGE,
+          limit: pageSize,
         }),
         mockApi.getRollNumberStatus().catch(() => null),
       ]);
@@ -131,13 +134,19 @@ export const StudentsListView: React.FC = () => {
     if (!authLoading) {
       fetchStudents(students.length === 0);
     }
-  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize]);
 
   useEffect(() => {
     const refresh = () => { void fetchStudents(); };
     window.addEventListener('students-updated', refresh);
     return () => window.removeEventListener('students-updated', refresh);
-  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize]);
+
+  // Batch actions intentionally apply only to the visible result set.
+  // Reset selection whenever paging or filters change so hidden candidates are never approved accidentally.
+  useEffect(() => {
+    setSelectedStudentIds([]);
+  }, [classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize]);
 
   // Fetch private thumbnail files only for the rows currently displayed.
   useEffect(() => {
@@ -230,6 +239,67 @@ export const StudentsListView: React.FC = () => {
 
   const allCurrentIds = students.map((s) => s.id);
   const allCurrentSelected = allCurrentIds.length > 0 && allCurrentIds.every((id) => selectedStudentIds.includes(id));
+  const canApproveFees = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'ACCOUNTANT';
+  const selectedUnpaidStudents = students.filter(
+    (student) => selectedStudentIds.includes(student.id) && student.feeStatus !== 'PAID'
+  );
+
+  const handleApproveSelectedFees = async () => {
+    if (!canApproveFees || selectedUnpaidStudents.length === 0 || isApprovingSelectedFees) return;
+
+    const selectedForApproval = [...selectedUnpaidStudents];
+    const totalAmount = selectedForApproval.length * 300;
+    const confirmed = confirm(
+      `Approve PKR ${totalAmount.toLocaleString()} in registration fees for ${selectedForApproval.length} selected candidate(s)?`
+    );
+    if (!confirmed) return;
+
+    setIsApprovingSelectedFees(true);
+    const succeededIds: string[] = [];
+    const failures: Array<{ name: string; message: string }> = [];
+    let nextIndex = 0;
+
+    const worker = async () => {
+      while (nextIndex < selectedForApproval.length) {
+        const student = selectedForApproval[nextIndex++];
+        try {
+          await mockApi.approveStudentPayment(student.id);
+          succeededIds.push(student.id);
+        } catch (err: any) {
+          failures.push({
+            name: student.fullName,
+            message: err?.message || 'Fee approval failed',
+          });
+        }
+      }
+    };
+
+    try {
+      const workerCount = Math.min(5, selectedForApproval.length);
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+      if (succeededIds.length > 0) {
+        setSelectedStudentIds((prev) => prev.filter((id) => !succeededIds.includes(id)));
+      }
+
+      await fetchStudents(false);
+
+      if (failures.length === 0) {
+        alert(`Successfully approved fees for ${succeededIds.length} candidate(s).`);
+      } else {
+        const preview = failures
+          .slice(0, 3)
+          .map((failure) => `${failure.name}: ${failure.message}`)
+          .join('\n');
+        const more = failures.length > 3 ? `\n…and ${failures.length - 3} more failure(s).` : '';
+        alert(
+          `Approved ${succeededIds.length} candidate(s). ${failures.length} failed.\n\n${preview}${more}`
+        );
+      }
+    } finally {
+      setIsApprovingSelectedFees(false);
+    }
+  };
 
   const toggleSelectAllCurrent = () => {
     if (allCurrentSelected) {
@@ -487,6 +557,31 @@ export const StudentsListView: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              {canApproveFees && (
+                <button
+                  type="button"
+                  onClick={handleApproveSelectedFees}
+                  disabled={isApprovingSelectedFees || selectedUnpaidStudents.length === 0}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={
+                    selectedUnpaidStudents.length > 0
+                      ? `Approve PKR 300 fee for ${selectedUnpaidStudents.length} selected unpaid candidate(s)`
+                      : 'All selected candidates on this page are already paid'
+                  }
+                >
+                  {isApprovingSelectedFees ? (
+                    <IconLoader size={14} className="animate-spin" />
+                  ) : (
+                    <IconApproveFee size={14} />
+                  )}
+                  <span>
+                    {isApprovingSelectedFees
+                      ? 'Approving Fees...'
+                      : `Approve Fees (${selectedUnpaidStudents.length})`}
+                  </span>
+                </button>
+              )}
+
               <button
                 onClick={() => setBulkPrintType('OMR')}
                 className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-xs font-medium transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
@@ -882,16 +977,35 @@ export const StudentsListView: React.FC = () => {
           <div>
             Showing{' '}
             <span className="font-semibold text-slate-700">
-              {pagination.total === 0 ? 0 : (pagination.page - 1) * STUDENTS_PER_PAGE + 1}
+              {pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1}
             </span>{' '}
             to{' '}
             <span className="font-semibold text-slate-700">
-              {Math.min(pagination.page * STUDENTS_PER_PAGE, pagination.total)}
+              {Math.min(pagination.page * pagination.limit, pagination.total)}
             </span>{' '}
             of <span className="font-semibold text-slate-700">{pagination.total}</span> candidates
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 font-medium text-slate-600">
+              <span>Rows</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#185b9d] cursor-pointer"
+                aria-label="Students per page"
+              >
+                {STUDENT_PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
