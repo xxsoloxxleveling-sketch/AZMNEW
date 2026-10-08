@@ -988,8 +988,6 @@ export class StudentsService {
                 eligibility: null,
                 finalStatus: null,
                 testRollNo: null,
-                testCentre: 'Main Campus Examination Center, Mansehra',
-                testReportingTime: '09:00 AM',
               },
             },
           },
@@ -1632,8 +1630,6 @@ export class StudentsService {
                 testRollNo: rollNumber,
                 eligibility: null,
                 finalStatus: null,
-                testCentre: 'Main Campus Examination Center, Mansehra',
-                testReportingTime: '09:00 AM',
               },
               update: {
                 testRollNo: rollNumber,
