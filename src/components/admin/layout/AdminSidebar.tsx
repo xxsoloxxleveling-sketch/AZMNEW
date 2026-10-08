@@ -78,6 +78,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
+      id: 'storage' as AdminTab,
+      label: 'Document Vault',
+      icon: IconStorage,
+      roles: ['SUPER_ADMIN', 'ADMIN'],
+    },
+    {
       id: 'attendance' as AdminTab,
       label: 'Examination Attendance',
       icon: IconAttendance,

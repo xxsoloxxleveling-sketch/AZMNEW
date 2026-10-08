@@ -284,7 +284,7 @@ function AppContent() {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
-      const deferredTabs = ['storage', 'fees', 'payroll'];
+      const deferredTabs = ['fees', 'payroll'];
 
       if (!hash || hash === 'home') {
         setCurrentRoute('public');
@@ -307,7 +307,7 @@ function AppContent() {
         setAdminTab(role === 'TEACHER' ? 'attendance' : 'partners');
         if (role === 'TEACHER') window.location.hash = 'attendance';
       } else if (
-        ['dashboard', 'students', 'partners', 'staff', 'transactions', 'settings', 'halls', 'attendance'].includes(
+        ['dashboard', 'students', 'partners', 'staff', 'transactions', 'settings', 'halls', 'attendance', 'storage'].includes(
           hash
         )
       ) {
@@ -316,7 +316,7 @@ function AppContent() {
         const canUseAttendance = canManageHalls || role === 'TEACHER';
         const targetTab: AdminTab = role === 'TEACHER' && hash !== 'settings'
           ? 'attendance'
-          : (hash === 'halls' && !canManageHalls) || (hash === 'attendance' && !canUseAttendance)
+          : ((hash === 'halls' || hash === 'storage') && !canManageHalls) || (hash === 'attendance' && !canUseAttendance)
             ? 'dashboard'
             : hash as AdminTab;
         setAdminTab(targetTab);
@@ -363,11 +363,11 @@ function AppContent() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    if (targetTab && ['storage', 'fees', 'payroll'].includes(targetTab)) {
+    if (targetTab && ['fees', 'payroll'].includes(targetTab)) {
       targetTab = role === 'TEACHER' ? 'attendance' : 'dashboard';
     }
 
-    if (targetTab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN') targetTab = 'dashboard';
+    if ((targetTab === 'halls' || targetTab === 'storage') && role !== 'SUPER_ADMIN' && role !== 'ADMIN') targetTab = 'dashboard';
     if (targetTab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN' && role !== 'TEACHER') targetTab = 'dashboard';
     if (targetRoute === 'admin' && role === 'TEACHER' && targetTab !== 'settings') targetTab = 'attendance';
     setCurrentRoute(targetRoute);
@@ -579,7 +579,7 @@ function AppContent() {
           onSelectTab={(tab) => {
             if (tab === 'scan') {
               navigateTo('scan');
-            } else if (['storage', 'fees', 'payroll'].includes(tab) || (tab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
+            } else if (['fees', 'payroll'].includes(tab) || ((tab === 'halls' || tab === 'storage') && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
               setAdminTab('dashboard');
               window.location.hash = 'dashboard';
             } else {
@@ -601,7 +601,7 @@ function AppContent() {
               onNavigate={(tab) => {
                 if (tab === 'scan') {
                   navigateTo('scan');
-                } else if (['storage', 'fees', 'payroll'].includes(tab) || (tab === 'halls' && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
+                } else if (['fees', 'payroll'].includes(tab) || ((tab === 'halls' || tab === 'storage') && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
                   setAdminTab('dashboard');
                   window.location.hash = 'dashboard';
                 } else {
@@ -618,8 +618,9 @@ function AppContent() {
           {adminTab === 'transactions' && <TransactionsListView />}
           {adminTab === 'settings' && <SettingsView />}
           {adminTab === 'halls' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <ExamHallsView />}
+          {adminTab === 'storage' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <DocumentVaultView />}
           {adminTab === 'attendance' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <AttendanceHubView />}
-          {['storage', 'fees', 'payroll'].includes(adminTab) && (
+          {['fees', 'payroll'].includes(adminTab) && (
             <DashboardView
               onNavigate={(tab) => {
                 setAdminTab(tab);

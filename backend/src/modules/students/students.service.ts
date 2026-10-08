@@ -461,7 +461,8 @@ export class StudentsService {
       } catch {}
     }
 
-    for (const document of student.studentDocuments || []) {
+    for (const document of [...(student.studentDocuments || [])].sort((a: any, b: any) =>
+      new Date(a.updatedAt || a.createdAt).getTime() - new Date(b.updatedAt || b.createdAt).getTime())) {
       uploadedDocuments[document.documentType] = {
         name: document.originalFileName || `${document.documentType} document`,
         bucket: document.bucket,
@@ -1841,7 +1842,7 @@ export class StudentsService {
           fatherName: true, currentClass: true, schoolName: true,
           cnicOrBForm: true, parentMobile: true, studentMobile: true,
           status: true, feeRecords: { select: { status: true } },
-          studentDocuments: { where: { documentType: 'photoThumbnail' }, select: { bucket: true, objectPath: true, mimeType: true } },
+          studentDocuments: { where: { documentType: 'photoThumbnail' }, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: 1, select: { bucket: true, objectPath: true, mimeType: true } },
         },
       });
       const esc = (value: unknown): string => String(value ?? '—')
@@ -2739,6 +2740,28 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
   async getStudentDocument(studentIdentifier: string, docType: string): Promise<{ buffer: Buffer; contentType: string }> {
     const rawApp = studentIdentifier.replace(/[^\w-]/g, '_');
     const aliases = this.getDocumentAliases(docType);
+
+    // Explicitly managed Vault files are authoritative, even if an older
+    // candidate-registration upload still exists on local disk. All legacy
+    // recovery paths below remain unchanged for non-Vault documents.
+    const vaultStudent = await prisma.student.findFirst({
+      where: { OR: [{ id: studentIdentifier }, { applicationNo: studentIdentifier }, { cnicOrBForm: studentIdentifier }] },
+      select: { id: true },
+    });
+    if (vaultStudent) {
+      const current = await prisma.studentDocument.findFirst({
+        where: { studentId: vaultStudent.id, documentType: { in: aliases }, objectPath: { startsWith: 'vault/' } },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      });
+      if (current) {
+        if (!['student-photos', 'student-documents'].includes(current.bucket)) {
+          throw Object.assign(new Error('Invalid Vault storage reference.'), { statusCode: 404 });
+        }
+        const bytes = await supabaseStorage.downloadFile(current.bucket as StorageBucket, current.objectPath);
+        if (!bytes?.length) throw Object.assign(new Error('Current Vault document is unavailable.'), { statusCode: 404 });
+        return { buffer: bytes, contentType: current.mimeType };
+      }
+    }
 
     // 1. Check server disk storage first
     const candDir = path.join(UPLOADS_DIR, rawApp);
