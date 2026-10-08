@@ -169,6 +169,19 @@ export class StudentsController {
     }
   }
 
+  async exportAllPdf(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const { buffer, filename } = await studentsService.exportAllStudentsPdf();
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.status(200).send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async exportSelectedPdf(req: Request, res: Response, next: NextFunction) {
     try {
       const { buffer, filename } = await studentsService.exportStudentsPdf(
