@@ -39,6 +39,7 @@ export type UpdateAllocationInput = z.infer<typeof updateAllocationSchema>;
 export const candidateQuerySchema = z.object({
   search: z.string().trim().max(200).optional(),
   class: z.string().trim().max(100).optional(),
+  gender: z.enum(['MALE', 'FEMALE']).optional(),
   assignment: z.enum(['unassigned', 'assigned', 'all']).default('unassigned'),
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),

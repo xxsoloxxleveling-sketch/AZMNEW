@@ -1249,7 +1249,7 @@ export const mockApi = {
     return res;
   },
 
-  async getHallCandidates(query: { search?: string; class?: string; assignment?: 'unassigned' | 'assigned' | 'all'; page?: number; limit?: number }): Promise<HallCandidatePage> {
+  async getHallCandidates(query: { search?: string; class?: string; gender?: 'MALE' | 'FEMALE'; assignment?: 'unassigned' | 'assigned' | 'all'; page?: number; limit?: number }): Promise<HallCandidatePage> {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, String(value));
     const res = await apiFetch<HallCandidatePage>(`/api/exam-halls/candidates?${params}`);
@@ -1450,6 +1450,11 @@ export const mockApi = {
 
     const suggestedFilename = `AZM-Students-${new Date().toISOString().split('T')[0]}.pdf`;
     await apiDownloadPdf(`/api/students/export-pdf?${params.toString()}`, suggestedFilename);
+  },
+
+  async downloadAllStudentsListPdf(): Promise<void> {
+    const filename = `AZM-Students-All-${new Date().toISOString().split('T')[0]}.pdf`;
+    await apiDownloadPdf('/api/students/export-all-pdf', filename);
   },
 
   async downloadSelectedStudentsListPdf(studentIds: string[]): Promise<void> {

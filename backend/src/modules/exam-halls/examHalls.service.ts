@@ -103,6 +103,7 @@ export class ExamHallsService {
     const where: Prisma.StudentWhereInput = {};
     const classWhere = buildStudentClassWhere(query.class);
     if (classWhere) where.AND = [classWhere];
+    if (query.gender) where.gender = query.gender;
     if (assignment === 'assigned') where.assignedHallId = { not: null };
     if (assignment === 'unassigned') where.assignedHallId = null;
     if (search) where.OR = ['fullName', 'rollNumber', 'applicationNo'].map(key => ({ [key]: { contains: search, mode: 'insensitive' } }));

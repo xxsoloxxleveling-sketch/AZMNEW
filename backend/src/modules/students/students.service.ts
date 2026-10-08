@@ -378,6 +378,7 @@ export function buildStudentClassWhere(classLevel?: string | null): any {
 }
 
 export class StudentsService {
+  private fullStudentPdfBusy = false;
   private activeThumbnailJobs = new Map<string, Promise<{ buffer: Buffer; contentType: string } | null>>();
 
   // Reserve without issuing: public access still requires student.rollNumber and
@@ -1818,6 +1819,104 @@ export class StudentsService {
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
     };
+  }
+
+  /**
+   * Full database roster export: no filters, no pagination limit, no private
+   * portrait/object-storage reads. A projection keeps memory predictable for
+   * the current student register (including inactive candidates).
+   */
+  async exportAllStudentsPdf(): Promise<{ buffer: Buffer; filename: string }> {
+    if (this.fullStudentPdfBusy) {
+      const error: AppError = new Error('A full student PDF export is already running. Please retry when it finishes.');
+      error.statusCode = 429;
+      throw error;
+    }
+    this.fullStudentPdfBusy = true;
+    try {
+      const students = await prisma.student.findMany({
+        orderBy: [{ currentClass: 'asc' }, { fullName: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true, applicationNo: true, rollNumber: true, fullName: true,
+          fatherName: true, currentClass: true, schoolName: true,
+          cnicOrBForm: true, parentMobile: true, studentMobile: true,
+          status: true, feeRecords: { select: { status: true } },
+          studentDocuments: { where: { documentType: 'photoThumbnail' }, select: { bucket: true, objectPath: true, mimeType: true } },
+        },
+      });
+      const esc = (value: unknown): string => String(value ?? '—')
+        .replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
+      // Reuse private 160px thumbnails, not original photos. Download with
+      // low concurrency; missing/unavailable photos use an honest placeholder.
+      const portraits: Array<string | null> = Array(students.length).fill(null);
+      let nextPortrait = 0;
+      const worker = async () => {
+        while (nextPortrait < students.length) {
+          const index = nextPortrait++;
+          const photo = students[index].studentDocuments[0];
+          if (!photo) continue;
+          try {
+            const bytes = await supabaseStorage.downloadFile(photo.bucket as StorageBucket, photo.objectPath);
+            if (bytes?.length && bytes.length <= 150_000 && ['image/jpeg', 'image/png', 'image/webp'].includes(photo.mimeType)) {
+              portraits[index] = `data:${photo.mimeType};base64,${bytes.toString('base64')}`;
+            }
+          } catch (err) {
+            logger.warn('Full roster photo unavailable:', err);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(3, students.length) }, worker));
+      const rows = students.map((student, index) => {
+        const feePaid = Boolean(student.rollNumber) || student.feeRecords.some(fee => fee.status === 'PAID');
+        return `<tr>
+          <td class="center">${index + 1}</td>
+          <td class="photo-cell">${portraits[index] ? `<img class="photo" src="${portraits[index]}" alt="Student portrait" />` : '<span class="photo-missing">No photo</span>'}</td>
+          <td class="code">${esc(student.rollNumber || student.applicationNo)}</td>
+          <td>${esc(student.fullName)}</td>
+          <td>${esc(student.fatherName)}</td>
+          <td class="center">${esc(student.currentClass)}</td>
+          <td>${esc(student.schoolName)}</td>
+          <td class="code">${esc(student.cnicOrBForm)}</td>
+          <td class="code">${esc(student.parentMobile || student.studentMobile)}</td>
+          <td class="center">${feePaid ? 'PAID' : 'UNPAID'}</td>
+          <td class="center">${esc(student.status)}</td>
+        </tr>`;
+      }).join('');
+      const generated = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Karachi' });
+      const html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"/>
+<title>AZM.AIO - Complete Student Directory</title><style>
+@page{size:A4 landscape;margin:12mm 8mm 14mm}
+*{box-sizing:border-box}
+body{font-family:Arial,"Segoe UI",sans-serif;color:#17253a;margin:0;font-size:9px}
+h1{color:#185b9d;font-size:18px;margin:0 0 3px 0}
+.sub{font-size:10px;color:#52647a;margin-bottom:12px}
+.meta{background:#eff6ff;border:1px solid #bfdbfe;padding:8px 10px;margin-bottom:12px}
+table{border-collapse:collapse;table-layout:fixed;width:100%;font-size:8.2px}
+.photo-cell{text-align:center}.photo{width:44px;height:50px;object-fit:cover;display:block;margin:auto;border:1px solid #cad5e5;border-radius:3px}.photo-missing{font-size:7px;color:#64748b}
+th,td{border:1px solid #d4deec;text-align:left;padding:5px 4px;overflow-wrap:anywhere;vertical-align:middle}
+th{background:#185b9d;color:#fff;font-weight:700}
+thead{display:table-header-group}
+tr{break-inside:avoid;page-break-inside:avoid}
+tr:nth-child(even){background:#f4f8fc}
+.center{text-align:center}.code{font-family:Consolas,monospace;font-size:7.5px}
+th:nth-child(1){width:3%} th:nth-child(2){width:7%} th:nth-child(3){width:10%}
+th:nth-child(4){width:12%}th:nth-child(5){width:11%}
+th:nth-child(6){width:8%}th:nth-child(7){width:12%}
+th:nth-child(8){width:11%}th:nth-child(9){width:11%}
+th:nth-child(10){width:7%}th:nth-child(11){width:8%}
+</style></head><body>
+<h1>AZM.AIO — Complete Student Directory</h1>
+<div class="sub">Official candidate register · Generated ${esc(generated)} PKT</div>
+<div class="meta"><strong>All Students: ${students.length}</strong> · Includes every registered student and status. No filters or page limits applied. Student portraits included when the stored private thumbnail is available; missing photos are labeled.</div>
+<table><thead><tr><th>#</th><th>Photo</th><th>Roll / App No</th><th>Student</th><th>Father / Guardian</th><th>Class</th><th>School</th><th>CNIC / B-Form</th><th>Contact</th><th>Fee</th><th>Status</th></tr></thead>
+<tbody>${rows || '<tr><td colspan="11" class="center">No student records are registered.</td></tr>'}</tbody></table>
+</body></html>`;
+      const buffer = await pdfService.generatePdfFromHtml(html, { landscape: true });
+      logger.info(`Full student directory PDF generated: ${students.length} records, ${buffer.length} bytes.`);
+      return { buffer, filename: `AZM-Students-All-${new Date().toISOString().slice(0,10)}.pdf` };
+    } finally {
+      this.fullStudentPdfBusy = false;
+    }
   }
 
   /**

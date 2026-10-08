@@ -143,6 +143,13 @@ router.get(
   studentsController.exportPdf
 );
 
+// All students, independent of UI filters/pagination, with a lightweight PDF (no portraits).
+router.get(
+  '/export-all-pdf',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.exportAllPdf
+);
+
 // Exact, bounded selected-student roster export (SUPER_ADMIN, ADMIN).
 // POST keeps private student identifiers out of the URL.
 router.post(

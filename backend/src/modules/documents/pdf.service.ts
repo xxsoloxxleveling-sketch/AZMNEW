@@ -875,6 +875,21 @@ export class PdfService {
       .filter(Boolean)
       .join(' — ');
 
+    // Accept only embedded raster bytes; never give Chromium a remote source.
+    const portraitSource = (value: unknown): string => {
+      if (typeof value !== 'string') return '';
+      const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+      if (!match) return '';
+      const bytes = Buffer.from(match[2], 'base64');
+      if (bytes.toString('base64') !== match[2]) return '';
+      const valid = match[1] === 'jpeg'
+        ? bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9
+        : match[1] === 'png'
+          ? bytes.length >= 33 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) && bytes.toString('ascii', 12, 16) === 'IHDR'
+          : bytes.length >= 20 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP' && bytes.readUInt32LE(4) + 8 === bytes.length;
+      return valid ? this.escapeHtml(value) : '';
+    };
+
     const paidCount = students.filter((s) => {
       return (
         s.feeStatus === 'PAID' ||
@@ -896,8 +911,8 @@ export class PdfService {
                 Boolean(s.rollNumber);
               const feeStatus = isPaid ? 'PAID' : (s.feeRecords?.[0]?.status || 'UNPAID');
               const att = s.attendancePercentage != null ? `${s.attendancePercentage}%` : '—';
-              const cat = (s.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ');
-              const photo = this.escapeHtml(s.rosterPhotoDataUrl || '');
+              const cat = String(s.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ');
+              const photo = portraitSource(s.rosterPhotoDataUrl);
               const photoCell = photo
                 ? `<img class="roster-photo" src="${photo}" alt="Candidate photo" />`
                 : `<span class="photo-placeholder">No photo</span>`;
@@ -906,15 +921,15 @@ export class PdfService {
           <tr class="${idx % 2 === 1 ? 'even-row' : ''}">
             <td class="text-center font-bold">${idx + 1}</td>
             <td class="text-center">${photoCell}</td>
-            <td class="font-mono text-center font-bold text-navy">${appNo}</td>
-            <td><strong>${s.fullName || '—'}</strong></td>
-            <td>${s.fatherName || '—'}</td>
+            <td class="font-mono text-center font-bold text-navy">${this.escapeHtml(appNo)}</td>
+            <td><strong>${this.escapeHtml(s.fullName || '—')}</strong></td>
+            <td>${this.escapeHtml(s.fatherName || '—')}</td>
             <td class="school-cell">${this.escapeHtml(s.schoolName || '—')}</td>
-            <td class="font-mono text-center">${s.cnicOrBForm || '—'}</td>
-            <td><span class="class-tag">${s.currentClass || '—'}</span><br/><small class="text-muted">${cat}</small></td>
-            <td class="text-center"><span class="badge ${isPaid ? 'badge-paid' : 'badge-unpaid'}">${feeStatus}</span></td>
-            <td class="text-center font-bold">${att}</td>
-            <td class="font-mono text-center">${contact}</td>
+            <td class="font-mono text-center">${this.escapeHtml(s.cnicOrBForm || '—')}</td>
+            <td><span class="class-tag">${this.escapeHtml(s.currentClass || '—')}</span><br/><small class="text-muted">${this.escapeHtml(cat)}</small></td>
+            <td class="text-center"><span class="badge ${isPaid ? 'badge-paid' : 'badge-unpaid'}">${this.escapeHtml(feeStatus)}</span></td>
+            <td class="text-center font-bold">${this.escapeHtml(att)}</td>
+            <td class="font-mono text-center">${this.escapeHtml(contact)}</td>
           </tr>
               `;
             })
@@ -922,7 +937,7 @@ export class PdfService {
         : `
           <tr>
             <td colspan="11" class="empty-state">
-              No students match the selected filter criteria (${classLabel}, ${genderLabel}, ${statusLabel}).
+              No students match the selected filter criteria (${this.escapeHtml(classLabel)}, ${this.escapeHtml(genderLabel)}, ${this.escapeHtml(statusLabel)}).
             </td>
           </tr>
         `;
@@ -932,7 +947,7 @@ export class PdfService {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>AZM Students Roster — ${filterTitle}</title>
+  <title>AZM Students Roster — ${this.escapeHtml(filterTitle)}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
     body { background: #fff; padding: 6mm 8mm; color: #0f172a; font-size: 10px; }
@@ -991,7 +1006,7 @@ export class PdfService {
       <td class="header-right">
         <div class="meta-box">
           <div>Generated: <strong>${generatedDate}</strong> (${generatedTime})</div>
-          <div>Total Candidates: <strong>${totalCount}</strong></div>
+          <div>Total Candidates: <strong>${this.escapeHtml(totalCount)}</strong></div>
         </div>
       </td>
     </tr>
@@ -999,10 +1014,10 @@ export class PdfService {
 
   <div class="filter-ribbon">
     <div class="filter-title">
-      Filter: <span>${filterTitle}</span>
+      Filter: <span>${this.escapeHtml(filterTitle)}</span>
     </div>
     <div class="counts-summary">
-      Total: <strong>${totalCount}</strong> &nbsp;|&nbsp; Paid: <strong style="color: #166534;">${paidCount}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color: #92400e;">${unpaidCount}</strong>
+      Total: <strong>${this.escapeHtml(totalCount)}</strong> &nbsp;|&nbsp; Paid: <strong style="color: #166534;">${paidCount}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color: #92400e;">${unpaidCount}</strong>
     </div>
   </div>
 
