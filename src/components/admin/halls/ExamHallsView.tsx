@@ -74,7 +74,7 @@ export const ExamHallsView: React.FC<{ onOpenQrScanner?: () => void }> = () => {
   const [refresh, setRefresh] = useState(0), [rosterSearch, setRosterSearch] = useState('');
   const [dialog, setDialog] = useState<Dialog | null>(null), [busy, setBusy] = useState(false), [modalError, setModalError] = useState(''), [notice, setNotice] = useState('');
   const [form, setForm] = useState<HallForm>(blankForm), [targetId, setTargetId] = useState(''), [newSeat, setNewSeat] = useState('');
-  const [search, setSearch] = useState(''), [classFilter, setClassFilter] = useState(''), [assignment, setAssignment] = useState<'unassigned' | 'assigned' | 'all'>('unassigned'), [page, setPage] = useState(1);
+  const [search, setSearch] = useState(''), [classFilter, setClassFilter] = useState(''), [genderFilter, setGenderFilter] = useState<'ALL' | 'MALE' | 'FEMALE'>('ALL'), [assignment, setAssignment] = useState<'unassigned' | 'assigned' | 'all'>('unassigned'), [page, setPage] = useState(1);
   const [candidates, setCandidates] = useState<HallCandidate[]>([]), [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 0 });
   const [candidateLoading, setCandidateLoading] = useState(false), [candidateError, setCandidateError] = useState(''), [candidateRetry, setCandidateRetry] = useState(0);
   const [selected, setSelected] = useState<Record<string, HallCandidate>>({});
@@ -107,19 +107,19 @@ export const ExamHallsView: React.FC<{ onOpenQrScanner?: () => void }> = () => {
     let active = true;
     if (dialog?.kind !== 'place') return;
     setCandidateLoading(true); setCandidateError(''); setCandidates([]);
-    mockApi.getHallCandidates({ search, class: classFilter || undefined, assignment, page, limit: 25 })
+    mockApi.getHallCandidates({ search, class: classFilter || undefined, gender: genderFilter === 'ALL' ? undefined : genderFilter, assignment, page, limit: 25 })
       .then(result => { if (active) { setCandidates(result.candidates); setPagination(result.pagination); } })
       .catch(error => { if (active) setCandidateError(error.message); })
       .finally(() => { if (active) setCandidateLoading(false); });
     return () => { active = false; };
-  }, [dialog?.kind, search, classFilter, assignment, page, refresh, candidateRetry]);
+  }, [dialog?.kind, search, classFilter, genderFilter, assignment, page, refresh, candidateRetry]);
 
   const open = (next: Dialog) => {
     setModalError(''); setNotice(''); setDialog(next); setTargetId('');
     if (next.kind === 'create') setForm(blankForm());
     if (next.kind === 'edit') setForm(Object.fromEntries(Object.keys(blankForm()).map(key => [key, String((next.hall as any)[key] ?? '')])) as HallForm);
     if (next.kind === 'seat') setNewSeat(next.candidate.seatNo || '');
-    if (next.kind === 'place') { setSearch(''); setClassFilter(''); setAssignment('unassigned'); setPage(1); setSelected({}); }
+    if (next.kind === 'place') { setSearch(''); setClassFilter(''); setGenderFilter('ALL'); setAssignment('unassigned'); setPage(1); setSelected({}); }
   };
   const close = () => { if (!busy) setDialog(null); };
   const mutate = async (operation: () => Promise<string>, keepOpen = false) => {
@@ -198,8 +198,9 @@ export const ExamHallsView: React.FC<{ onOpenQrScanner?: () => void }> = () => {
       {modalError && <p role="alert" className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700 mb-3">{modalError}</p>}
       {dialog.kind === 'place' && hall && <>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4">{[['Capacity', knownCapacity(hall) ? hall.capacity : '—'], ['Currently Assigned', hall.assignedCount], ['Available Seats', seats ?? '—'], ['Selected Candidates', selection.length]].map(([label, value]) => <div key={label} className="bg-slate-50 rounded-xl p-2"><span className="block text-slate-500">{label}</span><b className="block text-base mt-1">{value}</b></div>)}</div>
-        <div className="grid sm:grid-cols-3 gap-3"><label className="text-xs font-semibold">Search<input className={field + ' mt-1'} value={search} onChange={e => updateFilter(() => setSearch(e.target.value))} placeholder="Candidate name, roll or application"/></label>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><label className="text-xs font-semibold">Search<input className={field + ' mt-1'} value={search} onChange={e => updateFilter(() => setSearch(e.target.value))} placeholder="Candidate name, roll or application"/></label>
           <label className="text-xs font-semibold">Class<select className={field + ' mt-1'} value={classFilter} onChange={e => updateFilter(() => setClassFilter(e.target.value))}><option value="">All Classes</option>{classes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="text-xs font-semibold">Gender<select className={field + ' mt-1'} value={genderFilter} onChange={e => updateFilter(() => setGenderFilter(e.target.value as 'ALL' | 'MALE' | 'FEMALE'))}><option value="ALL">All Genders</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>
           <label className="text-xs font-semibold">Assignment<select className={field + ' mt-1'} value={assignment} onChange={e => updateFilter(() => setAssignment(e.target.value as any))}><option value="unassigned">Unassigned</option><option value="assigned">Assigned</option><option value="all">All Candidates</option></select></label>
         </div>
         {candidateLoading && <p role="status" className="text-xs mt-3">Loading placement candidates...</p>}
