@@ -1512,7 +1512,9 @@ export class StudentsService {
           'Biometric verification will take place at the entrance gate before seating allocation.',
         ],
         issuedAt: student.updatedAt.toISOString(),
-        qrPayload: `https://azmaio.com/verify?rollNo=${rollNo}&appId=${student.applicationNo}`,
+        qrPayload: student.qrToken && qrService.verifySignedQrToken(student.qrToken)
+          ? `https://azmaio.com/attend?token=${encodeURIComponent(student.qrToken)}`
+          : '',
       },
     };
   }
@@ -2408,8 +2410,9 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
     let qrDataUrl = '';
     try {
       const QRCode = await import('qrcode');
-      const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${candNum.value}&appId=${student.applicationNo}`;
-      qrDataUrl = await QRCode.toDataURL(qrPayload, {
+      const qrPayload = student.rollNumber && student.qrToken && qrService.verifySignedQrToken(student.qrToken)
+          ? `https://azmaio.com/attend?token=${encodeURIComponent(student.qrToken)}` : '';
+      if (qrPayload) qrDataUrl = await QRCode.toDataURL(qrPayload, {
         width: 300,
         margin: 1,
         color: { dark: '#000000', light: '#ffffff' },
@@ -2522,8 +2525,9 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       const candNum = getCandidateNumber(student);
       let qrDataUrl = '';
       try {
-        const qrPayload = student.qrToken || `https://azmaio.com/verify?rollNo=${candNum.value}&appId=${student.applicationNo}`;
-        qrDataUrl = await QRCode.toDataURL(qrPayload, {
+        const qrPayload = student.rollNumber && student.qrToken && qrService.verifySignedQrToken(student.qrToken)
+          ? `https://azmaio.com/attend?token=${encodeURIComponent(student.qrToken)}` : '';
+        if (qrPayload) qrDataUrl = await QRCode.toDataURL(qrPayload, {
           width: 300,
           margin: 1,
           color: { dark: '#000000', light: '#ffffff' },
