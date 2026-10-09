@@ -1,3 +1,4 @@
+import { extractSignedAttendanceToken } from '../utils/signedAttendanceQr';
 import { setToken, setRefreshToken, setUser, getUser, getToken } from './auth';
 import { apiFetch, apiDownloadPdf, apiOpenPdfForPrint, API_BASE_URL } from './apiClient';
 export { API_BASE_URL };
@@ -1653,15 +1654,8 @@ export const mockApi = {
     if (!mark.qrToken) return this.markAttendanceSession(sessionId, { ...mark, status: mark.status || 'PRESENT' });
     const invalidQr = () => Object.assign(new Error('Invalid Candidate QR'), { code: 'INVALID_QR' });
     if (mark.studentId || mark.rollNumber || (mark.status && mark.status !== 'PRESENT')) throw invalidQr();
-    let qrToken = mark.qrToken.trim();
-    if (qrToken.length > 4096) throw invalidQr();
-    if (!qrToken.startsWith('qr_')) {
-      let url: URL;
-      try { url = new URL(qrToken, 'https://azmaio.com'); } catch { throw invalidQr(); }
-      if (url.protocol !== 'https:' || !['azmaio.com', 'www.azmaio.com'].includes(url.hostname) || url.port || url.username || url.password || url.pathname !== '/attend' || url.hash || url.searchParams.getAll('token').length !== 1) throw invalidQr();
-      qrToken = url.searchParams.get('token') ?? '';
-    }
-    if (!/^qr_[^\s.]{1,1024}\.[a-fA-F0-9]{64}$/.test(qrToken)) throw invalidQr();
+    const qrToken = extractSignedAttendanceToken(mark.qrToken);
+    if (!qrToken) throw invalidQr();
     const res: AttendanceMarkResponse & { alreadyMarked?: boolean } = await apiFetch('/api/attendance/scan', {
       method: 'POST', timeoutMs: 15000,
       body: JSON.stringify({ sessionId: sessionId.trim(), qrToken, status: 'PRESENT' }),
