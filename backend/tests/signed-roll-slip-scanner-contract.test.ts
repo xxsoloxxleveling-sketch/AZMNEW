@@ -46,7 +46,7 @@ const publicView = src('src/components/rollnumber/RollNumberSlipView.tsx');
 const adminView = src('src/components/admin/students/RollSlipPreviewModal.tsx');
 assert(!service.includes('qrPayload: `https://azmaio.com/verify?'));
 assert(!service.includes('student.qrToken || `https://azmaio.com/verify?'));
-assert(publicView.includes('extractSignedAttendanceToken(payload)'));
+assert(publicView.includes('extractSignedAttendanceToken(selectedSlip.qrPayload)'));
 assert(!publicView.includes('api.qrserver.com'));
 assert(adminView.includes('buildSignedAttendanceQrUrl(student.qrToken)'));
 assert(!adminView.includes("type: 'AZM_SLIP'"));
