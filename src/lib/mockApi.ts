@@ -1,4 +1,4 @@
-import { extractSignedAttendanceToken } from '../utils/signedAttendanceQr';
+import { buildSignedAttendanceQrUrl, extractSignedAttendanceToken } from '../utils/signedAttendanceQr';
 import { setToken, setRefreshToken, setUser, getUser, getToken } from './auth';
 import { apiFetch, apiDownloadPdf, apiOpenPdfForPrint, API_BASE_URL } from './apiClient';
 export { API_BASE_URL };
@@ -1378,6 +1378,17 @@ export const mockApi = {
     } catch {
       data = { ...studentObj, id: studentId, rollNumber: rollNumber || studentObj?.rollNumber,
         placementStatus: 'PLACEMENT_PENDING', assignedHallId: null };
+    }
+    // Local fallback uses an already-issued signed QR, never an unsigned QR service.
+    const url = data?.rollNumber ? buildSignedAttendanceQrUrl(data.qrToken) : null;
+    if (url) {
+      try {
+        const QRCode = await import('qrcode');
+        data = { ...data, qrImageUrl: await QRCode.toDataURL(url, {
+          width: 320, margin: 3, errorCorrectionLevel: 'M',
+          color: { dark: '#000000', light: '#ffffff' },
+        }) };
+      } catch { data = { ...data, qrImageUrl: null }; }
     }
     printRollNumberSlip(data || { id: studentId, rollNumber });
   },
@@ -2825,6 +2836,10 @@ export function printRollNumberSlip(student: any) {
   const room = assigned && student.assignedRoom || 'To be assigned';
   const seat = assigned && student.seatNo || 'To be assigned';
   const testCenter = assigned && student.testCenterName || 'To be assigned';
+  const signedQrImage = student.rollNumber && buildSignedAttendanceQrUrl(student.qrToken)
+    && typeof student.qrImageUrl === 'string'
+    && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(student.qrImageUrl)
+    && student.qrImageUrl.length < 1_000_000 ? student.qrImageUrl : null;
 
   const html = `
 <!DOCTYPE html>
@@ -2888,8 +2903,8 @@ export function printRollNumberSlip(student: any) {
         </div>
       </div>
       <div style="text-align: center; flex-shrink: 0;">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(rollNo)}" alt="QR" style="width: 85px; height: 85px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 2px; background: #fff;" />
-        <div style="font-size: 9px; font-weight: 700; color: #64748b; margin-top: 2px;">BIOMETRIC QR PASS</div>
+        ${signedQrImage ? `<img src="${signedQrImage}" alt="Signed attendance QR" style="width:120px;height:120px;border:1px solid #cbd5e1;padding:2px;background:#fff;" />` : '<div style="width:120px;height:120px;padding:15px;border:1px solid #cbd5e1;color:#475569;">Signed QR unavailable — use official PDF</div>'}
+        <div style="font-size: 9px; font-weight: 700; color: #64748b; margin-top: 2px;">${signedQrImage ? 'SIGNED ATTENDANCE QR' : 'QR NOT AVAILABLE'}</div>
       </div>
     </div>
 
@@ -2962,7 +2977,10 @@ export function printStudentDossier(student: any) {
   const photoMarkup = student.photoUrl
     ? `<img src="${student.photoUrl}" alt="${student.fullName || 'Candidate'} photo" style="width: 100%; height: 100%; object-fit: cover;" />`
     : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #e2e8f0; color: #64748b; font-size: 10px; font-weight: 800; text-align: center;">NO PHOTO<br/>AVAILABLE</div>`;
-  const qrImageUrl = student.qrImageUrl || `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(rollNo)}`;
+  const qrImageUrl = student.rollNumber && buildSignedAttendanceQrUrl(student.qrToken)
+    && typeof student.qrImageUrl === 'string'
+    && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(student.qrImageUrl)
+    && student.qrImageUrl.length < 1_000_000 ? student.qrImageUrl : null;
 
   // Use genuine academic records only; never synthesize fake qualifications
   const academic = Array.isArray(student.academicRecords) ? student.academicRecords : [];
@@ -3009,7 +3027,7 @@ export function printStudentDossier(student: any) {
         <p>Session V (2026) Official Student Application Profile & Academic Dossier</p>
       </div>
       <div style="text-align: right;">
-        <img src="${qrImageUrl}" alt="QR" style="width: 70px; height: 70px; border-radius: 6px; border: 1px solid #cbd5e1; padding: 2px;" />
+        ${qrImageUrl ? `<img src="${qrImageUrl}" alt="Signed QR" style="width:96px;height:96px;border:1px solid #cbd5e1;padding:2px;" />` : '<div style="width:96px;height:96px;border:1px solid #cbd5e1;padding:8px;color:#475569;">Signed QR unavailable</div>'}
         <div style="font-size: 9px; font-family: monospace; font-weight: bold; margin-top: 2px;">${rollNo}</div>
       </div>
     </div>
