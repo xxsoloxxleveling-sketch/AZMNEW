@@ -177,6 +177,40 @@ async function browserChecks(app: ReturnType<typeof express>, detail: any, token
       await click("Can't scan? Mark attendance manually"); await textIncludes('Candidate camera1');
       assert(!(await page.evaluate(() => document.body.innerText.includes('Connect camera'))));
     });
+    await check('QR image fallback decodes locally, submits through signed endpoint and does not claim a duplicate as new attendance', async () => {
+      await page.evaluate(() => { (window as any).__mode = ''; (window as any).__mount(); }); await textIncludes('Connect camera');
+      const callsBefore = await page.evaluate(() => (window as any).__calls);
+      const feedbackBefore = await page.evaluate(() => (window as any).__beeps + (window as any).__vibrations);
+      await page.evaluate(async () => {
+        const encoded = (window as any).__images[0];
+        const blob = await (await fetch(encoded)).blob();
+        const file = new File([blob], 'candidate-qr.png', { type: 'image/png' });
+        const input = document.querySelector('input[aria-label="Choose a QR image"]') as HTMLInputElement;
+        if (!input) throw new Error('Missing QR-image fallback control');
+        const files = new DataTransfer();
+        files.items.add(file);
+        input.files = files.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await textIncludes('Already Marked');
+      assert.equal(await page.evaluate(() => (window as any).__calls), callsBefore + 1);
+      assert.equal(await page.evaluate(() => (window as any).__beeps + (window as any).__vibrations), feedbackBefore);
+    });
+    await check('QR image fallback rejects unsupported files without sending attendance', async () => {
+      await click('Scan Next Candidate');
+      await page.waitForFunction(() => !document.body.innerText.includes('Already Marked'), { timeout: 10000 });
+      const callsBefore = await page.evaluate(() => (window as any).__calls);
+      await page.evaluate(() => {
+        const file = new File(['<script>'], 'invalid.html', { type: 'text/html' });
+        const input = document.querySelector('input[aria-label="Choose a QR image"]') as HTMLInputElement;
+        const files = new DataTransfer();
+        files.items.add(file);
+        input.files = files.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await textIncludes('Choose a JPEG, PNG, or WebP');
+      assert.equal(await page.evaluate(() => (window as any).__calls), callsBefore);
+    });
   } finally { await browser?.close(); await new Promise<void>(resolve => server.close(() => resolve())); }
 }
 

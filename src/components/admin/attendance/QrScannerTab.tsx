@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import jsQR from 'jsqr';
-import { Camera, CheckCircle2, UserRound } from 'lucide-react';
+import { Camera, CheckCircle2, UserRound, Flashlight, ImageUp, ScanLine } from 'lucide-react';
+import { CandidateQrReader, decodeCandidateQrImage } from './qrReader';
 import { mockApi, type AttendanceMarkResponse, type AttendanceSessionDetail } from '../../../lib/mockApi';
 import { attendancePrimary, attendanceSecondary, attendanceValue } from './AttendanceDialog';
 
@@ -48,6 +48,8 @@ export const QrScannerTab: React.FC<Props> = ({ detail, onManualAttendance, onBu
   const busyCallbackRef = useRef(onBusyChange); busyCallbackRef.current = onBusyChange;
   const [cameraEnabled, setCameraEnabled] = useState(false), [facing, setFacing] = useState<'environment' | 'user'>('environment');
   const [cameraStarting, setCameraStarting] = useState(false), [cameraMessage, setCameraMessage] = useState('');
+  const [cameraReady, setCameraReady] = useState(false), [torchAvailable, setTorchAvailable] = useState(false), [torchOn, setTorchOn] = useState(false);
+  const [imageMessage, setImageMessage] = useState('');
   const [pending, setPending] = useState(false), [result, setResult] = useState<ScanResult | null>(null), [error, setError] = useState<ScanError | null>(null);
   const ready = detail?.session.status === 'OPEN';
 
@@ -90,6 +92,7 @@ export const QrScannerTab: React.FC<Props> = ({ detail, onManualAttendance, onBu
       if (videoRef.current) videoRef.current.srcObject = null;
     };
     release();
+    setCameraReady(false); setTorchAvailable(false); setTorchOn(false);
     if (!cameraEnabled || !ready) { setCameraStarting(false); return release; }
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setCameraMessage('Camera scanning requires a supported browser on HTTPS or localhost. Use manual attendance here.');
@@ -100,34 +103,51 @@ export const QrScannerTab: React.FC<Props> = ({ detail, onManualAttendance, onBu
     const start = async () => {
       let acquired: MediaStream | null = null;
       try {
-        acquired = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+        acquired = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
         if (!current() || !videoRef.current) { acquired.getTracks().forEach(track => track.stop()); return; }
         streamRef.current = acquired;
         videoRef.current.srcObject = acquired;
         await videoRef.current.play();
         if (!current()) { acquired.getTracks().forEach(track => track.stop()); return; }
-        setCameraStarting(false);
+        setCameraStarting(false); setCameraReady(true);
+        // Apply continuous autofocus only when advertised by the device.
+        // Do not interrupt scanning if a camera driver rejects this hint.
+        for (const track of acquired.getVideoTracks()) {
+          try {
+            const capabilities = track.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean; focusMode?: string[] }) | undefined;
+            setTorchAvailable(Boolean(capabilities?.torch));
+            if (capabilities?.focusMode?.includes('continuous')) {
+              void track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => {});
+            }
+          } catch {
+            // Some camera drivers throw while reporting capabilities.
+            // Keep the already-working stream and continue scanning.
+          }
+        }
         acquired.getVideoTracks().forEach(track => { track.onended = () => {
           if (current()) { setCameraMessage('Camera disconnected. Reconnect or use manual attendance.'); setCameraEnabled(false); }
         }; });
+        const reader = new CandidateQrReader();
         let lastDecode = 0;
+        let decoding = false;
         const frame = (now: number) => {
           if (!current()) return;
           const video = videoRef.current, canvas = canvasRef.current;
-          if (!lockedRef.current && !requestPending && video && canvas && video.readyState >= 2 && video.videoWidth > 0 && now - lastDecode >= 150) {
+          if (!decoding && !lockedRef.current && !requestPending && video && canvas && video.readyState >= 2 && video.videoWidth > 0 && now - lastDecode >= 250) {
             lastDecode = now;
-            canvas.width = Math.min(960, video.videoWidth); canvas.height = Math.round(video.videoHeight * canvas.width / video.videoWidth);
-            const context = canvas.getContext('2d', { willReadFrequently: true });
-            if (context) {
-              try {
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const image = context.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'attemptBoth' });
-                if (code?.data) void submitRef.current(code.data);
-              } catch {
-                setCameraMessage('The camera image could not be read. Reconnect or use manual attendance.'); setCameraEnabled(false); return;
+            decoding = true;
+            void reader.decode(video, canvas).then(decoded => {
+              // No scanned value is trusted here; mockApi verifies the signed
+              // token and the backend confirms frozen Hall membership.
+              if (current() && decoded && !lockedRef.current && !requestPending) {
+                void submitRef.current(decoded.value);
               }
-            }
+            }).catch(() => {
+              if (current()) {
+                setCameraMessage('The camera image could not be processed. Reconnect or use a QR image instead.');
+                setCameraEnabled(false);
+              }
+            }).finally(() => { decoding = false; });
           }
           frameRef.current = requestAnimationFrame(frame);
         };
@@ -143,7 +163,38 @@ export const QrScannerTab: React.FC<Props> = ({ detail, onManualAttendance, onBu
 
   const nextCandidate = () => {
     if (pending || requestPending) return;
-    setResult(null); setError(null); tokenRef.current = ''; lockedRef.current = false;
+    setResult(null); setError(null); setImageMessage(''); tokenRef.current = ''; lockedRef.current = false;
+  };
+
+  const toggleTorch = async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || !torchAvailable) return;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: !torchOn } as MediaTrackConstraintSet] });
+      setTorchOn(value => !value);
+    } catch {
+      setCameraMessage('This camera cannot switch its light right now. Continue scanning in better lighting.');
+    }
+  };
+
+  const scanImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file || pending || requestPending || lockedRef.current || !ready) return;
+    setImageMessage('Reading QR from the selected image locally…');
+    try {
+      const decoded = await decodeCandidateQrImage(file, new CandidateQrReader(), document.createElement('canvas'));
+      if (!mountedRef.current || !ready) return;
+      if (!decoded) {
+        setImageMessage('No readable QR was found. Try a clearer, closer image with the entire code visible.');
+        return;
+      }
+      if (requestPending || lockedRef.current) return;
+      setImageMessage('QR recognized — requesting secure Hall attendance verification.');
+      await submitRef.current(decoded.value);
+    } catch (failure) {
+      if (mountedRef.current) setImageMessage((failure as Error).message || 'This QR image could not be read.');
+    }
   };
   if (!ready || !detail) return <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600"><h2 className="font-semibold text-slate-900">QR attendance</h2><p className="mt-1">Select an OPEN examination Hall session before scanning attendance.</p>{onManualAttendance && <button className={attendanceSecondary + ' mt-3'} onClick={onManualAttendance}>Can't scan? Mark attendance manually</button>}</section>;
   const candidate = result && detail.roster.find(row => row.studentId === result.student.id);
@@ -157,15 +208,23 @@ export const QrScannerTab: React.FC<Props> = ({ detail, onManualAttendance, onBu
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="qr-attendance-title" className="text-sm font-bold">QR attendance</h2><p className="mt-1 text-xs text-slate-500">Scan a signed AZM candidate QR for this frozen Hall session.</p></div><div className="flex flex-wrap gap-2">
       <button className={attendanceSecondary} disabled={pending} onClick={() => setCameraEnabled(value => !value)}>{cameraEnabled ? 'Stop camera' : 'Connect camera'}</button>
       <button className={attendanceSecondary} disabled={!cameraEnabled || pending} onClick={() => setFacing(value => value === 'environment' ? 'user' : 'environment')}>Switch camera</button>
+      {torchAvailable && <button className={attendanceSecondary} disabled={!cameraReady || pending} aria-pressed={torchOn} onClick={() => void toggleTorch()}><Flashlight size={14} aria-hidden="true" />{torchOn ? 'Light off' : 'Light on'}</button>}
     </div></div>
     <div className="mt-3 grid min-w-0 gap-4 lg:grid-cols-2">
       <div><div className="relative aspect-video overflow-hidden rounded-lg bg-slate-900">
         <video ref={videoRef} muted playsInline className="h-full w-full object-contain" aria-label="Live candidate QR camera" />
+        {cameraReady && !pending && !result && !error && <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center"><span className="h-[75%] aspect-square rounded-xl border-2 border-emerald-400/90 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]" /></div>}
+        {cameraReady && <div className="pointer-events-none absolute bottom-2 inset-x-0 flex justify-center"><span className="rounded-md bg-slate-950/80 px-2 py-1 text-[11px] text-white">{pending ? 'QR recognized: checking server' : result ? 'Server verified attendance' : error ? 'QR rejected — review message' : 'Camera live · Finding QR…'}</span></div>}
         {!cameraEnabled && <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-slate-200"><Camera size={24} aria-hidden="true" /><span>Connect the camera to scan</span></div>}
       </div><canvas ref={canvasRef} hidden />
         {cameraStarting && <p role="status" className="mt-2 text-sm text-slate-600">Connecting camera…</p>}
         {cameraMessage && <div role="alert" className="mt-2 text-sm text-red-700"><p>{cameraMessage}</p><button className={attendanceSecondary + ' mt-2'} disabled={pending || cameraStarting} onClick={() => { setCameraMessage(''); setCameraEnabled(true); }}>Reconnect camera</button></div>}
-        <p className="mt-2 text-xs text-slate-500">Hold the candidate QR within the camera view. Verify the candidate before scanning the next person.</p>
+        <p className="mt-2 text-xs text-slate-500">Place the complete QR inside the guide. Move the camera closer, hold steady, and avoid glare. Small printed slip QR codes may need a closer view.</p>
+        <label className={attendanceSecondary + ' mt-3 inline-flex cursor-pointer items-center gap-2'}><ImageUp size={15} aria-hidden="true" />Scan QR from photo
+          <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="Choose a QR image" className="sr-only" disabled={pending || Boolean(result) || Boolean(error)} onChange={event => void scanImage(event)} />
+        </label>
+        {imageMessage && <p role="status" className="mt-2 text-xs text-slate-600">{imageMessage}</p>}
+        <p className="mt-2 text-xs text-slate-500">QR images are read locally. Only the decoded signed token is sent for attendance verification.</p>
       </div>
       <div className="min-w-0" aria-live="polite" aria-atomic="true">
         {pending && !error && <p role="status" className="text-sm text-slate-700">QR detected — verifying attendance…</p>}
@@ -175,7 +234,7 @@ export const QrScannerTab: React.FC<Props> = ({ detail, onManualAttendance, onBu
           <div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><UserRound size={20} aria-hidden="true" />Photo unavailable</div>
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">{fields.map(([label, value]) => <div key={label}><dt className="text-slate-500">{label}</dt><dd className="mt-1 break-words font-semibold">{attendanceValue(value) === '—' ? 'Not available' : attendanceValue(value)}</dd></div>)}</dl>
         </>}
-        {!pending && !result && !error && <p className="text-sm text-slate-600">Ready for a candidate QR. Attendance is confirmed only after the server saves it.</p>}
+        {!pending && !result && !error && <p className="flex items-center gap-2 text-sm text-slate-600"><ScanLine size={17} aria-hidden="true" />{cameraReady ? 'Searching camera frames for a readable candidate QR…' : 'Ready to scan. Connect the camera or choose a QR photo.'} Attendance is confirmed only after the server saves it.</p>}
         {(result || error) && <button className={attendancePrimary + ' mt-4'} disabled={pending} onClick={nextCandidate}>Scan Next Candidate</button>}
       </div>
     </div>
