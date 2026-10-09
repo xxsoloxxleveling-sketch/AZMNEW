@@ -36,7 +36,8 @@ function checkFileRules() {
 
 async function run() {
   dotenv.config({ path: path.join(backend, '.env'), quiet: true });
-  const ruleCount = checkFileRules();
+  const focused = process.argv.includes('--focus-reconciliation');
+  const ruleCount = focused ? 0 : checkFileRules();
   if (process.env.NODE_ENV === 'production') throw new Error('NEVER run tests in production');
   const sourceRaw = process.env.VAULT_TEST_DATABASE_URL || process.env.DATABASE_URL || '';
   if (!sourceRaw) throw new Error('Provide VAULT_TEST_DATABASE_URL pointing exclusively at localhost PostgreSQL.');
@@ -58,7 +59,7 @@ async function run() {
   for (const name of Object.keys(env)) if (name.startsWith('R2_') || name.startsWith('SUPABASE_')) env[name] = '';
   Object.assign(process.env, env);
 
-  const admin = new Client({ connectionString: source.toString() });
+  const admin = new Client({ connectionString: source.toString(), connectionTimeoutMillis: 10000, query_timeout: 30000 });
   await admin.connect();
   let db: any = null;
   let listener: any = null;
@@ -72,7 +73,7 @@ async function run() {
     created = true;
     const cli = path.join(backend, 'node_modules', 'prisma', 'build', 'index.js');
     execFileSync(process.execPath, [cli, 'migrate', 'deploy', '--schema', path.join(backend, 'prisma', 'schema.prisma')], {
-      cwd: backend, env, stdio: 'pipe',
+      cwd: backend, env, stdio: 'pipe', timeout: 60000, windowsHide: true,
     });
     const { PrismaClient } = await import('@prisma/client');
     db = new PrismaClient();
@@ -140,6 +141,9 @@ async function run() {
         body: JSON.stringify({ status, expectedRevision: revision, ...(reason ? { reason } : {}) }),
       });
 
+    const image = await sharp({ create: { width: 16, height: 16, channels: 3, background: { r: 10, g: 20, b: 30 } } }).jpeg().toBuffer();
+    const changed = await sharp({ create: { width: 16, height: 16, channels: 3, background: { r: 90, g: 80, b: 70 } } }).jpeg().toBuffer();
+    if (!focused) {
     await check('Unauthenticated vault denied', async () => {
       const response = await fetch(endpoint + '/api/vault/documents');
       assert.equal(response.status, 401);
@@ -147,8 +151,6 @@ async function run() {
     await check('Teacher vault denied', async () => assert.equal((await get('/api/vault/documents', 'TEACHER')).status, 403));
     await check('Accountant vault denied', async () => assert.equal((await get('/api/vault/documents', 'ACCOUNTANT')).status, 403));
 
-    const image = await sharp({ create: { width: 16, height: 16, channels: 3, background: { r: 10, g: 20, b: 30 } } }).jpeg().toBuffer();
-    const changed = await sharp({ create: { width: 16, height: 16, channels: 3, background: { r: 90, g: 80, b: 70 } } }).jpeg().toBuffer();
     const uploadRes = await postBinary('/api/vault/documents', image, 'image/jpeg', 'vault-student-1', 'bform');
     const uploadData = await uploadRes.json() as any;
     await check('Admin upload creates real file metadata', async () => {
@@ -271,6 +273,102 @@ async function run() {
       const office = await db.officeUseRecord.findUnique({ where: { studentId: 'vault-student-1' } });
       assert.equal(office, null);
     });
+    }
+
+    const { vaultService } = await import('../src/modules/vault/vault.service');
+    const { logger } = await import('../src/lib/logger');
+    const fixtureActor = { id: 'vault-admin', name: 'Fixture ADMIN' };
+    if (focused) {
+      await vaultService.upload({ studentId: 'vault-student-2', documentType: 'photo', filename: 'fixture.jpg', mimeType: 'image/jpeg', buffer: image }, fixtureActor);
+      await vaultService.upload({ studentId: 'vault-student-1', documentType: 'bform', filename: 'fixture.jpg', mimeType: 'image/jpeg', buffer: image }, fixtureActor);
+    }
+    const originalUpload = supabaseStorage.uploadFile;
+    const originalError = logger.error;
+    const originalThumbnailBuffer = sharp.prototype.toBuffer;
+    const snapshot = async () => ({
+      documents: await db.studentDocument.findMany({ orderBy: { id: 'asc' } }),
+      audits: await db.studentDocumentAudit.findMany({ orderBy: { id: 'asc' } }),
+      students: await db.student.findMany({ orderBy: { id: 'asc' } }),
+      office: await db.officeUseRecord.findMany({ orderBy: { id: 'asc' } }),
+    });
+    // Force a failure after the document/thumbnail writes, proving the actual
+    // PostgreSQL transaction rolls back and preserves existing audit history.
+    await db.$executeRawUnsafe(`ALTER TABLE "StudentDocumentAudit" ADD CONSTRAINT "fixture_reconciliation_failure" CHECK ("actorId" <> 'vault-failed-transaction')`);
+    try {
+      for (const operation of ['upload', 'replace'] as const) {
+        for (const scenario of ['original-throw-before-save', 'original-save-then-throw', 'original-return-error', 'thumbnail-generation', 'thumbnail-throw-before-save', 'thumbnail-save-then-throw', 'thumbnail-return-error', 'transaction', 'logger-throws', 'document-transaction']) {
+          await check(`${operation}: complete reconciliation keys preserved on ${scenario}`, async () => {
+            const documentType = scenario === 'document-transaction' ? 'bform' : 'photo';
+            const studentId = documentType === 'photo' ? 'vault-student-2' : 'vault-student-1';
+            const previous = await db.studentDocument.findFirstOrThrow({ where: { studentId, documentType } });
+            const before = await snapshot();
+            const historicalKeys = [...remoteFiles.keys()];
+            const attempted: Array<{ bucket: string; objectPath: string; objectKey: string; uploadState: string }> = [];
+            const records: any[] = [];
+            const injected = new Error('Synthetic ' + scenario);
+            const transactionFailure = ['transaction', 'document-transaction'].includes(scenario);
+            (supabaseStorage as any).uploadFile = async (bucket: string, objectPath: string, bytes: Buffer) => {
+              const objectKey = bucket + '/' + objectPath;
+              assert.ok(!remoteFiles.has(objectKey), 'never overwrite historical storage');
+              const object = { bucket, objectPath, objectKey, uploadState: 'attempted' };
+              attempted.push(object);
+              const first = attempted.length === 1;
+              if ((first && ['original-throw-before-save', 'logger-throws'].includes(scenario)) || (!first && scenario === 'thumbnail-throw-before-save')) throw injected;
+              if ((first && scenario === 'original-return-error') || (!first && scenario === 'thumbnail-return-error')) return { path: objectPath, error: 'Synthetic storage refusal' };
+              remoteFiles.set(objectKey, Buffer.from(bytes));
+              if ((first && scenario === 'original-save-then-throw') || (!first && scenario === 'thumbnail-save-then-throw')) throw injected;
+              object.uploadState = 'uploaded';
+              return { path: objectPath };
+            };
+            (logger as any).error = (message: string, record: string) => {
+              assert.match(message, /orphan reconciliation/);
+              records.push(JSON.parse(record));
+              if (scenario === 'logger-throws') throw new Error('Synthetic logging failure');
+            };
+            if (scenario === 'thumbnail-generation') {
+              (sharp.prototype as any).toBuffer = async () => { throw injected; };
+            }
+            try {
+              const actor = transactionFailure ? { id: 'vault-failed-transaction', name: 'Synthetic failure actor' } : fixtureActor;
+              const input = { studentId, documentType, filename: 'failure.jpg', mimeType: 'image/jpeg', buffer: changed };
+              const request = operation === 'upload' ? vaultService.upload(input, actor) : vaultService.replace(previous.id, previous.revision, input, actor);
+              await assert.rejects(request, (error: any) => {
+                if (transactionFailure) return /fixture_reconciliation_failure/.test(String(error.message));
+                if (scenario.endsWith('return-error')) return error.statusCode === 502;
+                return error === injected;
+              });
+              assert.equal(records.length, 1, 'one parseable reconciliation event');
+              assert.equal(records[0].operation, operation);
+              assert.deepEqual(records[0].objects, attempted, 'include every original/thumbnail attempted key and acknowledgement state');
+              const expectedCount = scenario.startsWith('original-') || ['thumbnail-generation', 'logger-throws', 'document-transaction'].includes(scenario) ? 1 : 2;
+              assert.equal(attempted.length, expectedCount);
+              for (const object of records[0].objects) {
+                assert.equal(object.objectKey, object.bucket + '/' + object.objectPath);
+                assert.ok(object.objectPath.startsWith('vault/' + studentId + '/'));
+                assert.equal(object.bucket, documentType === 'photo' ? 'student-photos' : 'student-documents');
+              }
+              if (scenario === 'thumbnail-return-error') {
+                assert.equal(remoteFiles.size - historicalKeys.length, 1, 'reported original 1 uploaded / 0 recorded regression');
+                assert.equal(records[0].objects[0].uploadState, 'uploaded');
+                assert.equal(records[0].objects[1].uploadState, 'attempted');
+              }
+              assert.ok(historicalKeys.every(key => remoteFiles.has(key)), 'keep every historical file');
+              assert.ok(attempted.filter(object => remoteFiles.has(object.objectKey)).every(object => records[0].objects.some((record: any) => record.objectKey === object.objectKey)), 'retain and identify all new remote objects, even ambiguous failures');
+              assert.deepEqual(await snapshot(), before, 'no metadata, eligibility or audit changes survive failure');
+            } finally {
+              (supabaseStorage as any).uploadFile = originalUpload;
+              logger.error = originalError;
+              sharp.prototype.toBuffer = originalThumbnailBuffer;
+            }
+          });
+        }
+      }
+    } finally {
+      await db.$executeRawUnsafe('ALTER TABLE "StudentDocumentAudit" DROP CONSTRAINT "fixture_reconciliation_failure"');
+      (supabaseStorage as any).uploadFile = originalUpload;
+      logger.error = originalError;
+      sharp.prototype.toBuffer = originalThumbnailBuffer;
+    }
 
     (supabaseStorage as any).uploadFile = originals.uploadFile;
     (supabaseStorage as any).downloadFile = originals.downloadFile;
@@ -279,7 +377,10 @@ async function run() {
 
     console.log('VAULT_MANAGEMENT_PASS=' + (ruleCount + tests) + ' VAULT_MANAGEMENT_FAIL=0');
   } finally {
-    if (listener) await new Promise<void>(resolve => listener.close(() => resolve()));
+    if (listener) {
+      listener.closeAllConnections();
+      await new Promise<void>(resolve => listener.close(() => resolve()));
+    }
     if (db) await db.$disconnect();
     try { const { prisma } = await import('../src/lib/prisma'); await prisma.$disconnect(); } catch {}
     if (created) {

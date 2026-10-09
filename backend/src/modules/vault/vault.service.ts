@@ -61,24 +61,46 @@ function reviewBaseQuery(query: VaultListQuery): Prisma.StudentDocumentWhereInpu
 }
 
 type StoredBytes = { bucket: StorageBucket; objectPath: string; mimeType: string; filename: string; checksumSha256: string; byteSize: number };
+type ReconciliationObject = { bucket: StorageBucket; objectPath: string; objectKey: string; uploadState: 'attempted' | 'uploaded' };
 
-async function putPrivateObject(studentId: string, documentType: string, filename: string, buffer: Buffer, mime: string, ext: string): Promise<StoredBytes> {
+// Register the complete R2 key before calling storage: a rejected upload can
+// still have committed remotely before its acknowledgement was lost.
+async function uploadTrackedObject(objects: ReconciliationObject[], bucket: StorageBucket, objectPath: string, buffer: Buffer, mime: string, failureMessage: string): Promise<void> {
+  const object: ReconciliationObject = { bucket, objectPath, objectKey: `${bucket}/${objectPath}`, uploadState: 'attempted' };
+  objects.push(object);
+  const result = await supabaseStorage.uploadFile(bucket, objectPath, buffer, mime);
+  if (result.error) fail(502, failureMessage);
+  object.uploadState = 'uploaded';
+}
+
+function reconcileFailure(operation: 'upload' | 'replace', objects: ReconciliationObject[], error: unknown): never {
+  try {
+    if (objects.length) {
+      // One JSON record preserves every attempted key in the existing server
+      // log, including originals and thumbnails. Reconciliation never deletes.
+      logger.error('Vault operation failed; private objects require orphan reconciliation:', JSON.stringify({ operation, objects }));
+    }
+  } finally {
+    // Logging must not replace the original storage/thumbnail/database error.
+    throw error;
+  }
+}
+
+async function putPrivateObject(studentId: string, documentType: string, filename: string, buffer: Buffer, mime: string, ext: string, objects: ReconciliationObject[]): Promise<StoredBytes> {
   if (!supabaseStorage.configured) fail(503, 'Private R2 document storage is unavailable.');
   const bucket: StorageBucket = documentType === 'photo' ? 'student-photos' : 'student-documents';
   const objectPath = 'vault/' + studentId + '/' + documentType + '/' + crypto.randomUUID() + '.' + ext;
-  const uploaded = await supabaseStorage.uploadFile(bucket, objectPath, buffer, mime);
-  if (uploaded.error) fail(502, 'Failed to save the document to private storage.');
+  await uploadTrackedObject(objects, bucket, objectPath, buffer, mime, 'Failed to save the document to private storage.');
   return {
     bucket, objectPath, mimeType: mime, filename, byteSize: buffer.length,
     checksumSha256: crypto.createHash('sha256').update(buffer).digest('hex'),
   };
 }
 
-async function storeThumbnail(studentId: string, buffer: Buffer): Promise<StoredBytes> {
+async function storeThumbnail(studentId: string, buffer: Buffer, objects: ReconciliationObject[]): Promise<StoredBytes> {
   const bytes = await sharp(buffer).resize(160, 160, { fit: 'cover', position: 'center' }).jpeg({ quality: 80, mozjpeg: true }).toBuffer();
   const objectPath = 'vault/' + studentId + '/photoThumbnail/' + crypto.randomUUID() + '.jpg';
-  const result = await supabaseStorage.uploadFile('student-photos', objectPath, bytes, 'image/jpeg');
-  if (result.error) fail(502, 'Failed to store the derived private photo thumbnail.');
+  await uploadTrackedObject(objects, 'student-photos', objectPath, bytes, 'image/jpeg', 'Failed to store the derived private photo thumbnail.');
   return {
     bucket: 'student-photos', objectPath, mimeType: 'image/jpeg', filename: 'photo_thumbnail.jpg',
     checksumSha256: crypto.createHash('sha256').update(bytes).digest('hex'), byteSize: bytes.length,
@@ -185,9 +207,10 @@ export const vaultService = {
     const filename = safeVaultFileName(input.filename);
     const student = await prisma.student.findUnique({ where: { id: input.studentId }, select: { id: true } });
     if (!student) fail(404, 'Student not found.');
-    const file = await putPrivateObject(student.id, input.documentType, filename, input.buffer, mime, extension);
-    const thumbnail = input.documentType === 'photo' ? await storeThumbnail(student.id, input.buffer) : null;
+    const objects: ReconciliationObject[] = [];
     try {
+      const file = await putPrivateObject(student.id, input.documentType, filename, input.buffer, mime, extension, objects);
+      const thumbnail = input.documentType === 'photo' ? await storeThumbnail(student.id, input.buffer, objects) : null;
       return await prisma.$transaction(async (tx) => {
         const document = await tx.studentDocument.create({
           data: { studentId: student.id, documentType: input.documentType, ...storedData(file), uploadedById: actor.id },
@@ -206,8 +229,7 @@ export const vaultService = {
         return publicDocument(document);
       }, { maxWait: 10000, timeout: 20000 });
     } catch (error) {
-      logger.error('Vault metadata write failed after private upload; new object requires orphan reconciliation:', file.objectPath);
-      throw error;
+      reconcileFailure('upload', objects, error);
     }
   },
 
@@ -218,9 +240,10 @@ export const vaultService = {
     const { mime, extension } = validateVaultFile(input.buffer, input.mimeType, old.documentType);
     await checkImageDecode(input.buffer, mime);
     const filename = safeVaultFileName(input.filename);
-    const file = await putPrivateObject(old.studentId, old.documentType, filename, input.buffer, mime, extension);
-    const thumbnail = old.documentType === 'photo' ? await storeThumbnail(old.studentId, input.buffer) : null;
+    const objects: ReconciliationObject[] = [];
     try {
+      const file = await putPrivateObject(old.studentId, old.documentType, filename, input.buffer, mime, extension, objects);
+      const thumbnail = old.documentType === 'photo' ? await storeThumbnail(old.studentId, input.buffer, objects) : null;
       return await prisma.$transaction(async tx => {
         const result = await tx.studentDocument.updateMany({
           where: { id, revision: expectedRevision },
@@ -256,8 +279,7 @@ export const vaultService = {
         return publicDocument(updated);
       }, { maxWait: 10000, timeout: 20000 });
     } catch (error) {
-      logger.error('Vault replacement metadata failed after private upload; new object requires orphan reconciliation:', file.objectPath);
-      throw error;
+      reconcileFailure('replace', objects, error);
     }
   },
 
