@@ -98,7 +98,7 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(({
             onClick={() => onOpenAlerts?.()}
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800/95 border border-amber-400/40 hover:border-amber-400 backdrop-blur-md transition-all cursor-pointer group focus:outline-hidden"
           >
-            <span className="text-xs font-semibold text-amber-300">Registration closed</span>
+            <span className="text-xs font-semibold text-amber-300">Official Announcements</span>
           </button>
         </div>
 
