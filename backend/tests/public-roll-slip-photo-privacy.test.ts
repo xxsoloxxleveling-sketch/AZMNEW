@@ -5,9 +5,11 @@ import path from 'node:path';
 import { build } from 'esbuild';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
+import jsQR from 'jsqr';
 
 const repoRoot = path.resolve(__dirname, '../..');
 const expectedCnic = '12345-1234567-1';
+const syntheticSignedQr = 'https://azmaio.com/attend?token=qr_SYNTHETIC-TEST_1790000000000.' + 'a'.repeat(64);
 const scriptText = `
   import React from 'react';
   import { createRoot } from 'react-dom/client';
@@ -73,7 +75,7 @@ async function run() {
           examDate: '15 November 2026', reportingTime: '7:30 AM',
           examStartTime: '8:30 AM', roomNo: 'R1', seatIndex: 'Seat 1',
           placementStatus: 'ASSIGNED', assignedHallId: 'H1', hallName: 'Synthetic Hall',
-          qrPayload: 'SYNTHETIC-QR-ONLY', barcode: 'SYNTHETIC',
+          qrPayload: syntheticSignedQr, barcode: 'SYNTHETIC',
           securityHash: 'Synthetic', specialInstructions: ['Bring your printed slip'],
         } });
       }).catch(() => json(res, 400, { success: false }));
@@ -150,6 +152,15 @@ async function run() {
     assert.deepEqual(headersSeen, [expectedCnic]);
     assert(urlPaths.every(x => !x.includes(expectedCnic)));
     check('Public Roll Slip fetches a real portrait using matching CNIC header, never in URL');
+
+    await page.waitForSelector('img[alt="Candidate Biometric QR Code"]', { timeout: 10000 });
+    const qrPngUrl = await page.$eval('img[alt="Candidate Biometric QR Code"]', element => (element as HTMLImageElement).src);
+    assert(qrPngUrl.startsWith('data:image/png;base64,'));
+    const qrBytes = Buffer.from(qrPngUrl.split(',')[1], 'base64');
+    const qrPixels = await sharp(qrBytes).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const decodedQr = jsQR(new Uint8ClampedArray(qrPixels.data), qrPixels.info.width, qrPixels.info.height);
+    assert.equal(decodedQr?.data, syntheticSignedQr);
+    check('Public Slip QR PNG pixels decode to the advanced scanner signed-token URL');
 
     await page.click('#btn-print-slip');
     assert.equal(await page.evaluate(() => (window as any).__printCalls), 1);
