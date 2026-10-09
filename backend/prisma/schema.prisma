@@ -15,6 +15,20 @@ enum Role {
   ACCOUNTANT
 }
 
+enum DocumentReviewStatus {
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum StudentDocumentAuditAction {
+  UPLOADED
+  REPLACED
+  VERIFIED
+  REJECTED
+  REOPENED
+}
+
 model User {
   staff        Staff?
   id           String   @id @default(cuid())
@@ -131,11 +145,47 @@ model StudentDocument {
   mimeType         String
   byteSize         Int?
   checksumSha256   String?
+  reviewStatus     DocumentReviewStatus @default(PENDING_REVIEW)
+  reviewedAt       DateTime?
+  reviewedById     String?
+  reviewedByName   String?
+  rejectionReason  String?
+  revision         Int @default(1)
+  uploadedById     String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now()) @updatedAt
 
   @@unique([bucket, objectPath])
   @@index([studentId, documentType])
+  @@index([reviewStatus, createdAt])
+}
+
+// Append-only historical record: deliberately no cascading FK to StudentDocument,
+// so a removed student or replaced object cannot silently erase the audit trail.
+model StudentDocumentAudit {
+  id                 String @id @default(cuid())
+  documentId         String
+  studentId          String
+  actorId            String
+  actorName          String
+  action             StudentDocumentAuditAction
+  fromStatus         DocumentReviewStatus?
+  toStatus           DocumentReviewStatus?
+  reason             String?
+  previousObjectPath String?
+  previousBucket     String?
+  previousFileName   String?
+  previousMimeType   String?
+  previousSha256     String?
+  newObjectPath      String?
+  newBucket          String?
+  newFileName        String?
+  newMimeType        String?
+  newSha256          String?
+  createdAt          DateTime @default(now())
+
+  @@index([documentId, createdAt])
+  @@index([studentId, createdAt])
 }
 
 model AcademicRecord {
