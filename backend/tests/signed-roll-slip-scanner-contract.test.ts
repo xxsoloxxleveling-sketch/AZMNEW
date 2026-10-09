@@ -28,6 +28,7 @@ assert.equal(buildSignedAttendanceQrUrl('PENDING-FEE-100'), null);
 
 // Decode the actual PNG pixels (not just the input string) with the same
 // jsQR library that powers the scanner's fallback.
+async function main() {
 const png = await QRCode.toBuffer(url!, {
   type: 'png', width: 320, margin: 3, errorCorrectionLevel: 'M',
   color: { dark: '#000000', light: '#ffffff' },
@@ -52,3 +53,6 @@ assert(!adminView.includes("type: 'AZM_SLIP'"));
 assert(service.includes('qrService.verifySignedQrToken(student.qrToken)'));
 assert(src('src/lib/mockApi.ts').includes('extractSignedAttendanceToken(mark.qrToken)'));
 console.log('PASS: signed QR format, rejection, pixel decoding, and source-contract safeguards');
+
+}
+void main().catch(error => { console.error(error); process.exitCode = 1; });
