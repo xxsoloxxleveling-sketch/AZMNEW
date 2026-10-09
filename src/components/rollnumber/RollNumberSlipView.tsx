@@ -53,28 +53,17 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   }, []);
 
   useEffect(() => {
-    if (selectedSlip?.rollNo) {
-      const payload = selectedSlip.qrPayload;
-      if (!extractSignedAttendanceToken(payload)) {
-        setQrCodeDataUrl('');
-        return;
-      }
-      QRCode.toDataURL(payload, {
-        width: 300,
-        margin: 3,
-        errorCorrectionLevel: 'M',
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
-      })
-        .then((url) => {
-          setQrCodeDataUrl(url);
-        })
-        .catch(() => setQrCodeDataUrl(''));
-    } else {
-      setQrCodeDataUrl('');
+    // Never display a delayed QR from an earlier candidate after changing slips.
+    let active = true;
+    setQrCodeDataUrl('');
+    if (selectedSlip?.rollNo && extractSignedAttendanceToken(selectedSlip.qrPayload)) {
+      void QRCode.toDataURL(selectedSlip.qrPayload, {
+        width: 320, margin: 3, errorCorrectionLevel: 'M',
+        color: { dark: '#000000', light: '#ffffff' },
+      }).then(url => { if (active) setQrCodeDataUrl(url); })
+        .catch(() => { if (active) setQrCodeDataUrl(''); });
     }
+    return () => { active = false; };
   }, [selectedSlip]);
 
   useEffect(() => {
