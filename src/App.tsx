@@ -9,6 +9,7 @@ import { AdminTab } from './components/admin/layout/AdminSidebar';
 import type { MockStudent } from './lib/mockApi';
 import { wakeUpBackend } from './lib/apiClient';
 import { PUBLIC_REGISTRATION_OPEN } from './config/registration';
+import { fetchPublicPriorityNotice, priorityNoticeDismissKey, priorityNoticeSeenKey, shouldAutoShowPriorityNotice } from './services/publicPriorityNotices';
 
 // Lazy Loaded Below-The-Fold Public Components
 const Footer = lazy(() =>
@@ -279,6 +280,33 @@ function AppContent() {
   useEffect(() => {
     wakeUpBackend();
   }, []);
+
+  // Published pinned/urgent notices appear automatically once per browser session
+  // on the public homepage. The user can always reopen them using the bell or
+  // "Official Announcements" button, even after dismissing for the day.
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '').toLowerCase();
+    if (currentRoute !== 'public' || activeTab !== 'home' || (hash && hash !== 'home')) return;
+    const controller = new AbortController();
+    void fetchPublicPriorityNotice(controller.signal)
+      .then((notice) => {
+        if (controller.signal.aborted || !notice) return;
+        try {
+          const today = new Date().toDateString();
+          const dismissedToday = window.localStorage.getItem(priorityNoticeDismissKey(notice.id));
+          const seenThisSession = window.sessionStorage.getItem(priorityNoticeSeenKey(notice.id)) === '1';
+          if (!shouldAutoShowPriorityNotice(notice, today, dismissedToday, seenThisSession)) return;
+          window.sessionStorage.setItem(priorityNoticeSeenKey(notice.id), '1');
+        } catch {
+          // Some privacy modes disable storage. The notice remains accessible.
+        }
+        setIsAlertModalOpen(true);
+      })
+      .catch(() => {
+        // If the public API is unavailable, do not show a stale static notice.
+      });
+    return () => controller.abort();
+  }, [currentRoute, activeTab]);
 
   // Hash-based route listener for browser URLs (e.g. #dashboard, #login, #register, #scan)
   useEffect(() => {

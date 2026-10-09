@@ -67,7 +67,7 @@ export const AlertsSection: React.FC<AlertsSectionProps> = ({ onSelectTab, onOpe
   };
 
   return (
-    <section className="py-14 bg-gradient-to-b from-white via-slate-50 to-slate-100/70 border-b border-slate-200">
+    <section id="azm-public-noticeboard" className="py-14 bg-gradient-to-b from-white via-slate-50 to-slate-100/70 border-b border-slate-200 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         
         {/* Section Header */}

@@ -232,10 +232,7 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="View Live Alerts"
             >
               <BellRing className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-amber-400 group-hover:scale-110 transition-transform animate-pulse" />
-              <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500 border border-slate-950 text-[8px] font-bold text-slate-950 items-center justify-center">1</span>
-              </span>
+
             </button>
 
             {/* Primary CTA Button: Clear Visual Anchor */}
