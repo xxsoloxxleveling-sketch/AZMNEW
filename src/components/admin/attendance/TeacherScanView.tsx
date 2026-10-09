@@ -3,6 +3,7 @@ import { Camera, RefreshCw, SwitchCamera } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { mockApi, type AttendanceSession, type AttendanceSessionDetail } from '../../../lib/mockApi';
 import { QrScannerTab } from './QrScannerTab';
+import { CandidateQrReader } from './qrReader';
 
 interface TeacherScanViewProps {
   onBackToDashboard?: () => void;
@@ -40,8 +41,11 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
   const [previewFacing, setPreviewFacing] = useState<'environment' | 'user'>('environment');
   const [previewError, setPreviewError] = useState('');
   const previewRef = useRef<HTMLVideoElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewFrameRef = useRef<number | null>(null);
   const previewStreamRef = useRef<MediaStream | null>(null);
   const previewGenerationRef = useRef(0);
+  const [previewQrFound, setPreviewQrFound] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -115,6 +119,8 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
   useEffect(() => {
     const generation = ++previewGenerationRef.current;
     const stop = () => {
+      if (previewFrameRef.current !== null) cancelAnimationFrame(previewFrameRef.current);
+      previewFrameRef.current = null;
       previewStreamRef.current?.getTracks().forEach(track => {
         track.onended = null;
         track.stop();
@@ -124,6 +130,7 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
     };
 
     stop();
+    setPreviewQrFound(false);
     if (!previewEnabled || sessions.length > 0) {
       setPreviewStarting(false);
       return () => {
@@ -168,6 +175,25 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
           return;
         }
         setPreviewStarting(false);
+        const reader = new CandidateQrReader();
+        let decoding = false;
+        let lastDecode = 0;
+        let found = false;
+        const previewFrame = (now: number) => {
+          if (!current()) return;
+          const source = previewRef.current, canvas = previewCanvasRef.current;
+          if (!found && !decoding && source && canvas && source.readyState >= 2 && source.videoWidth > 0 && now - lastDecode >= 400) {
+            lastDecode = now;
+            decoding = true;
+            void reader.decode(source, canvas).then(result => {
+              // This local detection deliberately does not send a token or
+              // claim the candidate's identity has been authenticated.
+              if (current() && result) { found = true; setPreviewQrFound(true); }
+            }).catch(() => {}).finally(() => { decoding = false; });
+          }
+          previewFrameRef.current = requestAnimationFrame(previewFrame);
+        };
+        previewFrameRef.current = requestAnimationFrame(previewFrame);
         stream.getVideoTracks().forEach(track => {
           track.onended = () => {
             if (current()) {
@@ -262,7 +288,7 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
           {!loadingSessions && !loadError && sessions.length === 0 && (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
               <p className="text-sm font-semibold text-amber-900">No OPEN attendance session exists yet.</p>
-              <p className="mt-1 text-xs leading-5 text-amber-800">You can still open the camera below to verify browser/device access. Camera Check is preview-only: it does not decode a candidate QR and cannot create attendance.</p>
+              <p className="mt-1 text-xs leading-5 text-amber-800">You can check the camera and locally detect a QR below. Without an OPEN frozen Hall session the app cannot authenticate the QR or save attendance.</p>
             </div>
           )}
         </section>
@@ -272,7 +298,7 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 id="camera-check-title" className="text-sm font-bold">Camera Check</h2>
-                <p className="mt-1 text-xs text-slate-500">Preview only. No QR data is processed and no attendance request is sent.</p>
+                <p className="mt-1 text-xs text-slate-500">Local QR recognition only. This does not authenticate the candidate or save attendance; open a Hall session first.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -297,6 +323,8 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
 
             <div className="relative mt-4 aspect-video overflow-hidden rounded-xl bg-slate-950">
               <video ref={previewRef} muted playsInline className={`h-full w-full object-contain ${previewFacing === 'user' ? 'scale-x-[-1]' : ''}`} aria-label="Camera check preview" />
+              <canvas ref={previewCanvasRef} hidden />
+              {previewEnabled && <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center"><span className="h-[75%] aspect-square rounded-xl border-2 border-amber-300/80" /></div>}
               {!previewEnabled && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-slate-300">
                   <Camera size={28} aria-hidden="true" />
@@ -307,6 +335,7 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
 
             {previewStarting && <p role="status" className="mt-2 text-sm text-slate-600">Connecting camera…</p>}
             {previewError && <p role="alert" className="mt-2 text-sm text-red-700">{previewError}</p>}
+            {previewEnabled && !previewStarting && !previewError && <p role="status" className={'mt-2 text-sm font-semibold ' + (previewQrFound ? 'text-emerald-700' : 'text-amber-800')}>{previewQrFound ? 'QR decoded locally — not verified. Open a Hall session to verify attendance.' : 'Camera live — looking for a readable QR. Keep it centered and close.'}</p>}
             <p className="mt-3 text-xs text-slate-500">Signed in as {user?.name || 'Staff member'} ({role}). Camera permission is controlled by this browser/device.</p>
           </section>
         )}
@@ -321,7 +350,7 @@ export const TeacherScanView: React.FC<TeacherScanViewProps> = ({ onBackToDashbo
       </div>
 
       <footer className="border-t border-slate-200 bg-white py-3 text-center text-xs text-slate-500">
-        Camera preview never marks attendance. Attendance scanning requires an OPEN Hall session.
+        Camera Check may recognize a QR locally, but never verifies identity or marks attendance. Attendance scanning requires an OPEN Hall session.
       </footer>
     </main>
   );
