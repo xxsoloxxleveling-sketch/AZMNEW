@@ -1,3 +1,4 @@
+import { buildSignedAttendanceQrUrl } from '../../../utils/signedAttendanceQr';
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, Download, AlertTriangle, ShieldCheck, User, Calendar, MapPin, CheckCircle2, Loader2 } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -74,19 +75,13 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
   useEffect(() => {
     if (!student || !isOpen) return;
 
-    const qrPayload = JSON.stringify({
-      type: 'AZM_SLIP',
-      session: '2026-V',
-      studentId: student.id,
-      applicationNo: student.applicationNo,
-      rollNumber: displayRoll,
-      status: isProvisional ? 'PROVISIONAL' : 'OFFICIAL',
-      timestamp: new Date().toISOString(),
-    });
+    const qrPayload = !isProvisional ? buildSignedAttendanceQrUrl(student.qrToken) : null;
+    if (!qrPayload) { setQrDataUrl(''); return; }
 
     QRCode.toDataURL(qrPayload, {
-      width: 140,
-      margin: 1,
+      width: 320,
+      margin: 3,
+      errorCorrectionLevel: 'M',
       color: { dark: '#0f172a', light: '#ffffff' },
     })
       .then(setQrDataUrl)
@@ -262,7 +257,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
 
                 {qrDataUrl && (
                   <div className="sm:mt-2 shrink-0">
-                    <img src={qrDataUrl} alt="Candidate QR" className="w-18 h-18 border border-slate-200 rounded-md p-0.5 bg-white" />
+                    <img src={qrDataUrl} alt="Candidate QR" className="w-28 h-28 border border-slate-200 rounded-md p-1 bg-white" />
                   </div>
                 )}
               </div>
