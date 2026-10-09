@@ -1,3 +1,4 @@
+import { extractSignedAttendanceToken } from '../../utils/signedAttendanceQr';
 import React, { useState, useEffect } from 'react';
 import { fetchVerifiedCandidatePortrait } from '../../services/candidatePortrait';
 import QRCode from 'qrcode';
@@ -53,10 +54,15 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
   useEffect(() => {
     if (selectedSlip?.rollNo) {
-      const payload = selectedSlip.qrPayload || selectedSlip.rollNo;
+      const payload = selectedSlip.qrPayload;
+      if (!extractSignedAttendanceToken(payload)) {
+        setQrCodeDataUrl('');
+        return;
+      }
       QRCode.toDataURL(payload, {
         width: 300,
-        margin: 1,
+        margin: 3,
+        errorCorrectionLevel: 'M',
         color: {
           dark: '#000000',
           light: '#ffffff',
@@ -65,12 +71,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
         .then((url) => {
           setQrCodeDataUrl(url);
         })
-        .catch((err) => {
-          console.warn('QRCode generate fallback:', err);
-          setQrCodeDataUrl(
-            `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payload)}`
-          );
-        });
+        .catch(() => setQrCodeDataUrl(''));
     } else {
       setQrCodeDataUrl('');
     }
@@ -518,7 +519,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
                 {/* Real Scannable Biometric QR Code Matrix */}
                 <div className="p-2 rounded-2xl bg-white border-2 border-slate-300 shadow-sm flex flex-col items-center">
-                  <div className="w-24 h-24 bg-white p-1 rounded-xl flex items-center justify-center border border-slate-200 shadow-inner overflow-hidden">
+                  <div className="w-32 h-32 bg-white p-1 rounded-xl flex items-center justify-center border border-slate-200 shadow-inner overflow-hidden">
                     {qrCodeDataUrl ? (
                       <img
                         src={qrCodeDataUrl}
@@ -527,7 +528,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                       />
                     ) : (
                       <div className="w-full h-full bg-slate-100 flex items-center justify-center">
-                        <QrCode className="w-8 h-8 text-slate-400 animate-pulse" />
+                        <span className="text-[10px] text-slate-500 text-center">Signed attendance QR unavailable</span>
                       </div>
                     )}
                   </div>
