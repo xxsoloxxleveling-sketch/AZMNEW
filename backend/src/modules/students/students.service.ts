@@ -461,7 +461,8 @@ export class StudentsService {
       } catch {}
     }
 
-    for (const document of student.studentDocuments || []) {
+    for (const document of [...(student.studentDocuments || [])].sort((a: any, b: any) =>
+      new Date(a.updatedAt || a.createdAt).getTime() - new Date(b.updatedAt || b.createdAt).getTime())) {
       uploadedDocuments[document.documentType] = {
         name: document.originalFileName || `${document.documentType} document`,
         bucket: document.bucket,
@@ -1841,7 +1842,7 @@ export class StudentsService {
           fatherName: true, currentClass: true, schoolName: true,
           cnicOrBForm: true, parentMobile: true, studentMobile: true,
           status: true, feeRecords: { select: { status: true } },
-          studentDocuments: { where: { documentType: 'photoThumbnail' }, select: { bucket: true, objectPath: true, mimeType: true } },
+          studentDocuments: { where: { documentType: 'photoThumbnail' }, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: 1, select: { bucket: true, objectPath: true, mimeType: true } },
         },
       });
       const esc = (value: unknown): string => String(value ?? '—')
@@ -2169,15 +2170,57 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
   }
 
   /**
-   * Generates Registration PDF buffer for downloading.
+   * Resolve printable portraits from the same private StudentDocument metadata
+   * used by the full student roster PDF. The formatted student deliberately
+   * excludes photoUrl and uploadedDocsJson, so slip/OMR generation cannot rely
+   * on those legacy fields. Prefer the newest usable stored image, falling back
+   * to earlier images if a newer object is missing or corrupt.
+   *
+   * Read-only: no migrations, storage writes or thumbnail generation while
+   * printing. Only the explicitly requested PDF receives image bytes.
    */
+  private async resolveStoredPrintPortraitBase64(student: any): Promise<string | null> {
+    if (typeof student?.id !== 'string' || !student.id) return null;
+    try {
+      const records = await prisma.studentDocument.findMany({
+        where: { studentId: student.id, documentType: { in: ['photo', 'photoThumbnail'] } },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 16,
+        select: { bucket: true, objectPath: true, mimeType: true },
+      });
+      for (const record of records) {
+        if (!['student-photos', 'student-documents'].includes(record.bucket) || !record.objectPath) continue;
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(record.mimeType)) continue;
+        try {
+          const imageBytes = await supabaseStorage.downloadFile(record.bucket as StorageBucket, record.objectPath);
+          if (!imageBytes?.length || imageBytes.length > 5 * 1024 * 1024) continue;
+          const image = sharp(imageBytes, { limitInputPixels: 20_000_000, failOn: 'error' });
+          const metadata = await image.metadata();
+          if (!['jpeg', 'png', 'webp'].includes(metadata.format || '')) continue;
+          const printable = await image.rotate()
+            .resize(600, 800, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 85, mozjpeg: true })
+            .toBuffer();
+          if (printable.length) return `data:image/jpeg;base64,${printable.toString('base64')}`;
+        } catch {
+          // Try the next historical private portrait. Never log file contents,
+          // R2 object keys, or candidate identifiers.
+        }
+      }
+    } catch {
+      // An unavailable metadata table/read must not break legacy slip PDFs.
+      logger.warn('Printable candidate portrait metadata is unavailable; trying legacy recovery.');
+    }
+    return null;
+  }
+
   /**
-   * Resolves student photo to a reliable base64 data URI for seamless embedding into PDFs.
-   */
-  /**
-   * Resolves student photo to a reliable base64 data URI for seamless embedding into PDFs.
+   * Embed real photos directly in Roll Slips, OMR sheets, registration slips
+   * and bulk PDFs without requiring browser cookies or remote image fetches.
    */
   async resolveStudentPhotoBase64(student: any): Promise<string> {
+    const storedPortrait = await this.resolveStoredPrintPortraitBase64(student);
+    if (storedPortrait) return storedPortrait;
     const source = await this.resolveOriginalStudentPhotoBase64(student);
     const image = source.match(/^data:image\/(?:jpeg|png|webp);base64,(.+)$/s);
     if (!image) return source;
@@ -2739,6 +2782,28 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
   async getStudentDocument(studentIdentifier: string, docType: string): Promise<{ buffer: Buffer; contentType: string }> {
     const rawApp = studentIdentifier.replace(/[^\w-]/g, '_');
     const aliases = this.getDocumentAliases(docType);
+
+    // Explicitly managed Vault files are authoritative, even if an older
+    // candidate-registration upload still exists on local disk. All legacy
+    // recovery paths below remain unchanged for non-Vault documents.
+    const vaultStudent = await prisma.student.findFirst({
+      where: { OR: [{ id: studentIdentifier }, { applicationNo: studentIdentifier }, { cnicOrBForm: studentIdentifier }] },
+      select: { id: true },
+    });
+    if (vaultStudent) {
+      const current = await prisma.studentDocument.findFirst({
+        where: { studentId: vaultStudent.id, documentType: { in: aliases }, objectPath: { startsWith: 'vault/' } },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      });
+      if (current) {
+        if (!['student-photos', 'student-documents'].includes(current.bucket)) {
+          throw Object.assign(new Error('Invalid Vault storage reference.'), { statusCode: 404 });
+        }
+        const bytes = await supabaseStorage.downloadFile(current.bucket as StorageBucket, current.objectPath);
+        if (!bytes?.length) throw Object.assign(new Error('Current Vault document is unavailable.'), { statusCode: 404 });
+        return { buffer: bytes, contentType: current.mimeType };
+      }
+    }
 
     // 1. Check server disk storage first
     const candDir = path.join(UPLOADS_DIR, rawApp);

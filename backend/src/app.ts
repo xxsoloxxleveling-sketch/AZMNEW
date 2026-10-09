@@ -6,6 +6,7 @@ import { prisma } from './lib/prisma';
 import { env } from './config/env';
 import authRoutes from './modules/auth/auth.routes';
 import studentsRoutes from './modules/students/students.routes';
+import vaultRoutes from './modules/vault/vault.routes';
 import partnersRoutes from './modules/partners/partners.routes';
 import attendanceRoutes from './modules/attendance/attendance.routes';
 import feesRoutes from './modules/fees/fees.routes';
@@ -161,6 +162,7 @@ app.get('/api/health', async (_req: Request, res: Response) => {
 // Mount module routes
 app.use('/api/auth', authRoutes);
 app.use('/api/students', studentsRoutes);
+app.use('/api/vault', vaultRoutes);
 app.use('/api/partners', partnersRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/fees', feesRoutes);
