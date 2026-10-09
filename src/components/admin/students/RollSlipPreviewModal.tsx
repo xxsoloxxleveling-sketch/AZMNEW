@@ -71,21 +71,20 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
     };
   }, [student?.id, isOpen]);
 
-  // Generate verification QR code
+  // Display only the already-issued signed attendance token.
   useEffect(() => {
-    if (!student || !isOpen) return;
-
-    const qrPayload = !isProvisional ? buildSignedAttendanceQrUrl(student.qrToken) : null;
-    if (!qrPayload) { setQrDataUrl(''); return; }
-
-    QRCode.toDataURL(qrPayload, {
-      width: 320,
-      margin: 3,
-      errorCorrectionLevel: 'M',
-      color: { dark: '#0f172a', light: '#ffffff' },
-    })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(''));
+    let active = true;
+    setQrDataUrl('');
+    const payload = student && isOpen && !isProvisional
+      ? buildSignedAttendanceQrUrl(student.qrToken) : null;
+    if (payload) {
+      void QRCode.toDataURL(payload, {
+        width: 320, margin: 3, errorCorrectionLevel: 'M',
+        color: { dark: '#0f172a', light: '#ffffff' },
+      }).then(url => { if (active) setQrDataUrl(url); })
+        .catch(() => { if (active) setQrDataUrl(''); });
+    }
+    return () => { active = false; };
   }, [student, isOpen, displayRoll, isProvisional, prepared]);
 
   if (!isOpen || !student) return null;
