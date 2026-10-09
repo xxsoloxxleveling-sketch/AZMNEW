@@ -1,3 +1,4 @@
+import { buildSignedAttendanceQrUrl } from '../../utils/signedAttendanceQr';
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import {
@@ -43,7 +44,8 @@ function formatHumanDate(dateStr?: string | null): string {
  * This modal is preserved for public candidate roll-number self-service view.
  */
 export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen, onClose, student }) => {
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [qrResult, setQrResult] = useState<{ student: MockStudent; dataUrl: string } | null>(null);
+  const qrCodeUrl = qrResult?.student === student ? qrResult?.dataUrl || '' : '';
   const [photoBlobUrl, setPhotoBlobUrl] = useState<string | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
   const [previewDocTitle, setPreviewDocTitle] = useState<string | null>(null);
@@ -94,17 +96,19 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
   }, [isOpen, student?.id, student?.applicationNo, student?.photoUrl]);
 
   useEffect(() => {
-    if (student?.rollNumber || student?.applicationNo) {
-      const payload = student.rollNumber || student.applicationNo || 'AZM-2026';
-      QRCode.toDataURL(payload, {
-        width: 250,
-        margin: 1,
+    let active = true;
+    setQrResult(null);
+    const payload = isOpen && student?.rollNumber
+      ? buildSignedAttendanceQrUrl(student.qrToken) : null;
+    if (payload) {
+      void QRCode.toDataURL(payload, {
+        width: 320, margin: 3, errorCorrectionLevel: 'M',
         color: { dark: '#0f172a', light: '#ffffff' },
-      })
-        .then((url) => setQrCodeUrl(url))
-        .catch(() => {});
+      }).then(url => { if (active && student) setQrResult({ student, dataUrl: url }); })
+        .catch(() => { if (active && student) setQrResult({ student, dataUrl: '' }); });
     }
-  }, [student]);
+    return () => { active = false; };
+  }, [student, isOpen]);
 
   const handleInspectDoc = async (docType: string, docName: string) => {
     const studentId = student?.id || student?.applicationNo;
@@ -211,9 +215,9 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
             {/* QR Code */}
             <div className="p-3 rounded-2xl bg-white border border-slate-300 shadow-xs text-center shrink-0 flex flex-col items-center">
               {qrCodeUrl ? (
-                <img src={qrCodeUrl} alt="QR" className="w-20 h-20 object-contain" />
+                <img src={qrCodeUrl} alt="QR" className="w-28 h-28 object-contain" />
               ) : (
-                <div className="w-20 h-20 bg-slate-100 animate-pulse rounded-lg" />
+                <div className="w-28 h-28 bg-slate-100 text-slate-500 flex items-center justify-center text-[10px] rounded-lg">QR unavailable</div>
               )}
               <span className="text-[9px] font-mono font-bold text-slate-500 mt-1">Signed QR</span>
             </div>

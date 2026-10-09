@@ -1,3 +1,4 @@
+import { buildSignedAttendanceQrUrl } from '../../../utils/signedAttendanceQr';
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, Download, AlertTriangle, ShieldCheck, User, Calendar, MapPin, CheckCircle2, Loader2 } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -27,7 +28,8 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
     return () => { active = false; };
   }, [initialStudent?.id, isOpen]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [qrResult, setQrResult] = useState<{ student: MockStudent; dataUrl: string } | null>(null);
+  const qrDataUrl = qrResult?.student === student ? qrResult?.dataUrl || '' : '';
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -70,37 +72,32 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
     };
   }, [student?.id, isOpen]);
 
-  // Generate verification QR code
+  // Display only the already-issued signed attendance token.
   useEffect(() => {
-    if (!student || !isOpen) return;
-
-    const qrPayload = JSON.stringify({
-      type: 'AZM_SLIP',
-      session: '2026-V',
-      studentId: student.id,
-      applicationNo: student.applicationNo,
-      rollNumber: displayRoll,
-      status: isProvisional ? 'PROVISIONAL' : 'OFFICIAL',
-      timestamp: new Date().toISOString(),
-    });
-
-    QRCode.toDataURL(qrPayload, {
-      width: 140,
-      margin: 1,
-      color: { dark: '#0f172a', light: '#ffffff' },
-    })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(''));
+    let active = true;
+    setQrResult(null);
+    const payload = student && prepared === student && isOpen && !isProvisional
+      ? buildSignedAttendanceQrUrl(student.qrToken) : null;
+    if (payload) {
+      void QRCode.toDataURL(payload, {
+        width: 320, margin: 3, errorCorrectionLevel: 'M',
+        color: { dark: '#0f172a', light: '#ffffff' },
+      }).then(url => { if (active && student) setQrResult({ student, dataUrl: url }); })
+        .catch(() => { if (active && student) setQrResult({ student, dataUrl: '' }); });
+    }
+    return () => { active = false; };
   }, [student, isOpen, displayRoll, isProvisional, prepared]);
 
   if (!isOpen || !student) return null;
 
   const handlePrint = async () => {
+    if (prepared?.id !== student.id) return;
     try { await mockApi.printStudentRollSlipPdf(student.id); }
     catch (error: any) { alert(error.message || 'Unable to print document.'); }
   };
 
   const handleDownloadPdf = async () => {
+    if (prepared?.id !== student.id) return;
     setIsDownloadingPdf(true);
     try {
       await mockApi.downloadStudentRollSlipPdf(student.id, displayRoll);
@@ -143,6 +140,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
+              disabled={prepared?.id !== student.id || isDownloadingPdf}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
             >
               <Printer className="w-4 h-4" />
@@ -151,7 +149,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
 
             <button
               onClick={handleDownloadPdf}
-              disabled={isDownloadingPdf}
+              disabled={prepared?.id !== student.id || isDownloadingPdf}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
             >
               {isDownloadingPdf ? (
@@ -260,11 +258,11 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
                   <div className="text-[10px] text-slate-400 font-mono">App #{student.applicationNo}</div>
                 </div>
 
-                {qrDataUrl && (
+                {qrDataUrl ? (
                   <div className="sm:mt-2 shrink-0">
-                    <img src={qrDataUrl} alt="Candidate QR" className="w-18 h-18 border border-slate-200 rounded-md p-0.5 bg-white" />
+                    <img src={qrDataUrl} alt="Candidate QR" className="w-28 h-28 border border-slate-200 rounded-md p-1 bg-white" />
                   </div>
-                )}
+                ) : <span className="text-xs text-slate-500" role="status">Signed attendance QR unavailable</span>}
               </div>
             </div>
 

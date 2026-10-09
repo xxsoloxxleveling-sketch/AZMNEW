@@ -1,3 +1,4 @@
+import { extractSignedAttendanceToken } from '../../utils/signedAttendanceQr';
 import React, { useState, useEffect } from 'react';
 import { fetchVerifiedCandidatePortrait } from '../../services/candidatePortrait';
 import QRCode from 'qrcode';
@@ -39,7 +40,10 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   const [portraitStatus, setPortraitStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
   const [portraitRetry, setPortraitRetry] = useState(0);
   const [isDossierOpen, setIsDossierOpen] = useState<boolean>(false);
-  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [qrResult, setQrResult] = useState<{ slip: RollNumberSlip; dataUrl: string } | null>(null);
+  const qrCodeDataUrl = qrResult?.slip === selectedSlip ? qrResult?.dataUrl || '' : '';
+  const qrPending = Boolean(selectedSlip?.rollNo && extractSignedAttendanceToken(selectedSlip.qrPayload)
+    && qrResult?.slip !== selectedSlip);
 
   const [hasSearched, setHasSearched] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -52,28 +56,17 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   }, []);
 
   useEffect(() => {
-    if (selectedSlip?.rollNo) {
-      const payload = selectedSlip.qrPayload || selectedSlip.rollNo;
-      QRCode.toDataURL(payload, {
-        width: 300,
-        margin: 1,
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
-      })
-        .then((url) => {
-          setQrCodeDataUrl(url);
-        })
-        .catch((err) => {
-          console.warn('QRCode generate fallback:', err);
-          setQrCodeDataUrl(
-            `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payload)}`
-          );
-        });
-    } else {
-      setQrCodeDataUrl('');
+    // Never display a delayed QR from an earlier candidate after changing slips.
+    let active = true;
+    setQrResult(null);
+    if (selectedSlip?.rollNo && extractSignedAttendanceToken(selectedSlip.qrPayload)) {
+      void QRCode.toDataURL(selectedSlip.qrPayload, {
+        width: 320, margin: 3, errorCorrectionLevel: 'M',
+        color: { dark: '#000000', light: '#ffffff' },
+      }).then(url => { if (active) setQrResult({ slip: selectedSlip, dataUrl: url }); })
+        .catch(() => { if (active) setQrResult({ slip: selectedSlip, dataUrl: '' }); });
     }
+    return () => { active = false; };
   }, [selectedSlip]);
 
   useEffect(() => {
@@ -154,7 +147,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
   const printDocument = () => {
     // Do not print a slip before the private portrait has finished loading.
-    if (portraitStatus === 'loading') return;
+    if (portraitStatus === 'loading' || qrPending) return;
     window.print();
   };
 
@@ -386,7 +379,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
               <button
                 onClick={printDocument}
-                disabled={portraitStatus === 'loading'}
+                disabled={portraitStatus === 'loading' || qrPending}
                 id="btn-print-slip"
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
@@ -396,7 +389,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
               <button
                 onClick={downloadSlipAlert}
-                disabled={portraitStatus === 'loading'}
+                disabled={portraitStatus === 'loading' || qrPending}
                 id="btn-download-slip"
                 className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497e] text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
@@ -518,7 +511,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
                 {/* Real Scannable Biometric QR Code Matrix */}
                 <div className="p-2 rounded-2xl bg-white border-2 border-slate-300 shadow-sm flex flex-col items-center">
-                  <div className="w-24 h-24 bg-white p-1 rounded-xl flex items-center justify-center border border-slate-200 shadow-inner overflow-hidden">
+                  <div className="w-32 h-32 bg-white p-1 rounded-xl flex items-center justify-center border border-slate-200 shadow-inner overflow-hidden">
                     {qrCodeDataUrl ? (
                       <img
                         src={qrCodeDataUrl}
@@ -527,7 +520,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                       />
                     ) : (
                       <div className="w-full h-full bg-slate-100 flex items-center justify-center">
-                        <QrCode className="w-8 h-8 text-slate-400 animate-pulse" />
+                        <span className="text-[10px] text-slate-500 text-center" role="status">{qrPending ? 'Preparing attendance QR…' : 'Signed attendance QR unavailable'}</span>
                       </div>
                     )}
                   </div>
@@ -614,6 +607,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 cnicOrBForm: selectedSlip.cnicBForm,
                 feeStatus: 'PAID',
                 rollNumber: selectedSlip.rollNo,
+                qrToken: extractSignedAttendanceToken(selectedSlip.qrPayload) || undefined,
                 currentClass: selectedSlip.classLevel,
                 photoUrl: portraitUrl || undefined,
                 officeUse: {

@@ -621,7 +621,7 @@ export class PdfService {
 
     const qrImgTag = qrDataUrl
       ? `<img src="${qrDataUrl}" class="qr-img" alt="QR" />`
-      : `<div style="font-size: 8px; color: #64748b; text-align: center; padding-top: 25px;">QR PASS</div>`;
+      : `<div style="font-size: 8px; color: #64748b; text-align: center; padding-top: 25px;">QR UNAVAILABLE</div>`;
 
     return `
 <!DOCTYPE html>
@@ -648,7 +648,7 @@ export class PdfService {
     .info-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
     .photo-col { width: 110px; vertical-align: top; text-align: center; }
     .details-col { padding: 0 14px; vertical-align: top; }
-    .badge-col { width: 130px; vertical-align: top; text-align: right; }
+    .badge-col { width: 142px; vertical-align: top; text-align: right; }
 
     .photo-frame { width: 100px; height: 118px; border: 2px solid #0f172a; border-radius: 6px; overflow: hidden; background: #f8fafc; margin: 0 auto 4px auto; position: relative; }
     .photo-frame img { width: 100%; height: 100%; object-fit: cover; }
@@ -668,7 +668,7 @@ export class PdfService {
     .roll-box-number { font-size: 13px; font-weight: 900; font-family: 'Courier New', monospace; letter-spacing: 0.5px; margin: 2px 0; }
     .roll-box-seat { font-size: 9.5px; font-weight: 700; color: #34d399; }
 
-    .qr-frame { width: 100px; height: 100px; border: 1.5px solid #94a3b8; border-radius: 6px; padding: 3px; background: #fff; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
+    .qr-frame { width: 124px; height: 124px; border: 1.5px solid #94a3b8; border-radius: 6px; padding: 3px; background: #fff; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
     .qr-img { width: 100%; height: 100%; object-fit: contain; }
     .qr-caption { font-size: 7.5px; font-weight: 700; color: #475569; text-align: center; margin-top: 2px; text-transform: uppercase; }
 
@@ -776,7 +776,7 @@ export class PdfService {
           <div class="qr-frame">
             ${qrImgTag}
           </div>
-          <div class="qr-caption">Scan to Verify Identity</div>
+          <div class="qr-caption">${qrDataUrl ? 'Signed Attendance QR' : 'Attendance QR unavailable'}</div>
         </td>
       </tr>
     </table>
