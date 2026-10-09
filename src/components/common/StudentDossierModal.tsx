@@ -95,18 +95,18 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
   }, [isOpen, student?.id, student?.applicationNo, student?.photoUrl]);
 
   useEffect(() => {
-    if (student?.rollNumber || student?.applicationNo) {
-      const payload = student.rollNumber ? buildSignedAttendanceQrUrl(student.qrToken) : null;
-      if (!payload) { setQrCodeUrl(''); return; }
-      QRCode.toDataURL(payload, {
-        width: 320,
-        margin: 3,
-        errorCorrectionLevel: 'M',
+    let active = true;
+    setQrCodeUrl('');
+    const payload = student?.rollNumber
+      ? buildSignedAttendanceQrUrl(student.qrToken) : null;
+    if (payload) {
+      void QRCode.toDataURL(payload, {
+        width: 320, margin: 3, errorCorrectionLevel: 'M',
         color: { dark: '#0f172a', light: '#ffffff' },
-      })
-        .then((url) => setQrCodeUrl(url))
-        .catch(() => {});
+      }).then(url => { if (active) setQrCodeUrl(url); })
+        .catch(() => { if (active) setQrCodeUrl(''); });
     }
+    return () => { active = false; };
   }, [student]);
 
   const handleInspectDoc = async (docType: string, docName: string) => {
