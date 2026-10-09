@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchVerifiedCandidatePortrait } from '../../services/candidatePortrait';
 import QRCode from 'qrcode';
 import { OFFICIAL_DATA } from '../../data/scholarshipData';
 import { searchRollNumberSlip } from '../../services/api';
@@ -33,6 +34,10 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [cnicOrBForm, setCnicOrBForm] = useState<string>('');
   const [selectedSlip, setSelectedSlip] = useState<RollNumberSlip | null>(null);
+  const [verifiedCnic, setVerifiedCnic] = useState('');
+  const [portraitUrl, setPortraitUrl] = useState<string | null>(null);
+  const [portraitStatus, setPortraitStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
+  const [portraitRetry, setPortraitRetry] = useState(0);
   const [isDossierOpen, setIsDossierOpen] = useState<boolean>(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
@@ -71,11 +76,45 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
     }
   }, [selectedSlip]);
 
+  useEffect(() => {
+    if (!selectedSlip || !verifiedCnic) return;
+
+    const controller = new AbortController();
+    let ownedUrl: string | null = null;
+    setPortraitUrl(null);
+    setPortraitStatus('loading');
+
+    void fetchVerifiedCandidatePortrait(selectedSlip.applicationId, verifiedCnic, controller.signal)
+      .then((url) => {
+        if (controller.signal.aborted) {
+          if (url) URL.revokeObjectURL(url);
+          return;
+        }
+        ownedUrl = url;
+        setPortraitUrl(url);
+        setPortraitStatus(url ? 'ready' : 'unavailable');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setPortraitUrl(null);
+          setPortraitStatus('unavailable');
+        }
+      });
+
+    return () => {
+      controller.abort();
+      if (ownedUrl) URL.revokeObjectURL(ownedUrl);
+    };
+  }, [selectedSlip, verifiedCnic, portraitRetry]);
+
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMsg('');
     setPlacementPending(false);
     setSelectedSlip(null);
+    setVerifiedCnic('');
+    setPortraitUrl(null);
+    setPortraitStatus('idle');
     const cleanQuery = searchQuery.trim();
     const cleanIdentity = cnicOrBForm.trim();
 
@@ -98,6 +137,8 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
         setErrorMsg('Your Roll Number is issued, but your examination Center/Hall assignment is not yet available. Please check again after seating is finalized.');
         return;
       }
+      setVerifiedCnic(cleanIdentity);
+      setPortraitStatus('loading');
       setSelectedSlip(data);
     } else {
       setSelectedSlip(null);
@@ -112,13 +153,12 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   };
 
   const printDocument = () => {
-    window.print();
-
-  };
-
-  const downloadSlipAlert = () => {
+    // Do not print a slip before the private portrait has finished loading.
+    if (portraitStatus === 'loading') return;
     window.print();
   };
+
+  const downloadSlipAlert = printDocument;
 
   return (
     <div className="py-10 max-w-5xl mx-auto px-4 sm:px-6 space-y-10">
@@ -346,8 +386,9 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
               <button
                 onClick={printDocument}
+                disabled={portraitStatus === 'loading'}
                 id="btn-print-slip"
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer"
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Direct Print (A4)</span>
@@ -355,8 +396,9 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
               <button
                 onClick={downloadSlipAlert}
+                disabled={portraitStatus === 'loading'}
                 id="btn-download-slip"
-                className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497e] text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer"
+                className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497e] text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Download Official PDF</span>
@@ -401,15 +443,31 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
               {/* Photo & Barcode (3 cols) */}
               <div className="md:col-span-3 flex flex-col items-center sm:items-start space-y-3">
                 <div className="relative">
-                  <img
-                    src={selectedSlip.candidatePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80'}
-                    alt={selectedSlip.candidateName || 'Candidate'}
-                    className="w-28 h-32 rounded-xl object-cover border-2 border-slate-900 shadow-xs bg-slate-100"
-                  />
+                  {portraitUrl ? (
+                    <img
+                      src={portraitUrl}
+                      alt="Candidate photograph"
+                      onError={() => {
+                        setPortraitUrl(null);
+                        setPortraitStatus('unavailable');
+                      }}
+                      className="w-28 h-32 rounded-xl object-cover border-2 border-slate-900 shadow-xs bg-slate-100"
+                    />
+                  ) : (
+                    <div role="status" aria-label="Candidate photograph" className="w-28 h-32 rounded-xl border-2 border-slate-900 bg-slate-100 flex flex-col items-center justify-center gap-2 px-2 text-center text-[10px] font-semibold text-slate-600">
+                      {portraitStatus === 'loading' ? <Loader2 className="w-6 h-6 animate-spin" aria-hidden="true" /> : <User className="w-7 h-7 text-slate-400" aria-hidden="true" />}
+                      <span>{portraitStatus === 'loading' ? 'Loading photograph…' : 'Photo unavailable'}</span>
+                    </div>
+                  )}
                   <span className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-emerald-700 text-white font-bold text-[9px] rounded-md">
                     Verified
                   </span>
                 </div>
+                {portraitStatus === 'unavailable' && (
+                  <button type="button" onClick={() => setPortraitRetry(value => value + 1)} className="no-print text-xs underline font-semibold text-[#185b9d] hover:text-blue-800">
+                    Retry photograph
+                  </button>
+                )}
                 <div className="text-center sm:text-left font-mono text-[10px] text-slate-600">
                   <span className="tracking-widest block font-bold text-slate-900">{selectedSlip.barcode || selectedSlip.rollNo || 'BARCODE'}</span>
                   <span>{selectedSlip.applicationId || 'APP-2026'}</span>
@@ -557,7 +615,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 feeStatus: 'PAID',
                 rollNumber: selectedSlip.rollNo,
                 currentClass: selectedSlip.classLevel,
-                photoUrl: selectedSlip.candidatePhoto,
+                photoUrl: portraitUrl || undefined,
                 officeUse: {
                   testCentre: selectedSlip.testCenter,
                   testDate: selectedSlip.examDate,
