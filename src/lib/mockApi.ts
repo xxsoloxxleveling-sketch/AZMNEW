@@ -1379,18 +1379,7 @@ export const mockApi = {
       data = { ...studentObj, id: studentId, rollNumber: rollNumber || studentObj?.rollNumber,
         placementStatus: 'PLACEMENT_PENDING', assignedHallId: null };
     }
-    // Local fallback uses an already-issued signed QR, never an unsigned QR service.
-    const url = data?.rollNumber ? buildSignedAttendanceQrUrl(data.qrToken) : null;
-    if (url) {
-      try {
-        const QRCode = await import('qrcode');
-        data = { ...data, qrImageUrl: await QRCode.toDataURL(url, {
-          width: 320, margin: 3, errorCorrectionLevel: 'M',
-          color: { dark: '#000000', light: '#ffffff' },
-        }) };
-      } catch { data = { ...data, qrImageUrl: null }; }
-    }
-    printRollNumberSlip(data || { id: studentId, rollNumber });
+    await printRollNumberSlip(data || { id: studentId, rollNumber });
   },
 
   async downloadStudentRollSlipPdf(studentId: string, rollNumber?: string): Promise<void> {
@@ -2817,7 +2806,19 @@ export function printStudentSlip(student: any) {
 /**
  * High-definition browser printable Roll Number Slip entry pass generator
  */
-export function printRollNumberSlip(student: any) {
+async function issuedAttendanceQrImage(student: any): Promise<string | null> {
+  const payload = student.rollNumber ? buildSignedAttendanceQrUrl(student.qrToken) : null;
+  if (!payload) return null;
+  try {
+    const QRCode = await import('qrcode');
+    return await QRCode.toDataURL(payload, {
+      width: 320, margin: 3, errorCorrectionLevel: 'M',
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+  } catch { return null; }
+}
+
+export async function printRollNumberSlip(student: any) {
   const assigned = student.placementStatus === 'ASSIGNED' && Boolean(student.assignedHallId);
   if (student.rollNumber && (!assigned || !student.assignedRoom || !student.seatNo || !student.testDate || !student.reportingTime)) {
     alert('PLACEMENT_PENDING: Examination placement is not yet available.');
@@ -2836,10 +2837,9 @@ export function printRollNumberSlip(student: any) {
   const room = assigned && student.assignedRoom || 'To be assigned';
   const seat = assigned && student.seatNo || 'To be assigned';
   const testCenter = assigned && student.testCenterName || 'To be assigned';
+  // Existing qrImageUrl may encode an old roll number or another candidate.
   const signedQrImage = student.rollNumber && buildSignedAttendanceQrUrl(student.qrToken)
-    && typeof student.qrImageUrl === 'string'
-    && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(student.qrImageUrl)
-    && student.qrImageUrl.length < 1_000_000 ? student.qrImageUrl : null;
+    ? await issuedAttendanceQrImage(student) : null;
 
   const html = `
 <!DOCTYPE html>
@@ -2964,7 +2964,7 @@ export function printRollNumberSlip(student: any) {
 /**
  * High-definition browser printable complete student application profile dossier
  */
-export function printStudentDossier(student: any) {
+export async function printStudentDossier(student: any) {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
     alert('Please allow popups to open and print your full student dossier.');
@@ -2978,9 +2978,7 @@ export function printStudentDossier(student: any) {
     ? `<img src="${student.photoUrl}" alt="${student.fullName || 'Candidate'} photo" style="width: 100%; height: 100%; object-fit: cover;" />`
     : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #e2e8f0; color: #64748b; font-size: 10px; font-weight: 800; text-align: center;">NO PHOTO<br/>AVAILABLE</div>`;
   const qrImageUrl = student.rollNumber && buildSignedAttendanceQrUrl(student.qrToken)
-    && typeof student.qrImageUrl === 'string'
-    && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(student.qrImageUrl)
-    && student.qrImageUrl.length < 1_000_000 ? student.qrImageUrl : null;
+    ? await issuedAttendanceQrImage(student) : null;
 
   // Use genuine academic records only; never synthesize fake qualifications
   const academic = Array.isArray(student.academicRecords) ? student.academicRecords : [];

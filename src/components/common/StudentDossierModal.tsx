@@ -44,7 +44,8 @@ function formatHumanDate(dateStr?: string | null): string {
  * This modal is preserved for public candidate roll-number self-service view.
  */
 export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen, onClose, student }) => {
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [qrResult, setQrResult] = useState<{ student: MockStudent; dataUrl: string } | null>(null);
+  const qrCodeUrl = qrResult?.student === student ? qrResult?.dataUrl || '' : '';
   const [photoBlobUrl, setPhotoBlobUrl] = useState<string | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
   const [previewDocTitle, setPreviewDocTitle] = useState<string | null>(null);
@@ -96,18 +97,18 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
 
   useEffect(() => {
     let active = true;
-    setQrCodeUrl('');
-    const payload = student?.rollNumber
+    setQrResult(null);
+    const payload = isOpen && student?.rollNumber
       ? buildSignedAttendanceQrUrl(student.qrToken) : null;
     if (payload) {
       void QRCode.toDataURL(payload, {
         width: 320, margin: 3, errorCorrectionLevel: 'M',
         color: { dark: '#0f172a', light: '#ffffff' },
-      }).then(url => { if (active) setQrCodeUrl(url); })
-        .catch(() => { if (active) setQrCodeUrl(''); });
+      }).then(url => { if (active && student) setQrResult({ student, dataUrl: url }); })
+        .catch(() => { if (active && student) setQrResult({ student, dataUrl: '' }); });
     }
     return () => { active = false; };
-  }, [student]);
+  }, [student, isOpen]);
 
   const handleInspectDoc = async (docType: string, docName: string) => {
     const studentId = student?.id || student?.applicationNo;

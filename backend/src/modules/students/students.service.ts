@@ -19,6 +19,13 @@ import {
 } from './students.schema';
 import { AppError } from '../../middleware/error.middleware';
 
+export function buildIssuedAttendanceQrPayload(student: { rollNumber?: string | null; qrToken?: string | null }): string {
+  if (!student.rollNumber || typeof student.qrToken !== 'string'
+    || !/^qr_[^\s.]{1,1024}\.[a-fA-F0-9]{64}$/.test(student.qrToken)
+    || !qrService.verifySignedQrToken(student.qrToken)) return '';
+  return `https://azmaio.com/attend?token=${encodeURIComponent(student.qrToken)}`;
+}
+
 // Release scheduling uses Pakistan time (UTC+05:00), never the host timezone.
 // Current saves are canonical UTC ISO; legacy naive datetimes are PKT wall-clock values.
 export function parseReleaseDateTime(value: unknown): Date | null {
@@ -1512,9 +1519,7 @@ export class StudentsService {
           'Biometric verification will take place at the entrance gate before seating allocation.',
         ],
         issuedAt: student.updatedAt.toISOString(),
-        qrPayload: student.qrToken && qrService.verifySignedQrToken(student.qrToken)
-          ? `https://azmaio.com/attend?token=${encodeURIComponent(student.qrToken)}`
-          : '',
+        qrPayload: buildIssuedAttendanceQrPayload(student),
       },
     };
   }
@@ -2080,7 +2085,11 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       throw error;
     }
 
-    return { ...this.formatStudentWithDocuments(student), ...await this.resolveExamPlacement(student) };
+    return {
+      ...this.formatStudentWithDocuments(student), ...await this.resolveExamPlacement(student),
+      // Administrative previews may trust only tokens verified by the server.
+      qrToken: student.rollNumber && !buildIssuedAttendanceQrPayload(student) ? '' : student.qrToken,
+    };
   }
 
   /**
@@ -2160,13 +2169,14 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
    */
   async getStudentQr(id: string) {
     const student = await this.getStudentById(id);
-    const qrPayload = `https://azmaio.com/attend?token=${student.qrToken}`;
+    const qrPayload = buildIssuedAttendanceQrPayload(student);
+    if (!qrPayload) throw Object.assign(new Error('Signed attendance QR unavailable.'), { statusCode: 409 });
     const qrBuffer = await qrService.generateQrBuffer(qrPayload);
 
     return {
       student,
       qrToken: student.qrToken,
-      qrImageUrl: student.qrImageUrl,
+      qrImageUrl: `data:image/png;base64,${qrBuffer.toString('base64')}`,
       qrBuffer,
     };
   }
@@ -2410,8 +2420,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
     let qrDataUrl = '';
     try {
       const QRCode = await import('qrcode');
-      const qrPayload = student.rollNumber && student.qrToken && qrService.verifySignedQrToken(student.qrToken)
-          ? `https://azmaio.com/attend?token=${encodeURIComponent(student.qrToken)}` : '';
+      const qrPayload = buildIssuedAttendanceQrPayload(student);
       if (qrPayload) qrDataUrl = await QRCode.toDataURL(qrPayload, {
         width: 300,
         margin: 1,
@@ -2525,8 +2534,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       const candNum = getCandidateNumber(student);
       let qrDataUrl = '';
       try {
-        const qrPayload = student.rollNumber && student.qrToken && qrService.verifySignedQrToken(student.qrToken)
-          ? `https://azmaio.com/attend?token=${encodeURIComponent(student.qrToken)}` : '';
+        const qrPayload = buildIssuedAttendanceQrPayload(student);
         if (qrPayload) qrDataUrl = await QRCode.toDataURL(qrPayload, {
           width: 300,
           margin: 1,
