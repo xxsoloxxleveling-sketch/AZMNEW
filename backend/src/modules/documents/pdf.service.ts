@@ -621,7 +621,7 @@ export class PdfService {
 
     const qrImgTag = qrDataUrl
       ? `<img src="${qrDataUrl}" class="qr-img" alt="QR" />`
-      : `<div style="font-size: 8px; color: #64748b; text-align: center; padding-top: 25px;">QR PASS</div>`;
+      : `<div style="font-size: 8px; color: #64748b; text-align: center; padding-top: 25px;">QR NOT ISSUED</div>`;
 
     return `
 <!DOCTYPE html>
@@ -1330,7 +1330,7 @@ export class PdfService {
 
     const qrImgTag = qrDataUrl
       ? `<img src="${qrDataUrl}" alt="Verification QR" />`
-      : `<div style="font-size: 7px; color: #475569; text-align: center; padding-top: 15px;">QR PASS</div>`;
+      : `<div style="font-size: 7px; color: #475569; text-align: center; padding-top: 15px;">QR NOT ISSUED</div>`;
 
     return `
 <!DOCTYPE html>
