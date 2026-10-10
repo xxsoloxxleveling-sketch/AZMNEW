@@ -37,13 +37,13 @@ export class AttendanceResetService {
     const sessions = await tx.attendanceSession.findMany({ where: { id: { in: scope.sessionIds } }, orderBy: { id: 'asc' }, include: { candidates: { orderBy: { studentId: 'asc' } }, attendance: { orderBy: { id: 'asc' } }, examHall: { select: { testCenterId: true } } } });
     if (sessions.length !== scope.sessionIds.length) fail(404, 'One or more selected attendance sessions were not found.');
     for (const session of sessions) {
-      if (!session.isCurrent || session.status !== 'OPEN') fail(409, 'Only current OPEN attendance attempts can be reset. CLOSED and archived history is protected.');
+      if (!session.isCurrent || !['OPEN', 'CLOSED'].includes(session.status)) fail(409, 'Only current OPEN or CLOSED attendance attempts can be reset. Archived history is protected.');
       if (session.businessDate.toISOString().slice(0, 10) !== scope.businessDate) fail(400, 'Every selected Hall must belong to the selected examination date.');
       if (scope.testCenterId && session.examHall.testCenterId !== scope.testCenterId) fail(400, 'A selected Hall does not belong to the selected examination center.');
     }
-    if (scope.mode === 'EXAM_DATE') {
-      const included = await tx.attendanceSession.findMany({ where: { businessDate: hallDate(scope.businessDate)!, isCurrent: true, status: 'OPEN', ...(scope.testCenterId ? { examHall: { testCenterId: scope.testCenterId } } : {}) }, select: { id: true } });
-      if (included.length !== sessions.length || included.some(row => !scope.sessionIds.includes(row.id))) fail(409, 'Select every current OPEN Hall in this examination date and center scope.');
+    if (scope.mode === 'EXAM_DATE' || scope.mode === 'CURRENT') {
+      const included = await tx.attendanceSession.findMany({ where: { businessDate: hallDate(scope.businessDate)!, isCurrent: true, status: { in: ['OPEN', 'CLOSED'] }, ...(scope.testCenterId ? { examHall: { testCenterId: scope.testCenterId } } : {}) }, select: { id: true } });
+      if (included.length !== sessions.length || included.some(row => !scope.sessionIds.includes(row.id))) fail(409, 'Select every current OPEN and CLOSED Hall in this examination date and center scope.');
     }
     const halls = sessions.map(session => ({ sessionId: session.id, examHallId: session.examHallId, hallName: session.hallNameSnapshot, roomNumber: session.roomNumberSnapshot, testCenterName: session.testCenterNameSnapshot, businessDate: scope.businessDate, attemptNumber: session.attemptNumber, status: session.status, expectedCount: session.candidates.length, presentCount: session.attendance.filter(row => row.status === 'PRESENT').length, lateCount: session.attendance.filter(row => row.status === 'LATE').length, absentCount: session.attendance.filter(row => row.status === 'ABSENT').length, manualCount: session.attendance.filter(row => row.method === 'MANUAL').length, qrCount: session.attendance.filter(row => row.method === 'QR_SCAN').length, markedCount: session.attendance.length, completionPercentage: session.candidates.length ? Math.round(session.attendance.length / session.candidates.length * 1000) / 10 : 0, lastMarkAt: session.attendance.reduce<string | null>((latest, row) => !latest || row.createdAt.toISOString() > latest ? row.createdAt.toISOString() : latest, null), staffActivity: 'UNKNOWN' as const }));
     const totals = { expectedCount: 0, presentCount: 0, lateCount: 0, absentCount: 0, manualCount: 0, qrCount: 0, markedCount: 0, completionPercentage: 0 };
@@ -94,13 +94,15 @@ export class AttendanceResetService {
       const resetReference = randomUUID(), completedAt = this.now().toISOString();
       const attempts = [];
       for (const old of snapshot.sessions) {
-        await tx.attendanceSession.update({ where: { id: old.id }, data: { isCurrent: false, archivedAt: this.now() } });
+        await tx.attendanceSession.update({ where: { id: old.id }, data: { isCurrent: false, archivedAt: this.now(), ...(old.status === 'CLOSED' ? { updatedAt: old.updatedAt } : {}) } });
         const next = await tx.attendanceSession.create({ data: { examHallId: old.examHallId, businessDate: old.businessDate, attemptNumber: old.attemptNumber + 1, openedByUserId: actorId, hallNameSnapshot: old.hallNameSnapshot, roomNumberSnapshot: old.roomNumberSnapshot, testCenterNameSnapshot: old.testCenterNameSnapshot, examDateSnapshot: old.examDateSnapshot, reportingTimeSnapshot: old.reportingTimeSnapshot } });
         if (old.candidates.length) await tx.attendanceSessionCandidate.createMany({ data: old.candidates.map(({id, createdAt, sessionId, ...candidate}) => ({ ...candidate, sessionId: next.id })) });
         attempts.push({ previousSessionId: old.id, newSessionId: next.id, attemptNumber: next.attemptNumber, examHallId: old.examHallId, hallName: old.hallNameSnapshot, expectedCount: old.candidates.length });
       }
       const result = { resetReference, completedAt, attempts, affectedCandidates: snapshot.totals.expectedCount, status: 'COMPLETED' };
       await tx.attendanceResetOperation.create({ data: { id: resetReference, actorId, actorName: actor.name, idempotencyKey, challengeNonce: challenge.nonce, requestHash, reason: input.reason, mode: challenge.scope.mode, businessDate: hallDate(challenge.scope.businessDate)!, affectedCandidates: snapshot.totals.expectedCount, scope: challenge.scope as unknown as Prisma.InputJsonValue, result } });
+      // Surface deferred archival validation before returning a success through Prisma.
+      await tx.$executeRaw`SET CONSTRAINTS "AttendanceSession_closed_reset_coherence" IMMEDIATE`;
       return result;
     });
   }

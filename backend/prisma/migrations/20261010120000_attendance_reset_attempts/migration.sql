@@ -26,12 +26,55 @@ CREATE TRIGGER "AttendanceResetOperation_immutable" BEFORE UPDATE OR DELETE ON "
 CREATE FUNCTION "protect_archived_attendance_session"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NOT OLD."isCurrent" THEN RAISE EXCEPTION 'Archived attendance attempts are immutable' USING ERRCODE='23514'; END IF;
-  IF OLD.status='CLOSED' THEN RAISE EXCEPTION 'Finalized attendance attempts are immutable' USING ERRCODE='23514'; END IF;
+  IF OLD.status='CLOSED' THEN
+    -- Finalization evidence is never edited. A reset may only archive the intact row;
+    -- the deferred constraint below requires its replacement and immutable audit.
+    IF TG_OP='UPDATE' THEN
+      IF OLD."isCurrent" AND NOT NEW."isCurrent" AND OLD."archivedAt" IS NULL AND NEW."archivedAt" IS NOT NULL
+         AND (to_jsonb(NEW) - ARRAY['isCurrent','archivedAt']) = (to_jsonb(OLD) - ARRAY['isCurrent','archivedAt']) THEN
+        RETURN NEW;
+      END IF;
+    END IF;
+    RAISE EXCEPTION 'Finalized attendance attempts are immutable' USING ERRCODE='23514';
+  END IF;
   IF TG_OP='DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
 END;
 $$;
 CREATE TRIGGER "AttendanceSession_archive_protection" BEFORE UPDATE OR DELETE ON "AttendanceSession" FOR EACH ROW EXECUTE FUNCTION "protect_archived_attendance_session"();
+CREATE FUNCTION "require_closed_attendance_reset"() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.status='CLOSED' AND OLD."isCurrent" AND NOT NEW."isCurrent" THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM "AttendanceResetOperation" operation
+      CROSS JOIN LATERAL jsonb_array_elements(operation.result->'attempts') attempt
+      JOIN "AttendanceSession" replacement ON replacement.id=attempt->>'newSessionId'
+      WHERE attempt->>'previousSessionId'=OLD.id
+        AND operation.result->>'status'='COMPLETED' AND operation.scope->'sessionIds' ? OLD.id
+        AND EXISTS (SELECT 1 FROM "User" actor WHERE actor.id=operation."actorId" AND actor.role='SUPER_ADMIN' AND actor.status='ACTIVE')
+        AND replacement."examHallId"=OLD."examHallId" AND replacement."businessDate"=OLD."businessDate"
+        AND replacement."attemptNumber"=OLD."attemptNumber"+1 AND replacement."isCurrent" AND replacement.status='OPEN'
+        AND replacement."openedByUserId"=operation."actorId"
+        AND replacement."closedAt" IS NULL AND replacement."closedByUserId" IS NULL
+        AND replacement."hallNameSnapshot"=OLD."hallNameSnapshot" AND replacement."roomNumberSnapshot"=OLD."roomNumberSnapshot"
+        AND replacement."testCenterNameSnapshot" IS NOT DISTINCT FROM OLD."testCenterNameSnapshot"
+        AND replacement."examDateSnapshot"=OLD."examDateSnapshot" AND replacement."reportingTimeSnapshot"=OLD."reportingTimeSnapshot"
+        AND NOT EXISTS (SELECT 1 FROM "Attendance" evidence WHERE evidence."sessionId"=replacement.id)
+        AND NOT EXISTS (
+          (SELECT to_jsonb(candidate)-ARRAY['id','sessionId','createdAt'] FROM "AttendanceSessionCandidate" candidate WHERE candidate."sessionId"=OLD.id
+           EXCEPT
+           SELECT to_jsonb(candidate)-ARRAY['id','sessionId','createdAt'] FROM "AttendanceSessionCandidate" candidate WHERE candidate."sessionId"=replacement.id)
+          UNION ALL
+          (SELECT to_jsonb(candidate)-ARRAY['id','sessionId','createdAt'] FROM "AttendanceSessionCandidate" candidate WHERE candidate."sessionId"=replacement.id
+           EXCEPT
+           SELECT to_jsonb(candidate)-ARRAY['id','sessionId','createdAt'] FROM "AttendanceSessionCandidate" candidate WHERE candidate."sessionId"=OLD.id)
+        )
+    ) THEN RAISE EXCEPTION 'Closed attendance archival requires a reset audit and exact replacement roster' USING ERRCODE='23514'; END IF;
+  END IF;
+  RETURN NULL;
+END;
+$$;
+CREATE CONSTRAINT TRIGGER "AttendanceSession_closed_reset_coherence" AFTER UPDATE ON "AttendanceSession" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION "require_closed_attendance_reset"();
 CREATE FUNCTION "protect_attendance_attempt_evidence"() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE current_attempt BOOLEAN; attempt_status "AttendanceSessionStatus";
 BEGIN

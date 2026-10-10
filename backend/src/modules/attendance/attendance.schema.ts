@@ -34,7 +34,7 @@ export type RosterQueryInput = z.infer<typeof rosterQuerySchema>;
 export type TodayAttendanceQueryInput = z.infer<typeof todayAttendanceQuerySchema>;
 
 export const resetScopeSchema = z.object({
-  mode: z.enum(['HALL', 'EXAM_DATE', 'CURRENT']),
+  mode: z.enum(['HALL', 'SELECTED', 'EXAM_DATE', 'CURRENT']),
   businessDate: z.string().refine(value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !!hallDate(value), 'Invalid business date.'),
   sessionIds: z.array(z.string().trim().min(1)).min(1).max(100).refine(ids => new Set(ids).size === ids.length, 'Duplicate sessions are not allowed.'),
   testCenterId: z.string().trim().min(1).optional(),

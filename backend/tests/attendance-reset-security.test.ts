@@ -103,7 +103,141 @@ async function run() {
       await assert.rejects(() => sql!.query('UPDATE "AttendanceSession" SET "hallNameSnapshot"=$1 WHERE id=$2', ['Tampered finalized Hall', active.id]), /immutable/);
       await assert.rejects(() => sql!.query('DELETE FROM "AttendanceSession" WHERE id=$1', [active.id]), /immutable/);
       await assert.rejects(() => sql!.query('UPDATE "AttendanceSession" SET "businessDate"=$1 WHERE id=$2', ['2026-10-11', active.id]), /immutable/);
+      for (const change of [
+        `status='OPEN'`, `"closedAt"=NULL`, `"closedByUserId"='sa'`,
+        `"openedByUserId"='other'`, `"openedAt"="openedAt" + interval '1 day'`,
+        `"attemptNumber"="attemptNumber"+1`, `"roomNumberSnapshot"='tampered'`,
+        `"testCenterNameSnapshot"='tampered'`, `"examDateSnapshot"='2026-10-11'`,
+        `"reportingTimeSnapshot"='10:00'`, `"createdAt"="createdAt" + interval '1 day'`,
+        `"updatedAt"="updatedAt" + interval '1 day'`,
+      ]) {
+        await assert.rejects(() => sql!.query(`UPDATE "AttendanceSession" SET "isCurrent"=false,"archivedAt"=now(),${change} WHERE id=$1`, [active.id]), /immutable/);
+      }
       assert.deepEqual(await db.attendanceSession.findUnique({ where: { id: active.id } }), before);
+    });
+    await check('a finalized attempt cannot be archived directly without an atomic reset audit', async () => {
+      session = await db.attendanceSession.findFirst({ where: { examHallId: hall.id, isCurrent: true } });
+      const before = await db.attendanceSession.findUnique({ where: { id: session.id } });
+      await assert.rejects(() => sql!.query('UPDATE "AttendanceSession" SET "isCurrent"=false,"archivedAt"=now() WHERE id=$1', [session.id]), /reset|audit|archive/i);
+      assert.deepEqual(await db.attendanceSession.findUnique({ where: { id: session.id } }), before);
+    });
+    const assertFrozenEvidence = async (id: string) => {
+      await assert.rejects(() => sql!.query('UPDATE "Attendance" SET status=\'PRESENT\' WHERE "sessionId"=$1', [id]), /immutable/);
+      await assert.rejects(() => sql!.query('UPDATE "Attendance" SET "markedByUserId"=\'sa\' WHERE "sessionId"=$1', [id]), /immutable/);
+      await assert.rejects(() => sql!.query('DELETE FROM "Attendance" WHERE "sessionId"=$1', [id]), /immutable/);
+      await assert.rejects(() => sql!.query('UPDATE "AttendanceSessionCandidate" SET "fullNameSnapshot"=\'tampered\' WHERE "sessionId"=$1', [id]), /immutable/);
+      await assert.rejects(() => sql!.query('DELETE FROM "AttendanceSessionCandidate" WHERE "sessionId"=$1', [id]), /immutable/);
+      await rejects(() => attendance.mark(id, { studentId: 's', status: 'PRESENT' }, 'admin'), 409);
+      await rejects(() => attendance.closeSession(id, true, 'admin'), 409);
+    };
+    await check('CLOSED reset retains absent evidence and closure fields, starts OPEN at zero and rejects old IDs', async () => {
+      const oldId = session.id;
+      const before = await db.attendanceSession.findUnique({ where: { id: oldId } });
+      const marks = await db.attendance.findMany({ where: { sessionId: oldId }, orderBy: { id: 'asc' } });
+      const roster = await db.attendanceSessionCandidate.findMany({ where: { sessionId: oldId }, orderBy: { studentId: 'asc' } });
+      assert.equal(before.status, 'CLOSED'); assert.equal(marks.length, 1); assert.equal(marks[0].status, 'ABSENT');
+      await assertFrozenEvidence(oldId);
+      const preview = await reset.preview(scope(), 'sa'); assert.equal(preview.halls[0].status, 'CLOSED'); assert.equal(preview.totals.absentCount, 1);
+      await rejects(() => reset.preview(scope(), 'admin'), 403);
+      const operation: any = await reset.confirm(confirm(preview.challenge), 'sa', randomUUID());
+      const archived = await db.attendanceSession.findUnique({ where: { id: oldId } });
+      const { isCurrent: _current, archivedAt: _archived, ...evidence } = archived;
+      const { isCurrent: _oldCurrent, archivedAt: _oldArchived, ...previous } = before;
+      assert.deepEqual(evidence, previous); assert.equal(archived.isCurrent, false); assert(archived.archivedAt);
+      assert.deepEqual(await db.attendance.findMany({ where: { sessionId: oldId }, orderBy: { id: 'asc' } }), marks);
+      assert.deepEqual(await db.attendanceSessionCandidate.findMany({ where: { sessionId: oldId }, orderBy: { studentId: 'asc' } }), roster);
+      session = await db.attendanceSession.findUnique({ where: { id: operation.attempts[0].newSessionId } });
+      assert.equal(session.status, 'OPEN'); assert.equal(session.isCurrent, true); assert.equal(session.attemptNumber, before.attemptNumber + 1);
+      assert.equal(await db.attendance.count({ where: { sessionId: session.id } }), 0);
+      assert.deepEqual((await db.attendanceSessionCandidate.findMany({ where: { sessionId: session.id }, orderBy: { studentId: 'asc' } })).map(({ id, sessionId, createdAt, ...row }: any) => row), roster.map(({ id, sessionId, createdAt, ...row }: any) => row));
+      assert.equal((await db.student.findUnique({ where: { id: 's' } })).qrToken, 'security-fixture');
+      await assertFrozenEvidence(oldId);
+      await assert.rejects(() => sql!.query('UPDATE "AttendanceSession" SET "isCurrent"=true,"archivedAt"=NULL WHERE id=$1', [oldId]), /immutable/);
+    });
+    await check('repeated CLOSED resets preserve every finalized attempt and exactly one current generation', async () => {
+      const previousId = session.id;
+      await attendance.closeSession(previousId, true, 'admin');
+      const before = await db.attendanceSession.findUnique({ where: { id: previousId } });
+      const marks = await db.attendance.findMany({ where: { sessionId: previousId } });
+      const preview = await reset.preview(scope(), 'sa'), operation: any = await reset.confirm(confirm(preview.challenge), 'sa', randomUUID());
+      session = await db.attendanceSession.findUnique({ where: { id: operation.attempts[0].newSessionId } });
+      assert.equal(session.attemptNumber, before.attemptNumber + 1); assert.equal(session.status, 'OPEN');
+      assert.equal(await db.attendance.count({ where: { sessionId: session.id } }), 0);
+      assert.deepEqual(await db.attendance.findMany({ where: { sessionId: previousId } }), marks);
+      const old = await db.attendanceSession.findUnique({ where: { id: previousId } });
+      assert.equal(old.status, 'CLOSED'); assert.equal(old.closedAt.toISOString(), before.closedAt.toISOString()); assert.equal(old.closedByUserId, before.closedByUserId);
+      assert.equal(await db.attendanceSession.count({ where: { examHallId: hall.id, isCurrent: true } }), 1);
+      await assertFrozenEvidence(previousId);
+    });
+    await check('close-first serialization invalidates OPEN preview and a fresh CLOSED reset retains all automatic absences', async () => {
+      const oldId = session.id, preview = await reset.preview(scope(), 'sa'), auditCount = await db.attendanceResetOperation.count();
+      await attendance.closeSession(oldId, true, 'admin');
+      await rejects(() => reset.confirm(confirm(preview.challenge), 'sa', randomUUID()), 409);
+      assert.equal(await db.attendanceResetOperation.count(), auditCount);
+      const marks = await db.attendance.findMany({ where: { sessionId: oldId } });
+      assert.equal(marks.length, 1); assert.equal(marks[0].status, 'ABSENT');
+      const fresh = await reset.preview(scope(), 'sa'), result: any = await reset.confirm(confirm(fresh.challenge), 'sa', randomUUID());
+      assert.deepEqual(await db.attendance.findMany({ where: { sessionId: oldId } }), marks);
+      session = await db.attendanceSession.findUnique({ where: { id: result.attempts[0].newSessionId } });
+      await rejects(() => attendance.closeSession(oldId, true, 'admin'), 409);
+      assert.equal(await db.attendance.count({ where: { sessionId: session.id } }), 0);
+    });
+    await check('database rejects forged archival with invalid actor, scope, snapshot, roster or nonzero replacement', async () => {
+      await attendance.closeSession(session.id, true, 'admin');
+      const before = await db.attendanceSession.findUnique({ where: { id: session.id } });
+      const roster = await db.attendanceSessionCandidate.findMany({ where: { sessionId: before.id } });
+      const auditCount = await db.attendanceResetOperation.count();
+      for (const variant of ['actor', 'scope', 'snapshot', 'roster', 'marked']) {
+        const outcome = await db.$transaction(async (tx: any) => {
+          const actorId = variant === 'actor' ? 'admin' : 'sa';
+          await tx.attendanceSession.update({ where: { id: before.id }, data: { isCurrent: false, archivedAt: new Date(), updatedAt: before.updatedAt } });
+          const replacement = await tx.attendanceSession.create({ data: {
+            examHallId: before.examHallId, businessDate: before.businessDate, attemptNumber: before.attemptNumber + 1, openedByUserId: actorId,
+            hallNameSnapshot: variant === 'snapshot' ? 'Forged replacement Hall' : before.hallNameSnapshot,
+            roomNumberSnapshot: before.roomNumberSnapshot, testCenterNameSnapshot: before.testCenterNameSnapshot,
+            examDateSnapshot: before.examDateSnapshot, reportingTimeSnapshot: before.reportingTimeSnapshot,
+          } });
+          if (variant !== 'roster') await tx.attendanceSessionCandidate.createMany({ data: roster.map(({ id, sessionId, createdAt, ...row }: any) => ({ ...row, sessionId: replacement.id })) });
+          if (variant === 'marked') await tx.attendance.create({ data: { sessionId: replacement.id, studentId: 's', date: before.businessDate, status: 'PRESENT', method: 'MANUAL', markedByUserId: actorId } });
+          await tx.attendanceResetOperation.create({ data: {
+            id: randomUUID(), actorId, actorName: actorId, idempotencyKey: randomUUID(), challengeNonce: randomUUID(), requestHash: 'Synthetic forged request',
+            reason: 'Synthetic invalid archive', mode: 'HALL', businessDate: before.businessDate, affectedCandidates: roster.length,
+            scope: { mode: 'HALL', businessDate: '2026-10-10', sessionIds: [variant === 'scope' ? 'unrelated' : before.id] },
+            result: { status: 'COMPLETED', attempts: [{ previousSessionId: before.id, newSessionId: replacement.id }] },
+          } });
+          // Force the deferred integrity check before Prisma reports a result.
+          await tx.$executeRawUnsafe('SET CONSTRAINTS "AttendanceSession_closed_reset_coherence" IMMEDIATE');
+          return 'COMMITTED';
+        }).catch((error: any) => { assert.match(error.message, /reset audit and exact replacement roster/); return 'REJECTED'; });
+        assert.deepEqual(await db.attendanceSession.findUnique({ where: { id: before.id } }), before);
+        assert.equal(await db.attendanceSession.count({ where: { examHallId: hall.id, isCurrent: true } }), 1);
+        assert.equal(await db.attendanceResetOperation.count(), auditCount);
+        assert.notEqual(outcome, 'COMMITTED', `Forged ${variant} archive must roll back`);
+      }
+    });
+    await check('service surfaces coherence failure before returning success and rolls back all reset writes', async () => {
+      const before = await db.attendanceSession.findUnique({ where: { id: session.id } });
+      const marks = await db.attendance.findMany({ where: { sessionId: session.id }, orderBy: { id: 'asc' } });
+      const roster = await db.attendanceSessionCandidate.findMany({ where: { sessionId: session.id }, orderBy: { studentId: 'asc' } });
+      const audits = await db.attendanceResetOperation.findMany({ orderBy: { id: 'asc' } });
+      const count = await db.attendanceSession.count();
+      const corrupted = new Proxy(db, { get(target, property) {
+        if (property !== '$transaction') return Reflect.get(target, property);
+        return (work: any, options: any) => target.$transaction((tx: any) => work(new Proxy(tx, { get(transaction, name) {
+          if (name !== 'attendanceResetOperation') return Reflect.get(transaction, name);
+          return new Proxy(transaction.attendanceResetOperation, { get(model, method) {
+            if (method !== 'create') return Reflect.get(model, method);
+            return (args: any) => model.create({ ...args, data: { ...args.data, scope: { ...args.data.scope, sessionIds: ['unrelated'] } } });
+          } });
+        } })), options);
+      } });
+      const preview = await reset.preview(scope(), 'sa');
+      await assert.rejects(() => new AttendanceResetService(corrupted).confirm(confirm(preview.challenge), 'sa', randomUUID()), /reset audit and exact replacement roster/);
+      assert.deepEqual(await db.attendanceSession.findUnique({ where: { id: session.id } }), before);
+      assert.deepEqual(await db.attendance.findMany({ where: { sessionId: session.id }, orderBy: { id: 'asc' } }), marks);
+      assert.deepEqual(await db.attendanceSessionCandidate.findMany({ where: { sessionId: session.id }, orderBy: { studentId: 'asc' } }), roster);
+      assert.deepEqual(await db.attendanceResetOperation.findMany({ orderBy: { id: 'asc' } }), audits);
+      assert.equal(await db.attendanceSession.count(), count);
     });
     const { default: router } = await import('../src/modules/attendance/attendance.routes');
     const { errorHandler } = await import('../src/middleware/error.middleware');
