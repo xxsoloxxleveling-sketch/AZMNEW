@@ -285,6 +285,14 @@ export class StudentsController {
     }
   }
 
+  async deletionProtection(req: Request, res: Response, next: NextFunction) {
+    try {
+      res.status(200).json({ success: true, data: await studentsService.getDeletionProtection(req.params.id) });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async delete(req: Request, res: Response, next: NextFunction) {
     try {
       await studentsService.deleteStudent(req.params.id);

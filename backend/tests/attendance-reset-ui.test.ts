@@ -1,0 +1,149 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import express from 'express';
+import puppeteer from 'puppeteer';
+
+async function run() {
+  const root = path.resolve(__dirname, '../..');
+  const { build } = require(path.join(root, 'node_modules/esbuild'));
+  const fixture = `
+    import React from 'react'; import {createRoot} from 'react-dom/client';
+    import {AttendanceResetCenter} from './src/components/admin/attendance/AttendanceResetCenter'; import {AttendanceHubView} from './src/components/admin/attendance/AttendanceHubView'; import {attendanceResetApi} from './src/lib/attendanceResetApi'; window.__api=attendanceResetApi;
+    const session={id:'old',examHallId:'hall',businessDate:'2026-10-10',status:new URL(location.href).searchParams.has('closed')?'CLOSED':'OPEN',hallNameSnapshot:'Hall One',roomNumberSnapshot:'101',testCenterNameSnapshot:'Center',examDateSnapshot:'2026-10-10',reportingTimeSnapshot:'09:00',attemptNumber:1,isCurrent:true};
+    const counts={expectedCount:3,markedCount:2,presentCount:1,lateCount:0,absentCount:1,manualCount:1,qrCount:1,unmarkedCount:1,attendancePercentage:33.3};
+    const otherSession={...session,id:'old-other',examHallId:'hall-other',hallNameSnapshot:'Hall Two',roomNumberSnapshot:'102',status:new URL(location.href).searchParams.has('mixed')?'CLOSED':'OPEN'};const zeroCounts={...counts,markedCount:0,presentCount:0,lateCount:0,absentCount:0,manualCount:0,qrCount:0,unmarkedCount:3,attendancePercentage:0};const cross=new URL(location.href).searchParams.has('cross')||new URL(location.href).searchParams.has('mixed');let resetDone=false;window.__confirmRelease=null;window.__previewScope=null;window.__release=null;window.__loading=new URL(location.href).searchParams.has('loading');window.__writes=[];window.__fault='';window.__outcome=null;window.__response=null;window.__requests=[];
+    window.fetch=async(input,options={})=>{const url=new URL(String(input));const response=(data,status=200)=>new Response(JSON.stringify(status===200?{success:true,data}:{success:false,error:{message:data}}),{status,headers:{'Content-Type':'application/json'}});
+      window.__requests.push({url:url.toString(),body:options.body});if(window.__response)return response(window.__response);
+      if(url.pathname==='/api/test-centers')return response([{id:'center',name:'Center'}]);
+      if(url.pathname==='/api/exam-halls')return response([{id:'hall',name:'Hall One',roomNumber:'101',examDate:'2026-10-10',reportingTime:'09:00',testCenterId:'center',assignedCount:3},...(cross?[{id:'hall-other',name:'Hall Two',roomNumber:'102',examDate:'2026-10-10',reportingTime:'09:00',testCenterId:'center',assignedCount:3}]:[])]);
+      if(url.pathname==='/api/attendance/sessions') { if(window.__loading){window.__loading=false;await new Promise(resolve=>window.__release=resolve);} let list=[{...session,stats:counts}];if(cross)list.push({...otherSession,id:resetDone?'fresh-other':'old-other',attemptNumber:resetDone?2:1,stats:resetDone?zeroCounts:counts});if(url.searchParams.get('includeHistory')==='true')list.unshift({...session,id:'archived',isCurrent:false,stats:counts});if(url.searchParams.get('examHallId'))list=list.filter(item=>item.examHallId===url.searchParams.get('examHallId'));return response({sessions:list,pagination:{page:1,limit:100,total:list.length,totalPages:1}});}
+      if(url.pathname.endsWith('/candidates'))return response({candidates:[{studentId:'s',fullNameSnapshot:'Candidate One',status:'NOT_MARKED'}],pagination:{page:1,limit:25,total:1,totalPages:1}});
+      if(url.pathname==='/api/attendance/sessions/fresh-other'||url.pathname==='/api/attendance/sessions/old-other')return response({session:{...otherSession,id:resetDone?'fresh-other':'old-other',attemptNumber:resetDone?2:1},stats:resetDone?zeroCounts:counts,roster:[]});
+      if(url.pathname==='/api/attendance/sessions/old'||url.pathname==='/api/attendance/sessions/archived')return response({session:{...session,id:url.pathname.endsWith('archived')?'archived':'old',isCurrent:!url.pathname.endsWith('archived')},stats:counts,roster:[]});
+      if(url.pathname.endsWith('/history'))return response({operations:[],pagination:{page:1,limit:10,total:0,totalPages:0}});
+      if(url.pathname.endsWith('/preview')){if(window.__fault==='preview')return response('Preview unavailable',503);const scope=JSON.parse(options.body);window.__previewScope=scope;const selected=scope.sessionIds.map(id=>id==='old-other'?otherSession:session);const halls=selected.map(item=>({...counts,sessionId:item.id,examHallId:item.examHallId,hallName:item.hallNameSnapshot,roomNumber:item.roomNumberSnapshot,testCenterName:'Center',businessDate:'2026-10-10',attemptNumber:1,status:item.status,staffActivity:'UNKNOWN',lastMarkAt:null}));const totals=Object.fromEntries(['expectedCount','markedCount','presentCount','lateCount','absentCount','manualCount','qrCount'].map(key=>[key,halls.reduce((sum,item)=>sum+item[key],0)]));return response({challenge:'challenge',expiresAt:new Date(Date.now()+(window.__fault==='expired'?-1000:300000)).toISOString(),scope,halls,totals});}
+      if(url.pathname.endsWith('/confirm')){window.__writes.push({key:options.headers['Idempotency-Key'],body:JSON.parse(options.body)});if(window.__fault==='network'){window.__fault='';throw new Error('NetworkError');}if(window.__fault==='wait')await new Promise(resolve=>window.__confirmRelease=resolve);if(window.__fault==='server'){window.__fault='';return response('Server temporarily unavailable',503);}if(window.__fault==='conflict')return response('Preview is stale. Preview again.',409);resetDone=true;const selected=window.__previewScope.sessionIds.map(id=>id==='old-other'?otherSession:session);return response({resetReference:'reset-1',completedAt:new Date().toISOString(),attempts:selected.map(item=>({previousSessionId:item.id,newSessionId:item.id==='old-other'?'fresh-other':'fresh',examHallId:item.examHallId,hallName:item.hallNameSnapshot,attemptNumber:2,expectedCount:3})),affectedCandidates:3*selected.length,status:'COMPLETED'});}
+      return response('Unexpected route',404);
+    };
+    createRoot(document.getElementById('root')).render(new URL(location.href).searchParams.has('hub')?<AttendanceHubView/>:<AttendanceResetCenter selectedSession={session} centers={[{id:'center',name:'Center'}]} hallCenters={[{id:'hall',testCenterId:'center'},{id:'hall-other',testCenterId:'center'}]} disabled={false} onDialogChange={()=>{}} onReset={result=>window.__outcome=result}/>);
+  `;
+  const bundle = await build({ stdin: { contents: fixture, resolveDir: root, loader: 'tsx' }, bundle: true, write: false, format: 'iife', platform: 'browser', define: { 'import.meta.env': JSON.stringify({ VITE_API_URL: 'http://fixture.invalid' }) }, plugins: [{ name: 'auth-fixture', setup(builder: any) { builder.onResolve({ filter: /authContext$/ }, () => ({ path: 'auth', namespace: 'fixture' })); builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const useAuth=()=>({role:new URL(location.href).searchParams.get("role")||"SUPER_ADMIN"});', loader: 'js' })); } }] });
+  const app = express(); const assets = path.join(root, 'dist/assets'); const css = fs.readdirSync(assets).find(name => name.endsWith('.css'))!;
+  app.get('/style.css', (_req, res) => res.sendFile(path.join(assets, css)));
+  app.get('/bundle.js', (_req, res) => res.type('js').send(bundle.outputFiles[0].text));
+  app.get('/', (_req, res) => res.send('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="root" class="p-4 min-w-0"></div><script src="/bundle.js"></script></body></html>'));
+  const server = app.listen(0, '127.0.0.1'); await new Promise<void>(resolve => server.once('listening', resolve));
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] }); const page = await browser.newPage(); let passed = 0;
+  const base = `http://127.0.0.1:${(server.address() as any).port}`;
+  const check = async (name: string, action: () => Promise<void>) => { await action(); passed++; console.log('PASS: ' + name); };
+  const click = async (text: string) => { await page.waitForFunction(text => Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === text && !button.disabled), {}, text); const buttons = await page.$$('button'); for (const button of buttons) if ((await button.evaluate(el => el.textContent))?.trim() === text) { await button.click(); return; } throw new Error('Missing ' + text); };
+  const visit = async () => { await page.goto(base); await page.waitForFunction(() => document.querySelector('input[name="reset-halls"]')); };
+  const preview = async () => { await click('Preview Attendance Reset'); await page.waitForSelector('[role="dialog"]'); };
+  const fill = async () => { await page.type('#reset-reason', 'Restart after operator verification'); await page.type('#reset-phrase', 'RESET ATTENDANCE'); };
+  try {
+    await check('restricted roles cannot see reset controls', async () => { for (const role of ['ADMIN', 'TEACHER', 'ACCOUNTANT']) { await page.goto(base + '?role=' + role); assert.equal(await page.$('#reset-center-title'), null); } });
+    await check('session loading prevents premature reset previews', async () => {await page.goto(base+'?loading=1'); await page.waitForFunction(() => document.body.innerText.includes('Loading current attendance attempts')); assert(await page.$eval('#attendance-reset-preview', el => (el as HTMLButtonElement).disabled)); await page.evaluate(() => (window as any).__release()); await page.waitForSelector('input[name="reset-halls"]');});
+    await check('center selection and overview use real session values', async () => { await visit(); await page.select('#reset-center', 'center'); await page.waitForSelector('input[name="reset-halls"]'); assert((await page.evaluate(() => document.body.innerText)).includes('66.7%')); await preview(); const request = await page.evaluate(() => (window as any).__requests.find((item: any) => item.url.endsWith('/preview'))); assert.equal(JSON.parse(request.body).testCenterId, 'center'); await page.keyboard.press('Escape'); });
+    await check('preview performs no attendance writes and shows exact Hall counts', async () => { await visit(); await preview(); assert.equal(await page.evaluate(() => (window as any).__writes.length), 0); assert(await page.$('[aria-label="Reset impact preview"]')); });
+    await check('current CLOSED Hall can be selected and its original state is shown in preview', async () => {
+      await page.goto(base+'?closed=1');await page.waitForSelector('input[name="reset-halls"]');
+      assert(await page.evaluate(() => document.querySelector('input[name="reset-halls"]')?.parentElement?.textContent?.includes('CLOSED')));
+      await preview();assert(await page.$eval('[aria-label="Reset impact preview"]',el=>el.textContent?.includes('CLOSED')));
+      assert.equal(await page.evaluate(()=>(window as any).__writes.length),0);await page.keyboard.press('Escape');
+    });
+    await check('all-current mode includes every OPEN and CLOSED Hall and prevents subset selection', async () => {
+      await page.goto(base+'?mixed=1');await page.waitForSelector('input[name="reset-halls"]');await page.select('#reset-mode','CURRENT');
+      await page.waitForFunction(()=>{const options=Array.from(document.querySelectorAll<HTMLInputElement>('input[name="reset-halls"]'));return options.length===2&&options.every(option=>option.checked&&option.disabled);});
+      await preview();const request=await page.evaluate(()=>(window as any).__requests.find((item:any)=>item.url.endsWith('/preview')));assert.deepEqual(JSON.parse(request.body).sessionIds,['old','old-other']);assert.equal(JSON.parse(request.body).mode,'CURRENT');
+      const impact=await page.$eval('[aria-label="Reset impact preview"]',el=>el.textContent);assert(impact?.includes('OPEN'));assert(impact?.includes('CLOSED'));await page.keyboard.press('Escape');
+      await page.select('#reset-mode','EXAM_DATE');await page.select('#reset-center','center');await page.waitForFunction(()=>{const options=Array.from(document.querySelectorAll<HTMLInputElement>('input[name="reset-halls"]'));return options.length===2&&options.every(option=>option.checked&&option.disabled);});
+      assert.equal(await page.evaluate(()=>document.querySelectorAll('input[name="reset-halls"]').length),2);await visit();await preview();
+    });
+    await check('selected bulk mode permits an explicit mixed-status scope', async () => {
+      await page.goto(base+'?mixed=1');await page.waitForSelector('input[name="reset-halls"]');await page.select('#reset-mode','SELECTED');
+      await page.waitForFunction(()=>{const options=Array.from(document.querySelectorAll<HTMLInputElement>('input[name="reset-halls"]'));return options.length===2&&options.every(option=>!option.disabled);});
+      await page.evaluate(()=>{const options=Array.from(document.querySelectorAll<HTMLInputElement>('input[name="reset-halls"]'));options.filter(option=>!option.checked).forEach(option=>option.click());});await preview();
+      const request=await page.evaluate(()=>(window as any).__requests.find((item:any)=>item.url.endsWith('/preview')));assert.equal(JSON.parse(request.body).mode,'SELECTED');assert.deepEqual(JSON.parse(request.body).sessionIds,['old','old-other']);
+      assert(await page.evaluate(()=>document.querySelector('[aria-label="Reset impact preview"]')?.textContent?.includes('CLOSED')));await page.keyboard.press('Escape');await visit();await preview();
+    });
+    await check('reason and exact confirmation are required', async () => { assert(await page.$$eval('button', nodes => nodes.find(node => node.textContent === 'Reset Attendance')?.disabled)); await page.type('#reset-reason', 'Valid reason'); await page.type('#reset-phrase', 'RESET'); assert(await page.$$eval('button', nodes => nodes.find(node => node.textContent === 'Reset Attendance')?.disabled)); });
+    await check('short trimmed reset reason remains disabled with correct typed phrase', async () => {
+      await page.$eval('#reset-reason', el => { (el as HTMLTextAreaElement).select(); });await page.type('#reset-reason',' ab ');
+      await page.$eval('#reset-phrase', el => { (el as HTMLInputElement).select(); });await page.type('#reset-phrase','RESET ATTENDANCE');
+      assert(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Reset Attendance')?.disabled));
+      assert.equal(await page.evaluate(()=>(window as any).__writes.length),0);
+    });
+    await check('dialog traps focus including multiline reason and restores it', async () => { for (let index = 0; index < 12; index++) { await page.keyboard.press('Tab'); assert(await page.evaluate(() => document.querySelector('[role="dialog"]')?.contains(document.activeElement))); } await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('[role="dialog"]')); await page.waitForFunction(() => document.activeElement?.id === 'attendance-reset-preview'); });
+    await check('mobile impact table scrolls without page overflow', async () => { await page.setViewport({ width: 390, height: 844 }); await preview(); assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)); assert(await page.$eval('[role="dialog"]', el => el.getBoundingClientRect().bottom <= innerHeight)); await page.screenshot({path:path.join(os.tmpdir(),'azm-attendance-reset-mobile.png'),fullPage:true}); await page.keyboard.press('Escape'); });
+    await check('tablet preview fits viewport and keeps fields and footer accessible', async () => {
+      await page.setViewport({width:768,height:1024});await preview();
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      assert(await page.$eval('[role="dialog"]',el=>el.getBoundingClientRect().bottom<=innerHeight));
+      await page.focus('#reset-reason');assert(await page.evaluate(()=>document.activeElement?.id==='reset-reason'));
+      await page.screenshot({path:path.join(os.tmpdir(),'azm-attendance-reset-tablet.png'),fullPage:true});await page.keyboard.press('Escape');
+    });
+    await check('expired preview cannot be executed', async () => { await page.evaluate(() => (window as any).__fault = 'expired'); await preview(); await fill(); assert(await page.$$eval('button', nodes => nodes.find(node => node.textContent === 'Reset Attendance')?.disabled)); await page.keyboard.press('Escape'); });
+    await check('preview error is visible and not treated as success', async () => { await page.evaluate(() => (window as any).__fault = 'preview'); await click('Preview Attendance Reset'); await page.waitForFunction(() => document.body.innerText.includes('Preview unavailable')); assert.equal(await page.$('[role="dialog"]'), null); });
+    await check('uncertain confirm retry reuses idempotency key and frozen body', async () => { await page.evaluate(() => (window as any).__fault = ''); await preview(); await fill(); await page.evaluate(() => (window as any).__fault = 'network'); await click('Reset Attendance'); await page.waitForFunction(() => document.body.innerText.includes('outcome is unconfirmed')); assert(await page.$eval('#reset-reason', el => (el as HTMLTextAreaElement).disabled)); await click('Retry Same Confirmation'); await page.waitForFunction(() => !!(window as any).__outcome); const writes = await page.evaluate(() => (window as any).__writes); assert.equal(writes.length, 2); assert.equal(writes[0].key, writes[1].key); assert.deepEqual(writes[0].body, writes[1].body); assert.equal(await page.evaluate(() => (window as any).__outcome.attempts[0].newSessionId), 'fresh'); });
+    await check('reset history is read-only and has honest empty state', async () => { assert((await page.evaluate(() => document.body.innerText)).includes('No attendance reset events recorded.')); assert.equal(await page.$$eval('[aria-label="Reset audit history"] button', nodes => nodes.length), 0); });
+    await check('selected Halls scope excludes unselected OPEN Hall and completes CLOSED Hall reset', async () => {
+      await page.goto(base+'?mixed=1');await page.waitForSelector('input[name="reset-halls"]');await page.select('#reset-mode','SELECTED');
+      await page.waitForFunction(()=>Array.from(document.querySelectorAll<HTMLInputElement>('input[name="reset-halls"]')).every(option=>!option.disabled));
+      await page.evaluate(()=>{for(const option of Array.from(document.querySelectorAll<HTMLInputElement>('input[name="reset-halls"]'))){const required=!!option.parentElement?.textContent?.includes('Hall Two');if(option.checked!==required)option.click();}});
+      await preview();await fill();await click('Reset Attendance');await page.waitForFunction(()=>!!(window as any).__outcome);
+      const writes=await page.evaluate(()=>(window as any).__writes);assert.equal(writes.length,1);
+      const result=await page.evaluate(()=>(window as any).__outcome);assert.equal(result.attempts.length,1);assert.equal(result.attempts[0].previousSessionId,'old-other');
+    });
+    await check('mixed all-current confirmation creates results for entire reviewed scope', async () => {
+      await page.goto(base+'?mixed=1');await page.waitForSelector('input[name="reset-halls"]');await page.select('#reset-mode','CURRENT');
+      await page.waitForFunction(()=>Array.from(document.querySelectorAll<HTMLInputElement>('input[name="reset-halls"]')).every(option=>option.checked&&option.disabled));
+      await preview();await fill();await click('Reset Attendance');await page.waitForFunction(()=>!!(window as any).__outcome);
+      assert.deepEqual(await page.evaluate(()=>(window as any).__outcome.attempts.map((attempt:any)=>attempt.previousSessionId)),['old','old-other']);
+      assert.equal(await page.evaluate(()=>(window as any).__outcome.affectedCandidates),6);
+    });
+    await check('duplicate activation while confirmation is pending sends only one request', async () => {
+      await visit();await preview();await fill();await page.evaluate(()=>(window as any).__fault='wait');await click('Reset Attendance');
+      await page.waitForFunction(()=>!!(window as any).__confirmRelease);
+      assert(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Confirming…')?.disabled));
+      await page.evaluate(()=>{const button=Array.from(document.querySelectorAll('button')).find(node=>node.textContent==='Confirming…');button?.click();button?.click();});
+      assert.equal(await page.evaluate(()=>(window as any).__writes.length),1);await page.evaluate(()=>(window as any).__confirmRelease());await page.waitForFunction(()=>!!(window as any).__outcome);
+    });
+    await check('server failure preserves same confirmation and safely resolves retry', async () => {
+      await visit();await preview();await fill();await page.evaluate(()=>(window as any).__fault='server');await click('Reset Attendance');
+      await page.waitForFunction(()=>document.body.innerText.includes('Server temporarily unavailable'));
+      assert(await page.evaluate(()=>document.body.innerText.includes('outcome is unconfirmed')));await click('Retry Same Confirmation');await page.waitForFunction(()=>!!(window as any).__outcome);
+      const writes=await page.evaluate(()=>(window as any).__writes);assert.equal(writes.length,2);assert.equal(writes[0].key,writes[1].key);assert.deepEqual(writes[0].body,writes[1].body);
+    });
+    await check('typed adapter rejects malformed history and reset outcomes', async () => {
+      const rejected = await page.evaluate(async () => {
+        const good = {resetReference:'r',completedAt:new Date().toISOString(),attempts:[{previousSessionId:'a',newSessionId:'b',examHallId:'hall',hallName:'Hall One',attemptNumber:2,expectedCount:3}],affectedCandidates:3,status:'COMPLETED'};
+        const results = [];
+        for (const response of [{...good,status:'PENDING'}, {...good,completedAt:123}, {...good,affectedCandidates:-1}, {...good,attempts:[...good.attempts,...good.attempts]}, {...good,attempts:[...good.attempts,{previousSessionId:'b',newSessionId:'c',examHallId:'hall-other',hallName:'Hall Two',attemptNumber:2,expectedCount:0}]}]) { (window as any).__response=response; try {await (window as any).__api.confirm('c','reason','RESET ATTENDANCE','k');results.push(false);} catch {results.push(true);} }
+        for (const response of [{operations:[null],pagination:{page:1,limit:10,total:1,totalPages:1}}, {operations:[],pagination:{page:1,limit:10,total:-1,totalPages:0}}, {operations:[],pagination:{page:2,limit:10,total:0,totalPages:0}}]) { (window as any).__response=response; try {await (window as any).__api.history(1);results.push(false);}catch {results.push(true);} }
+        (window as any).__response=null;return results;
+      }); assert.equal(rejected.length,8);assert(rejected.every(Boolean));
+    });
+    await check('archived Hall attempts preserve metrics and prevent marking or closure', async () => {
+      await page.goto(base+'?hub=1'); await page.waitForSelector('#attendance-session'); await page.waitForFunction(() => document.body.innerText.includes('Candidate One'));
+      assert.equal(await page.$eval('#attendance-session',el => (el as HTMLSelectElement).value),'old'); assert(await page.$$eval('button', nodes => nodes.some(node => node.textContent === 'Mark Attendance'))); await click('Refresh workspace'); await page.waitForFunction(() => document.body.innerText.includes('Candidate One')); assert.equal(await page.$eval('#attendance-session',el => (el as HTMLSelectElement).value),'old');
+      assert(await page.evaluate(() => (window as any).__requests.some((request: any) => request.url.includes('includeHistory=true'))));
+      await page.select('#attendance-session','archived'); await page.waitForFunction(() => document.body.innerText.includes('ARCHIVED ATTEMPT')); await page.waitForFunction(() => document.body.innerText.includes('Candidate One'));
+      assert(await page.$$eval('button', nodes => !nodes.some(node => node.textContent === 'Mark Attendance' || node.textContent === 'Close Attendance Session')));
+      assert(await page.$$eval('button', nodes => nodes.find(node => node.textContent === 'QR attendance')?.disabled));
+      assert((await page.evaluate(() => document.body.innerText)).includes('33.3%'));
+      for (const width of [390,768,1280]) {await page.setViewport({width,height:844});assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));} await page.screenshot({path:path.join(os.tmpdir(),'azm-attendance-archive-desktop.png'),fullPage:true});
+    });
+    await check('reset of a different Hall navigates to its fresh zero-progress attempt', async () => {
+      await page.goto(base+'?hub=1&cross=1');await page.waitForFunction(() => document.body.innerText.includes('Candidate One'));
+      assert.equal(await page.$eval('#attendance-hall',el => (el as HTMLSelectElement).value),'hall');
+      await page.waitForSelector('input[name="reset-halls"]'); await page.evaluate(() => {const options=Array.from(document.querySelectorAll<HTMLInputElement>('input[name="reset-halls"]')); options.find(option => option.parentElement?.textContent?.includes('Hall Two'))?.click();});
+      await preview();await fill();await click('Reset Attendance');
+      await page.waitForFunction(() => (document.querySelector('#attendance-hall') as HTMLSelectElement)?.value==='hall-other' && (document.querySelector('#attendance-session') as HTMLSelectElement)?.value==='fresh-other' && document.body.innerText.includes('Candidate One'));
+      assert(await page.evaluate(() => document.body.innerText.includes('Attempt 2')));assert(await page.evaluate(() => document.body.innerText.includes('0%')));
+    });
+    console.log(`Attendance reset browser: ${passed} PASS, 0 FAIL.`);
+  } finally { await browser.close(); await new Promise<void>(resolve => server.close(() => resolve())); }
+}
+run().catch(error => { console.error(error); process.exitCode = 1; });

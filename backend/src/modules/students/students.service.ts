@@ -3,7 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import sharp from 'sharp';
 import { prisma, TransactionType } from '../../lib/prisma';
-import { TransactionStatus, TransactionSource, FeeStatus } from '@prisma/client';
+import { Prisma, TransactionStatus, TransactionSource, FeeStatus } from '@prisma/client';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
 import { supabaseStorage, StorageBucket } from '../../lib/supabaseStorage';
@@ -2149,19 +2149,66 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
     return officeRecord;
   }
 
-  /**
-   * Deletes a student record and cascade-deletes all associated transactions, fee records, and documents.
-   */
+  async deletionProtection(tx: Prisma.TransactionClient, id: string) {
+    const student = await tx.student.findUnique({ where: { id }, select: {
+      status: true, photoUrl: true, uploadedDocsJson: true, testScore: true, overallRank: true,
+      officeUse: true, documents: true,
+    } });
+    if (!student) throw Object.assign(new Error('Candidate not found.'), { statusCode: 404 });
+    const [frozenRosters, attendance, fees, financialTransactions, documents, documentAudits, academicRecords] = await Promise.all([
+      tx.attendanceSessionCandidate.count({ where: { studentId: id } }),
+      tx.attendance.count({ where: { studentId: id } }),
+      tx.feeRecord.count({ where: { studentId: id } }),
+      tx.transaction.count({ where: { feeRecord: { studentId: id } } }),
+      tx.studentDocument.count({ where: { studentId: id } }),
+      tx.studentDocumentAudit.count({ where: { studentId: id } }),
+      tx.academicRecord.count({ where: { studentId: id } }),
+    ]);
+    const counts = {
+      frozenRosters, attendance, fees, financialTransactions, documents, documentAudits, academicRecords,
+      legacyAttachments: student.photoUrl || (student.uploadedDocsJson && student.uploadedDocsJson !== '{}') ? 1 : 0,
+      documentChecklist: student.documents && Object.entries(student.documents)
+        .some(([key, value]) => key !== 'id' && key !== 'studentId' && Boolean(value)) ? 1 : 0,
+      examinationResults: student.testScore !== null || student.overallRank !== null ? 1 : 0,
+      officeHistory: student.officeUse && Object.entries(student.officeUse)
+        .some(([key, value]) => key !== 'id' && key !== 'studentId' && Boolean(value)) ? 1 : 0,
+    };
+    const labels: Record<keyof typeof counts, string> = {
+      frozenRosters: 'Frozen examination Hall rosters', attendance: 'Attendance records',
+      fees: 'Fee records', financialTransactions: 'Financial transactions', documents: 'Stored documents',
+      documentAudits: 'Document audit events', academicRecords: 'Academic records',
+      legacyAttachments: 'Registration attachments', examinationResults: 'Examination results', officeHistory: 'Office review history',
+      documentChecklist: 'Document checklist history',
+    };
+    const blockers = Object.entries(counts).filter(([, count]) => count > 0)
+      .map(([kind, count]) => ({ kind, label: labels[kind as keyof typeof counts], count }));
+    return { canPermanentlyDelete: blockers.length === 0, canDeactivate: student.status === 'ACTIVE', counts, blockers };
+  }
+
+  async getDeletionProtection(id: string) {
+    return prisma.$transaction(tx => this.deletionProtection(tx, id), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  /** Retain examination, financial, document and academic history. */
   async deleteStudent(id: string) {
-    const student = await this.getStudentById(id);
-
-    // Financial Ledger transactions are immutable records. Linked fee transaction references
-    // are safely decoupled via onDelete: SetNull at the schema layer. Do not delete transactions.
-
-    // Delete student (Prisma cascades academicRecords, documents, officeUse, attendance, feeRecords)
-    return prisma.student.delete({
-      where: { id },
-    });
+    try {
+      return await prisma.$transaction(async tx => {
+        const protection = await this.deletionProtection(tx, id);
+        if (!protection.canPermanentlyDelete) {
+          throw Object.assign(new Error(protection.counts.frozenRosters
+            ? 'Cannot permanently delete this candidate because they are included in an examination Hall attendance session. Deactivate the candidate instead to preserve their history.'
+            : 'Cannot permanently delete this candidate because they have protected records. Deactivate the candidate instead to preserve their history.'),
+          { statusCode: 409, code: 'CANDIDATE_DELETION_PROTECTED', details: protection });
+        }
+        return tx.student.delete({ where: { id } });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error: any) {
+      const foreignKeyConflict = error.code === 'P2003' || (error instanceof Prisma.PrismaClientUnknownRequestError
+        && /foreign key constraint/.test(error.message) && /(?:23001|23503)/.test(error.message));
+      if (foreignKeyConflict) throw Object.assign(new Error('Cannot permanently delete this candidate because a related record protects their history. Refresh the dependency summary or deactivate the candidate instead.'), { statusCode: 409, code: 'CANDIDATE_DELETION_PROTECTED' });
+      if (error.code === 'P2034') throw Object.assign(new Error('Candidate records changed during deletion. Refresh the dependency summary before trying again.'), { statusCode: 409, code: 'CANDIDATE_DELETION_CONFLICT' });
+      throw error;
+    }
   }
 
   /**
