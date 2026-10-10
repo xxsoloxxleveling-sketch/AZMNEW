@@ -100,7 +100,7 @@ export class ExamHallsService {
 
   async getCandidates(query: CandidateQueryInput) {
     const { page, limit, search, assignment } = query;
-    const where: Prisma.StudentWhereInput = {};
+    const where: Prisma.StudentWhereInput = { status: 'ACTIVE' };
     const classWhere = buildStudentClassWhere(query.class);
     if (classWhere) where.AND = [classWhere];
     if (query.gender) where.gender = query.gender;
@@ -168,7 +168,7 @@ export class ExamHallsService {
   private async guardOpenAttendance(tx: Prisma.TransactionClient, studentIds: string[]) {
     if (!studentIds.length) return;
     const active = await tx.attendanceSessionCandidate.findFirst({
-      where: { studentId: { in: studentIds }, session: { status: 'OPEN' } }, select: { id: true },
+      where: { studentId: { in: studentIds }, session: { status: 'OPEN', isCurrent: true } }, select: { id: true },
     });
     if (active) fail(409, 'Candidate belongs to an OPEN examination attendance session. Close that session before moving or unassigning the candidate.');
   }
@@ -176,8 +176,9 @@ export class ExamHallsService {
   private async assign(tx: Prisma.TransactionClient, hallId: string, ids: string[], explicitSeat?: string | null) {
     const hall = await this.hall(tx, hallId);
     const studentIds = [...new Set(ids)].sort();
-    const students = await tx.student.findMany({ where: { id: { in: studentIds } }, select: candidateSelect });
+    const students = await tx.student.findMany({ where: { id: { in: studentIds } }, select: { ...candidateSelect, status: true } });
     if (students.length !== studentIds.length) fail(404, 'One or more selected candidates do not exist.');
+    if (students.some(student => student.status !== 'ACTIVE' && student.assignedHallId !== hallId)) fail(409, 'Only ACTIVE candidates may receive a new Hall allocation.');
     await this.guardOpenAttendance(tx, students.filter(student => student.assignedHallId !== hallId).map(student => student.id));
     const occupants = await tx.student.findMany({ where: { assignedHallId: hallId }, select: { id: true, seatNo: true } });
     const newcomers = students.filter(s => s.assignedHallId !== hallId).length;

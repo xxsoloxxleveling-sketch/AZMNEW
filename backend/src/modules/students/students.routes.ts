@@ -220,6 +220,12 @@ router.patch(
   studentsController.update
 );
 
+router.get(
+  '/:id/deletion-protection',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  studentsController.deletionProtection
+);
+
 router.delete(
   '/:id',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),

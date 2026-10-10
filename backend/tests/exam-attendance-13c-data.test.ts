@@ -70,6 +70,7 @@ async function run() {
       const oldRow = (await db.query('SELECT id,"studentId",date,status,"markedByUserId",method,"createdAt" FROM "Attendance" WHERE id=$1', ['legacy-mark-13c'])).rows[0];
       fs.writeFileSync(schemaPath, extendedSchema);
       fs.cpSync(migrationPath, path.join(migrationRoot, migrationName), { recursive: true });
+      fs.cpSync(path.join(backend, 'prisma/migrations/20261010120000_attendance_reset_attempts'), path.join(migrationRoot, '20261010120000_attendance_reset_attempts'), { recursive: true });
       execFileSync(process.execPath, [cli, 'migrate', 'deploy', '--schema', schemaPath], { cwd: backend, env: upgradeEnv, stdio: 'pipe' });
       await check('upgrade preserves legacy Attendance unchanged with nullable sessionId and no synthetic sessions', async () => {
         const after = (await db.query('SELECT id,"studentId",date,status,"markedByUserId",method,"createdAt","sessionId" FROM "Attendance" WHERE id=$1', ['legacy-mark-13c'])).rows[0];
@@ -80,7 +81,7 @@ async function run() {
       await check('session, frozen-roster, attendance indexes and foreign keys exist', async () => {
         const indexes = await db.query("SELECT indexname FROM pg_indexes WHERE schemaname='public'");
         const names = new Set(indexes.rows.map((r: any) => r.indexname));
-        for (const n of ['Attendance_sessionId_studentId_key','Attendance_studentId_idx','AttendanceSession_examHallId_businessDate_key','AttendanceSession_businessDate_idx','AttendanceSession_status_idx','AttendanceSessionCandidate_sessionId_studentId_key','AttendanceSessionCandidate_studentId_idx']) assert(names.has(n), n);
+        for (const n of ['Attendance_sessionId_studentId_key','Attendance_studentId_idx','AttendanceSession_examHallId_businessDate_attemptNumber_key','AttendanceSession_current_hall_date_key','AttendanceSession_businessDate_idx','AttendanceSession_status_idx','AttendanceSessionCandidate_sessionId_studentId_key','AttendanceSessionCandidate_studentId_idx']) assert(names.has(n), n);
         const constraints = await db.query("SELECT conname FROM pg_constraint WHERE conrelid IN ('\"AttendanceSession\"'::regclass,'\"AttendanceSessionCandidate\"'::regclass,'\"Attendance\"'::regclass)");
         const foreignKeys = new Set(constraints.rows.map((r: any) => r.conname));
         for (const n of ['AttendanceSession_examHallId_fkey','AttendanceSessionCandidate_sessionId_fkey','AttendanceSessionCandidate_studentId_fkey','Attendance_sessionId_fkey','Attendance_sessionId_studentId_fkey']) assert(foreignKeys.has(n), n);

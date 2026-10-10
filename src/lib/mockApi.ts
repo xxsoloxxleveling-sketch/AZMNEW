@@ -3,6 +3,13 @@ import { setToken, setRefreshToken, setUser, getUser, getToken } from './auth';
 import { apiFetch, apiDownloadPdf, apiOpenPdfForPrint, API_BASE_URL } from './apiClient';
 export { API_BASE_URL };
 
+export interface StudentDeletionProtection {
+  canPermanentlyDelete: boolean;
+  canDeactivate: boolean;
+  counts: Record<string, number>;
+  blockers: { kind: string; label: string; count: number }[];
+}
+
 export interface HallCandidate {
   legacyAllocationNeedsReview?: boolean;
   id: string;
@@ -256,6 +263,9 @@ export interface AttendancePagination {
 }
 export interface AttendanceSession {
   id: string;
+  attemptNumber?: number;
+  isCurrent?: boolean;
+  archivedAt?: string | null;
   examHallId: string;
   businessDate: string;
   status: 'OPEN' | 'CLOSED';
@@ -1199,6 +1209,11 @@ export const mockApi = {
     return res?.data || res;
   },
 
+  async getStudentDeletionProtection(studentId: string): Promise<StudentDeletionProtection> {
+    const res = await apiFetch<any>(`/api/students/${encodeURIComponent(studentId)}/deletion-protection`);
+    return res?.data || res;
+  },
+
   async deleteStudent(studentId: string): Promise<boolean> {
     await apiFetch<any>(`/api/students/${studentId}`, {
       method: 'DELETE',
@@ -1575,13 +1590,14 @@ export const mockApi = {
   },
 
   // 5. Hall-scoped attendance sessions
-  async getAttendanceSessions(query?: { page?: number; limit?: number; examHallId?: string; businessDate?: string; status?: 'OPEN' | 'CLOSED' }): Promise<AttendanceSessionListResponse> {
+  async getAttendanceSessions(query?: { page?: number; limit?: number; examHallId?: string; businessDate?: string; status?: 'OPEN' | 'CLOSED'; includeHistory?: boolean }): Promise<AttendanceSessionListResponse> {
     const params = new URLSearchParams();
     params.set('page', String(query?.page || 1));
     params.set('limit', String(query?.limit || 25));
     if (query?.examHallId) params.set('examHallId', query.examHallId);
     if (query?.businessDate) params.set('businessDate', query.businessDate);
     if (query?.status) params.set('status', query.status);
+    if (query?.includeHistory !== undefined) params.set('includeHistory', String(query.includeHistory));
     const res: any = await apiFetch<any>(`/api/attendance/sessions?${params.toString()}`);
     if (!Array.isArray(res?.sessions) || !res?.pagination) throw new Error('Invalid attendance sessions response');
     validateAttendancePagination(res.pagination);

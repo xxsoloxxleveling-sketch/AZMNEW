@@ -345,6 +345,9 @@ enum AttendanceSessionStatus {
 
 model AttendanceSession {
   id                       String @id @default(cuid())
+  attemptNumber            Int @default(1)
+  isCurrent                Boolean @default(true)
+  archivedAt               DateTime?
   examHallId               String
   examHall                 ExamHall @relation(fields: [examHallId], references: [id], onDelete: Restrict)
   businessDate             DateTime @db.Date
@@ -363,9 +366,28 @@ model AttendanceSession {
   candidates               AttendanceSessionCandidate[]
   attendance               Attendance[]
 
-  @@unique([examHallId, businessDate])
+  @@unique([examHallId, businessDate, attemptNumber])
   @@index([businessDate])
   @@index([status])
+}
+
+model AttendanceResetOperation {
+  id             String @id @default(cuid())
+  actorId        String
+  actorName      String
+  idempotencyKey String
+  challengeNonce String @unique
+  requestHash    String
+  reason         String
+  mode           String
+  businessDate   DateTime @db.Date
+  affectedCandidates Int
+  scope          Json
+  result         Json
+  completedAt    DateTime @default(now())
+
+  @@unique([actorId, idempotencyKey])
+  @@index([completedAt])
 }
 
 model AttendanceSessionCandidate {

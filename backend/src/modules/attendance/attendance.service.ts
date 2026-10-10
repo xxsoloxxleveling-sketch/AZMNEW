@@ -18,12 +18,12 @@ const rosterSelect = {
   applicationNoSnapshot: true, currentClassSnapshot: true, seatNoSnapshot: true,
   attendance: { select: { status: true, method: true, createdAt: true } },
 } satisfies Prisma.AttendanceSessionCandidateSelect;
-function metrics(expectedCount: number, marks: {status: string}[]) {
+function metrics(expectedCount: number, marks: {status: string; method?: string}[]) {
   const presentCount = marks.filter(mark => mark.status === 'PRESENT').length;
   const lateCount = marks.filter(mark => mark.status === 'LATE').length;
   const absentCount = marks.filter(mark => mark.status === 'ABSENT').length;
   return { expectedCount, markedCount: marks.length, presentCount, lateCount, absentCount,
-    unmarkedCount: expectedCount - marks.length,
+    unmarkedCount: expectedCount - marks.length, manualCount: marks.filter(mark => mark.method === 'MANUAL').length, qrCount: marks.filter(mark => mark.method === 'QR_SCAN').length, completionPercentage: expectedCount > 0 ? Math.round(marks.length / expectedCount * 1000) / 10 : 0,
     attendancePercentage: expectedCount > 0 ? Math.round((presentCount + lateCount) / expectedCount * 1000) / 10 : null };
 }
 function rosterRow(row: any) {
@@ -56,6 +56,7 @@ export class AttendanceService {
     const locked = await tx.$queryRaw<{id: string}[]>`SELECT id FROM "AttendanceSession" WHERE id = ${sessionId} FOR UPDATE`;
     if (!locked.length) fail(404, 'Examination attendance session not found.');
     const session = await tx.attendanceSession.findUniqueOrThrow({ where: { id: sessionId } });
+    if (!session.isCurrent) fail(409, 'This attendance attempt has been archived. Refresh the current Hall session.');
     if (session.status !== 'OPEN') fail(409, 'This examination attendance session is CLOSED.');
     return session;
   }
@@ -69,13 +70,14 @@ export class AttendanceService {
     this.operator(userId);
     if (!examHallId?.trim()) fail(400, 'Examination Hall is required.');
     return this.transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "ExamHall" WHERE id = ${examHallId} FOR UPDATE`;
       const hall = await tx.examHall.findUnique({ where: { id: examHallId }, include: { testCenter: { select: { name: true } } } });
       if (!hall) fail(404, 'Examination Hall not found.');
       const businessDate = hallDate(hall.examDate);
       if (!businessDate) fail(409, 'Configure a valid examination date on this Hall before opening attendance.');
-      if (await tx.attendanceSession.findUnique({ where: { examHallId_businessDate: { examHallId, businessDate } } })) fail(409, 'An examination attendance session already exists for this Hall and business date.');
+      if (await tx.attendanceSession.findFirst({ where: { examHallId, businessDate, isCurrent: true } })) fail(409, 'An examination attendance session already exists for this Hall and business date.');
       // Snapshot every explicit assignment, independently of class and legacy mirrors.
-      const candidates = await tx.student.findMany({ where: { assignedHallId: examHallId }, select: { id: true, fullName: true, rollNumber: true, applicationNo: true, currentClass: true, seatNo: true }, orderBy: { id: 'asc' } });
+      const candidates = await tx.student.findMany({ where: { assignedHallId: examHallId, status: 'ACTIVE' }, select: { id: true, fullName: true, rollNumber: true, applicationNo: true, currentClass: true, seatNo: true }, orderBy: { id: 'asc' } });
       if (!candidates.length) fail(409, 'No explicitly assigned candidates are available for this examination Hall. Complete Hall allocation before opening attendance.');
       const session = await tx.attendanceSession.create({ data: {
         examHallId, businessDate, openedByUserId: userId, hallNameSnapshot: hall.name,
@@ -134,9 +136,9 @@ export class AttendanceService {
   async getSession(sessionId: string) { return this.transaction(tx => this.detail(tx, sessionId)); }
   async listSessions(query: SessionQueryInput) {
     return this.transaction(async tx => {
-      const where = { ...(query.examHallId ? { examHallId: query.examHallId } : {}), ...(query.businessDate ? { businessDate: hallDate(query.businessDate)! } : {}), ...(query.status ? { status: query.status } : {}) };
+      const where = { ...(query.includeHistory ? {} : { isCurrent: true }), ...(query.examHallId ? { examHallId: query.examHallId } : {}), ...(query.businessDate ? { businessDate: hallDate(query.businessDate)! } : {}), ...(query.status ? { status: query.status } : {}) };
       const total = await tx.attendanceSession.count({ where });
-      const sessions = await tx.attendanceSession.findMany({ where, orderBy: [{ businessDate: 'desc' }, { id: 'asc' }], skip: (query.page - 1) * query.limit, take: query.limit, include: { _count: { select: { candidates: true } }, attendance: { select: { status: true } } } });
+      const sessions = await tx.attendanceSession.findMany({ where, orderBy: [{ businessDate: 'desc' }, { isCurrent: 'desc' }, { attemptNumber: 'desc' }, { id: 'asc' }], skip: (query.page - 1) * query.limit, take: query.limit, include: { _count: { select: { candidates: true } }, attendance: { select: { status: true, method: true } } } });
       return { sessions: sessions.map(({ _count, attendance, ...session }) => ({ ...session, stats: metrics(_count.candidates, attendance) })), pagination: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) } };
     });
   }
@@ -153,7 +155,7 @@ export class AttendanceService {
   async getTodayAttendance(now = new Date()) {
     return this.transaction(async tx => {
       const businessDate = karachiBusinessDate(now);
-      const sessions = await tx.attendanceSession.findMany({ where: { businessDate }, select: { _count: { select: { candidates: true } }, attendance: { select: { status: true } } } });
+      const sessions = await tx.attendanceSession.findMany({ where: { businessDate, isCurrent: true }, select: { _count: { select: { candidates: true } }, attendance: { select: { status: true, method: true } } } });
       return { date: businessDate.toISOString().slice(0, 10), sessionCount: sessions.length, ...metrics(sessions.reduce((total, session) => total + session._count.candidates, 0), sessions.flatMap(session => session.attendance)) };
     });
   }

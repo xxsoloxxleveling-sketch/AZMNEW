@@ -19,7 +19,8 @@ import {
   CheckCircle2 as IconApproveFee,
 } from 'lucide-react';
 import { StatusBadge } from '../shared/StatusBadge';
-import { mockApi, MockStudent } from '../../../lib/mockApi';
+import { mockApi, MockStudent, StudentDeletionProtection } from '../../../lib/mockApi';
+import { AttendanceDialog, attendanceSecondary } from '../attendance/AttendanceDialog';
 import { AdminWalkInModal } from './AdminWalkInModal';
 import { StudentDetailView } from './StudentDetailView';
 import { RollSlipPreviewModal } from './RollSlipPreviewModal';
@@ -57,6 +58,16 @@ export const StudentsListView: React.FC = () => {
   const elapsedPdfLabel = `${String(Math.floor(pdfExportElapsedSeconds / 60)).padStart(2, '0')}:${String(pdfExportElapsedSeconds % 60).padStart(2, '0')}`;
   const [studentToDelete, setStudentToDelete] = useState<MockStudent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletionProtection, setDeletionProtection] = useState<StudentDeletionProtection | null>(null);
+  const [deletionError, setDeletionError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    setDeletionProtection(null); setDeletionError('');
+    if (studentToDelete) mockApi.getStudentDeletionProtection(studentToDelete.id)
+      .then(result => { if (!cancelled) setDeletionProtection(result); })
+      .catch(error => { if (!cancelled) setDeletionError(error.message || 'Could not check protected records.'); });
+    return () => { cancelled = true; };
+  }, [studentToDelete]);
   const [rollStatus, setRollStatus] = useState<{ readyCount: number; issuedCount: number; totalPaidCount: number; scheduledDate?: string } | null>(null);
   const [showBatchRollModal, setShowBatchRollModal] = useState(false);
   const [isIssuingBatch, setIsIssuingBatch] = useState(false);
@@ -254,17 +265,29 @@ export const StudentsListView: React.FC = () => {
   }, [students, compactListMode]);
 
   const handleConfirmDelete = async () => {
-    if (!studentToDelete) return;
+    if (!studentToDelete || !deletionProtection?.canPermanentlyDelete || isDeleting) return;
     setIsDeleting(true);
     try {
       await mockApi.deleteStudent(studentToDelete.id);
       setStudentToDelete(null);
       await fetchStudents();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete student.');
+      setDeletionError(err.message || 'Failed to delete student.');
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const handleDeactivateCandidate = async () => {
+    if (!studentToDelete || !deletionProtection?.canDeactivate || isDeleting) return;
+    setIsDeleting(true); setDeletionError('');
+    try {
+      await mockApi.updateStudent(studentToDelete.id, { status: 'INACTIVE' });
+      setStudentToDelete(null);
+      await fetchStudents();
+    } catch (error: any) {
+      setDeletionError(error.message || 'Could not deactivate candidate.');
+    } finally { setIsDeleting(false); }
   };
 
   const handleSort = (field: 'rollNumber' | 'fullName' | 'currentClass') => {
@@ -1180,42 +1203,27 @@ export const StudentsListView: React.FC = () => {
         onClose={() => setBulkPrintType(null)}
       />
 
-      {/* Confirm Student Delete Modal (Super Admin Only) */}
+      {/* Candidate history is checked server-side before permanent deletion. */}
       {studentToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4">
-            <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center mx-auto border border-rose-100">
-              <IconAlertTriangle size={24} />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Delete Candidate Record?</h3>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Are you sure you want to permanently delete{' '}
-                <strong className="text-slate-800">{studentToDelete.fullName}</strong> (
-                {studentToDelete.rollNumber || studentToDelete.applicationNo}) from the database? This action cannot be undone.
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setStudentToDelete(null)}
-                disabled={isDeleting}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-              >
-                {isDeleting ? <IconLoader size={14} className="animate-spin" /> : <IconDeleteCandidate size={14} />}
-                <span>{isDeleting ? 'Deleting...' : 'Yes, Delete Record'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <AttendanceDialog title="Candidate Record Actions" busy={isDeleting} onClose={() => setStudentToDelete(null)} footer={<>
+          <button type="button" className={attendanceSecondary} disabled={isDeleting} onClick={() => setStudentToDelete(null)}>Cancel</button>
+          {deletionProtection?.canDeactivate && <button type="button" className={attendanceSecondary} disabled={isDeleting} onClick={handleDeactivateCandidate}>Deactivate Candidate</button>}
+          <button type="button" disabled={isDeleting || !deletionProtection?.canPermanentlyDelete} onClick={handleConfirmDelete}
+            className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:opacity-50 disabled:cursor-not-allowed">{isDeleting ? 'Saving…' : 'Permanently Delete'}</button>
+        </>}>
+          <p className="text-sm text-slate-700"><strong>{studentToDelete.fullName}</strong> · {studentToDelete.rollNumber || studentToDelete.applicationNo}</p>
+          {!deletionProtection && !deletionError && <p role="status" className="mt-3 text-xs text-slate-600">Checking protected records…</p>}
+          {deletionError && <p role="alert" className="mt-3 text-xs text-rose-700">{deletionError}</p>}
+          {deletionProtection && <>
+            <p className="mt-3 text-xs text-slate-600">{deletionProtection.canPermanentlyDelete
+              ? 'No protected history was found. Permanent deletion removes this registration and cannot be undone.'
+              : 'Permanent deletion is blocked to preserve candidate history. Deactivation preserves registration, Hall assignments, attendance, financial records and documents.'}</p>
+            {deletionProtection.blockers.length > 0 && <dl className="mt-3 divide-y divide-slate-200 border-y border-slate-200">
+              {deletionProtection.blockers.map(blocker => <div key={blocker.kind} className="flex justify-between gap-3 py-2 text-xs"><dt>{blocker.label}</dt><dd className="font-semibold tabular-nums">{blocker.count}</dd></div>)}
+            </dl>}
+            {deletionProtection.canDeactivate && <p className="mt-3 text-xs text-slate-600">Deactivate Candidate sets this candidate to Inactive and prevents new attendance marks or new Hall allocations. Existing historical records remain available.</p>}
+          </>}
+        </AttendanceDialog>
       )}
 
       {/* Batch Issue Roll Numbers Modal */}
