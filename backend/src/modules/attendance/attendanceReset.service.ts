@@ -94,15 +94,15 @@ export class AttendanceResetService {
       const resetReference = randomUUID(), completedAt = this.now().toISOString();
       const attempts = [];
       for (const old of snapshot.sessions) {
-        await tx.attendanceSession.update({ where: { id: old.id }, data: { isCurrent: false, archivedAt: this.now(), ...(old.status === 'CLOSED' ? { updatedAt: old.updatedAt } : {}) } });
+        await tx.attendanceSession.update({ where: { id: old.id }, data: { isCurrent: false, archivedAt: this.now(), updatedAt: old.updatedAt } });
         const next = await tx.attendanceSession.create({ data: { examHallId: old.examHallId, businessDate: old.businessDate, attemptNumber: old.attemptNumber + 1, openedByUserId: actorId, hallNameSnapshot: old.hallNameSnapshot, roomNumberSnapshot: old.roomNumberSnapshot, testCenterNameSnapshot: old.testCenterNameSnapshot, examDateSnapshot: old.examDateSnapshot, reportingTimeSnapshot: old.reportingTimeSnapshot } });
         if (old.candidates.length) await tx.attendanceSessionCandidate.createMany({ data: old.candidates.map(({id, createdAt, sessionId, ...candidate}) => ({ ...candidate, sessionId: next.id })) });
         attempts.push({ previousSessionId: old.id, newSessionId: next.id, attemptNumber: next.attemptNumber, examHallId: old.examHallId, hallName: old.hallNameSnapshot, expectedCount: old.candidates.length });
       }
       const result = { resetReference, completedAt, attempts, affectedCandidates: snapshot.totals.expectedCount, status: 'COMPLETED' };
-      await tx.attendanceResetOperation.create({ data: { id: resetReference, actorId, actorName: actor.name, idempotencyKey, challengeNonce: challenge.nonce, requestHash, reason: input.reason, mode: challenge.scope.mode, businessDate: hallDate(challenge.scope.businessDate)!, affectedCandidates: snapshot.totals.expectedCount, scope: challenge.scope as unknown as Prisma.InputJsonValue, result } });
+      await tx.attendanceResetOperation.create({ data: { id: resetReference, actorId, actorName: actor.name, idempotencyKey, challengeNonce: challenge.nonce, requestHash, reason: input.reason, mode: challenge.scope.mode, businessDate: hallDate(challenge.scope.businessDate)!, affectedCandidates: snapshot.totals.expectedCount, scope: challenge.scope as unknown as Prisma.InputJsonValue, result, completedAt: new Date(completedAt) } });
       // Surface deferred archival validation before returning a success through Prisma.
-      await tx.$executeRaw`SET CONSTRAINTS "AttendanceSession_closed_reset_coherence" IMMEDIATE`;
+      await tx.$executeRaw`SET CONSTRAINTS "AttendanceSession_closed_reset_coherence", "AttendanceResetOperation_insert_validation" IMMEDIATE`;
       return result;
     });
   }

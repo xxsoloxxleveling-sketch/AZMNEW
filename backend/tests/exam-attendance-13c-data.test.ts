@@ -157,7 +157,10 @@ async function run() {
           const overview = await dashboard.getOverview(); assert.equal(overview.attendanceToday.sessionCount, 2); assert.equal(overview.attendanceToday.expectedCount, 2); assert.equal(overview.attendanceToday.markedCount, 1); assert.equal(overview.attendanceToday.attendancePercentage, 50);
           assert((await prisma.student.count({ where: { status: 'ACTIVE' } })) > 2);
         });
-        await prisma.attendanceSession.delete({ where: { id: emptyToday.id } });
+        await check('even an empty attendance attempt retains its immutable historical identity', async () => {
+          await assert.rejects(() => prisma.attendanceSession.delete({ where: { id: emptyToday.id } }), /immutable historical identities/);
+          assert.equal((await prisma.attendanceSession.findUniqueOrThrow({ where: { id: emptyToday.id } })).isCurrent, true);
+        });
 
         await hall('race13c', '2026-11-19'); await student('race13c-student', 'Class 9th', 'race13c');
         const raceSession = await attendance.openSession('race13c', 'operator');

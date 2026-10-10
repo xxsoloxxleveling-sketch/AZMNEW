@@ -533,6 +533,7 @@ export const StudentsListView: React.FC = () => {
               <IconSearch size={16} className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
+                id="student-directory-search"
                 placeholder="Search name, roll, or CNIC..."
                 value={searchQuery}
                 onChange={(e) => {
@@ -1205,7 +1206,7 @@ export const StudentsListView: React.FC = () => {
 
       {/* Candidate history is checked server-side before permanent deletion. */}
       {studentToDelete && (
-        <AttendanceDialog title="Candidate Record Actions" busy={isDeleting} onClose={() => setStudentToDelete(null)} footer={<>
+        <AttendanceDialog returnFocusId="student-directory-search" title="Candidate Record Actions" busy={isDeleting} onClose={() => setStudentToDelete(null)} footer={<>
           <button type="button" className={attendanceSecondary} disabled={isDeleting} onClick={() => setStudentToDelete(null)}>Cancel</button>
           {deletionProtection?.canDeactivate && <button type="button" className={attendanceSecondary} disabled={isDeleting} onClick={handleDeactivateCandidate}>Deactivate Candidate</button>}
           <button type="button" disabled={isDeleting || !deletionProtection?.canPermanentlyDelete} onClick={handleConfirmDelete}

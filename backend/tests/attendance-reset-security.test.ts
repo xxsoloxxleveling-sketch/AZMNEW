@@ -111,7 +111,7 @@ async function run() {
         `"reportingTimeSnapshot"='10:00'`, `"createdAt"="createdAt" + interval '1 day'`,
         `"updatedAt"="updatedAt" + interval '1 day'`,
       ]) {
-        await assert.rejects(() => sql!.query(`UPDATE "AttendanceSession" SET "isCurrent"=false,"archivedAt"=now(),${change} WHERE id=$1`, [active.id]), /immutable/);
+        await assert.rejects(() => sql!.query(`UPDATE "AttendanceSession" SET "isCurrent"=false,"archivedAt"=now(),${change} WHERE id=$1`, [active.id]), /immutable|archival may only change archive metadata/);
       }
       assert.deepEqual(await db.attendanceSession.findUnique({ where: { id: active.id } }), before);
     });
@@ -200,7 +200,7 @@ async function run() {
           if (variant !== 'roster') await tx.attendanceSessionCandidate.createMany({ data: roster.map(({ id, sessionId, createdAt, ...row }: any) => ({ ...row, sessionId: replacement.id })) });
           if (variant === 'marked') await tx.attendance.create({ data: { sessionId: replacement.id, studentId: 's', date: before.businessDate, status: 'PRESENT', method: 'MANUAL', markedByUserId: actorId } });
           await tx.attendanceResetOperation.create({ data: {
-            id: randomUUID(), actorId, actorName: actorId, idempotencyKey: randomUUID(), challengeNonce: randomUUID(), requestHash: 'Synthetic forged request',
+            id: randomUUID(), actorId, actorName: actorId, idempotencyKey: randomUUID(), challengeNonce: randomUUID(), requestHash: '0'.repeat(64),
             reason: 'Synthetic invalid archive', mode: 'HALL', businessDate: before.businessDate, affectedCandidates: roster.length,
             scope: { mode: 'HALL', businessDate: '2026-10-10', sessionIds: [variant === 'scope' ? 'unrelated' : before.id] },
             result: { status: 'COMPLETED', attempts: [{ previousSessionId: before.id, newSessionId: replacement.id }] },
