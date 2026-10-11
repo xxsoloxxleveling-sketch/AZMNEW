@@ -111,7 +111,15 @@ export class AttendanceResetService {
       await this.actor(tx, actorId, expectedTokenVersion);
       const total = await tx.attendanceResetOperation.count();
       const operations = await tx.attendanceResetOperation.findMany({ orderBy: [{completedAt:'desc'},{id:'asc'}], skip: (query.page - 1) * query.limit, take: query.limit, select: { id: true, actorName: true, reason: true, mode: true, businessDate: true, affectedCandidates: true, scope: true, result: true, completedAt: true } });
-      return { operations, pagination: { ...query, total, totalPages: Math.ceil(total / query.limit) } };
+      // Prisma @db.Date fields are Date objects and JSON.stringify emits full UTC timestamps.
+      // The Reset History API contract requires a date-only YYYY-MM-DD business date.
+      return {
+        operations: operations.map(row => ({
+          ...row,
+          businessDate: row.businessDate.toISOString().slice(0, 10),
+        })),
+        pagination: { ...query, total, totalPages: Math.ceil(total / query.limit) },
+      };
     });
   }
 }

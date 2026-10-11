@@ -7,11 +7,13 @@ on:
       - feature/staged-attendance-preserve-only
       - codex/stage1-truncate-guard
       - codex/stage1-final-runtime-security
+      - fix/attendance-reset-history-wire-date
   pull_request:
     branches:
       - feature/super-admin-session-lifecycle
       - feature/db-runtime-role-isolation
       - codex/stage1-truncate-guard
+      - codex/stage1-final-runtime-security
 
 permissions:
   contents: read
@@ -69,6 +71,8 @@ jobs:
         env:
           AZM_SYNTHETIC_PG_CONTAINER: ${{ job.services.postgres.id }}
         run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/runtime-role-isolation.test.ts
+      - name: Regression - reset audit history serializes date-only business dates
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/attendance-reset-integrity.test.ts
       - name: Confirm no production changes
         run: |
           echo 'Synthetic PostgreSQL container only. No production host credentials, schema changes, backup imports or deployments.'
