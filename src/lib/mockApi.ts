@@ -268,7 +268,9 @@ export interface AttendanceSession {
   archivedAt?: string | null;
   examHallId: string;
   businessDate: string;
-  status: 'OPEN' | 'CLOSED';
+  status: 'OPEN' | 'CLOSED' | 'CANCELLED';
+  cancelledAt?: string | null;
+  cancelledByUserId?: string | null;
   openedByUserId: string;
   openedAt: string;
   closedByUserId: string | null;
@@ -1590,7 +1592,7 @@ export const mockApi = {
   },
 
   // 5. Hall-scoped attendance sessions
-  async getAttendanceSessions(query?: { page?: number; limit?: number; examHallId?: string; businessDate?: string; status?: 'OPEN' | 'CLOSED'; includeHistory?: boolean }): Promise<AttendanceSessionListResponse> {
+  async getAttendanceSessions(query?: { page?: number; limit?: number; examHallId?: string; businessDate?: string; status?: 'OPEN' | 'CLOSED' | 'CANCELLED'; includeHistory?: boolean }): Promise<AttendanceSessionListResponse> {
     const params = new URLSearchParams();
     params.set('page', String(query?.page || 1));
     params.set('limit', String(query?.limit || 25));

@@ -3,7 +3,8 @@ import { Request, Response, NextFunction } from 'express';
 import { attendanceService } from './attendance.service';
 import { sessionQuerySchema, rosterQuerySchema } from './attendance.schema';
 import { attendanceResetService } from './attendanceReset.service';
-import { resetHistorySchema } from './attendance.schema';
+import { resetHistorySchema, cancelHistorySchema } from './attendance.schema';
+import { attendanceCancellationService } from './attendanceCancellation.service';
 
 function tokenVersion(req: Request): number { return verifyAccessToken(req.get('Authorization')!.split(' ')[1]).tokenVersion; }
 function operator(req: Request): string {
@@ -11,6 +12,12 @@ function operator(req: Request): string {
   return req.user.id;
 }
 export class AttendanceController {
+  cancelPreview = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceCancellationService.preview(req.params.sessionId, req.body, operator(req), tokenVersion(req)));
+  cancelConfirm = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceCancellationService.confirm(req.params.sessionId, req.body, operator(req), req.get('Idempotency-Key') || '', tokenVersion(req)));
+  cancelHistory = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => {
+    const query = cancelHistorySchema.parse(req.query);
+    return attendanceCancellationService.history(operator(req), query.page, query.limit, tokenVersion(req));
+  });
   resetPreview = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceResetService.preview(req.body, operator(req), tokenVersion(req)));
   resetConfirm = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceResetService.confirm(req.body, operator(req), req.get('Idempotency-Key') || '', tokenVersion(req)));
   resetHistory = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => {

@@ -57,7 +57,7 @@ export class AttendanceService {
     if (!locked.length) fail(404, 'Examination attendance session not found.');
     const session = await tx.attendanceSession.findUniqueOrThrow({ where: { id: sessionId } });
     if (!session.isCurrent) fail(409, 'This attendance attempt has been archived. Refresh the current Hall session.');
-    if (session.status !== 'OPEN') fail(409, 'This examination attendance session is CLOSED.');
+    if (session.status !== 'OPEN') fail(409, 'This attendance attempt is CLOSED or CANCELLED; marking is prohibited.');
     return session;
   }
   private async detail(tx: Prisma.TransactionClient, sessionId: string) {
@@ -75,12 +75,23 @@ export class AttendanceService {
       if (!hall) fail(404, 'Examination Hall not found.');
       const businessDate = hallDate(hall.examDate);
       if (!businessDate) fail(409, 'Configure a valid examination date on this Hall before opening attendance.');
-      if (await tx.attendanceSession.findFirst({ where: { examHallId, businessDate, isCurrent: true } })) fail(409, 'An examination attendance session already exists for this Hall and business date.');
+      const latest = await tx.attendanceSession.findFirst({
+        where: { examHallId, businessDate }, orderBy: { attemptNumber: 'desc' },
+      });
+      if (latest?.isCurrent) fail(409, 'An examination attendance session already exists for this Hall and business date.');
+      if (latest && latest.status !== 'CANCELLED')
+        fail(409, 'Only a cancelled Hall/date may be explicitly reopened without a reset.');
+      if (latest) {
+        const actor = await tx.user.findUnique({ where: { id: userId }, select: { role: true, status: true } });
+        if (actor?.role !== 'SUPER_ADMIN' || actor.status !== 'ACTIVE')
+          fail(403, 'Only an active Super Admin may start a new attempt after cancellation.');
+      }
       // Snapshot every explicit assignment, independently of class and legacy mirrors.
       const candidates = await tx.student.findMany({ where: { assignedHallId: examHallId, status: 'ACTIVE' }, select: { id: true, fullName: true, rollNumber: true, applicationNo: true, currentClass: true, seatNo: true }, orderBy: { id: 'asc' } });
       if (!candidates.length) fail(409, 'No explicitly assigned candidates are available for this examination Hall. Complete Hall allocation before opening attendance.');
       const session = await tx.attendanceSession.create({ data: {
-        examHallId, businessDate, openedByUserId: userId, hallNameSnapshot: hall.name,
+        examHallId, businessDate, attemptNumber: latest ? latest.attemptNumber + 1 : 1,
+        openedByUserId: userId, hallNameSnapshot: hall.name,
         roomNumberSnapshot: hall.roomNumber, testCenterNameSnapshot: hall.testCenter?.name ?? null,
         examDateSnapshot: hall.examDate, reportingTimeSnapshot: hall.reportingTime,
       } });

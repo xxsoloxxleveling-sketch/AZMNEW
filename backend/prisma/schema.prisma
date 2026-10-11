@@ -341,6 +341,7 @@ enum AttendanceMethod {
 enum AttendanceSessionStatus {
   OPEN
   CLOSED
+  CANCELLED
 }
 
 model AttendanceSession {
@@ -356,6 +357,8 @@ model AttendanceSession {
   openedAt                 DateTime @default(now())
   closedByUserId           String?
   closedAt                 DateTime?
+  cancelledByUserId        String?
+  cancelledAt              DateTime?
   hallNameSnapshot         String
   roomNumberSnapshot       String
   testCenterNameSnapshot   String?
@@ -365,6 +368,7 @@ model AttendanceSession {
   updatedAt                DateTime @default(now()) @updatedAt
   candidates               AttendanceSessionCandidate[]
   attendance               Attendance[]
+  cancellation             AttendanceSessionCancellation?
 
   @@unique([examHallId, businessDate, attemptNumber])
   @@index([businessDate])
@@ -388,6 +392,34 @@ model AttendanceResetOperation {
 
   @@unique([actorId, idempotencyKey])
   @@index([completedAt])
+}
+
+model AttendanceSessionCancellation {
+  id                          String @id
+  sessionId                   String @unique
+  session                     AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  actorId                     String
+  actorName                   String
+  idempotencyKey              String
+  challengeNonce              String @unique
+  requestHash                 String
+  snapshotFingerprint         String
+  reason                      String
+  approvalReference           String?
+  retentionApproved           Boolean @default(false)
+  externalDispositionAttested Boolean @default(false)
+  closedEvidenceApproved      Boolean @default(false)
+  previousStatus              AttendanceSessionStatus
+  businessDate                DateTime @db.Date
+  purgeAttendance             Boolean
+  markedCount                 Int
+  deletedCount                Int
+  retainedCount               Int
+  expectedCount               Int
+  cancelledAt                 DateTime @default(now())
+
+  @@unique([actorId, idempotencyKey])
+  @@index([cancelledAt])
 }
 
 model AttendanceSessionCandidate {
