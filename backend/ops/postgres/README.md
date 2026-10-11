@@ -14,6 +14,14 @@ their application-level tests.
 The backend uses DATABASE_URL and DIRECT_URL. Prisma migration deployment is a
 separate command. Avoid owner/migration credentials in the systemd API service.
 
+The new pre-listen production startup guard checks the effective PostgreSQL
+login, both connection identities, public-schema ownership, DDL and immutable
+audit privileges, migration-ledger rights and required active trigger names.
+It refuses to start HTTP when those checks fail, including when the backend
+still uses its former table owner. Therefore DO NOT merge/deploy this guard
+until the migration and backend-runtime credential cutover are coordinated.
+Development/test service startup is unaffected.
+
 ## Preferred conservative topology
 
 | Identity | Login | Permissions | Runtime placement |

@@ -2,8 +2,18 @@ import app from './app';
 import { env } from './config/env';
 import { logger } from './lib/logger';
 import { prisma } from './lib/prisma';
+import { assertRestrictedRuntimeDatabase } from './security/dbRuntimeSafety';
 
 async function bootstrap() {
+  // Production must fail closed before opening an HTTP socket if the backend
+  // still uses privileged schema-owner/migrator credentials.
+  if (env.NODE_ENV === 'production') {
+    await assertRestrictedRuntimeDatabase(prisma, {
+      databaseUrl: env.DATABASE_URL,
+      directUrl: env.DIRECT_URL || '',
+    });
+    logger.info('Production PostgreSQL runtime privilege boundary verified.');
+  }
   // Synchronize new credentials and purge legacy accounts
   const host = process.env.HOST || (env.NODE_ENV === 'production' ? '127.0.0.1' : undefined);
 
@@ -33,4 +43,9 @@ async function bootstrap() {
   process.on('SIGINT', handleShutdown);
 }
 
-bootstrap();
+bootstrap().catch(async () => {
+  // Do not log connection details, environment values or database row data.
+  logger.error('Backend initialization failed; refusing to serve HTTP.');
+  try { await prisma.$disconnect(); } catch { /* preserve original failure */ }
+  process.exit(1);
+});

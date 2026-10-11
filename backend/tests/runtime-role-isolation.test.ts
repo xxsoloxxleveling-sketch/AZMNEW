@@ -8,6 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import { AttendanceService } from '../src/modules/attendance/attendance.service';
 import { AttendanceCancellationService } from '../src/modules/attendance/attendanceCancellation.service';
 import { qrService } from '../src/modules/attendance/qr.service';
+import { assertRestrictedRuntimeDatabase } from '../src/security/dbRuntimeSafety';
 
 const { Client } = pg;
 const stamp = () => randomUUID().replaceAll('-', '').slice(0, 18);
@@ -105,6 +106,40 @@ async function run() {
     app=new PrismaClient({
       datasources:{db:{url:runtimeUrl.toString()}},
       log:['error'],
+    });
+
+    await check('pre-listen guard accepts least-privilege runtime only',async()=>{
+      await assertRestrictedRuntimeDatabase(app!, {
+        databaseUrl:runtimeUrl.toString(), directUrl:runtimeUrl.toString(),
+      });
+    });
+    await check('pre-listen guard rejects a schema owner before API starts',async()=>{
+      const ownerClient=new PrismaClient({datasources:{db:{url:dbUrl.toString()}}});
+      try {
+        await assert.rejects(
+          ()=>assertRestrictedRuntimeDatabase(ownerClient,{
+            databaseUrl:dbUrl.toString(),directUrl:dbUrl.toString(),
+          }),/Blocked unsafe production DB runtime/);
+      } finally { await ownerClient.$disconnect(); }
+    });
+    await check('pre-listen guard rejects privileged DIRECT_URL credentials',async()=>{
+      await assert.rejects(
+        ()=>assertRestrictedRuntimeDatabase(app!,{
+          databaseUrl:runtimeUrl.toString(), directUrl:dbUrl.toString(),
+        }),/DIRECT_URL and DATABASE_URL/);
+    });
+    await check('pre-listen guard catches disabled protections and recovers',async()=>{
+      await fixture!.query('ALTER TABLE "AttendanceSession" DISABLE TRIGGER "AttendanceSession_archive_protection"');
+      try {
+        await assert.rejects(()=>assertRestrictedRuntimeDatabase(app!,{
+          databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString(),
+        }),/required attendance\/audit triggers/);
+      } finally {
+        await fixture!.query('ALTER TABLE "AttendanceSession" ENABLE TRIGGER "AttendanceSession_archive_protection"');
+      }
+      await assertRestrictedRuntimeDatabase(app!,{
+        databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString(),
+      });
     });
 
     await check('app login cannot change public schema or database DDL',async()=>{
