@@ -6,10 +6,12 @@ on:
       - feature/db-runtime-role-isolation
       - feature/staged-attendance-preserve-only
       - codex/stage1-truncate-guard
+      - codex/stage1-final-runtime-security
   pull_request:
     branches:
       - feature/super-admin-session-lifecycle
       - feature/db-runtime-role-isolation
+      - codex/stage1-truncate-guard
 
 permissions:
   contents: read

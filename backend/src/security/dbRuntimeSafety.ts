@@ -7,6 +7,7 @@ type RuntimeIdentity = {
   createDb: boolean;
   createRole: boolean;
   bypassRls: boolean;
+  replication: boolean;
   createSchema: boolean;
   createDatabase: boolean;
   schemaOwnerMemberships: bigint | number;
@@ -17,7 +18,8 @@ type DmlBoundary = {
   markDelete: boolean; markTruncate: boolean; resetAuditInsert: boolean; cancelAuditInsert: boolean;
   cancelAuditUpdate: boolean; cancelAuditDelete: boolean;
   resetAuditUpdate: boolean; resetAuditDelete: boolean;
-  migrationWrite: boolean; triggerPrivilege: boolean;
+  resetAuditTruncate: boolean; cancelAuditTruncate: boolean;
+  migrationWrite: boolean; migrationTruncate: boolean; triggerPrivilege: boolean;
 };
 type TriggerStatus = { tgname: string; tgenabled: string };
 const expectedTriggers = [
@@ -68,7 +70,7 @@ export async function assertRestrictedRuntimeDatabase(
     'SELECT current_user AS "databaseRole",',
     'r.rolcanlogin AS "canLogin", r.rolsuper AS "superuser",',
     'r.rolcreatedb AS "createDb", r.rolcreaterole AS "createRole",',
-    'r.rolbypassrls AS "bypassRls",',
+    'r.rolbypassrls AS "bypassRls", r.rolreplication AS "replication",',
     "has_schema_privilege(current_user,'public','CREATE') AS \"createSchema\",",
     "has_database_privilege(current_user,current_database(),'CREATE') AS \"createDatabase\",",
     "current_setting('session_replication_role') AS \"sessionReplicationRole\",",
@@ -88,14 +90,19 @@ export async function assertRestrictedRuntimeDatabase(
     "has_table_privilege(current_user,'public.\"AttendanceSessionCancellation\"','INSERT') AS \"cancelAuditInsert\",",
     "has_table_privilege(current_user,'public.\"AttendanceSessionCancellation\"','UPDATE') AS \"cancelAuditUpdate\",",
     "has_table_privilege(current_user,'public.\"AttendanceSessionCancellation\"','DELETE') AS \"cancelAuditDelete\",",
+    "has_table_privilege(current_user,'public.\"AttendanceSessionCancellation\"','TRUNCATE') AS \"cancelAuditTruncate\",",
     "has_table_privilege(current_user,'public.\"AttendanceResetOperation\"','UPDATE') AS \"resetAuditUpdate\",",
     "has_table_privilege(current_user,'public.\"AttendanceResetOperation\"','DELETE') AS \"resetAuditDelete\",",
+    "has_table_privilege(current_user,'public.\"AttendanceResetOperation\"','TRUNCATE') AS \"resetAuditTruncate\",",
     "has_table_privilege(current_user,'public.\"AttendanceSession\"','TRIGGER') AS \"triggerPrivilege\",",
     'EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace',
     "WHERE n.nspname='public' AND c.relname='_prisma_migrations'",
     "AND (has_table_privilege(current_user,c.oid,'INSERT')",
     "OR has_table_privilege(current_user,c.oid,'UPDATE')",
-    "OR has_table_privilege(current_user,c.oid,'DELETE'))) AS \"migrationWrite\"",
+    "OR has_table_privilege(current_user,c.oid,'DELETE'))) AS \"migrationWrite\",",
+    'EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace',
+    "WHERE n.nspname='public' AND c.relname='_prisma_migrations'",
+    "AND has_table_privilege(current_user,c.oid,'TRUNCATE')) AS \"migrationTruncate\"",
   ].join(' ');
   const triggerQuery = [
     'SELECT t.tgname, t.tgenabled FROM pg_trigger t',
@@ -114,7 +121,7 @@ export async function assertRestrictedRuntimeDatabase(
   });
   const r = results.identity;
   if (!r || r.databaseRole !== runtimeName || !r.canLogin ||
-      r.superuser || r.createDb || r.createRole || r.bypassRls ||
+      r.superuser || r.createDb || r.createRole || r.bypassRls || r.replication ||
       r.createSchema || r.createDatabase ||
       Number(r.schemaOwnerMemberships) !== 0 ||
       r.sessionReplicationRole !== 'origin') {
@@ -124,9 +131,9 @@ export async function assertRestrictedRuntimeDatabase(
   if (!access || !access.sessionRead || !access.sessionInsert ||
       !access.sessionUpdate || access.markDelete || access.markTruncate ||
       !access.resetAuditInsert || !access.cancelAuditInsert ||
-      access.cancelAuditUpdate || access.cancelAuditDelete ||
-      access.resetAuditUpdate || access.resetAuditDelete ||
-      access.migrationWrite || access.triggerPrivilege) {
+      access.cancelAuditUpdate || access.cancelAuditDelete || access.cancelAuditTruncate ||
+      access.resetAuditUpdate || access.resetAuditDelete || access.resetAuditTruncate ||
+      access.migrationWrite || access.migrationTruncate || access.triggerPrivilege) {
     blocked('runtime DML or immutable-audit privilege requirements not met');
   }
   const enabled = new Map(results.triggers.map(x => [x.tgname,x.tgenabled]));

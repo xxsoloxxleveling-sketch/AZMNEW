@@ -101,6 +101,27 @@ async function run() {
         (result.stderr||result.stdout).slice(-1800));
     console.log('Isolated least-privilege grants applied in disposable PostgreSQL 17.');
 
+    await check('grant operator rejects inherited TRUNCATE on immutable evidence and migration history',async()=>{
+      for (const table of ['"AttendanceResetOperation"','"AttendanceSessionCancellation"','"_prisma_migrations"']) {
+        // PUBLIC grants represent effective privileges bypassing direct role REVOKEs.
+        // Only the isolated synthetic fixture is ever modified.
+        await fixture!.query('GRANT TRUNCATE ON TABLE '+table+' TO PUBLIC');
+        try {
+          const rejected=spawnSync('docker',[
+            'exec','-i','-u','postgres',serviceContainer,'psql','-X',
+            '-v','ON_ERROR_STOP=1','-U','postgres','-d',database,
+            '-v','target_db='+database,
+            '-v','login_role='+login,'-v','grant_role='+group,
+            '-v','approved_ticket=SYNTHETIC-TEST',
+            '-v','accept_action=APPLY-AZM-RUNTIME-ROLE-GRANTS'
+          ],{input:sql,encoding:'utf8',timeout:30000});
+          assert.notEqual(rejected.status,0,'Operator accepted inherited TRUNCATE on '+table);
+        } finally {
+          await fixture!.query('REVOKE TRUNCATE ON TABLE '+table+' FROM PUBLIC');
+        }
+      }
+    });
+
     runtime=new Client({connectionString:runtimeUrl.toString()});
     await runtime.connect();
     app=new PrismaClient({
@@ -131,6 +152,45 @@ async function run() {
         () => assertRestrictedRuntimeDatabase(observedClient as unknown as PrismaClient, {
           databaseUrl: runtimeUrl.toString(), directUrl: runtimeUrl.toString(),
         }), /runtime DML or immutable-audit privilege requirements/,
+      );
+    });
+    for (const unsafeField of ['resetAuditTruncate','cancelAuditTruncate','migrationTruncate'] as const) {
+      await check('pre-listen guard rejects effective '+unsafeField,async()=>{
+        // Synthetic metadata injection: no TRUNCATE statement is executed.
+        const observedClient={
+          $transaction:(work:(tx:any)=>Promise<unknown>)=>app!.$transaction(async tx=>
+            work({
+              $executeRawUnsafe:(sql:string)=>tx.$executeRawUnsafe(sql),
+              $queryRawUnsafe:async(sql:string)=>{
+                const rows=await tx.$queryRawUnsafe<any[]>(sql);
+                return sql.includes('AS "markDelete"')
+                  ? rows.map(row=>({...row,[unsafeField]:true})) : rows;
+              },
+            })),
+        };
+        await assert.rejects(
+          ()=>assertRestrictedRuntimeDatabase(observedClient as unknown as PrismaClient,{
+            databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString(),
+          }),/runtime DML or immutable-audit privilege requirements/,
+        );
+      });
+    }
+    await check('pre-listen guard rejects replication-capable runtime role',async()=>{
+      const observedClient={
+        $transaction:(work:(tx:any)=>Promise<unknown>)=>app!.$transaction(async tx=>
+          work({
+            $executeRawUnsafe:(sql:string)=>tx.$executeRawUnsafe(sql),
+            $queryRawUnsafe:async(sql:string)=>{
+              const rows=await tx.$queryRawUnsafe<any[]>(sql);
+              return sql.includes('AS "databaseRole"')
+                ? rows.map(row=>({...row,replication:true})) : rows;
+            },
+          })),
+      };
+      await assert.rejects(
+        ()=>assertRestrictedRuntimeDatabase(observedClient as unknown as PrismaClient,{
+          databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString(),
+        }),/login has schema ownership, elevated privileges/,
       );
     });
     await check('pre-listen guard rejects a schema owner before API starts',async()=>{
@@ -181,6 +241,16 @@ async function run() {
       const {rows:[role]}=await runtime!.query(
         'SELECT rolsuper,rolcreaterole,rolcreatedb,rolreplication,rolbypassrls FROM pg_roles WHERE rolname=current_user');
       assert(Object.values(role).every(value=>value===false));
+    });
+    await check('runtime lacks effective TRUNCATE on both audits and migration ledger',async()=>{
+      const {rows}=await runtime!.query(
+        "SELECT c.relname,has_table_privilege(current_user,c.oid,'TRUNCATE') AS allowed"+
+        " FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace"+
+        " WHERE n.nspname='public' AND c.relname=ANY($1)",
+        [['AttendanceResetOperation','AttendanceSessionCancellation','_prisma_migrations']],
+      );
+      assert.equal(rows.length,3,'Expected all three protected relations in synthetic fixture');
+      for (const row of rows) assert.equal(row.allowed,false,'Unsafe TRUNCATE on '+row.relname);
     });
     await check('runtime cannot alter the Prisma migration ledger',async()=>{
       await reject(()=>runtime!.query(

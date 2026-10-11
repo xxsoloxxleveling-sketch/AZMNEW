@@ -147,19 +147,23 @@ SELECT (
   AND has_table_privilege(:'login_role','public."AttendanceSession"','INSERT')
   AND has_table_privilege(:'login_role','public."AttendanceSession"','UPDATE')
   AND has_table_privilege(:'login_role','public."AttendanceSession"','DELETE')
+  AND EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolname=:'login_role' AND NOT r.rolreplication)
   AND NOT has_table_privilege(:'login_role','public."Attendance"','DELETE')
   AND NOT has_table_privilege(:'login_role','public."Attendance"','TRUNCATE')
   AND has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','INSERT')
   AND NOT has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','UPDATE')
   AND NOT has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','DELETE')
+  AND NOT has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','TRUNCATE')
   AND NOT has_table_privilege(:'login_role','public."AttendanceResetOperation"','UPDATE')
   AND NOT has_table_privilege(:'login_role','public."AttendanceResetOperation"','DELETE')
+  AND NOT has_table_privilege(:'login_role','public."AttendanceResetOperation"','TRUNCATE')
   AND NOT EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relname='_prisma_migrations'
       AND (has_table_privilege(:'login_role',c.oid,'INSERT')
         OR has_table_privilege(:'login_role',c.oid,'UPDATE')
-        OR has_table_privilege(:'login_role',c.oid,'DELETE'))
+        OR has_table_privilege(:'login_role',c.oid,'DELETE')
+        OR has_table_privilege(:'login_role',c.oid,'TRUNCATE'))
   )
   AND NOT EXISTS (
     SELECT 1 FROM pg_class c
