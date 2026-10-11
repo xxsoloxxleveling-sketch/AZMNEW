@@ -113,6 +113,26 @@ async function run() {
         databaseUrl:runtimeUrl.toString(), directUrl:runtimeUrl.toString(),
       });
     });
+    await check('pre-listen guard rejects effective Attendance TRUNCATE capability',async()=>{
+      // Simulate an unsafe effective-permission observation without granting
+      // destructive privileges or executing TRUNCATE against any database.
+      const observedClient = {
+        $transaction: (work: (tx: any) => Promise<unknown>) => app!.$transaction(async tx =>
+          work({
+            $executeRawUnsafe: (sql: string) => tx.$executeRawUnsafe(sql),
+            $queryRawUnsafe: async (sql: string) => {
+              const rows = await tx.$queryRawUnsafe<any[]>(sql);
+              return sql.includes('AS "markDelete"')
+                ? rows.map(row => ({ ...row, markTruncate: true })) : rows;
+            },
+          })),
+      };
+      await assert.rejects(
+        () => assertRestrictedRuntimeDatabase(observedClient as unknown as PrismaClient, {
+          databaseUrl: runtimeUrl.toString(), directUrl: runtimeUrl.toString(),
+        }), /runtime DML or immutable-audit privilege requirements/,
+      );
+    });
     await check('pre-listen guard rejects a schema owner before API starts',async()=>{
       const ownerClient=new PrismaClient({datasources:{db:{url:dbUrl.toString()}}});
       try {

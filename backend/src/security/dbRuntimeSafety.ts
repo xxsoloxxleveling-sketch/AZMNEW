@@ -14,7 +14,7 @@ type RuntimeIdentity = {
 };
 type DmlBoundary = {
   sessionRead: boolean; sessionInsert: boolean; sessionUpdate: boolean;
-  markDelete: boolean; resetAuditInsert: boolean; cancelAuditInsert: boolean;
+  markDelete: boolean; markTruncate: boolean; resetAuditInsert: boolean; cancelAuditInsert: boolean;
   cancelAuditUpdate: boolean; cancelAuditDelete: boolean;
   resetAuditUpdate: boolean; resetAuditDelete: boolean;
   migrationWrite: boolean; triggerPrivilege: boolean;
@@ -83,6 +83,7 @@ export async function assertRestrictedRuntimeDatabase(
     "has_table_privilege(current_user,'public.\"AttendanceSession\"','INSERT') AS \"sessionInsert\",",
     "has_table_privilege(current_user,'public.\"AttendanceSession\"','UPDATE') AS \"sessionUpdate\",",
     "has_table_privilege(current_user,'public.\"Attendance\"','DELETE') AS \"markDelete\",",
+    "has_table_privilege(current_user,'public.\"Attendance\"','TRUNCATE') AS \"markTruncate\",",
     "has_table_privilege(current_user,'public.\"AttendanceResetOperation\"','INSERT') AS \"resetAuditInsert\",",
     "has_table_privilege(current_user,'public.\"AttendanceSessionCancellation\"','INSERT') AS \"cancelAuditInsert\",",
     "has_table_privilege(current_user,'public.\"AttendanceSessionCancellation\"','UPDATE') AS \"cancelAuditUpdate\",",
@@ -121,7 +122,7 @@ export async function assertRestrictedRuntimeDatabase(
   }
   const access = results.access;
   if (!access || !access.sessionRead || !access.sessionInsert ||
-      !access.sessionUpdate || access.markDelete ||
+      !access.sessionUpdate || access.markDelete || access.markTruncate ||
       !access.resetAuditInsert || !access.cancelAuditInsert ||
       access.cancelAuditUpdate || access.cancelAuditDelete ||
       access.resetAuditUpdate || access.resetAuditDelete ||

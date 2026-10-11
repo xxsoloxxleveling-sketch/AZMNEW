@@ -148,6 +148,7 @@ SELECT (
   AND has_table_privilege(:'login_role','public."AttendanceSession"','UPDATE')
   AND has_table_privilege(:'login_role','public."AttendanceSession"','DELETE')
   AND NOT has_table_privilege(:'login_role','public."Attendance"','DELETE')
+  AND NOT has_table_privilege(:'login_role','public."Attendance"','TRUNCATE')
   AND has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','INSERT')
   AND NOT has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','UPDATE')
   AND NOT has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','DELETE')
