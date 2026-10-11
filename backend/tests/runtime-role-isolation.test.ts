@@ -205,26 +205,39 @@ async function run() {
       assert.equal(await app!.attendanceSessionCandidate.count({
         where:{sessionId:session.id}}),1);
     });
-    await check('restricted runtime cannot bypass attendance deletion trigger',async()=>{
+    await check('restricted runtime has no Attendance DELETE privilege',async()=>{
+      const permissions=await runtime!.query(
+        "SELECT has_table_privilege(current_user,'public.\"Attendance\"','DELETE') AS allowed");
+      assert.equal(permissions.rows[0].allowed,false);
       await reject(()=>runtime!.query(
-        'DELETE FROM "Attendance" WHERE "sessionId"=$1',[session.id]),'23514');
+        'DELETE FROM "Attendance" WHERE "sessionId"=$1',[session.id]),'42501');
       assert.equal(await app!.attendance.count({where:{sessionId:session.id}}),1);
     });
-    await check('restricted runtime can execute authorized exact-session cancellation and purge',async()=>{
-      const impact=await cancellation.preview(session.id,{purgeAttendance:true},id,0);
+    await check('restricted runtime cannot request permanent attendance purge',async()=>{
+      await assert.rejects(
+        ()=>cancellation.preview(session.id,{purgeAttendance:true},id,0),
+        (error:any)=>error?.name==='ZodError');
+      assert.equal(await app!.attendance.count({where:{sessionId:session.id}}),1);
+    });
+    await check('restricted runtime cannot truncate attendance or disable the staging trigger',async()=>{
+      await reject(()=>runtime!.query('TRUNCATE "Attendance"'),'42501');
+      await reject(()=>runtime!.query(
+        'ALTER TABLE "Attendance" DISABLE TRIGGER "Attendance_staged_no_delete"'),'42501');
+      assert.equal(await app!.attendance.count({where:{sessionId:session.id}}),1);
+    });
+    await check('restricted runtime can cancel exact session without deleting attendance',async()=>{
+      const impact=await cancellation.preview(session.id,{purgeAttendance:false},id,0);
       assert.equal(impact.impact.markedCount,1);
       const receipt=await cancellation.confirm(session.id,{
         challenge:impact.challenge,
-        reason:'Approved synthetic test cancellation for role isolation',
-        confirmationText:'CANCEL SESSION AND DELETE ATTENDANCE',
-        approvalReference:'SYNTHETIC-APPROVAL-ONLY',
-        retentionApproved:true,
-        externalDispositionAttested:true,
-        irreversibleDeletionAcknowledged:true,
+        reason:'Approved synthetic test cancellation preserving all records',
+        confirmationText:'CANCEL SESSION',
       },id,randomUUID(),0);
       assert.equal(receipt.status,'CANCELLED');
-      assert.equal(receipt.deletedCount,1);
-      assert.equal(await app!.attendance.count({where:{sessionId:session.id}}),0);
+      assert.equal(receipt.purgeAttendance,false);
+      assert.equal(receipt.deletedCount,0);
+      assert.equal(receipt.retainedCount,1);
+      assert.equal(await app!.attendance.count({where:{sessionId:session.id}}),1);
       assert.equal(await app!.attendanceSessionCandidate.count({where:{sessionId:session.id}}),1);
       assert.equal(await app!.attendanceSessionCancellation.count({where:{sessionId:session.id}}),1);
     });

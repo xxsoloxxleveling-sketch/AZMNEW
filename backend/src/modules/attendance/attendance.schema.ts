@@ -44,18 +44,15 @@ export const resetConfirmSchema = z.object({
   reason: z.string().trim().min(5).max(1000),
   confirmationText: z.literal('RESET ATTENDANCE'),
 }).strict();
+// Stage 1 has no permanent-deletion action. A future reviewed migration
+// and separately approved release would be needed to change this contract.
 export const cancelPreviewSchema = z.object({
-  purgeAttendance: z.boolean(),
+  purgeAttendance: z.literal(false),
 }).strict();
 export const cancelConfirmSchema = z.object({
   challenge: z.string().min(10).max(32000),
   reason: z.string().trim().min(10).max(1000),
-  confirmationText: z.enum(['CANCEL SESSION', 'CANCEL SESSION AND DELETE ATTENDANCE']),
-  approvalReference: z.string().trim().min(8).max(160).optional(),
-  retentionApproved: z.boolean().default(false),
-  externalDispositionAttested: z.boolean().default(false),
-  irreversibleDeletionAcknowledged: z.boolean().default(false),
-  closedEvidenceApproved: z.boolean().default(false),
+  confirmationText: z.literal('CANCEL SESSION'),
 }).strict();
 export const cancelHistorySchema = z.object(pagination).strict();
 export type CancelConfirmInput = z.infer<typeof cancelConfirmSchema>;

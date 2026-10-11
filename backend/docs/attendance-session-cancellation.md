@@ -1,5 +1,12 @@
 # AZM.AIO — Super Admin Hall-session cancellation safety
 
+**IMPORTANT Stage 1 override:** This original PR #15 design includes an
+exceptional hard-purge path; the staged-release branch adds a fourth migration
+and API/UI changes that **unconditionally disable new permanent attendance
+deletion**. Only CANCEL AND PRESERVE is supported until a separate approved
+release. See staged-attendance-preservation.md. The original PR #15 reviewed
+migration is unchanged.
+
 Development branch: `feature/super-admin-session-lifecycle`, based on draft PR #14
 (`2924871cf8dcf117ce6de7857b4584d910a8ba36`).
 

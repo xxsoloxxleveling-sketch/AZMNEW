@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - feature/super-admin-session-lifecycle
+      - feature/staged-attendance-preserve-only
   pull_request:
     branches:
       - feature/super-admin-attendance-reset
+      - feature/db-runtime-role-isolation
 
 permissions:
   contents: read

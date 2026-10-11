@@ -58,13 +58,20 @@ check('client uses exact session preview and commit routes',()=>{
   assert.match(api,/Idempotency-Key/);
   assert.match(api,/retryOnColdStart: false/);
 });
-check('UI requires typed irreversible confirmation and separate CLOSED approval',()=>{
-  assert.match(component,/CANCEL SESSION AND DELETE ATTENDANCE/);
-  assert.match(component,/closedEvidenceApproved/);
-  assert.match(component,/retentionApproved/);
-  assert.match(component,/externalDispositionAttested/);
-  assert.match(component,/irreversibleDeletionAcknowledged/);
-  assert.match(component,/preview\.blockers\.length/);
+check('Stage 1 UI visibly disables permanent attendance deletion',()=>{
+  assert.match(component,/permanent attendance deletion is disabled/i);
+  assert.match(component,/Cancel and preserve attendance/);
+  assert.match(component,/All .*attendance marks will remain/);
+  assert.match(component,/preview\.purgeAttendance === false/);
+  assert.doesNotMatch(component,/CANCEL SESSION AND DELETE ATTENDANCE/);
+  assert.doesNotMatch(component,/closedEvidenceApproved|retentionApproved|irreversibleDeletionAcknowledged/);
+});
+check('Stage 1 API always requests preserve-only confirmation',()=>{
+  assert.match(api,/purgeAttendance: false/);
+  assert.match(api,/value\.purgeAttendance === false/);
+  assert.match(api,/value\.deletedCount === 0/);
+  assert.match(api,/confirmationText: 'CANCEL SESSION'/);
+  assert.doesNotMatch(api,/CANCEL SESSION AND DELETE ATTENDANCE/);
 });
 check('Hall history explicitly distinguishes CANCELLED attempts',()=>{
   assert.match(source,/option value="CANCELLED"/);

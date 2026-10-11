@@ -170,9 +170,7 @@ function AttendanceWorkspace({ role }: { role: string }) {
       onDialogChange={setCancelDialog}
       onCancelled={result => {
         desiredSession.current = result.sessionId;
-        setNotice(result.purgeAttendance
-          ? 'Session cancelled. ' + result.deletedCount + ' individual attendance marks were permanently deleted. The cancellation audit and frozen roster remain.'
-          : 'Session cancelled. Existing attendance and the frozen roster were preserved.');
+        setNotice('Session cancelled. Every attendance mark and the frozen roster were preserved.');
         setHistoryPage(1); setHistoryStatus(''); setHistoryDate('');
         setAttendanceTab('manual');
         setRefresh(value => value + 1);

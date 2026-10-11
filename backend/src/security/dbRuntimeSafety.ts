@@ -30,6 +30,7 @@ const expectedTriggers = [
   'AttendanceResetOperation_insert_validation',
   'AttendanceSessionCancellation_immutable',
   'AttendanceSessionCancellation_coherence',
+  'Attendance_staged_no_delete',
 ] as const;
 
 function loginFromUrl(value: string): string {
@@ -120,7 +121,7 @@ export async function assertRestrictedRuntimeDatabase(
   }
   const access = results.access;
   if (!access || !access.sessionRead || !access.sessionInsert ||
-      !access.sessionUpdate || !access.markDelete ||
+      !access.sessionUpdate || access.markDelete ||
       !access.resetAuditInsert || !access.cancelAuditInsert ||
       access.cancelAuditUpdate || access.cancelAuditDelete ||
       access.resetAuditUpdate || access.resetAuditDelete ||

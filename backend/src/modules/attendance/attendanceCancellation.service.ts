@@ -53,7 +53,8 @@ export class AttendanceCancellationService {
     return actor;
   }
 
-  private async snapshot(tx: Prisma.TransactionClient, sessionId: string, purgeAttendance: boolean) {
+  // Stage 1: snapshots are strictly non-destructive. No purge mode exists.
+  private async snapshot(tx: Prisma.TransactionClient, sessionId: string) {
     const session = await tx.attendanceSession.findUnique({
       where: { id: sessionId },
       include: {
@@ -94,9 +95,7 @@ export class AttendanceCancellationService {
       documentAuditReferences: documentAuditCount,
       externalOmrOrResults: 'UNKNOWN' as const,
     };
-    const blockers = purgeAttendance && scoredOrRankedCandidates
-      ? ['One or more candidates have recorded results/ranks. Attendance purging is prohibited until the dependencies are resolved.']
-      : [];
+    const blockers: string[] = [];
     return {
       session, impact, blockers,
       fingerprint: hash({ session, students, feeIds: fees.map(fee => fee.id), feeTransactionCount, documentCount, documentAuditCount }),
@@ -119,15 +118,15 @@ export class AttendanceCancellationService {
   }
 
   async preview(sessionId: string, input: unknown, actorId: string, tokenVersion?: number) {
-    const parsed = cancelPreviewSchema.parse(input);
+    cancelPreviewSchema.parse(input);
     if (!sessionId?.trim()) fail(400, 'Select one examination session.');
     return this.transaction(async tx => {
       const actor = await this.actor(tx, actorId, tokenVersion);
-      const snapshot = await this.snapshot(tx, sessionId, parsed.purgeAttendance);
+      const snapshot = await this.snapshot(tx, sessionId);
       const expires = this.now().getTime() + 5 * 60 * 1000;
       const challenge: Challenge = {
         purpose: 'attendance-cancellation-v1', actorId, tokenVersion: actor.tokenVersion,
-        sessionId, purgeAttendance: parsed.purgeAttendance, nonce: randomUUID(), expires,
+        sessionId, purgeAttendance: false, nonce: randomUUID(), expires,
         fingerprint: snapshot.fingerprint,
       };
       const body = Buffer.from(JSON.stringify(challenge)).toString('base64url');
@@ -135,7 +134,7 @@ export class AttendanceCancellationService {
       return {
         challenge: body + '.' + sign(body),
         expiresAt: new Date(expires).toISOString(),
-        purgeAttendance: parsed.purgeAttendance,
+        purgeAttendance: false,
         session: {
           id: session.id, examHallId: session.examHallId,
           hallName: session.hallNameSnapshot, roomNumber: session.roomNumberSnapshot,
@@ -167,6 +166,11 @@ export class AttendanceCancellationService {
     const requestHash = hash({ sessionId, input });
     return this.transaction(async tx => {
       const actor = await this.actor(tx, actorId, tokenVersion);
+      // Reject legacy signed purge challenges BEFORE idempotency replay. Even a
+      // previously valid signed challenge cannot re-enable deletion in Stage 1.
+      const challenge = this.parse(input.challenge);
+      if (challenge.purgeAttendance)
+        fail(403, 'Permanent attendance deletion is disabled in the staged release.');
       const prior = await tx.attendanceSessionCancellation.findUnique({
         where: { actorId_idempotencyKey: { actorId, idempotencyKey } },
       });
@@ -175,7 +179,6 @@ export class AttendanceCancellationService {
           fail(409, 'This idempotency key was used for a different cancellation.');
         return this.result(prior);
       }
-      const challenge = this.parse(input.challenge);
       if (challenge.actorId !== actorId || challenge.tokenVersion !== actor.tokenVersion ||
           challenge.sessionId !== sessionId)
         fail(403, 'This confirmation belongs to another session or authentication context.');
@@ -183,24 +186,17 @@ export class AttendanceCancellationService {
         fail(410, 'Cancellation preview expired. Review the session again.');
       if (await tx.attendanceSessionCancellation.findUnique({ where: { challengeNonce: challenge.nonce } }))
         fail(409, 'Cancellation confirmation has already been used.');
-      const phrase = challenge.purgeAttendance ? 'CANCEL SESSION AND DELETE ATTENDANCE' : 'CANCEL SESSION';
-      if (input.confirmationText !== phrase) fail(400, 'Type ' + phrase + ' to confirm this operation.');
-      if (challenge.purgeAttendance &&
-        (!input.retentionApproved || !input.externalDispositionAttested ||
-         !input.irreversibleDeletionAcknowledged || !input.approvalReference?.trim()))
-        fail(400, 'An explicit retention approval, external-record disposition and permanent-deletion acknowledgement are required.');
+      if (input.confirmationText !== 'CANCEL SESSION')
+        fail(400, 'Type CANCEL SESSION to confirm this operation.');
 
       const current = await tx.attendanceSession.findUnique({ where: { id: sessionId }, select: { examHallId: true } });
       if (!current) fail(404, 'Examination session not found.');
       await tx.$queryRawUnsafe('SELECT id FROM "ExamHall" WHERE id=$1 FOR UPDATE', current.examHallId);
       await tx.$queryRawUnsafe('SELECT id FROM "AttendanceSession" WHERE id=$1 FOR UPDATE', sessionId);
-      const snapshot = await this.snapshot(tx, sessionId, challenge.purgeAttendance);
+      const snapshot = await this.snapshot(tx, sessionId);
       if (snapshot.fingerprint !== challenge.fingerprint)
         fail(409, 'Attendance or dependencies changed after preview. Review a fresh preview.');
       if (snapshot.blockers.length) fail(409, snapshot.blockers.join(' '));
-      if (challenge.purgeAttendance && snapshot.session.status === 'CLOSED' && !input.closedEvidenceApproved)
-        fail(400, 'Deletion of CLOSED session evidence requires separate explicit acknowledgement.');
-
       const id = randomUUID();
       const cancelledAt = this.now();
       const markedCount = snapshot.impact.markedCount;
@@ -209,24 +205,20 @@ export class AttendanceCancellationService {
           id, sessionId, actorId, actorName: actor.name, idempotencyKey,
           challengeNonce: challenge.nonce, requestHash,
           snapshotFingerprint: snapshot.fingerprint, reason: input.reason,
-          approvalReference: challenge.purgeAttendance ? input.approvalReference!.trim() : null,
-          retentionApproved: challenge.purgeAttendance ? true : false,
-          externalDispositionAttested: challenge.purgeAttendance ? true : false,
-          closedEvidenceApproved: challenge.purgeAttendance && snapshot.session.status === 'CLOSED' ? true : false,
+          approvalReference: null,
+          retentionApproved: false,
+          externalDispositionAttested: false,
+          closedEvidenceApproved: false,
           previousStatus: snapshot.session.status, businessDate: snapshot.session.businessDate,
-          purgeAttendance: challenge.purgeAttendance,
-          markedCount, deletedCount: challenge.purgeAttendance ? markedCount : 0,
-          retainedCount: challenge.purgeAttendance ? 0 : markedCount,
+          purgeAttendance: false,
+          markedCount, deletedCount: 0,
+          retainedCount: markedCount,
           expectedCount: snapshot.impact.expectedCount, cancelledAt,
         },
       });
       // All interpolated data is passed as a PostgreSQL bind parameter.
       await tx.$queryRawUnsafe('SELECT set_config(\'azm.cancel_audit_id\', $1, true)', id);
-      if (challenge.purgeAttendance) {
-        const deleted = await tx.attendance.deleteMany({ where: { sessionId } });
-        if (deleted.count !== markedCount)
-          fail(409, 'Cancellation purge count changed; no deletion was committed.');
-      }
+      // No deleteMany is present in Stage 1. All original attendance is retained.
       await tx.attendanceSession.update({
         where: { id: sessionId },
         data: {
@@ -237,9 +229,9 @@ export class AttendanceCancellationService {
       await tx.$executeRawUnsafe('SET CONSTRAINTS "AttendanceSession_closed_reset_coherence", "AttendanceSessionCancellation_coherence" IMMEDIATE');
       return this.result({
         id, sessionId, previousStatus: snapshot.session.status, cancelledAt,
-        purgeAttendance: challenge.purgeAttendance,
-        deletedCount: challenge.purgeAttendance ? markedCount : 0,
-        retainedCount: challenge.purgeAttendance ? 0 : markedCount,
+        purgeAttendance: false,
+        deletedCount: 0,
+        retainedCount: markedCount,
         expectedCount: snapshot.impact.expectedCount,
       });
     });

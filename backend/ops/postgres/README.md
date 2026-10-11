@@ -4,6 +4,16 @@
 design and synthetic verification artifact; it is **not authorization** to
 change live PostgreSQL identities, services, credentials, or data.
 
+## Stage 1 preserve-only amendment (stacked PR)
+
+The new additive migration 20261011221000_staged_attendance_preservation
+**prohibits all new permanent attendance deletion**, including for CLOSED
+sessions. The revised runtime-grants.sql **does NOT grant Attendance.DELETE**;
+the production pre-listen guard also requires its absence and the enabled
+Attendance_staged_no_delete trigger. After approval, apply all FOUR reviewed
+migrations (not three) before the new runtime credential/grant switch.
+See backend/docs/staged-attendance-preservation.md. No live cutover is approved.
+
 ## Why this gate exists
 
 The deployed API must not connect as the owner of its own attendance tables

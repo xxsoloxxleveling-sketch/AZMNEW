@@ -18,7 +18,7 @@ export interface CancellationImpact {
 export interface CancellationPreview {
   challenge: string;
   expiresAt: string;
-  purgeAttendance: boolean;
+  purgeAttendance: false;
   session: {
     id: string;
     examHallId: string;
@@ -38,7 +38,7 @@ export interface CancellationResult {
   previousStatus: 'OPEN' | 'CLOSED';
   status: 'CANCELLED';
   cancelledAt: string;
-  purgeAttendance: boolean;
+  purgeAttendance: false;
   deletedCount: number;
   retainedCount: number;
   expectedCount: number;
@@ -46,12 +46,7 @@ export interface CancellationResult {
 export interface CancellationConfirm {
   challenge: string;
   reason: string;
-  confirmationText: 'CANCEL SESSION' | 'CANCEL SESSION AND DELETE ATTENDANCE';
-  approvalReference?: string;
-  retentionApproved?: boolean;
-  externalDispositionAttested?: boolean;
-  irreversibleDeletionAcknowledged?: boolean;
-  closedEvidenceApproved?: boolean;
+  confirmationText: 'CANCEL SESSION';
 }
 export interface CancellationHistory {
   operations: {
@@ -90,19 +85,19 @@ function validImpact(value: any): value is CancellationImpact {
 function validResult(value: any): value is CancellationResult {
   return !!value && nonempty(value.cancellationReference) && nonempty(value.sessionId) &&
     ['OPEN','CLOSED'].includes(value.previousStatus) && value.status === 'CANCELLED' &&
-    timestamp(value.cancelledAt) && typeof value.purgeAttendance === 'boolean' &&
+    timestamp(value.cancelledAt) && value.purgeAttendance === false &&
     integer(value.deletedCount) && integer(value.retainedCount) && integer(value.expectedCount) &&
     value.deletedCount + value.retainedCount <= value.expectedCount &&
-    (!value.purgeAttendance || value.retainedCount === 0);
+    value.deletedCount === 0;
 }
 export const attendanceCancellationApi = {
-  async preview(sessionId: string, purgeAttendance: boolean): Promise<CancellationPreview> {
+  async preview(sessionId: string): Promise<CancellationPreview> {
     const result = await apiFetch<CancellationPreview>(
       '/api/attendance/sessions/' + encodeURIComponent(sessionId) + '/cancel/preview',
-      { method: 'POST', body: JSON.stringify({ purgeAttendance }) },
+      { method: 'POST', body: JSON.stringify({ purgeAttendance: false }) },
     );
     if (!result || !nonempty(result.challenge) || !timestamp(result.expiresAt) ||
-      result.purgeAttendance !== purgeAttendance || !result.session ||
+      result.purgeAttendance !== false || !result.session ||
       result.session.id !== sessionId || !nonempty(result.session.examHallId) ||
       !nonempty(result.session.hallName) || !nonempty(result.session.roomNumber) ||
       !nonempty(result.session.businessDate) || !nonempty(result.session.examDate) ||
@@ -113,6 +108,11 @@ export const attendanceCancellationApi = {
     return result;
   },
   async confirm(sessionId: string, input: CancellationConfirm, idempotencyKey: string): Promise<CancellationResult> {
+    // Prevent even compromised UI state from issuing a destructive request.
+    if (input.confirmationText !== 'CANCEL SESSION' ||
+        Object.keys(input).some(key => !['challenge','reason','confirmationText'].includes(key))) {
+      throw new Error('Permanent attendance deletion is unavailable in the staged release.');
+    }
     const result = await apiFetch<CancellationResult>(
       '/api/attendance/sessions/' + encodeURIComponent(sessionId) + '/cancel/confirm',
       { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey },

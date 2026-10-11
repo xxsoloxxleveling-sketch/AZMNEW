@@ -116,11 +116,13 @@ GRANT USAGE ON SCHEMA public TO :"grant_role";
 
 -- No application read/write permission on the Prisma migrations ledger.
 -- Mutation of either append-only attendance audit is denied at the ACL level.
--- Other application tables allow the existing backend DML surface. Existing
--- row-level audit/finality protections remain enforced by database triggers.
+-- Stage 1 also disallows DELETE on the Attendance table, even when a caller
+-- supplies a forged cancellation-audit context. Other application tables
+-- retain their existing DML surface. Database triggers remain mandatory.
 SELECT format('GRANT %s ON TABLE %I.%I TO %I',
   CASE WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation')
     THEN 'SELECT, INSERT'
+    WHEN c.relname = 'Attendance' THEN 'SELECT, INSERT, UPDATE'
     ELSE 'SELECT, INSERT, UPDATE, DELETE'
   END,
   n.nspname,c.relname,:'grant_role')
@@ -145,7 +147,7 @@ SELECT (
   AND has_table_privilege(:'login_role','public."AttendanceSession"','INSERT')
   AND has_table_privilege(:'login_role','public."AttendanceSession"','UPDATE')
   AND has_table_privilege(:'login_role','public."AttendanceSession"','DELETE')
-  AND has_table_privilege(:'login_role','public."Attendance"','DELETE')
+  AND NOT has_table_privilege(:'login_role','public."Attendance"','DELETE')
   AND has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','INSERT')
   AND NOT has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','UPDATE')
   AND NOT has_table_privilege(:'login_role','public."AttendanceSessionCancellation"','DELETE')
