@@ -602,6 +602,10 @@ export const api = {
       const { mockApi } = await import('../lib/mockApi');
       return mockApi.updateUserAccount(id, data);
     },
+    delete: async (id: string): Promise<void> => {
+      const { mockApi } = await import('../lib/mockApi');
+      await mockApi.deleteUser(id);
+    },
   },
 };
 

@@ -271,6 +271,31 @@ export class UsersService {
 
     const user = await this.getUserById(id);
 
+    // Remove only accounts that have never contributed to operational or audit history.
+    // These actor references are deliberately not all foreign keys; deleting a referenced
+    // User would orphan immutable evidence even when PostgreSQL permits the DELETE.
+    const deleteUnused = async (tx: Prisma.TransactionClient) => {
+      const usages = await Promise.all([
+        tx.attendanceSession.count({ where: { OR: [
+          { openedByUserId: id }, { closedByUserId: id }, { cancelledByUserId: id },
+        ] } }),
+        tx.attendance.count({ where: { markedByUserId: id } }),
+        tx.attendanceResetOperation.count({ where: { actorId: id } }),
+        tx.attendanceSessionCancellation.count({ where: { actorId: id } }),
+        tx.staff.count({ where: { userId: id } }),
+        tx.studentDocument.count({ where: { OR: [{ reviewedById: id }, { uploadedById: id }] } }),
+        tx.studentDocumentAudit.count({ where: { actorId: id } }),
+        tx.partnerStatusAudit.count({ where: { changedById: id } }),
+        tx.transaction.count({ where: { OR: [{ createdById: id }, { voidedById: id }] } }),
+      ]);
+      if (usages.some(count => count > 0)) {
+        const error: AppError = new Error('This account is linked to operational or audit history and cannot be permanently deleted. Deactivate it instead.');
+        error.statusCode = 409;
+        throw error;
+      }
+      return tx.user.delete({ where: { id } });
+    };
+
     if (user.role === Role.SUPER_ADMIN && user.status === 'ACTIVE') {
       return withSerializableRetry(async (tx) => {
         const activeCount = await tx.user.count({
@@ -286,15 +311,11 @@ export class UsersService {
           throw error;
         }
 
-        return tx.user.delete({
-          where: { id },
-        });
+        return deleteUnused(tx);
       });
     }
 
-    return prisma.user.delete({
-      where: { id },
-    });
+    return withSerializableRetry(deleteUnused);
   }
 }
 
