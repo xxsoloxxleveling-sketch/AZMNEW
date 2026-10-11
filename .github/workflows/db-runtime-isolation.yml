@@ -5,6 +5,7 @@ on:
     branches:
       - feature/db-runtime-role-isolation
       - feature/staged-attendance-preserve-only
+      - codex/stage1-truncate-guard
   pull_request:
     branches:
       - feature/super-admin-session-lifecycle
