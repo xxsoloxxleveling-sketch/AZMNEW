@@ -14,7 +14,7 @@ async function run() {
   const accounts = new Map<string, any>();
   const sources = [
     'attendanceSession', 'attendance', 'attendanceResetOperation',
-    'attendanceSessionCancellation', 'staff', 'studentDocument',
+    'attendanceSessionCancellation', 'attendanceSessionReopening', 'staff', 'studentDocument',
     'studentDocumentAudit', 'partnerStatusAudit', 'transaction',
   ] as const;
   let referencingSource: string | null = null;

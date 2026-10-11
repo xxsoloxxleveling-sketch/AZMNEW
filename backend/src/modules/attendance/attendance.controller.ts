@@ -33,6 +33,7 @@ export class AttendanceController {
   candidates = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getCandidates(req.params.sessionId, rosterQuerySchema.parse(req.query)));
   mark = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.mark(req.params.sessionId, req.body, operator(req)), 201);
   close = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.closeSession(req.params.sessionId, req.body.markRemainingAbsent, operator(req)));
+  reopen = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.reopenSession(req.params.sessionId, req.body.reason, operator(req), tokenVersion(req)));
   scan = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = await attendanceService.scanOrMarkAttendance(req.body, operator(req));

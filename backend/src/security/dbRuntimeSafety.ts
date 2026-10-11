@@ -19,6 +19,7 @@ type DmlBoundary = {
   cancelAuditUpdate: boolean; cancelAuditDelete: boolean;
   resetAuditUpdate: boolean; resetAuditDelete: boolean;
   resetAuditTruncate: boolean; cancelAuditTruncate: boolean;
+  reopenAuditInsert: boolean; reopenAuditUpdate: boolean; reopenAuditDelete: boolean; reopenAuditTruncate: boolean;
   migrationWrite: boolean; migrationTruncate: boolean; triggerPrivilege: boolean;
 };
 type TriggerStatus = { tgname: string; tgenabled: string };
@@ -33,6 +34,9 @@ const expectedTriggers = [
   'AttendanceSessionCancellation_immutable',
   'AttendanceSessionCancellation_coherence',
   'Attendance_staged_no_delete',
+  'AttendanceSessionReopening_immutable',
+  'AttendanceSessionReopening_insert_validation',
+  'AttendanceSessionReopening_coherence',
 ] as const;
 
 function loginFromUrl(value: string): string {
@@ -94,6 +98,10 @@ export async function assertRestrictedRuntimeDatabase(
     "has_table_privilege(current_user,'public.\"AttendanceResetOperation\"','UPDATE') AS \"resetAuditUpdate\",",
     "has_table_privilege(current_user,'public.\"AttendanceResetOperation\"','DELETE') AS \"resetAuditDelete\",",
     "has_table_privilege(current_user,'public.\"AttendanceResetOperation\"','TRUNCATE') AS \"resetAuditTruncate\",",
+    "has_table_privilege(current_user,'public.\"AttendanceSessionReopening\"','INSERT') AS \"reopenAuditInsert\",",
+    "has_table_privilege(current_user,'public.\"AttendanceSessionReopening\"','UPDATE') AS \"reopenAuditUpdate\",",
+    "has_table_privilege(current_user,'public.\"AttendanceSessionReopening\"','DELETE') AS \"reopenAuditDelete\",",
+    "has_table_privilege(current_user,'public.\"AttendanceSessionReopening\"','TRUNCATE') AS \"reopenAuditTruncate\",",
     "has_table_privilege(current_user,'public.\"AttendanceSession\"','TRIGGER') AS \"triggerPrivilege\",",
     'EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace',
     "WHERE n.nspname='public' AND c.relname='_prisma_migrations'",
@@ -133,6 +141,7 @@ export async function assertRestrictedRuntimeDatabase(
       !access.resetAuditInsert || !access.cancelAuditInsert ||
       access.cancelAuditUpdate || access.cancelAuditDelete || access.cancelAuditTruncate ||
       access.resetAuditUpdate || access.resetAuditDelete || access.resetAuditTruncate ||
+      !access.reopenAuditInsert || access.reopenAuditUpdate || access.reopenAuditDelete || access.reopenAuditTruncate ||
       access.migrationWrite || access.migrationTruncate || access.triggerPrivilege) {
     blocked('runtime DML or immutable-audit privilege requirements not met');
   }

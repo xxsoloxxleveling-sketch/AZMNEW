@@ -369,6 +369,7 @@ model AttendanceSession {
   candidates               AttendanceSessionCandidate[]
   attendance               Attendance[]
   cancellation             AttendanceSessionCancellation?
+  reopenings               AttendanceSessionReopening[]
 
   @@unique([examHallId, businessDate, attemptNumber])
   @@index([businessDate])
@@ -420,6 +421,23 @@ model AttendanceSessionCancellation {
 
   @@unique([actorId, idempotencyKey])
   @@index([cancelledAt])
+}
+
+// Immutable history of each authorized CLOSED -> OPEN transition.
+model AttendanceSessionReopening {
+  id                    String @id
+  sessionId             String
+  session               AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  actorId               String
+  actorName             String
+  reason                String
+  previousClosedAt      DateTime
+  previousClosedByUserId String
+  expectedCount         Int
+  markedCount           Int
+  reopenedAt            DateTime @default(now())
+
+  @@index([sessionId, reopenedAt])
 }
 
 model AttendanceSessionCandidate {

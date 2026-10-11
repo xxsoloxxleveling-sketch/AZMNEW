@@ -102,7 +102,7 @@ async function run() {
     console.log('Isolated least-privilege grants applied in disposable PostgreSQL 17.');
 
     await check('grant operator rejects inherited TRUNCATE on immutable evidence and migration history',async()=>{
-      for (const table of ['"AttendanceResetOperation"','"AttendanceSessionCancellation"','"_prisma_migrations"']) {
+      for (const table of ['"AttendanceResetOperation"','"AttendanceSessionCancellation"','"AttendanceSessionReopening"','"_prisma_migrations"']) {
         // PUBLIC grants represent effective privileges bypassing direct role REVOKEs.
         // Only the isolated synthetic fixture is ever modified.
         await fixture!.query('GRANT TRUNCATE ON TABLE '+table+' TO PUBLIC');
@@ -247,9 +247,9 @@ async function run() {
         "SELECT c.relname,has_table_privilege(current_user,c.oid,'TRUNCATE') AS allowed"+
         " FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace"+
         " WHERE n.nspname='public' AND c.relname=ANY($1)",
-        [['AttendanceResetOperation','AttendanceSessionCancellation','_prisma_migrations']],
+        [['AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','_prisma_migrations']],
       );
-      assert.equal(rows.length,3,'Expected all three protected relations in synthetic fixture');
+      assert.equal(rows.length,4,'Expected all four protected relations in synthetic fixture');
       for (const row of rows) assert.equal(row.allowed,false,'Unsafe TRUNCATE on '+row.relname);
     });
     await check('runtime cannot alter the Prisma migration ledger',async()=>{
@@ -295,6 +295,42 @@ async function run() {
       assert.equal(await app!.attendanceSessionCandidate.count({
         where:{sessionId:session.id}}),1);
     });
+    await check('Super Admin can reopen CLOSED current attempt with immutable audit and no mark changes',async()=>{
+      const before = await app!.attendance.findMany({where:{sessionId:session.id}});
+      const roster = await app!.attendanceSessionCandidate.findMany({where:{sessionId:session.id}});
+      const closed = await service.closeSession(session.id,false,id);
+      assert.equal(closed.session.status,'CLOSED');
+      await assert.rejects(
+        () => service.reopenSession(session.id,'Unauthorized teacher reopen attempt',teacher,0),
+        (error:any) => error.statusCode===403,
+      );
+      await reject(()=>runtime!.query(
+        'UPDATE "AttendanceSession" SET status=$1,"closedAt"=NULL,"closedByUserId"=NULL WHERE id=$2',
+        ['OPEN',session.id]),'23514');
+      await assert.rejects(
+        () => service.reopenSession(session.id,'tiny',id,0),
+        (error:any) => error.statusCode===400,
+      );
+      assert.equal(await app!.attendanceSessionReopening.count(),0);
+      const detail=await service.reopenSession(session.id,'Reopening to continue marking the original roster',id,0);
+      assert.equal(detail.session.id,session.id);
+      assert.equal(detail.session.status,'OPEN');
+      assert.equal(detail.session.closedAt,null);
+      assert.equal(detail.session.closedByUserId,null);
+      assert.deepEqual(await app!.attendance.findMany({where:{sessionId:session.id}}),before);
+      assert.deepEqual(await app!.attendanceSessionCandidate.findMany({where:{sessionId:session.id}}),roster);
+      const audits=await app!.attendanceSessionReopening.findMany({where:{sessionId:session.id}});
+      assert.equal(audits.length,1);
+      assert.equal(audits[0].previousClosedAt.getTime(),closed.session.closedAt!.getTime());
+      assert.equal(audits[0].markedCount,1);
+      await reject(()=>runtime!.query('DELETE FROM "AttendanceSessionReopening"'),'42501');
+      await reject(()=>runtime!.query(
+        'UPDATE "AttendanceSessionReopening" SET reason=$1',['tampered']),'42501');
+      await assert.rejects(
+        () => service.reopenSession(session.id,'Second reopening without another closure',id,0),
+        (error:any)=>error.statusCode===409,
+      );
+    });
     await check('restricted runtime has no Attendance DELETE privilege',async()=>{
       const permissions=await runtime!.query(
         "SELECT has_table_privilege(current_user,'public.\"Attendance\"','DELETE') AS allowed");
@@ -330,6 +366,13 @@ async function run() {
       assert.equal(await app!.attendance.count({where:{sessionId:session.id}}),1);
       assert.equal(await app!.attendanceSessionCandidate.count({where:{sessionId:session.id}}),1);
       assert.equal(await app!.attendanceSessionCancellation.count({where:{sessionId:session.id}}),1);
+    });
+    await check('cannot reopen archived cancelled attempt',async()=>{
+      await assert.rejects(
+        ()=>service.reopenSession(session.id,'Must reject archived cancellation',id,0),
+        (error:any)=>error.statusCode===409,
+      );
+      assert.equal(await app!.attendanceSessionReopening.count({where:{sessionId:session.id}}),1);
     });
     await check('runtime cannot disable triggers after authorized cancellation',async()=>{
       await reject(()=>runtime!.query(

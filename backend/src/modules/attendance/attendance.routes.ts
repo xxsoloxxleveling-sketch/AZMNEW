@@ -5,7 +5,7 @@ import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
 import { validateBody, validateQuery } from '../../middleware/validate.middleware';
 import { attendanceScanRateLimiter } from '../../middleware/rateLimit.middleware';
-import { resetScopeSchema, resetConfirmSchema, resetHistorySchema, cancelPreviewSchema, cancelConfirmSchema, cancelHistorySchema, openSessionSchema, closeSessionSchema, markAttendanceSchema, scanAttendanceSchema, sessionQuerySchema, rosterQuerySchema, todayAttendanceQuerySchema } from './attendance.schema';
+import { resetScopeSchema, resetConfirmSchema, resetHistorySchema, cancelPreviewSchema, cancelConfirmSchema, cancelHistorySchema, openSessionSchema, closeSessionSchema, reopenSessionSchema, markAttendanceSchema, scanAttendanceSchema, sessionQuerySchema, rosterQuerySchema, todayAttendanceQuerySchema } from './attendance.schema';
 const router = Router();
 router.use(authenticate, authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER));
 const administrators = authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN);
@@ -22,6 +22,7 @@ router.get('/sessions/:sessionId/candidates', validateQuery(rosterQuerySchema), 
 router.get('/sessions/:sessionId', attendanceController.detail);
 router.post('/sessions/:sessionId/mark', attendanceScanRateLimiter, validateBody(markAttendanceSchema), attendanceController.mark);
 router.post('/sessions/:sessionId/close', administrators, validateBody(closeSessionSchema), attendanceController.close);
+router.post('/sessions/:sessionId/reopen', superAdmin, attendanceScanRateLimiter, validateBody(reopenSessionSchema), attendanceController.reopen);
 // Compatibility writes still require an explicit examination session.
 router.post('/scan', attendanceScanRateLimiter, validateBody(scanAttendanceSchema), attendanceController.scan);
 router.get('/today', validateQuery(todayAttendanceQuerySchema), attendanceController.getToday);

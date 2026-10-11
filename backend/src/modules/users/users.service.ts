@@ -282,6 +282,7 @@ export class UsersService {
         tx.attendance.count({ where: { markedByUserId: id } }),
         tx.attendanceResetOperation.count({ where: { actorId: id } }),
         tx.attendanceSessionCancellation.count({ where: { actorId: id } }),
+        tx.attendanceSessionReopening.count({ where: { actorId: id } }),
         tx.staff.count({ where: { userId: id } }),
         tx.studentDocument.count({ where: { OR: [{ reviewedById: id }, { uploadedById: id }] } }),
         tx.studentDocumentAudit.count({ where: { actorId: id } }),

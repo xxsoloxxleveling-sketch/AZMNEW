@@ -33,7 +33,8 @@ function AttendanceWorkspace({ role }: { role: string }) {
   const [cancelDialog, setCancelDialog] = useState(false);
   const [refresh, setRefresh] = useState(0), [notice, setNotice] = useState('');
   const [attendanceTab, setAttendanceTab] = useState<'manual' | 'scan'>('manual'), [scanBusy, setScanBusy] = useState(false);
-  const [dialog, setDialog] = useState<'open' | 'close' | null>(null), [busy, setBusy] = useState(false), [modalError, setModalError] = useState(''), [convertAbsent, setConvertAbsent] = useState(false), [markDialog, setMarkDialog] = useState(false);
+  const [dialog, setDialog] = useState<'open' | 'close' | 'reopen' | null>(null), [busy, setBusy] = useState(false), [modalError, setModalError] = useState(''), [convertAbsent, setConvertAbsent] = useState(false), [markDialog, setMarkDialog] = useState(false);
+  const [reopenReason, setReopenReason] = useState(''), [reopenConfirmation, setReopenConfirmation] = useState('');
   const hall = halls.find(item => item.id === hallId);
   const visibleHalls = halls.filter(item => centerId === 'all' || (item.testCenterId ?? 'unknown') === centerId);
   const locked = !!dialog || markDialog || scanBusy || resetDialog || cancelDialog;
@@ -96,7 +97,7 @@ function AttendanceWorkspace({ role }: { role: string }) {
     return () => { active = false; };
   }, [sessionId, hallId, refresh, loading, sourceError, historyLoading, historyError]);
   const changeHall = (id: string) => { setHallId(id); setSessionId(''); setDetail(null); setHistoryPage(1); setHistoryStatus(''); setHistoryDate(''); setNotice(''); };
-  const openDialog = (kind: 'open' | 'close') => { setModalError(''); setConvertAbsent(false); setDialog(kind); setNotice(''); };
+  const openDialog = (kind: 'open' | 'close' | 'reopen') => { setModalError(''); setConvertAbsent(false); setReopenReason(''); setReopenConfirmation(''); setDialog(kind); setNotice(''); };
   const submit = async () => {
     if (busy || !administrator) return;
     setBusy(true); setModalError('');
@@ -105,6 +106,16 @@ function AttendanceWorkspace({ role }: { role: string }) {
         const created = await mockApi.createAttendanceSession({ examHallId: hall.id });
         if (created.session.examHallId !== hall.id || created.session.status !== 'OPEN') throw new Error('Session opening was not confirmed. Refresh Hall sessions before retrying.');
         desiredSession.current = created.session.id; setSessionId(created.session.id); setHistoryPage(1); setHistoryDate(''); setHistoryStatus(''); setNotice('Attendance session opened. The Hall roster is frozen.');
+      } else if (dialog === 'reopen' && detail) {
+        const reopened = await mockApi.reopenAttendanceSession(detail.session.id, {
+          reason: reopenReason.trim(), confirmationText: 'REOPEN SESSION',
+        });
+        if (reopened.session.id !== detail.session.id || reopened.session.status !== 'OPEN' ||
+            reopened.session.isCurrent === false)
+          throw new Error('Reopening was not confirmed. Refresh the session before retrying.');
+        setDetail(reopened);
+        setNotice('Session reopened by Super Admin. All existing attendance marks and frozen roster entries are preserved.');
+        setAttendanceTab('manual');
       } else if (dialog === 'close' && detail) {
         const closed = await mockApi.closeAttendanceSession(detail.session.id, { markRemainingAbsent: convertAbsent });
         if (closed.session.id !== detail.session.id || closed.session.status !== 'CLOSED') throw new Error('Session closure was not confirmed. Refresh the session before retrying.');
@@ -137,7 +148,7 @@ function AttendanceWorkspace({ role }: { role: string }) {
     </section>
     {hall && !loading && !sourceError && <>
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Attendance session">
-        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-bold">Attendance Session</h2><div className="flex flex-wrap gap-2">{administrator && <button className={attendancePrimary} disabled={!canOpen || locked} onClick={() => openDialog('open')}>Open Attendance Session</button>}{administrator && sessionReady && detail.session.status === 'OPEN' && detail.session.isCurrent !== false && <button className={attendanceSecondary} disabled={locked} onClick={() => openDialog('close')}>Close Attendance Session</button>}</div></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-bold">Attendance Session</h2><div className="flex flex-wrap gap-2">{administrator && <button className={attendancePrimary} disabled={!canOpen || locked} onClick={() => openDialog('open')}>Open Attendance Session</button>}{administrator && sessionReady && detail.session.status === 'OPEN' && detail.session.isCurrent !== false && <button className={attendanceSecondary} disabled={locked} onClick={() => openDialog('close')}>Close Attendance Session</button>}{role === 'SUPER_ADMIN' && sessionReady && detail.session.status === 'CLOSED' && detail.session.isCurrent !== false && <button className={attendanceSecondary} disabled={locked} onClick={() => openDialog('reopen')}>Reopen Closed Session</button>}</div></div>
         {historyLoading && <p role="status" className="mt-3 text-sm text-slate-600">Loading Hall sessions…</p>}
         {historyError && <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 text-sm text-red-700"><span>Failed to load Hall sessions: {historyError}</span><button className={attendanceSecondary} onClick={() => setRefresh(value => value + 1)}>Retry sessions</button></div>}
         {!historyLoading && !historyError && history && !history.sessions.length && <div className="mt-3"><span className="text-xs font-semibold text-slate-600">NO SESSION</span><p className="mt-1 text-sm text-slate-600">{historyDate || historyStatus ? 'No attendance sessions match these filters for this Hall.' : 'No attendance session has been opened for this Hall.'}</p></div>}
@@ -177,8 +188,23 @@ function AttendanceWorkspace({ role }: { role: string }) {
       }}
     />}
     {role === 'SUPER_ADMIN' && <AttendanceResetCenter selectedSession={detail?.session ?? null} centers={centers} hallCenters={halls.map(hall => ({ id: hall.id, testCenterId: hall.testCenterId }))} disabled={!!dialog || markDialog || scanBusy} onDialogChange={setResetDialog} onReset={result => { const replacement = result.attempts.find(attempt => attempt.previousSessionId === sessionId) ?? result.attempts[0]; if (replacement) { desiredSession.current = replacement.newSessionId; setCenterId('all'); setHallId(replacement.examHallId); setSessionId(replacement.newSessionId); setDetail(null); } setHistoryPage(1); setHistoryStatus(''); setHistoryDate(''); setAttendanceTab('manual'); setRefresh(value => value + 1); }} />}
-    {dialog && <AttendanceDialog title={dialog === 'open' ? 'Confirm Open Session' : 'Confirm Close Session'} busy={busy} onClose={() => { if (!busy) setDialog(null); }} footer={<><button data-autofocus className={attendanceSecondary} disabled={busy} onClick={() => setDialog(null)}>Cancel</button><button className={attendancePrimary} disabled={busy} onClick={submit}>{busy ? 'Saving…' : dialog === 'open' ? 'Open Session' : 'Close Session'}</button></>}>
-      {dialog === 'open' && hall ? <><dl className="grid grid-cols-2 gap-x-3 gap-y-3 text-sm">{[['Test Center', hall.centerName], ['Hall', hall.name], ['Room', hall.roomNumber], ['Exam Date', hall.examDate], ['Reporting Time', hall.reportingTime], ['Candidates to snapshot', hall.assignedCount]].map(([name, value]) => <div key={name}><dt className="text-xs text-slate-500">{name}</dt><dd className="mt-1 break-words font-semibold">{attendanceValue(value)}</dd></div>)}</dl><p className="mt-4 text-sm text-slate-600">The Hall roster will be frozen when this session is opened.</p></> : detail && <><dl className="grid grid-cols-3 gap-3 text-sm">{[['Expected', detail.stats.expectedCount], ['Marked', detail.stats.markedCount], ['Not Marked', detail.stats.unmarkedCount]].map(([name, value]) => <div key={name}><dt className="text-xs text-slate-500">{name}</dt><dd className="mt-1 font-semibold tabular-nums">{value}</dd></div>)}</dl><label className="mt-4 flex items-start gap-2 text-sm"><input id="attendance-close-absent" type="checkbox" checked={convertAbsent} disabled={busy} onChange={event => setConvertAbsent(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#185b9d] focus-visible:outline-2 focus-visible:outline-[#185b9d]" /><span>Mark all remaining Not Marked candidates as Absent</span></label><p className="mt-3 text-sm text-slate-600">Closing the session prevents further attendance marking.</p><p className="mt-2 text-xs text-slate-500">{convertAbsent ? 'Only remaining Not Marked candidates will be recorded as Absent.' : 'Remaining candidates will stay Not Marked in the historical roster.'}</p></>}
+    {dialog && <AttendanceDialog title={dialog === 'open' ? 'Confirm Open Session' : dialog === 'reopen' ? 'Confirm Reopen Closed Session' : 'Confirm Close Session'} busy={busy} onClose={() => { if (!busy) setDialog(null); }} footer={<><button data-autofocus className={attendanceSecondary} disabled={busy} onClick={() => setDialog(null)}>Cancel</button><button className={attendancePrimary} disabled={busy || (dialog === 'reopen' && (reopenReason.trim().length < 10 || reopenConfirmation !== 'REOPEN SESSION'))} onClick={submit}>{busy ? 'Saving…' : dialog === 'open' ? 'Open Session' : dialog === 'reopen' ? 'Reopen Session' : 'Close Session'}</button></>}>
+      {dialog === 'reopen' && detail ? <div className="space-y-3 text-sm">
+        <p className="font-semibold text-slate-900">Unlock this CLOSED session without resetting attendance?</p>
+        <dl className="grid grid-cols-3 gap-2 text-xs">
+          <div><dt>Expected</dt><dd className="font-bold">{detail.stats.expectedCount}</dd></div>
+          <div><dt>Already marked</dt><dd className="font-bold">{detail.stats.markedCount}</dd></div>
+          <div><dt>Not marked</dt><dd className="font-bold">{detail.stats.unmarkedCount}</dd></div>
+        </dl>
+        <p className="text-slate-600">All Present, Late and Absent marks will remain unchanged, including marks entered automatically on closure. Previously marked candidates cannot be marked again. This action is permanently audited.</p>
+        <label className="block font-semibold" htmlFor="attendance-reopen-reason">Reason for reopening (required, at least 10 characters)</label>
+        <textarea id="attendance-reopen-reason" rows={3} maxLength={1000} value={reopenReason} disabled={busy}
+          onChange={event => setReopenReason(event.target.value)}
+          className={attendanceField + ' w-full'} placeholder="Explain why the session needs to reopen..." />
+        <label className="block font-semibold" htmlFor="attendance-reopen-confirm">Type REOPEN SESSION to confirm</label>
+        <input id="attendance-reopen-confirm" type="text" autoComplete="off" value={reopenConfirmation} disabled={busy}
+          onChange={event => setReopenConfirmation(event.target.value)} className={attendanceField + ' w-full'} />
+      </div> : dialog === 'open' && hall ? <><dl className="grid grid-cols-2 gap-x-3 gap-y-3 text-sm">{[['Test Center', hall.centerName], ['Hall', hall.name], ['Room', hall.roomNumber], ['Exam Date', hall.examDate], ['Reporting Time', hall.reportingTime], ['Candidates to snapshot', hall.assignedCount]].map(([name, value]) => <div key={name}><dt className="text-xs text-slate-500">{name}</dt><dd className="mt-1 break-words font-semibold">{attendanceValue(value)}</dd></div>)}</dl><p className="mt-4 text-sm text-slate-600">The Hall roster will be frozen when this session is opened.</p></> : detail && <><dl className="grid grid-cols-3 gap-3 text-sm">{[['Expected', detail.stats.expectedCount], ['Marked', detail.stats.markedCount], ['Not Marked', detail.stats.unmarkedCount]].map(([name, value]) => <div key={name}><dt className="text-xs text-slate-500">{name}</dt><dd className="mt-1 font-semibold tabular-nums">{value}</dd></div>)}</dl><label className="mt-4 flex items-start gap-2 text-sm"><input id="attendance-close-absent" type="checkbox" checked={convertAbsent} disabled={busy} onChange={event => setConvertAbsent(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#185b9d] focus-visible:outline-2 focus-visible:outline-[#185b9d]" /><span>Mark all remaining Not Marked candidates as Absent</span></label><p className="mt-3 text-sm text-slate-600">Closing the session prevents further attendance marking.</p><p className="mt-2 text-xs text-slate-500">{convertAbsent ? 'Only remaining Not Marked candidates will be recorded as Absent.' : 'Remaining candidates will stay Not Marked in the historical roster.'}</p></>}
       {modalError && <p role="alert" className="mt-3 text-sm text-red-700">{modalError}</p>}
     </AttendanceDialog>}
   </div>;

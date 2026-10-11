@@ -1647,6 +1647,17 @@ export const mockApi = {
     return res;
   },
 
+  async reopenAttendanceSession(id: string, payload: { reason: string; confirmationText: 'REOPEN SESSION' }): Promise<AttendanceSessionDetail> {
+    const res: any = await apiFetch<any>(`/api/attendance/sessions/${encodeURIComponent(id)}/reopen`, {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+    if (!res?.session || !res?.stats || !Array.isArray(res?.roster)) throw new Error('Invalid reopened attendance session');
+    validateAttendanceSessionIdentity(res.session);
+    validateAttendanceMetrics(res.stats);
+    validateAttendanceCandidates(res.roster);
+    return res as AttendanceSessionDetail;
+  },
+
   async closeAttendanceSession(id: string, payload: { markRemainingAbsent?: boolean } = {}): Promise<AttendanceSessionDetail> {
     const res: any = await apiFetch<any>(`/api/attendance/sessions/${encodeURIComponent(id)}/close`, {
       method: 'POST', body: JSON.stringify({ markRemainingAbsent: payload.markRemainingAbsent ?? false }),

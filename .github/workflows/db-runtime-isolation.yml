@@ -9,6 +9,7 @@ on:
       - codex/stage1-final-runtime-security
       - fix/attendance-reset-history-wire-date
       - feature/superadmin-delete-unused-user
+      - feature/superadmin-reopen-closed-preserve-marks
   pull_request:
     branches:
       - feature/super-admin-session-lifecycle
@@ -16,6 +17,7 @@ on:
       - codex/stage1-truncate-guard
       - codex/stage1-final-runtime-security
       - fix/attendance-reset-history-wire-date
+      - feature/superadmin-delete-unused-user
 
 permissions:
   contents: read

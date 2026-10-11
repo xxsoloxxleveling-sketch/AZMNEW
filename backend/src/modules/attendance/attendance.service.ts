@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../../lib/prisma';
 import { qrService } from './qr.service';
 import { hallDate } from '../exam-halls/examHalls.service';
@@ -141,6 +142,45 @@ export class AttendanceService {
         if (unmarked.length) await tx.attendance.createMany({ data: unmarked.map(candidate => ({ sessionId, studentId: candidate.studentId, date: session.businessDate, status: 'ABSENT', method: 'MANUAL', markedByUserId: userId })) });
       }
       await tx.attendanceSession.update({ where: { id: sessionId }, data: { status: 'CLOSED', closedAt: new Date(), closedByUserId: userId } });
+      return this.detail(tx, sessionId);
+    });
+  }
+  async reopenSession(sessionId: string, reason: string, actorId: string, expectedTokenVersion?: number) {
+    this.operator(actorId);
+    if (!sessionId?.trim()) fail(400, 'Select the CLOSED examination attendance session.');
+    if (typeof reason !== 'string' || reason.trim().length < 10 || reason.trim().length > 1000)
+      fail(400, 'A reopening reason of 10 to 1000 characters is required.');
+    return this.transaction(async tx => {
+      const actors = await tx.$queryRawUnsafe<{ id: string; name: string; role: string; status: string; tokenVersion: number }[]>(
+        'SELECT id,name,role,status,"tokenVersion" FROM "User" WHERE id=$1 FOR SHARE', actorId,
+      );
+      const actor = actors[0];
+      if (!actor || actor.status !== 'ACTIVE' || actor.role !== 'SUPER_ADMIN')
+        fail(403, 'Only an active Super Admin may reopen a CLOSED attendance session.');
+      if (expectedTokenVersion !== undefined && expectedTokenVersion !== actor.tokenVersion)
+        fail(401, 'Your Super Admin authorization session expired. Please sign in again.');
+
+      const locked = await tx.$queryRaw<{id: string}[]>`SELECT id FROM "AttendanceSession" WHERE id=${sessionId} FOR UPDATE`;
+      if (!locked.length) fail(404, 'Examination attendance session not found.');
+      const session = await tx.attendanceSession.findUniqueOrThrow({ where: { id: sessionId } });
+      if (session.status !== 'CLOSED' || !session.isCurrent || session.archivedAt ||
+          !session.closedAt || !session.closedByUserId || session.cancelledAt)
+        fail(409, 'Only the current CLOSED attempt may be reopened. Archived and cancelled attempts remain immutable.');
+      const [expectedCount, markedCount] = await Promise.all([
+        tx.attendanceSessionCandidate.count({ where: { sessionId } }),
+        tx.attendance.count({ where: { sessionId } }),
+      ]);
+      const id = randomUUID();
+      await tx.$queryRawUnsafe("SELECT set_config('azm.reopen_audit_id', $1, true)", id);
+      await tx.attendanceSessionReopening.create({ data: {
+        id, sessionId, actorId, actorName: actor.name, reason: reason.trim(),
+        previousClosedAt: session.closedAt, previousClosedByUserId: session.closedByUserId,
+        expectedCount, markedCount,
+      } });
+      await tx.attendanceSession.update({ where: { id: sessionId }, data: {
+        status: 'OPEN', closedAt: null, closedByUserId: null,
+      } });
+      // All original attendance and frozen roster rows are retained exactly.
       return this.detail(tx, sessionId);
     });
   }

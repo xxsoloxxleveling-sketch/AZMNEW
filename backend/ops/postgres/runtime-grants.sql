@@ -120,7 +120,7 @@ GRANT USAGE ON SCHEMA public TO :"grant_role";
 -- supplies a forged cancellation-audit context. Other application tables
 -- retain their existing DML surface. Database triggers remain mandatory.
 SELECT format('GRANT %s ON TABLE %I.%I TO %I',
-  CASE WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation')
+  CASE WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening')
     THEN 'SELECT, INSERT'
     WHEN c.relname = 'Attendance' THEN 'SELECT, INSERT, UPDATE'
     ELSE 'SELECT, INSERT, UPDATE, DELETE'
@@ -157,6 +157,10 @@ SELECT (
   AND NOT has_table_privilege(:'login_role','public."AttendanceResetOperation"','UPDATE')
   AND NOT has_table_privilege(:'login_role','public."AttendanceResetOperation"','DELETE')
   AND NOT has_table_privilege(:'login_role','public."AttendanceResetOperation"','TRUNCATE')
+  AND has_table_privilege(:'login_role','public."AttendanceSessionReopening"','INSERT')
+  AND NOT has_table_privilege(:'login_role','public."AttendanceSessionReopening"','UPDATE')
+  AND NOT has_table_privilege(:'login_role','public."AttendanceSessionReopening"','DELETE')
+  AND NOT has_table_privilege(:'login_role','public."AttendanceSessionReopening"','TRUNCATE')
   AND NOT EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relname='_prisma_migrations'

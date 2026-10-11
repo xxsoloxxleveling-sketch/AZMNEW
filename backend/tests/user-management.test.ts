@@ -174,6 +174,7 @@ async function runUserManagementTests() {
       attendance: { count: async () => Number(linkedHistoryTable === 'attendance') },
       attendanceResetOperation: { count: async () => Number(linkedHistoryTable === 'attendanceResetOperation') },
       attendanceSessionCancellation: { count: async () => Number(linkedHistoryTable === 'attendanceSessionCancellation') },
+      attendanceSessionReopening: { count: async () => Number(linkedHistoryTable === 'attendanceSessionReopening') },
       staff: { count: async () => Number(linkedHistoryTable === 'staff') },
       studentDocument: { count: async () => Number(linkedHistoryTable === 'studentDocument') },
       studentDocumentAudit: { count: async () => Number(linkedHistoryTable === 'studentDocumentAudit') },
@@ -411,7 +412,7 @@ async function runUserManagementTests() {
   assert(!testUsersMap.has('unused-test-account'), 'Unused test account can be deleted by another Super Admin');
   for (const table of [
     'attendanceSession', 'attendance', 'attendanceResetOperation',
-    'attendanceSessionCancellation', 'staff', 'studentDocument',
+    'attendanceSessionCancellation', 'attendanceSessionReopening', 'staff', 'studentDocument',
     'studentDocumentAudit', 'partnerStatusAudit', 'transaction',
   ]) {
     testUsersMap.set('linked-test-account', {
