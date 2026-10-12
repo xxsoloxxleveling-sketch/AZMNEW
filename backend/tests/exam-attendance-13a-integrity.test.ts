@@ -29,7 +29,7 @@ async function run() {
     fs.mkdirSync(path.join(fixture, 'prisma/migrations'), { recursive: true });
     fs.writeFileSync(path.join(fixture, 'prisma/schema.prisma'), baselineSchema.replace('directUrl = env("DIRECT_URL")', 'directUrl = env("DIRECT_URL")\n  shadowDatabaseUrl = env("ATTENDANCE_SHADOW_DATABASE_URL")'));
     for (const dir of fs.readdirSync(path.join(backend, 'prisma/migrations'), { withFileTypes: true })) {
-      if (dir.name.includes('exam_attendance_sessions')) continue;
+      if ((dir.name.includes('exam_attendance_sessions') || dir.name.includes('attendance_reset_attempts'))) continue;
       fs.cpSync(path.join(backend, 'prisma/migrations', dir.name), path.join(fixture, 'prisma/migrations', dir.name), { recursive: true });
     }
     const migrationEnv = { ...process.env, ATTENDANCE_SHADOW_DATABASE_URL: shadowUrl.toString() };
@@ -45,6 +45,7 @@ async function run() {
     fs.writeFileSync(schemaFile, newSchema);
     const migrationName = fs.readdirSync(path.join(backend, 'prisma/migrations')).find(name => name.endsWith('_exam_attendance_sessions'))!;
     fs.cpSync(path.join(backend, 'prisma/migrations', migrationName), path.join(fixture, 'prisma/migrations', migrationName), { recursive: true });
+    fs.cpSync(path.join(backend, 'prisma/migrations/20261010120000_attendance_reset_attempts'), path.join(fixture, 'prisma/migrations/20261010120000_attendance_reset_attempts'), { recursive: true });
     const migrationSql = fs.readFileSync(path.join(backend, 'prisma/migrations', migrationName, 'migration.sql'), 'utf8');
     await check('migration SQL contains no data rewriting or deletion', () => { assert(!/^(INSERT|UPDATE|DELETE|TRUNCATE|DROP TABLE)\s/im.test(migrationSql)); });
     const migrateOutput = execFileSync(process.execPath, [prismaCli, 'migrate', 'dev', '--schema', schemaFile, '--skip-generate', '--skip-seed'], { cwd: backend, env: migrationEnv, stdio: 'pipe', encoding: 'utf8' });
@@ -63,7 +64,7 @@ async function run() {
     const hallData = (id: string, examDate = '2026-11-15') => ({ id, name: 'Hall ' + id, roomNumber: 'Room ' + id, targetClass: 'Class 9th', examDate, reportingTime: '08:00', capacity: 20, testCenterId: center.id });
     for (const id of ['a','b','empty','race','close-yes','history','date-race','move-race']) await db.examHall.create({ data: hallData(id) });
     await db.examHall.create({ data: hallData('bad-date', '31 February 2026') });
-    for (const [id, hall] of [['a1','a'],['a2','a'],['a3','a'],['inactive','a'],['b1','b'],['r1','race'],['r2','race'],['c1','close-yes'],['c2','close-yes'],['h1','history'],['d1','date-race'],['m1','move-race']] as const) await db.student.create({ data: { ...studentData(id,hall), seatNo: 'Seat-' + id, rollNumber: 'ROLL-' + id, status: id === 'inactive' ? 'INACTIVE' : 'ACTIVE', currentClass: id === 'inactive' ? 'Other informational class' : 'Class 9th' } });
+    for (const [id, hall] of [['a1','a'],['a2','a'],['a3','a'],['inactive','a'],['b1','b'],['r1','race'],['r2','race'],['c1','close-yes'],['c2','close-yes'],['h1','history'],['d1','date-race'],['m1','move-race']] as const) await db.student.create({ data: { ...studentData(id,hall), seatNo: 'Seat-' + id, rollNumber: 'ROLL-' + id, status: 'ACTIVE', currentClass: id === 'inactive' ? 'Other informational class' : 'Class 9th' } });
     await db.student.create({ data: { ...studentData('legacy-text'), assignedHall: 'Hall empty', assignedRoom: 'Room empty', seatNo: 'Old seat' } });
     await db.student.create({ data: studentData('class-only') });
     const ownQr = qrService.generateSignedQrToken('a3'), wrongQr = qrService.generateSignedQrToken('b1');
@@ -87,7 +88,9 @@ async function run() {
     await check('Hall is required and class scope rejected',async()=>{assert.equal((await request('/sessions',{})).status,400);assert.equal((await request('/sessions',{examHallId:'a',classLevel:'Class 9th'})).status,400);assert.equal((await request('/today?classLevel=Class%209th')).status,400);});
     await check('invalid Hall and invalid configured exam date rejected',async()=>{assert.equal((await request('/sessions',{examHallId:'missing'})).status,404);assert.equal((await request('/sessions',{examHallId:'bad-date'})).status,409);});
     await check('empty explicit roster rejects legacy/class/targetClass matches',async()=>assert.equal((await request('/sessions',{examHallId:'empty'})).status,409));
+
     const opened=await request('/sessions',{examHallId:'a'});const a=opened.body.data.session.id;
+    await db.student.update({ where: { id: 'inactive' }, data: { status: 'INACTIVE' } });
     await check('ADMIN opens snapshot of every explicit candidate only',()=>{assert.equal(opened.status,201);assert.equal(opened.body.data.stats.expectedCount,4);assert.deepEqual(opened.body.data.roster.map((row:any)=>row.studentId).sort(),['a1','a2','a3','inactive']);});
     await check('snapshots retain seat/name/roll/application/class and exclude private fields',()=>{const row=opened.body.data.roster.find((r:any)=>r.studentId==='a1');assert.equal(row.seatNoSnapshot,'Seat-a1');assert.equal(row.rollNumberSnapshot,'ROLL-a1');assert.equal(row.applicationNoSnapshot,'APP-a1');assert.equal(row.currentClassSnapshot,'Class 9th');assert.equal(row.fullNameSnapshot,'Candidate a1');assert(!/cnic|mobile|email|document|father|fee|parent/i.test(JSON.stringify(opened.body.data)));});
     await check('business date derives Hall date, not server date; Karachi midnight boundary',()=>{assert.equal(opened.body.data.session.businessDate.slice(0,10),'2026-11-15');assert.equal(karachiBusinessDate(new Date('2026-10-07T20:01:00Z')).toISOString().slice(0,10),'2026-10-08');});
@@ -109,7 +112,7 @@ async function run() {
       assert.equal((await attendance.getSession(a)).stats.presentCount,1);
     });
     await check('close rejects nonboolean absence conversion',async()=>assert.equal((await request('/sessions/'+a+'/close',{markRemainingAbsent:'true'})).status,400));
-    await check('metrics use frozen expected roster and unmarked stays NOT_MARKED',async()=>{const detail=await attendance.getSession(a);assert.deepEqual(detail.stats,{expectedCount:4,markedCount:2,presentCount:1,lateCount:1,absentCount:0,unmarkedCount:2,attendancePercentage:50});assert.equal(detail.roster.find((row:any)=>row.studentId==='a2')?.status,'NOT_MARKED');});
+    await check('metrics use frozen expected roster and unmarked stays NOT_MARKED',async()=>{const detail=await attendance.getSession(a);assert.deepEqual(detail.stats,{expectedCount:4,markedCount:2,presentCount:1,lateCount:1,absentCount:0,unmarkedCount:2,manualCount:1,qrCount:1,completionPercentage:50,attendancePercentage:50});assert.equal(detail.roster.find((row:any)=>row.studentId==='a2')?.status,'NOT_MARKED');});
     await check('session search is paginated and scoped to frozen safe fields',async()=>{const result=await request('/sessions/'+a+'/candidates?search=Seat-a2&limit=1');assert.equal(result.body.data.pagination.total,1);assert.equal(result.body.data.candidates[0].studentId,'a2');assert.equal((await request('/sessions/'+a+'/candidates?classLevel=Class%209th')).status,400);});
     await check('no session date yields null; session date uses frozen denominator',async()=>{assert.equal((await attendance.getTodayAttendance(new Date('2026-10-07T10:00:00Z'))).attendancePercentage,null);const today=await attendance.getTodayAttendance(new Date('2026-11-15T10:00:00Z'));assert.equal(today.expectedCount,5);assert.equal(today.attendancePercentage,40);});
     await check('close default false preserves NOT_MARKED and records closing operator',async()=>{const result=await request('/sessions/'+a+'/close',{});assert.equal(result.status,200);assert.equal(result.body.data.stats.absentCount,0);assert.equal(result.body.data.stats.unmarkedCount,2);assert.equal(result.body.data.session.closedByUserId,'ADMIN');assert.equal(result.body.data.session.status,'CLOSED');});

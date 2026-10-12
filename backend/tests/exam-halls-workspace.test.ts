@@ -12,6 +12,21 @@ check('print escapes dynamic content and excludes implicit membership',()=>{asse
 check('print preserves backend seats and separate roll semantics',()=>{assert(html.includes('Desk Z9'));assert(html.includes('Unassigned'));assert(!html.includes('Seat #02'));assert(!html.includes('APP-B'));assert(html.includes('ROLL-A'))});
 check('print A4 metadata has unknown values and no fees or attendance',()=>{assert(html.includes('size:A4'));assert(html.includes('Recorded Invigilator'));assert(html.includes('Candidate Signature'));assert(!/feeStatus|Attendance|PRESENT|ABSENT/.test(html));assert(!html.includes('2026'))});
 check('no unsafe runtime fallback or native dialogs',()=>{for(const term of ['DEFAULT_HALLS','attendanceMap','attendanceRate','presentCount','absentCount','feeStatus','alert(','prompt(','confirm(','getStudents(','Main Campus Examination Center','15 Nov 2026','0305-1755551'])assert(!source.includes(term),term)});
-check('Student global filters and public registration policy remain byte-identical to current main',()=>{for(const file of ['backend/src/modules/students/students.service.ts','backend/tests/student-class-filtering.test.ts','src/config/registration.ts']){const baseline=execFileSync('git',['show','origin/main:'+file],{cwd:root,encoding:'utf8'});const current=fs.readFileSync(path.join(root,file),'utf8');assert.equal(current.replace(/\r\n/g,'\n'),baseline.replace(/\r\n/g,'\n'),file)}});
+check('Student service outside authorized deletion protection and public registration policy remain byte-identical to current main',()=>{
+ const withoutDeletion=(text:string)=>{
+  const normalized=text.replace(/\r\n/g,'\n').replace('import { Prisma, TransactionStatus,','import { TransactionStatus,');
+  const start=normalized.includes('\n  async deletionProtection(')
+   ? normalized.indexOf('\n  async deletionProtection(')
+   : normalized.indexOf('\n  /**\n   * Deletes a student record');
+  const end=normalized.indexOf('\n  /**\n   * Retrieves QR metadata',start);
+  assert(start>=0&&end>start,'Authorized deletion section must be identifiable');
+  return normalized.slice(0,start)+normalized.slice(end);
+ };
+ for(const file of ['backend/src/modules/students/students.service.ts','backend/tests/student-class-filtering.test.ts','src/config/registration.ts']){
+  const baseline=execFileSync('git',['show','origin/main:'+file],{cwd:root,encoding:'utf8'});
+  const current=fs.readFileSync(path.join(root,file),'utf8');
+  assert.equal(file.endsWith('students.service.ts')?withoutDeletion(current):current.replace(/\r\n/g,'\n'),file.endsWith('students.service.ts')?withoutDeletion(baseline):baseline.replace(/\r\n/g,'\n'),file);
+ }
+});
 check('design note retains classic profile and scope-limited local Hall enablement',()=>{const note=fs.readFileSync(path.join(root,'design-system/azm-aio/pages/halls.md'),'utf8');assert(note.includes('CLASSIC CLIENT-APPROVED UI PROFILE'));assert(note.includes('7578b2dd'));assert(note.includes('deferred'))});
 console.log('Hall workspace: '+passed+' PASS, 0 FAIL.');

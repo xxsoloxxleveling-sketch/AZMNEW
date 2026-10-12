@@ -152,6 +152,7 @@ async function runUserManagementTests() {
   const origGetUserById = usersService.getUserById.bind(usersService);
   const origTransaction = prisma.$transaction;
   let matrixTransactions = 0;
+  let linkedHistoryTable: string | null = null;
 
   // Stub the pre-transaction lookup to use the isolated test fixture
   usersService.getUserById = async (id: string) => {
@@ -168,7 +169,18 @@ async function runUserManagementTests() {
   (prisma as any).$transaction = async (callback: any, options: any) => {
     if (options?.isolationLevel !== 'Serializable') throw new Error('Super-admin guards require Serializable isolation.');
     matrixTransactions++;
-    return callback({ user: {
+    return callback({
+      attendanceSession: { count: async () => Number(linkedHistoryTable === 'attendanceSession') },
+      attendance: { count: async () => Number(linkedHistoryTable === 'attendance') },
+      attendanceResetOperation: { count: async () => Number(linkedHistoryTable === 'attendanceResetOperation') },
+      attendanceSessionCancellation: { count: async () => Number(linkedHistoryTable === 'attendanceSessionCancellation') },
+      attendanceSessionReopening: { count: async () => Number(linkedHistoryTable === 'attendanceSessionReopening') },
+      staff: { count: async () => Number(linkedHistoryTable === 'staff') },
+      studentDocument: { count: async () => Number(linkedHistoryTable === 'studentDocument') },
+      studentDocumentAudit: { count: async () => Number(linkedHistoryTable === 'studentDocumentAudit') },
+      partnerStatusAudit: { count: async () => Number(linkedHistoryTable === 'partnerStatusAudit') },
+      transaction: { count: async () => Number(linkedHistoryTable === 'transaction') },
+      user: {
       count: async ({ where }: any) => [...testUsersMap.values()].filter(user => user.role === where.role && user.status === where.status).length,
       update: async ({ where, data }: any) => {
         const user = testUsersMap.get(where.id);
@@ -389,6 +401,35 @@ async function runUserManagementTests() {
       selfDeactError?.message === 'You cannot deactivate your own account.',
     '9. Existing self-deactivation protection still passes -> REJECTED (400)'
   );
+
+  // 4.9a Delete unused test accounts, but never orphan an operational/audit actor.
+  testUsersMap.clear();
+  testUsersMap.set('unused-test-account', {
+    id: 'unused-test-account', name: 'Unused Tester', email: 'unused@test.invalid',
+    role: Role.TEACHER, status: 'ACTIVE',
+  });
+  await usersService.deleteUser('unused-test-account', 'sa-1');
+  assert(!testUsersMap.has('unused-test-account'), 'Unused test account can be deleted by another Super Admin');
+  for (const table of [
+    'attendanceSession', 'attendance', 'attendanceResetOperation',
+    'attendanceSessionCancellation', 'attendanceSessionReopening', 'staff', 'studentDocument',
+    'studentDocumentAudit', 'partnerStatusAudit', 'transaction',
+  ]) {
+    testUsersMap.set('linked-test-account', {
+      id: 'linked-test-account', name: 'Historical Tester', email: 'linked@test.invalid',
+      role: Role.TEACHER, status: 'ACTIVE',
+    });
+    linkedHistoryTable = table;
+    let blocked = false;
+    try {
+      await usersService.deleteUser('linked-test-account', 'sa-1');
+    } catch (error: any) {
+      blocked = error.statusCode === 409 && error.message.includes('Deactivate it instead');
+    }
+    assert(blocked && testUsersMap.has('linked-test-account'),
+      'Referenced account cannot be deleted from ' + table);
+  }
+  linkedHistoryTable = null;
 
   // 4.10 Existing self-delete protection still passes -> REJECTED
   let selfDeleteCaught = false;

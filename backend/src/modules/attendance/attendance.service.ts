@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../../lib/prisma';
 import { qrService } from './qr.service';
 import { hallDate } from '../exam-halls/examHalls.service';
@@ -18,12 +19,12 @@ const rosterSelect = {
   applicationNoSnapshot: true, currentClassSnapshot: true, seatNoSnapshot: true,
   attendance: { select: { status: true, method: true, createdAt: true } },
 } satisfies Prisma.AttendanceSessionCandidateSelect;
-function metrics(expectedCount: number, marks: {status: string}[]) {
+function metrics(expectedCount: number, marks: {status: string; method?: string}[]) {
   const presentCount = marks.filter(mark => mark.status === 'PRESENT').length;
   const lateCount = marks.filter(mark => mark.status === 'LATE').length;
   const absentCount = marks.filter(mark => mark.status === 'ABSENT').length;
   return { expectedCount, markedCount: marks.length, presentCount, lateCount, absentCount,
-    unmarkedCount: expectedCount - marks.length,
+    unmarkedCount: expectedCount - marks.length, manualCount: marks.filter(mark => mark.method === 'MANUAL').length, qrCount: marks.filter(mark => mark.method === 'QR_SCAN').length, completionPercentage: expectedCount > 0 ? Math.round(marks.length / expectedCount * 1000) / 10 : 0,
     attendancePercentage: expectedCount > 0 ? Math.round((presentCount + lateCount) / expectedCount * 1000) / 10 : null };
 }
 function rosterRow(row: any) {
@@ -56,7 +57,8 @@ export class AttendanceService {
     const locked = await tx.$queryRaw<{id: string}[]>`SELECT id FROM "AttendanceSession" WHERE id = ${sessionId} FOR UPDATE`;
     if (!locked.length) fail(404, 'Examination attendance session not found.');
     const session = await tx.attendanceSession.findUniqueOrThrow({ where: { id: sessionId } });
-    if (session.status !== 'OPEN') fail(409, 'This examination attendance session is CLOSED.');
+    if (!session.isCurrent) fail(409, 'This attendance attempt has been archived. Refresh the current Hall session.');
+    if (session.status !== 'OPEN') fail(409, 'This attendance attempt is CLOSED or CANCELLED; marking is prohibited.');
     return session;
   }
   private async detail(tx: Prisma.TransactionClient, sessionId: string) {
@@ -69,16 +71,28 @@ export class AttendanceService {
     this.operator(userId);
     if (!examHallId?.trim()) fail(400, 'Examination Hall is required.');
     return this.transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "ExamHall" WHERE id = ${examHallId} FOR UPDATE`;
       const hall = await tx.examHall.findUnique({ where: { id: examHallId }, include: { testCenter: { select: { name: true } } } });
       if (!hall) fail(404, 'Examination Hall not found.');
       const businessDate = hallDate(hall.examDate);
       if (!businessDate) fail(409, 'Configure a valid examination date on this Hall before opening attendance.');
-      if (await tx.attendanceSession.findUnique({ where: { examHallId_businessDate: { examHallId, businessDate } } })) fail(409, 'An examination attendance session already exists for this Hall and business date.');
+      const latest = await tx.attendanceSession.findFirst({
+        where: { examHallId, businessDate }, orderBy: { attemptNumber: 'desc' },
+      });
+      if (latest?.isCurrent) fail(409, 'An examination attendance session already exists for this Hall and business date.');
+      if (latest && latest.status !== 'CANCELLED')
+        fail(409, 'Only a cancelled Hall/date may be explicitly reopened without a reset.');
+      if (latest) {
+        const actor = await tx.user.findUnique({ where: { id: userId }, select: { role: true, status: true } });
+        if (actor?.role !== 'SUPER_ADMIN' || actor.status !== 'ACTIVE')
+          fail(403, 'Only an active Super Admin may start a new attempt after cancellation.');
+      }
       // Snapshot every explicit assignment, independently of class and legacy mirrors.
-      const candidates = await tx.student.findMany({ where: { assignedHallId: examHallId }, select: { id: true, fullName: true, rollNumber: true, applicationNo: true, currentClass: true, seatNo: true }, orderBy: { id: 'asc' } });
+      const candidates = await tx.student.findMany({ where: { assignedHallId: examHallId, status: 'ACTIVE' }, select: { id: true, fullName: true, rollNumber: true, applicationNo: true, currentClass: true, seatNo: true }, orderBy: { id: 'asc' } });
       if (!candidates.length) fail(409, 'No explicitly assigned candidates are available for this examination Hall. Complete Hall allocation before opening attendance.');
       const session = await tx.attendanceSession.create({ data: {
-        examHallId, businessDate, openedByUserId: userId, hallNameSnapshot: hall.name,
+        examHallId, businessDate, attemptNumber: latest ? latest.attemptNumber + 1 : 1,
+        openedByUserId: userId, hallNameSnapshot: hall.name,
         roomNumberSnapshot: hall.roomNumber, testCenterNameSnapshot: hall.testCenter?.name ?? null,
         examDateSnapshot: hall.examDate, reportingTimeSnapshot: hall.reportingTime,
       } });
@@ -131,12 +145,51 @@ export class AttendanceService {
       return this.detail(tx, sessionId);
     });
   }
+  async reopenSession(sessionId: string, reason: string, actorId: string, expectedTokenVersion?: number) {
+    this.operator(actorId);
+    if (!sessionId?.trim()) fail(400, 'Select the CLOSED examination attendance session.');
+    if (typeof reason !== 'string' || reason.trim().length < 10 || reason.trim().length > 1000)
+      fail(400, 'A reopening reason of 10 to 1000 characters is required.');
+    return this.transaction(async tx => {
+      const actors = await tx.$queryRawUnsafe<{ id: string; name: string; role: string; status: string; tokenVersion: number }[]>(
+        'SELECT id,name,role,status,"tokenVersion" FROM "User" WHERE id=$1 FOR SHARE', actorId,
+      );
+      const actor = actors[0];
+      if (!actor || actor.status !== 'ACTIVE' || actor.role !== 'SUPER_ADMIN')
+        fail(403, 'Only an active Super Admin may reopen a CLOSED attendance session.');
+      if (expectedTokenVersion !== undefined && expectedTokenVersion !== actor.tokenVersion)
+        fail(401, 'Your Super Admin authorization session expired. Please sign in again.');
+
+      const locked = await tx.$queryRaw<{id: string}[]>`SELECT id FROM "AttendanceSession" WHERE id=${sessionId} FOR UPDATE`;
+      if (!locked.length) fail(404, 'Examination attendance session not found.');
+      const session = await tx.attendanceSession.findUniqueOrThrow({ where: { id: sessionId } });
+      if (session.status !== 'CLOSED' || !session.isCurrent || session.archivedAt ||
+          !session.closedAt || !session.closedByUserId || session.cancelledAt)
+        fail(409, 'Only the current CLOSED attempt may be reopened. Archived and cancelled attempts remain immutable.');
+      const [expectedCount, markedCount] = await Promise.all([
+        tx.attendanceSessionCandidate.count({ where: { sessionId } }),
+        tx.attendance.count({ where: { sessionId } }),
+      ]);
+      const id = randomUUID();
+      await tx.$queryRawUnsafe("SELECT set_config('azm.reopen_audit_id', $1, true)", id);
+      await tx.attendanceSessionReopening.create({ data: {
+        id, sessionId, actorId, actorName: actor.name, reason: reason.trim(),
+        previousClosedAt: session.closedAt, previousClosedByUserId: session.closedByUserId,
+        expectedCount, markedCount,
+      } });
+      await tx.attendanceSession.update({ where: { id: sessionId }, data: {
+        status: 'OPEN', closedAt: null, closedByUserId: null,
+      } });
+      // All original attendance and frozen roster rows are retained exactly.
+      return this.detail(tx, sessionId);
+    });
+  }
   async getSession(sessionId: string) { return this.transaction(tx => this.detail(tx, sessionId)); }
   async listSessions(query: SessionQueryInput) {
     return this.transaction(async tx => {
-      const where = { ...(query.examHallId ? { examHallId: query.examHallId } : {}), ...(query.businessDate ? { businessDate: hallDate(query.businessDate)! } : {}), ...(query.status ? { status: query.status } : {}) };
+      const where = { ...(query.includeHistory ? {} : { isCurrent: true }), ...(query.examHallId ? { examHallId: query.examHallId } : {}), ...(query.businessDate ? { businessDate: hallDate(query.businessDate)! } : {}), ...(query.status ? { status: query.status } : {}) };
       const total = await tx.attendanceSession.count({ where });
-      const sessions = await tx.attendanceSession.findMany({ where, orderBy: [{ businessDate: 'desc' }, { id: 'asc' }], skip: (query.page - 1) * query.limit, take: query.limit, include: { _count: { select: { candidates: true } }, attendance: { select: { status: true } } } });
+      const sessions = await tx.attendanceSession.findMany({ where, orderBy: [{ businessDate: 'desc' }, { isCurrent: 'desc' }, { attemptNumber: 'desc' }, { id: 'asc' }], skip: (query.page - 1) * query.limit, take: query.limit, include: { _count: { select: { candidates: true } }, attendance: { select: { status: true, method: true } } } });
       return { sessions: sessions.map(({ _count, attendance, ...session }) => ({ ...session, stats: metrics(_count.candidates, attendance) })), pagination: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) } };
     });
   }
@@ -153,7 +206,7 @@ export class AttendanceService {
   async getTodayAttendance(now = new Date()) {
     return this.transaction(async tx => {
       const businessDate = karachiBusinessDate(now);
-      const sessions = await tx.attendanceSession.findMany({ where: { businessDate }, select: { _count: { select: { candidates: true } }, attendance: { select: { status: true } } } });
+      const sessions = await tx.attendanceSession.findMany({ where: { businessDate, isCurrent: true }, select: { _count: { select: { candidates: true } }, attendance: { select: { status: true, method: true } } } });
       return { date: businessDate.toISOString().slice(0, 10), sessionCount: sessions.length, ...metrics(sessions.reduce((total, session) => total + session._count.candidates, 0), sessions.flatMap(session => session.attendance)) };
     });
   }

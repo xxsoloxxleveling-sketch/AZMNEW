@@ -341,10 +341,14 @@ enum AttendanceMethod {
 enum AttendanceSessionStatus {
   OPEN
   CLOSED
+  CANCELLED
 }
 
 model AttendanceSession {
   id                       String @id @default(cuid())
+  attemptNumber            Int @default(1)
+  isCurrent                Boolean @default(true)
+  archivedAt               DateTime?
   examHallId               String
   examHall                 ExamHall @relation(fields: [examHallId], references: [id], onDelete: Restrict)
   businessDate             DateTime @db.Date
@@ -353,6 +357,8 @@ model AttendanceSession {
   openedAt                 DateTime @default(now())
   closedByUserId           String?
   closedAt                 DateTime?
+  cancelledByUserId        String?
+  cancelledAt              DateTime?
   hallNameSnapshot         String
   roomNumberSnapshot       String
   testCenterNameSnapshot   String?
@@ -362,10 +368,76 @@ model AttendanceSession {
   updatedAt                DateTime @default(now()) @updatedAt
   candidates               AttendanceSessionCandidate[]
   attendance               Attendance[]
+  cancellation             AttendanceSessionCancellation?
+  reopenings               AttendanceSessionReopening[]
 
-  @@unique([examHallId, businessDate])
+  @@unique([examHallId, businessDate, attemptNumber])
   @@index([businessDate])
   @@index([status])
+}
+
+model AttendanceResetOperation {
+  id             String @id @default(cuid())
+  actorId        String
+  actorName      String
+  idempotencyKey String
+  challengeNonce String @unique
+  requestHash    String
+  reason         String
+  mode           String
+  businessDate   DateTime @db.Date
+  affectedCandidates Int
+  scope          Json
+  result         Json
+  completedAt    DateTime @default(now())
+
+  @@unique([actorId, idempotencyKey])
+  @@index([completedAt])
+}
+
+model AttendanceSessionCancellation {
+  id                          String @id
+  sessionId                   String @unique
+  session                     AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  actorId                     String
+  actorName                   String
+  idempotencyKey              String
+  challengeNonce              String @unique
+  requestHash                 String
+  snapshotFingerprint         String
+  reason                      String
+  approvalReference           String?
+  retentionApproved           Boolean @default(false)
+  externalDispositionAttested Boolean @default(false)
+  closedEvidenceApproved      Boolean @default(false)
+  previousStatus              AttendanceSessionStatus
+  businessDate                DateTime @db.Date
+  purgeAttendance             Boolean
+  markedCount                 Int
+  deletedCount                Int
+  retainedCount               Int
+  expectedCount               Int
+  cancelledAt                 DateTime @default(now())
+
+  @@unique([actorId, idempotencyKey])
+  @@index([cancelledAt])
+}
+
+// Immutable history of each authorized CLOSED -> OPEN transition.
+model AttendanceSessionReopening {
+  id                    String @id
+  sessionId             String
+  session               AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  actorId               String
+  actorName             String
+  reason                String
+  previousClosedAt      DateTime
+  previousClosedByUserId String
+  expectedCount         Int
+  markedCount           Int
+  reopenedAt            DateTime @default(now())
+
+  @@index([sessionId, reopenedAt])
 }
 
 model AttendanceSessionCandidate {

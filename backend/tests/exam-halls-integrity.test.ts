@@ -42,10 +42,11 @@ async function run() {
         "testCenterId" text REFERENCES "TestCenter"(id) ON DELETE SET NULL,
         "createdAt" timestamp NOT NULL DEFAULT now(), "updatedAt" timestamp NOT NULL DEFAULT now()
       );
+      CREATE TYPE "StudentStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'GRADUATED');
       CREATE TABLE "Student" (
         id text PRIMARY KEY, "fullName" text NOT NULL, "rollNumber" text, "applicationNo" text,
         "currentClass" text NOT NULL, "assignedHallId" text, "assignedHall" text, "assignedRoom" text,
-        "seatNo" text, "feeStatus" text, "updatedAt" timestamp NOT NULL DEFAULT now()
+        "seatNo" text, "feeStatus" text, status "StudentStatus" NOT NULL DEFAULT 'ACTIVE', "updatedAt" timestamp NOT NULL DEFAULT now()
       );
       CREATE TABLE "OfficeUseRecord" (
         id text PRIMARY KEY, "studentId" text UNIQUE NOT NULL REFERENCES "Student"(id) ON DELETE CASCADE,
@@ -56,7 +57,7 @@ async function run() {
       );
       CREATE TYPE "AttendanceSessionStatus" AS ENUM ('OPEN', 'CLOSED');
       CREATE TABLE "AttendanceSession" (
-        id text PRIMARY KEY, status "AttendanceSessionStatus" NOT NULL
+        id text PRIMARY KEY, status "AttendanceSessionStatus" NOT NULL, "isCurrent" boolean NOT NULL DEFAULT true
       );
       CREATE TABLE "AttendanceSessionCandidate" (
         id text PRIMARY KEY, "sessionId" text NOT NULL REFERENCES "AttendanceSession"(id),
@@ -181,6 +182,17 @@ async function run() {
       assert.equal(result.candidates[0].legacyAllocationNeedsReview,true);
       assert(!('assignedHall' in result.candidates[0]));assert.equal(result.candidates[0].assignedHallId,null);
       assert.equal((await setup.query('SELECT "assignedHallId" FROM "Student" WHERE id=$1',['s60'])).rows[0].assignedHallId,null);
+    });
+    await check('inactive candidates excluded from new placement but retain existing occupancy', async () => {
+      const hall = await create('Inactive protection', 1);
+      await halls.batchAssign(hall.id, { studentIds: ['s58'] });
+      await setup.query('UPDATE "Student" SET status=\'INACTIVE\' WHERE id IN (\'s58\',\'s59\')');
+      assert.equal((await halls.getExamHallById(hall.id)).assignedCount, 1);
+      assert.equal((await halls.getCandidates(candidateQuerySchema.parse({ search: 'APP59' }))).candidates.length, 0);
+      await conflict(() => halls.batchAssign(b.id, { studentIds: ['s59'] }));
+      await conflict(() => halls.batchAssign(hall.id, { studentIds: ['s57'] }));
+      await halls.batchAssign(hall.id, { studentIds: ['s58'] });
+      assert.equal((await halls.getExamHallById(hall.id)).assignedStudents[0].id, 's58');
     });
     console.log(`Hall integrity: ${passed} PASS, 0 FAIL (real isolated local PostgreSQL).`);
   } finally {
