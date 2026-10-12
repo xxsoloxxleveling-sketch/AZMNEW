@@ -1,3 +1,4 @@
+import { isStudentDocumentEntry } from '../../utils/studentDocuments';
 import { buildSignedAttendanceQrUrl } from '../../utils/signedAttendanceQr';
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
@@ -357,7 +358,7 @@ export const StudentDossierModal: React.FC<StudentDossierModalProps> = ({ isOpen
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {Object.entries(student.uploadedDocuments).map(([docType, doc]: [string, any]) => {
-                  if (docType === 'photoThumbnail') return null;
+                  if (!isStudentDocumentEntry(docType, doc)) return null;
                   const docTitle = doc?.name || `${docType} Document`;
                   return (
                     <div

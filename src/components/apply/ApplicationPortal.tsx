@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { buildDmcDocuments } from '../../utils/studentDocuments';
 import { StudentApplicationData, PartnerSchoolData, PageTab } from '../../types';
 import { MONTHLY_ASSISTANCE_RATES, BENEFICIARY_CATEGORIES, OFFICIAL_DATA } from '../../data/scholarshipData';
 import { mockApi, printStudentDossier } from '../../lib/mockApi';
@@ -1202,26 +1203,10 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                 uploadedAt: new Date().toISOString(),
               }
             : undefined,
-          dmc: dmcFiles[0]
-            ? {
-                ...dmcFiles[0],
-                uploadedAt: new Date().toISOString(),
-              }
-            : uploadedDocs.dmcUploaded
-            ? {
-                ...uploadedDocs.dmcUploaded,
-                uploadedAt: new Date().toISOString(),
-              }
-            : undefined,
-          dmcFiles: dmcFiles.length > 0 ? dmcFiles : undefined,
-          dmc_2: dmcFiles[1]
-            ? {
-                name: dmcFiles[1].name,
-                size: dmcFiles[1].size,
-                dataUrl: dmcFiles[1].dataUrl,
-                uploadedAt: new Date().toISOString(),
-              }
-            : undefined,
+          ...buildDmcDocuments(
+            dmcFiles.length > 0 ? dmcFiles : uploadedDocs.dmcUploaded ? [uploadedDocs.dmcUploaded] : [],
+            new Date().toISOString(),
+          ),
           domicile: uploadedDocs.domicileUploaded
             ? {
                 ...uploadedDocs.domicileUploaded,
