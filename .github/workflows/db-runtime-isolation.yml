@@ -86,9 +86,13 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: ''
-      - name: Install Chrome for synthetic document UI checks
-        working-directory: backend
-        run: ./node_modules/.bin/puppeteer browsers install chrome --install-deps
+      - name: Select runner Chrome for synthetic document UI checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path=$(command -v google-chrome)
+          "$chrome_path" --version
+          printf 'PUPPETEER_EXECUTABLE_PATH=%s\n' "$chrome_path" >> "$GITHUB_ENV"
       - name: Verify legacy and future student document collections
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/student-document-collections.test.ts
