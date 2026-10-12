@@ -12,6 +12,7 @@ on:
       - feature/superadmin-reopen-closed-preserve-marks
   pull_request:
     branches:
+      - main
       - feature/super-admin-session-lifecycle
       - feature/db-runtime-role-isolation
       - codex/stage1-truncate-guard
@@ -60,6 +61,8 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: backend/package-lock.json
+      - name: Install frontend dependencies for document UI regressions
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -79,6 +82,19 @@ jobs:
         run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/attendance-reset-integrity.test.ts
       - name: Validate Super Admin user deletion safety without touching a database
         run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/user-delete-safety.test.ts
+      - name: Build matching frontend without publishing
+        run: npm run build
+        env:
+          VITE_API_URL: ''
+      - name: Install Chrome for synthetic document UI checks
+        working-directory: backend
+        run: ./node_modules/.bin/puppeteer browsers install chrome --install-deps
+      - name: Verify legacy and future student document collections
+        working-directory: backend
+        run: ./node_modules/.bin/tsx tests/student-document-collections.test.ts
+      - name: Verify strict public and flexible admin registration
+        working-directory: backend
+        run: ./node_modules/.bin/tsx tests/admin-registration.test.ts
       - name: Confirm no production changes
         run: |
           echo 'Synthetic PostgreSQL container only. No production host credentials, schema changes, backup imports or deployments.'
