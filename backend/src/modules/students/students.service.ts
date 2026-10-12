@@ -2842,7 +2842,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
    */
   async getStudentDocument(studentIdentifier: string, docType: string): Promise<{ buffer: Buffer; contentType: string }> {
     const rawApp = studentIdentifier.replace(/[^\w-]/g, '_');
-    const aliases = this.getDocumentAliases(docType);
+    const aliases = [...new Set([docType, ...this.getDocumentAliases(docType)])];
 
     // Explicitly managed Vault files are authoritative, even if an older
     // candidate-registration upload still exists on local disk. All legacy

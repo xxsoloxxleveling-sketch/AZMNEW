@@ -162,6 +162,15 @@ async function run() {
     assert.equal(result.buffer.toString(),'stored:synthetic/photo.webp');assert.equal(result.contentType,'image/webp');
   });
 
+  await check('requested canonical income key is preserved ahead of historical aliases',async()=>{
+    current={...raw,uploadedDocsJson:JSON.stringify({
+      income:{name:'current.pdf',supabasePath:'synthetic/income.pdf'},
+      incomeCertificate:{name:'historical.pdf',supabasePath:'synthetic/historical-income.pdf'},
+    })};
+    assert.equal((await service.getStudentDocument(raw.id,'income')).buffer.toString(),'stored:synthetic/income.pdf');
+    assert.equal((await service.getStudentDocument(raw.id,'incomeCertificate')).buffer.toString(),'stored:synthetic/historical-income.pdf');
+  });
+
   const fixture = `
     import React from 'react'; import {createRoot} from 'react-dom/client';
     import {StudentDetailView} from './src/components/admin/students/StudentDetailView';
