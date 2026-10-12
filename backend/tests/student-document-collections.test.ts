@@ -5,7 +5,7 @@ import Module from 'node:module';
 import { build } from 'esbuild';
 import express from 'express';
 import puppeteer from 'puppeteer';
-import { normalizeStudentDocuments } from '../src/modules/students/studentDocuments';
+import { normalizeStudentDocuments, parseLegacyStudentStorageUrl } from '../src/modules/students/studentDocuments';
 import { buildDmcDocuments, isStudentDocumentEntry } from '../../src/utils/studentDocuments';
 
 const root = path.resolve(__dirname, '../..');
@@ -57,6 +57,23 @@ async function run() {
     assert.equal(isStudentDocumentEntry('random',files),false);
     assert.equal(isStudentDocumentEntry('photoThumbnail',files[0]),false);
     assert.equal(isStudentDocumentEntry('dmc_4',files[3]),true);
+  });
+
+  const legacyOrigin = 'https://amteshciynijqkxapjwd.supabase.co';
+  await check('legacy project URLs become private storage keys without using signed tokens', () => {
+    for (const mode of ['sign', 'public', 'authenticated']) {
+      assert.deepEqual(parseLegacyStudentStorageUrl(`${legacyOrigin}/storage/v1/object/${mode}/student-documents/synthetic/father%20copy.pdf?token=expired`),
+        {bucket:'student-documents',path:'synthetic/father copy.pdf'});
+    }
+    for (const value of ['https://foreign.example.test/storage/v1/object/sign/student-photos/synthetic/photo.jpg',
+      legacyOrigin.replace('https:', 'http:')+'/storage/v1/object/sign/student-photos/synthetic/photo.jpg',
+      legacyOrigin+'/storage/v1/object/sign/unknown-bucket/synthetic/file.pdf',
+      legacyOrigin+'/storage/v1/object/sign/student-photos/synthetic%00/photo.jpg',
+      legacyOrigin+'/storage/v1/object/sign/student-photos/synthetic%5Cphoto.jpg',
+      legacyOrigin+'/storage/v1/object/sign/student-photos/synthetic%252Fphoto.jpg',
+      legacyOrigin+':444/storage/v1/object/sign/student-photos/synthetic/photo.jpg', null]) {
+      assert.equal(parseLegacyStudentStorageUrl(value),null);
+    }
   });
 
   // Bundle the real service with isolated adapters. No database client or live storage is loaded.
@@ -128,6 +145,21 @@ async function run() {
       const result=service.formatStudentWithDocuments({...raw,uploadedDocsJson:json,studentDocuments:[{documentType:'dmc',originalFileName:'current.pdf',objectPath:'fixture/current.pdf',bucket:'student-documents',createdAt:raw.createdAt}]});
       assert.deepEqual(Object.keys(result.uploadedDocuments),['dmc']);
     }
+  });
+
+  await check('all legacy document URL fields recover from private storage without remote fetch',async()=>{
+    for(const field of ['dataUrl','publicUrl','fileUrl','url','supabasePath']){
+      current={...raw,uploadedDocsJson:JSON.stringify({fatherCnic:{name:'father.pdf',[field]:`${legacyOrigin}/storage/v1/object/sign/student-documents/synthetic/father.pdf?token=expired`}})};
+      const result=await service.getStudentDocument(raw.id,'fatherCnic');
+      assert.equal(result.buffer.toString(),'stored:synthetic/father.pdf');assert.equal(result.contentType,'application/pdf');
+    }
+    current={...raw,uploadedDocsJson:JSON.stringify({bform:`${legacyOrigin}/storage/v1/object/public/student-documents/synthetic/bform.png`})};
+    assert.equal((await service.getStudentDocument(raw.id,'bform')).buffer.toString(),'stored:synthetic/bform.png');
+  });
+  await check('legacy model photo URL recovers the migrated original image',async()=>{
+    current={...raw,photoUrl:`${legacyOrigin}/storage/v1/object/sign/student-photos/synthetic/photo.webp?token=expired`,uploadedDocsJson:null};
+    const result=await service.getStudentDocument(raw.id,'photo');
+    assert.equal(result.buffer.toString(),'stored:synthetic/photo.webp');assert.equal(result.contentType,'image/webp');
   });
 
   const fixture = `

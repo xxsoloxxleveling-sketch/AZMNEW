@@ -42,3 +42,21 @@ export function legacyDmcCollectionEntry(input: unknown, key: string): unknown {
   const collection = (input as any)?.dmcFiles;
   return Array.isArray(collection) ? collection[Number(match[1]) - 1] : undefined;
 }
+
+/** Extract only this project's historical storage key; never fetch a legacy URL or use its token. */
+export function parseLegacyStudentStorageUrl(value: unknown): {
+  bucket: 'student-photos' | 'student-documents'; path: string;
+} | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'amteshciynijqkxapjwd.supabase.co'
+      || url.port || url.username || url.password) return null;
+    const match = /^\/storage\/v1\/object\/(?:sign|public|authenticated)\/(student-photos|student-documents)\/(.+)$/.exec(url.pathname);
+    if (!match) return null;
+    const path = decodeURIComponent(match[2]);
+    if (path.includes('\\') || /[\x00-\x1f\x7f%]/.test(path)
+      || path.split('/').some(part => !part || part === '.' || part === '..')) return null;
+    return { bucket: match[1] as 'student-photos' | 'student-documents', path };
+  } catch { return null; }
+}
