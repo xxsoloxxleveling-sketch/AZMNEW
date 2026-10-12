@@ -96,6 +96,8 @@ jobs:
       - name: Verify legacy and future student document collections
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/student-document-collections.test.ts
+      - name: Verify single-page roll-slip print layout and school attendance instruction
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/roll-slip-print-layout.test.ts
       - name: Verify strict public and flexible admin registration
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/admin-registration.test.ts
