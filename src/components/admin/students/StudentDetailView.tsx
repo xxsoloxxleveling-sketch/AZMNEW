@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { isStudentDocumentEntry } from '../../../utils/studentDocuments';
 import {
   ArrowLeft as IconArrowLeft,
   Download as IconDownloadSlip,
@@ -123,7 +124,7 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
   if (!up && s.uploadedDocsJson) {
     try { up = JSON.parse(s.uploadedDocsJson); } catch {}
   }
-  up = up || {};
+  up = up && typeof up === 'object' && !Array.isArray(up) ? up : {};
 
   const officeUse = s.officeUse;
   const docStatus: 'VERIFIED' | 'PENDING_REVIEW' | 'REJECTED' =
@@ -136,7 +137,7 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
 
   // Add all documents from uploadedDocuments / uploadedDocsJson
   for (const [key, value] of Object.entries(up)) {
-    if (!value || key === 'photoThumbnail') continue;
+    if (!isStudentDocumentEntry(key, value)) continue;
     const docObj: any = typeof value === 'object' ? value : { dataUrl: String(value) };
     const { docType, defaultTitle } = getDocTypeInfo(key, docObj);
     const legacyUrl = docObj.fileUrl || docObj.publicUrl || docObj.dataUrl || (typeof value === 'string' && value.startsWith('data:') ? value : '');
@@ -169,7 +170,7 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
   // Include relations from studentDocuments table if present
   if (Array.isArray(s.studentDocuments)) {
     for (const doc of s.studentDocuments) {
-      if (!doc || doc.documentType === 'photoThumbnail') continue;
+      if (!doc || !isStudentDocumentEntry(doc.documentType, doc)) continue;
       const key = doc.documentType;
       const { docType, defaultTitle } = getDocTypeInfo(key, doc);
       const isPdf = doc.mimeType === 'application/pdf' || doc.originalFileName?.endsWith('.pdf') || doc.objectPath?.endsWith('.pdf');
@@ -295,9 +296,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
       if (full) {
         setStudent(full);
         const docs = extractStudentDocuments(full);
-        if (docs.length > 0) {
-          setDocuments(docs);
-        }
+        setDocuments(docs);
         if (full.testCenterName || full.officeUse?.testCentre) {
           setAssignedCenter(full.testCenterName || full.officeUse?.testCentre || '');
         }

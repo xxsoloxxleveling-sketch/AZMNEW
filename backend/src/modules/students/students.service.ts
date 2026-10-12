@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { normalizeStudentDocuments, legacyDmcCollectionEntry } from './studentDocuments';
 import path from 'path';
 import crypto from 'crypto';
 import sharp from 'sharp';
@@ -78,7 +79,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 
 const metadataOnlyDocuments = (documents: Record<string, any> | undefined) => {
   const clean: Record<string, any> = {};
-  for (const [docType, document] of Object.entries(documents || {})) {
+  for (const [docType, document] of Object.entries(normalizeStudentDocuments(documents))) {
     if (!document || typeof document !== 'object' || !document.supabasePath) continue;
     clean[docType] = {
       name: document.name || `${docType} document`,
@@ -464,7 +465,8 @@ export class StudentsService {
 
     if (student.uploadedDocsJson) {
       try {
-        uploadedDocuments = JSON.parse(student.uploadedDocsJson);
+        const parsed = JSON.parse(student.uploadedDocsJson);
+        uploadedDocuments = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
       } catch {}
     }
 
@@ -490,7 +492,7 @@ export class StudentsService {
     }
 
     const documentMetadata: Record<string, any> = {};
-    for (const [docType, document] of Object.entries(uploadedDocuments)) {
+    for (const [docType, document] of Object.entries(normalizeStudentDocuments(uploadedDocuments))) {
       if (docType === 'photoThumbnail') continue;
       const doc: any = typeof document === 'object' && document !== null ? document : { name: `${docType} document` };
       documentMetadata[docType] = {
@@ -909,7 +911,7 @@ export class StudentsService {
         }
 
         // Upload any other documents provided as inline dataUrls that do not have a supabasePath yet
-        for (const [docKey, docVal] of Object.entries(uploadedDocuments || {})) {
+        for (const [docKey, docVal] of Object.entries(normalizeStudentDocuments(uploadedDocuments))) {
           if (docKey === 'photo' || docKey === 'photoThumbnail' || docKey === 'signature') continue;
           if (resolvedDocs[docKey]?.supabasePath) continue;
           if (docVal && typeof docVal === 'object') {
@@ -2935,9 +2937,11 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
     // 5. Check uploadedDocsJson across all aliases
     if (student && student.uploadedDocsJson) {
       try {
-        const docs = JSON.parse(student.uploadedDocsJson);
+        const docs = normalizeStudentDocuments(student.uploadedDocsJson);
         for (const alias of aliases) {
-          const doc = docs[alias];
+          // A current relation may occupy the primary slot in the detail serializer,
+          // while raw legacy JSON still contains only the collection.
+          const doc = docs[alias] || legacyDmcCollectionEntry(student.uploadedDocsJson, alias);
           if (!doc) continue;
 
           // Object format with dataUrl
