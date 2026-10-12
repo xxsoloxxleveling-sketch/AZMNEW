@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { normalizeStudentDocuments, legacyDmcCollectionEntry } from './studentDocuments';
+import { normalizeStudentDocuments, legacyDmcCollectionEntry, parseLegacyStudentStorageUrl } from './studentDocuments';
 import path from 'path';
 import crypto from 'crypto';
 import sharp from 'sharp';
@@ -2926,6 +2926,15 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
           return { buffer: Buffer.from(match[2], 'base64'), contentType: mime };
         }
       } else if (student.photoUrl.startsWith('http')) {
+        const reference = parseLegacyStudentStorageUrl(student.photoUrl);
+        if (reference) {
+          const bytes = await supabaseStorage.downloadFile(reference.bucket, reference.path);
+          if (bytes?.length) return {
+            buffer: bytes,
+            contentType: reference.path.toLowerCase().endsWith('.png') ? 'image/png'
+              : reference.path.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg',
+          };
+        }
         const buffer = await this.fetchRemoteBuffer(student.photoUrl);
         if (buffer && buffer.length > 0) {
           const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
@@ -2960,6 +2969,21 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
               const mime = match[1] || (doc.includes('application/pdf') ? 'application/pdf' : 'image/jpeg');
               return { buffer: Buffer.from(match[2], 'base64'), contentType: mime };
             }
+          }
+
+          // Old signed links identify files copied to R2 during the storage migration.
+          // Resolve only the approved project's path through private storage; ignore expired tokens.
+          for (const value of new Set([typeof doc === 'string' ? doc : undefined,
+            doc.dataUrl, doc.publicUrl, doc.fileUrl, doc.url, doc.supabasePath])) {
+            const reference = parseLegacyStudentStorageUrl(value);
+            if (!reference) continue;
+            const bytes = await supabaseStorage.downloadFile(reference.bucket, reference.path);
+            if (bytes?.length) return {
+              buffer: bytes,
+              contentType: doc.mimeType || doc.fileType || (reference.path.toLowerCase().endsWith('.pdf')
+                ? 'application/pdf' : reference.path.toLowerCase().endsWith('.png')
+                ? 'image/png' : reference.path.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg'),
+            };
           }
 
           // Object format with supabasePath
