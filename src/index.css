@@ -133,3 +133,67 @@
   animation-play-state: paused;
 }
 
+
+/* Paper width must not activate the mobile roll-slip layout. A named page
+   keeps these dimensions scoped to the public roll slip. */
+@page roll-slip {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+@media print {
+  /* Visibility alone leaves hidden application content in the page flow. */
+  body:has(.roll-number-slip) *:not(:has(.roll-number-slip)):not(.roll-number-slip):not(.roll-number-slip *) {
+    display: none !important;
+  }
+  body:has(.roll-number-slip),
+  body:has(.roll-number-slip) *:has(.roll-number-slip) {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .roll-number-slip {
+    page: roll-slip;
+    position: relative;
+    width: 100%;
+    padding: 6mm;
+    border-radius: 4mm;
+    break-inside: avoid;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .roll-number-slip .roll-slip-header { margin-bottom: 5mm; padding-bottom: 4mm; }
+  .roll-number-slip .roll-slip-header > div,
+  .roll-number-slip .roll-slip-footer { flex-direction: row; }
+  .roll-number-slip .roll-slip-header > div > div:last-child,
+  .roll-number-slip .roll-slip-footer > div:last-child { text-align: right; }
+  .roll-number-slip .roll-slip-metadata {
+    grid-template-columns: 26mm minmax(0, 1fr) 40mm;
+    gap: 5mm;
+    padding-bottom: 5mm;
+  }
+  .roll-number-slip .roll-slip-metadata > div { grid-column: auto; min-width: 0; }
+  .roll-number-slip .roll-slip-photo { align-items: flex-start; }
+  .roll-number-slip .roll-slip-photo img,
+  .roll-number-slip .roll-slip-photo [aria-label="Candidate photograph"] { width: 26mm; height: 32mm; }
+  .roll-number-slip .roll-slip-photo > div:last-child { text-align: left; overflow-wrap: anywhere; }
+  .roll-number-slip .roll-slip-particulars { overflow-wrap: anywhere; }
+  .roll-number-slip .roll-slip-qr { align-items: flex-end; }
+  .roll-number-slip .roll-slip-qr > div:first-child { padding: 2mm; }
+  .roll-number-slip .roll-slip-qr > div:first-child > span:nth-child(2) { font-size: 11px; }
+  .roll-number-slip .roll-slip-schedule { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 5mm 0; padding: 3mm; gap: 3mm; }
+  .roll-number-slip .roll-slip-instructions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .roll-number-slip .roll-slip-instructions li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .roll-number-slip .roll-slip-footer { margin-top: 5mm; padding-top: 3mm; gap: 3mm; }
+  .roll-number-slip .roll-slip-header,
+  .roll-number-slip .roll-slip-metadata,
+  .roll-number-slip .roll-slip-schedule,
+  .roll-number-slip .roll-slip-instructions li,
+  .roll-number-slip .roll-slip-footer { break-inside: avoid; }
+}

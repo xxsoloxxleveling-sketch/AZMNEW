@@ -27,6 +27,8 @@ import {
   FileText
 } from 'lucide-react';
 
+const schoolAttendanceInstruction = "Wear your school uniform. If your school registered you, attend with your institute’s instructor.";
+
 interface RollNumberSlipViewProps {
   onSelectTab: (tab: PageTab) => void;
 }
@@ -402,7 +404,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
 
           {/* Document Canvas Container */}
-          <div className="printable-document bg-white rounded-3xl border-2 border-slate-300 shadow-xl p-6 sm:p-10 relative overflow-hidden bg-guilloche">
+          <div className="printable-document roll-number-slip bg-white rounded-3xl border-2 border-slate-300 shadow-xl p-6 sm:p-10 relative overflow-hidden bg-guilloche">
             {/* Guilloche Security Watermark Crest in Center Background */}
             <div className="absolute inset-0 flex items-center justify-center opacity-[0.035] pointer-events-none select-none">
               <div className="w-[500px] h-[500px] rounded-full border-[24px] border-[#185b9d] flex items-center justify-center">
@@ -411,7 +413,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
             </div>
 
             {/* Document Header */}
-            <div className="border-b-2 border-slate-900 pb-4 mb-6">
+            <div className="roll-slip-header border-b-2 border-slate-900 pb-4 mb-6">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3 text-center sm:text-left">
                   <Logo size="lg" />
@@ -432,9 +434,9 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
             </div>
 
             {/* Top Slip Metadata Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start pb-6 border-b border-slate-200">
+            <div className="roll-slip-metadata grid grid-cols-1 md:grid-cols-12 gap-6 items-start pb-6 border-b border-slate-200">
               {/* Photo & Barcode (3 cols) */}
-              <div className="md:col-span-3 flex flex-col items-center sm:items-start space-y-3">
+              <div className="roll-slip-photo md:col-span-3 flex flex-col items-center sm:items-start space-y-3">
                 <div className="relative">
                   {portraitUrl ? (
                     <img
@@ -468,7 +470,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
               </div>
 
               {/* Candidate Particulars (6 cols) */}
-              <div className="md:col-span-6 space-y-3 text-xs">
+              <div className="roll-slip-particulars md:col-span-6 space-y-3 text-xs">
                 <div className="grid grid-cols-2 gap-y-2.5 gap-x-4">
                   <div>
                     <span className="text-slate-500 text-[10px] uppercase font-bold block">Candidate Name:</span>
@@ -502,7 +504,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
               </div>
 
               {/* QR Code & Roll No Highlight Box (3 cols) */}
-              <div className="md:col-span-3 flex flex-col items-center md:items-end text-center md:text-right space-y-3">
+              <div className="roll-slip-qr md:col-span-3 flex flex-col items-center md:items-end text-center md:text-right space-y-3">
                 <div className="p-3 rounded-2xl bg-slate-900 text-white w-full max-w-[180px] text-center">
                   <span className="text-[9px] uppercase font-bold text-amber-300 tracking-wider block">Official Roll No</span>
                   <span className="text-base font-extrabold font-mono text-white block tabular-nums">{selectedSlip.rollNo}</span>
@@ -533,7 +535,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
             </div>
 
             {/* Exam Timing & Schedule Schedule Bar */}
-            <div className="my-6 p-4 rounded-2xl bg-slate-100 border border-slate-300 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+            <div className="roll-slip-schedule my-6 p-4 rounded-2xl bg-slate-100 border border-slate-300 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Examination Date:</span>
                 <span className="text-xs font-extrabold text-slate-900 font-mono flex items-center justify-center gap-1 mt-0.5">
@@ -564,13 +566,13 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                 Mandatory Examination Day Instructions
               </h4>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700 leading-snug">
-                {(selectedSlip.specialInstructions || [
+              <ul className="roll-slip-instructions grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700 leading-snug">
+                {[...new Set([...(selectedSlip.specialInstructions || [
                   'Bring your original CNIC / B-Form along with this printed entry slip to the examination centre.',
                   'Candidate must report at the Reporting Time printed above. Late entry may not be permitted.',
                   'Biometric verification will be carried out at the entry desk using your QR code.',
                   'Mobile phones, smartwatches, and programmable calculators are strictly prohibited inside the hall.'
-                ]).map((inst, iIdx) => (
+                ]), schoolAttendanceInstruction])].map((inst, iIdx) => (
                   <li key={iIdx} className="flex items-start gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
                     <span className="font-bold text-[#185b9d]">{iIdx + 1}.</span>
                     <span>{inst}</span>
@@ -580,7 +582,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
             </div>
 
             {/* Document Verification Footer */}
-            <div className="mt-8 pt-4 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-slate-500">
+            <div className="roll-slip-footer mt-8 pt-4 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-slate-500">
               <div>
                 <span>Security Token: </span>
                 <span className="font-mono font-bold text-slate-800">{selectedSlip.securityHash || 'Not available'}</span>
