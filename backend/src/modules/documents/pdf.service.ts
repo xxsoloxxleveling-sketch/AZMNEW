@@ -29,7 +29,7 @@ class PdfGenerationQueue {
 
 export function getPrintableHsscGroup(student: { currentClass?: string | null; hsscGroup?: string | null }): string | null {
   const grade = (student.currentClass || '').trim();
-  if (!/(HSSC|first year|second year|1st year|2nd year|11th|12th|class 11|class 12)/i.test(grade)) return null;
+  if (!/^(?:HSSC[-\s]?(?:I{1,2}|[12])(?:\s*\(Class\s+1[12](?:th)?\))?|(?:first|second|1st|2nd)\s+year|(?:Class\s+)?1[12](?:th)?(?:\s*\(HSSC[-\s]?I{1,2}\))?)$/i.test(grade)) return null;
   const value = (student.hsscGroup || '').trim();
   const options = ['Pre-Medical', 'Pre-Engineering', 'ICS', 'FA', 'I.Com', 'General Science'];
   return options.find(group => group.toLowerCase() === value.toLowerCase()) || 'Not specified';
