@@ -27,6 +27,14 @@ class PdfGenerationQueue {
   }
 }
 
+export function getPrintableHsscGroup(student: { currentClass?: string | null; hsscGroup?: string | null }): string | null {
+  const grade = (student.currentClass || '').trim();
+  if (!/(HSSC|first year|second year|1st year|2nd year|11th|12th|class 11|class 12)/i.test(grade)) return null;
+  const value = (student.hsscGroup || '').trim();
+  const options = ['Pre-Medical', 'Pre-Engineering', 'ICS', 'FA', 'I.Com', 'General Science'];
+  return options.find(group => group.toLowerCase() === value.toLowerCase()) || 'Not specified';
+}
+
 const pdfQueue = new PdfGenerationQueue();
 
 export class PdfService {
@@ -756,8 +764,8 @@ export class PdfService {
               <td class="cand-value" style="color: #065f46;">${classLevel}</td>
             </tr>
             <tr>
-              <td class="cand-label">Discipline / Group:</td>
-              <td class="cand-value">${student.hsscGroup || 'General Science / Merit'}</td>
+              <td class="cand-label">${getPrintableHsscGroup(student) ? 'HSSC Group:' : 'Discipline / Group:'}</td>
+              <td class="cand-value">${getPrintableHsscGroup(student) || student.bsDepartment || 'Not specified'}</td>
             </tr>
             <tr>
               <td class="cand-label">Institution:</td>
@@ -1270,7 +1278,8 @@ export class PdfService {
     const fatherName = (student.fatherName || '').toUpperCase();
     const cnic = student.cnicOrBForm || 'N/A';
     const classLevel = student.currentClass || 'SSC-II (Class 10th)';
-    const groupOrSubject = student.hsscGroup || student.bsDepartment || 'General Merit / Science';
+    const hsscGroup = getPrintableHsscGroup(student);
+    const groupOrSubject = hsscGroup || student.bsDepartment || 'Not specified';
     const assigned = student.placementStatus === 'ASSIGNED' && Boolean(student.assignedHallId);
     const testCenter = assigned && student.testCenterName || 'To be assigned';
     const hallName = assigned && student.assignedHall || 'To be assigned';
@@ -1814,7 +1823,7 @@ export class PdfService {
           <td class="dt-val">${roomNo} | ${seatNo}</td>
         </tr>
         <tr>
-          <td class="dt-label">Class &amp; Group:</td>
+          <td class="dt-label">${hsscGroup ? 'Class / HSSC Group:' : 'Class / Group:'}</td>
           <td class="dt-val">${classLevel} (${groupOrSubject})</td>
           <td class="dt-label">Test Center:</td>
           <td class="dt-val">${testCenter}</td>
