@@ -163,6 +163,17 @@ export const UserManagementTab: React.FC = () => {
     fetchDirectory(pagination.page, true);
   };
 
+  const handleUserDeleted = (deletedUser: UserAccountRecord) => {
+    setUserList(previous => previous.filter(user => user.id !== deletedUser.id));
+    setSuccessNotice(`Unused account "${deletedUser.name}" deleted successfully.`);
+    const nextPage = userList.length === 1 && pagination.page > 1 ? pagination.page - 1 : pagination.page;
+    if (nextPage !== pagination.page) {
+      setPagination(previous => ({ ...previous, page: nextPage }));
+    } else {
+      fetchDirectory(nextPage, true);
+    }
+  };
+
   // Access check fallback
   if (!authLoading && !isSuperAdmin) {
     return (
@@ -515,6 +526,7 @@ export const UserManagementTab: React.FC = () => {
         isOpen={isDrawerOpen}
         onClose={handleCloseDetail}
         onUserUpdated={handleUserUpdated}
+        onUserDeleted={handleUserDeleted}
       />
     </div>
   );

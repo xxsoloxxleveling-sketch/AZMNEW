@@ -1,9 +1,10 @@
 import fs from 'fs';
+import { normalizeStudentDocuments, legacyDmcCollectionEntry, parseLegacyStudentStorageUrl } from './studentDocuments';
 import path from 'path';
 import crypto from 'crypto';
 import sharp from 'sharp';
 import { prisma, TransactionType } from '../../lib/prisma';
-import { TransactionStatus, TransactionSource, FeeStatus } from '@prisma/client';
+import { Prisma, TransactionStatus, TransactionSource, FeeStatus } from '@prisma/client';
 import { qrService } from '../attendance/qr.service';
 import { pdfService } from '../documents/pdf.service';
 import { supabaseStorage, StorageBucket } from '../../lib/supabaseStorage';
@@ -78,7 +79,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 
 const metadataOnlyDocuments = (documents: Record<string, any> | undefined) => {
   const clean: Record<string, any> = {};
-  for (const [docType, document] of Object.entries(documents || {})) {
+  for (const [docType, document] of Object.entries(normalizeStudentDocuments(documents))) {
     if (!document || typeof document !== 'object' || !document.supabasePath) continue;
     clean[docType] = {
       name: document.name || `${docType} document`,
@@ -464,7 +465,8 @@ export class StudentsService {
 
     if (student.uploadedDocsJson) {
       try {
-        uploadedDocuments = JSON.parse(student.uploadedDocsJson);
+        const parsed = JSON.parse(student.uploadedDocsJson);
+        uploadedDocuments = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
       } catch {}
     }
 
@@ -490,7 +492,7 @@ export class StudentsService {
     }
 
     const documentMetadata: Record<string, any> = {};
-    for (const [docType, document] of Object.entries(uploadedDocuments)) {
+    for (const [docType, document] of Object.entries(normalizeStudentDocuments(uploadedDocuments))) {
       if (docType === 'photoThumbnail') continue;
       const doc: any = typeof document === 'object' && document !== null ? document : { name: `${docType} document` };
       documentMetadata[docType] = {
@@ -909,7 +911,7 @@ export class StudentsService {
         }
 
         // Upload any other documents provided as inline dataUrls that do not have a supabasePath yet
-        for (const [docKey, docVal] of Object.entries(uploadedDocuments || {})) {
+        for (const [docKey, docVal] of Object.entries(normalizeStudentDocuments(uploadedDocuments))) {
           if (docKey === 'photo' || docKey === 'photoThumbnail' || docKey === 'signature') continue;
           if (resolvedDocs[docKey]?.supabasePath) continue;
           if (docVal && typeof docVal === 'object') {
@@ -1498,6 +1500,7 @@ export class StudentsService {
         fatherName: student.fatherName,
         cnicBForm: student.cnicOrBForm,
         classLevel: student.currentClass || 'SSC-II (Class 10th)',
+        hsscGroup: student.hsscGroup,
         candidatePhoto:
           (student.photoUrl && !student.photoUrl.includes('unsplash') ? student.photoUrl : null) ||
           `/api/students/${student.id}/photo-thumbnail`,
@@ -2149,19 +2152,66 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
     return officeRecord;
   }
 
-  /**
-   * Deletes a student record and cascade-deletes all associated transactions, fee records, and documents.
-   */
+  async deletionProtection(tx: Prisma.TransactionClient, id: string) {
+    const student = await tx.student.findUnique({ where: { id }, select: {
+      status: true, photoUrl: true, uploadedDocsJson: true, testScore: true, overallRank: true,
+      officeUse: true, documents: true,
+    } });
+    if (!student) throw Object.assign(new Error('Candidate not found.'), { statusCode: 404 });
+    const [frozenRosters, attendance, fees, financialTransactions, documents, documentAudits, academicRecords] = await Promise.all([
+      tx.attendanceSessionCandidate.count({ where: { studentId: id } }),
+      tx.attendance.count({ where: { studentId: id } }),
+      tx.feeRecord.count({ where: { studentId: id } }),
+      tx.transaction.count({ where: { feeRecord: { studentId: id } } }),
+      tx.studentDocument.count({ where: { studentId: id } }),
+      tx.studentDocumentAudit.count({ where: { studentId: id } }),
+      tx.academicRecord.count({ where: { studentId: id } }),
+    ]);
+    const counts = {
+      frozenRosters, attendance, fees, financialTransactions, documents, documentAudits, academicRecords,
+      legacyAttachments: student.photoUrl || (student.uploadedDocsJson && student.uploadedDocsJson !== '{}') ? 1 : 0,
+      documentChecklist: student.documents && Object.entries(student.documents)
+        .some(([key, value]) => key !== 'id' && key !== 'studentId' && Boolean(value)) ? 1 : 0,
+      examinationResults: student.testScore !== null || student.overallRank !== null ? 1 : 0,
+      officeHistory: student.officeUse && Object.entries(student.officeUse)
+        .some(([key, value]) => key !== 'id' && key !== 'studentId' && Boolean(value)) ? 1 : 0,
+    };
+    const labels: Record<keyof typeof counts, string> = {
+      frozenRosters: 'Frozen examination Hall rosters', attendance: 'Attendance records',
+      fees: 'Fee records', financialTransactions: 'Financial transactions', documents: 'Stored documents',
+      documentAudits: 'Document audit events', academicRecords: 'Academic records',
+      legacyAttachments: 'Registration attachments', examinationResults: 'Examination results', officeHistory: 'Office review history',
+      documentChecklist: 'Document checklist history',
+    };
+    const blockers = Object.entries(counts).filter(([, count]) => count > 0)
+      .map(([kind, count]) => ({ kind, label: labels[kind as keyof typeof counts], count }));
+    return { canPermanentlyDelete: blockers.length === 0, canDeactivate: student.status === 'ACTIVE', counts, blockers };
+  }
+
+  async getDeletionProtection(id: string) {
+    return prisma.$transaction(tx => this.deletionProtection(tx, id), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  /** Retain examination, financial, document and academic history. */
   async deleteStudent(id: string) {
-    const student = await this.getStudentById(id);
-
-    // Financial Ledger transactions are immutable records. Linked fee transaction references
-    // are safely decoupled via onDelete: SetNull at the schema layer. Do not delete transactions.
-
-    // Delete student (Prisma cascades academicRecords, documents, officeUse, attendance, feeRecords)
-    return prisma.student.delete({
-      where: { id },
-    });
+    try {
+      return await prisma.$transaction(async tx => {
+        const protection = await this.deletionProtection(tx, id);
+        if (!protection.canPermanentlyDelete) {
+          throw Object.assign(new Error(protection.counts.frozenRosters
+            ? 'Cannot permanently delete this candidate because they are included in an examination Hall attendance session. Deactivate the candidate instead to preserve their history.'
+            : 'Cannot permanently delete this candidate because they have protected records. Deactivate the candidate instead to preserve their history.'),
+          { statusCode: 409, code: 'CANDIDATE_DELETION_PROTECTED', details: protection });
+        }
+        return tx.student.delete({ where: { id } });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error: any) {
+      const foreignKeyConflict = error.code === 'P2003' || (error instanceof Prisma.PrismaClientUnknownRequestError
+        && /foreign key constraint/.test(error.message) && /(?:23001|23503)/.test(error.message));
+      if (foreignKeyConflict) throw Object.assign(new Error('Cannot permanently delete this candidate because a related record protects their history. Refresh the dependency summary or deactivate the candidate instead.'), { statusCode: 409, code: 'CANDIDATE_DELETION_PROTECTED' });
+      if (error.code === 'P2034') throw Object.assign(new Error('Candidate records changed during deletion. Refresh the dependency summary before trying again.'), { statusCode: 409, code: 'CANDIDATE_DELETION_CONFLICT' });
+      throw error;
+    }
   }
 
   /**
@@ -2793,7 +2843,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
    */
   async getStudentDocument(studentIdentifier: string, docType: string): Promise<{ buffer: Buffer; contentType: string }> {
     const rawApp = studentIdentifier.replace(/[^\w-]/g, '_');
-    const aliases = this.getDocumentAliases(docType);
+    const aliases = [...new Set([docType, ...this.getDocumentAliases(docType)])];
 
     // Explicitly managed Vault files are authoritative, even if an older
     // candidate-registration upload still exists on local disk. All legacy
@@ -2877,6 +2927,15 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
           return { buffer: Buffer.from(match[2], 'base64'), contentType: mime };
         }
       } else if (student.photoUrl.startsWith('http')) {
+        const reference = parseLegacyStudentStorageUrl(student.photoUrl);
+        if (reference) {
+          const bytes = await supabaseStorage.downloadFile(reference.bucket, reference.path);
+          if (bytes?.length) return {
+            buffer: bytes,
+            contentType: reference.path.toLowerCase().endsWith('.png') ? 'image/png'
+              : reference.path.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg',
+          };
+        }
         const buffer = await this.fetchRemoteBuffer(student.photoUrl);
         if (buffer && buffer.length > 0) {
           const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
@@ -2888,9 +2947,11 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
     // 5. Check uploadedDocsJson across all aliases
     if (student && student.uploadedDocsJson) {
       try {
-        const docs = JSON.parse(student.uploadedDocsJson);
+        const docs = normalizeStudentDocuments(student.uploadedDocsJson);
         for (const alias of aliases) {
-          const doc = docs[alias];
+          // A current relation may occupy the primary slot in the detail serializer,
+          // while raw legacy JSON still contains only the collection.
+          const doc = docs[alias] || legacyDmcCollectionEntry(student.uploadedDocsJson, alias);
           if (!doc) continue;
 
           // Object format with dataUrl
@@ -2909,6 +2970,21 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
               const mime = match[1] || (doc.includes('application/pdf') ? 'application/pdf' : 'image/jpeg');
               return { buffer: Buffer.from(match[2], 'base64'), contentType: mime };
             }
+          }
+
+          // Old signed links identify files copied to R2 during the storage migration.
+          // Resolve only the approved project's path through private storage; ignore expired tokens.
+          for (const value of new Set([typeof doc === 'string' ? doc : undefined,
+            doc.dataUrl, doc.publicUrl, doc.fileUrl, doc.url, doc.supabasePath])) {
+            const reference = parseLegacyStudentStorageUrl(value);
+            if (!reference) continue;
+            const bytes = await supabaseStorage.downloadFile(reference.bucket, reference.path);
+            if (bytes?.length) return {
+              buffer: bytes,
+              contentType: doc.mimeType || doc.fileType || (reference.path.toLowerCase().endsWith('.pdf')
+                ? 'application/pdf' : reference.path.toLowerCase().endsWith('.png')
+                ? 'image/png' : reference.path.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg'),
+            };
           }
 
           // Object format with supabasePath

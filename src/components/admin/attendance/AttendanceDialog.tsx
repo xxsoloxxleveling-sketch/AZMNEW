@@ -9,8 +9,8 @@ export const attendanceValue = (value: unknown): string => value === null || val
 
 // The shared confirmation modal cannot contain a form or enforce focus containment.
 // This attendance-local dialog follows the approved Hall confirmation proportions.
-export function AttendanceDialog({ title, busy, onClose, children, footer }: {
-  title: string; busy: boolean; onClose: () => void; children: React.ReactNode; footer: React.ReactNode;
+export function AttendanceDialog({ title, busy, onClose, children, footer, returnFocusId }: {
+  returnFocusId?: string; title: string; busy: boolean; onClose: () => void; children: React.ReactNode; footer: React.ReactNode;
 }) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -21,7 +21,7 @@ export function AttendanceDialog({ title, busy, onClose, children, footer }: {
     const wasInert = root?.hasAttribute('inert');
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden'; root?.setAttribute('inert', '');
-    const focusables = (): HTMLElement[] => Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex="0"]') ?? []) as HTMLElement[];
+    const focusables = (): HTMLElement[] => Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]') ?? []) as HTMLElement[];
     (panel.current?.querySelector<HTMLElement>('[data-autofocus]') ?? focusables()[0] ?? panel.current)?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !latest.current.busy) { event.preventDefault(); latest.current.onClose(); }
@@ -37,7 +37,7 @@ export function AttendanceDialog({ title, busy, onClose, children, footer }: {
       document.removeEventListener('keydown', keydown); document.body.style.overflow = overflow;
       if (!wasInert) root?.removeAttribute('inert');
       window.requestAnimationFrame(() => {
-        const target = previous?.isConnected && !previous.hasAttribute('disabled') ? previous : document.querySelector<HTMLElement>('#attendance-search, #attendance-hall');
+        const target = previous?.isConnected && previous !== document.body && !previous.hasAttribute('disabled') ? previous : (returnFocusId ? document.getElementById(returnFocusId) : document.querySelector<HTMLElement>('#attendance-search, #attendance-hall'));
         target?.focus();
       });
     };

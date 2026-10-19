@@ -1,3 +1,4 @@
+import { examLock } from '../attendance/examControl.service';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { buildStudentClassWhere } from '../students/students.service';
@@ -56,7 +57,7 @@ export class ExamHallsService {
   private async transaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.db.$transaction(work, {
+        return await this.db.$transaction(async tx => {await examLock(tx);return work(tx);}, {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
           maxWait: 5000, timeout: 15000,
         });
@@ -100,7 +101,7 @@ export class ExamHallsService {
 
   async getCandidates(query: CandidateQueryInput) {
     const { page, limit, search, assignment } = query;
-    const where: Prisma.StudentWhereInput = {};
+    const where: Prisma.StudentWhereInput = { status: 'ACTIVE' };
     const classWhere = buildStudentClassWhere(query.class);
     if (classWhere) where.AND = [classWhere];
     if (query.gender) where.gender = query.gender;
@@ -165,20 +166,12 @@ export class ExamHallsService {
     }
   }
 
-  private async guardOpenAttendance(tx: Prisma.TransactionClient, studentIds: string[]) {
-    if (!studentIds.length) return;
-    const active = await tx.attendanceSessionCandidate.findFirst({
-      where: { studentId: { in: studentIds }, session: { status: 'OPEN' } }, select: { id: true },
-    });
-    if (active) fail(409, 'Candidate belongs to an OPEN examination attendance session. Close that session before moving or unassigning the candidate.');
-  }
-
   private async assign(tx: Prisma.TransactionClient, hallId: string, ids: string[], explicitSeat?: string | null) {
     const hall = await this.hall(tx, hallId);
     const studentIds = [...new Set(ids)].sort();
-    const students = await tx.student.findMany({ where: { id: { in: studentIds } }, select: candidateSelect });
+    const students = await tx.student.findMany({ where: { id: { in: studentIds } }, select: { ...candidateSelect, status: true } });
     if (students.length !== studentIds.length) fail(404, 'One or more selected candidates do not exist.');
-    await this.guardOpenAttendance(tx, students.filter(student => student.assignedHallId !== hallId).map(student => student.id));
+    if (students.some(student => student.status !== 'ACTIVE' && student.assignedHallId !== hallId)) fail(409, 'Only ACTIVE candidates may receive a new Hall allocation.');
     const occupants = await tx.student.findMany({ where: { assignedHallId: hallId }, select: { id: true, seatNo: true } });
     const newcomers = students.filter(s => s.assignedHallId !== hallId).length;
     if (occupants.length + newcomers > hall.capacity) fail(409, 'Hall capacity would be exceeded. ' + occupants.length + ' of ' + hall.capacity + ' seats are currently assigned.');
@@ -246,7 +239,6 @@ export class ExamHallsService {
   private async unassign(tx: Prisma.TransactionClient, studentId: string) {
     const student = await tx.student.findUnique({ where: { id: studentId }, select: { assignedHallId: true, officeUse: true } });
     if (!student) fail(404, 'Candidate not found.');
-    await this.guardOpenAttendance(tx, [studentId]);
     const hall = student.assignedHallId ? await tx.examHall.findUnique({ where: { id: student.assignedHallId }, include: { testCenter: { select: centerSelect } } }) : null;
     // Independent OfficeUse writers exist: clear matching Hall-derived fields only.
     if (hall && student.officeUse) {

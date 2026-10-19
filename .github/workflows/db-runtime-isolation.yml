@@ -1,0 +1,119 @@
+name: AZM runtime DB privilege isolation - synthetic PostgreSQL 17
+
+on:
+  push:
+    branches:
+      - feature/superadmin-session-control-20261019
+      - feature/db-runtime-role-isolation
+      - feature/staged-attendance-preserve-only
+      - codex/stage1-truncate-guard
+      - codex/stage1-final-runtime-security
+      - fix/attendance-reset-history-wire-date
+      - feature/superadmin-delete-unused-user
+      - feature/superadmin-reopen-closed-preserve-marks
+  pull_request:
+    branches:
+      - main
+      - feature/super-admin-session-lifecycle
+      - feature/db-runtime-role-isolation
+      - codex/stage1-truncate-guard
+      - codex/stage1-final-runtime-security
+      - fix/attendance-reset-history-wire-date
+      - feature/superadmin-delete-unused-user
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-privilege-fixture:
+    name: PostgreSQL 17 restricted-login security checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: synthetic_only_not_prod
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:synthetic_only_not_prod@127.0.0.1:5432/postgres
+      DIRECT_URL: postgresql://postgres:synthetic_only_not_prod@127.0.0.1:5432/postgres
+      ATTENDANCE_TEST_DATABASE_URL: postgresql://postgres:synthetic_only_not_prod@127.0.0.1:5432/postgres
+      JWT_ACCESS_SECRET: synthetic-ci-role-isolation-access-secret
+      JWT_REFRESH_SECRET: synthetic-ci-role-isolation-refresh-secret
+      QR_SECRET: synthetic-ci-role-isolation-qr-secret
+    steps:
+      - name: Checkout read-only GitHub source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install frontend dependencies for document UI regressions
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Generate Prisma client and validate schema
+        working-directory: backend
+        run: |
+          ./node_modules/.bin/prisma generate --schema prisma/schema.prisma
+          ./node_modules/.bin/prisma validate --schema prisma/schema.prisma
+      - name: Backend TypeScript
+        working-directory: backend
+        run: ./node_modules/.bin/tsc --noEmit --pretty false
+      - name: Validate PRE_OPEN lifecycle, deletion capability, ownership and restricted runtime
+        env:
+          REQUIRE_PG17: "true"
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/exam-session-control.test.ts
+      - name: Validate Super Admin user deletion safety without touching a database
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/user-delete-safety.test.ts
+      - name: Build matching frontend without publishing
+        run: npm run build
+        env:
+          VITE_API_URL: ''
+      - name: Select runner Chrome for synthetic document UI checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path=$(command -v google-chrome)
+          "$chrome_path" --version
+          printf 'PUPPETEER_EXECUTABLE_PATH=%s\n' "$chrome_path" >> "$GITHUB_ENV"
+      - name: Authenticated session control browser verification
+        env:
+          REQUIRE_PG17: "true"
+          EXAM_CONTROL_BROWSER: "true"
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/exam-session-control.test.ts
+      - name: Upload synthetic session control screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exam-session-control-ui
+          path: verification/exam-control/
+          if-no-files-found: ignore
+      - name: Verify legacy and future student document collections
+        working-directory: backend
+        run: ./node_modules/.bin/tsx tests/student-document-collections.test.ts
+      - name: Verify single-page roll-slip print layout and school attendance instruction
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/roll-slip-print-layout.test.ts
+      - name: Verify HSSC stream printing compatibility
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/hssc-group-printing.test.ts
+      - name: Verify strict public and flexible admin registration
+        working-directory: backend
+        run: ./node_modules/.bin/tsx tests/admin-registration.test.ts
+      - name: Confirm no production changes
+        run: |
+          echo 'Synthetic PostgreSQL container only. No production host credentials, schema changes, backup imports or deployments.'

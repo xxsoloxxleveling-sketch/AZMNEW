@@ -3,6 +3,7 @@ import { X, Printer, Download, AlertTriangle, User, Loader2, CheckCircle2 } from
 import QRCode from 'qrcode';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
 import { apiFetchProtectedObjectUrl, apiFetch } from '../../../lib/apiClient';
+import { getPrintableHsscGroup } from '../../../utils/hsscGroup';
 
 interface StudentOmrModalProps {
   student: MockStudent | null;
@@ -93,6 +94,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
   }, [student, isOpen, displayRoll, isProvisional, prepared]);
 
   if (!isOpen || !student) return null;
+  const hsscGroup = getPrintableHsscGroup(student);
 
   const handlePrint = async () => {
     try { await mockApi.printStudentOmrPdf(student.id); }
@@ -269,6 +271,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
                 <div>
                   <span className="font-bold text-slate-500 uppercase text-[9px] block">Class / Category</span>
                   <span className="font-bold text-slate-800">{student.currentClass}</span>
+                  {hsscGroup && <span className="block font-bold text-slate-800">HSSC Group: {hsscGroup}</span>}
                 </div>
                 <div className="col-span-2 pt-1 border-t border-slate-200">
                   <span className="font-bold text-slate-500 uppercase text-[9px] block">

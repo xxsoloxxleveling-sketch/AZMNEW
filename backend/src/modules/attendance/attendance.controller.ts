@@ -1,21 +1,40 @@
+import { verifyAccessToken } from '../../lib/jwt';
 import { Request, Response, NextFunction } from 'express';
 import { attendanceService } from './attendance.service';
 import { sessionQuerySchema, rosterQuerySchema } from './attendance.schema';
+import { attendanceResetService } from './attendanceReset.service';
+import { resetHistorySchema, cancelHistorySchema } from './attendance.schema';
+import { attendanceCancellationService } from './attendanceCancellation.service';
 
+function tokenVersion(req: Request): number { return verifyAccessToken(req.get('Authorization')!.split(' ')[1]).tokenVersion; }
 function operator(req: Request): string {
   if (!req.user?.id) throw Object.assign(new Error('Authenticated attendance operator is required.'), { statusCode: 401 });
   return req.user.id;
 }
 export class AttendanceController {
+  cancelPreview = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceCancellationService.preview(req.params.sessionId, req.body, operator(req), tokenVersion(req)));
+  cancelConfirm = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceCancellationService.confirm(req.params.sessionId, req.body, operator(req), req.get('Idempotency-Key') || '', tokenVersion(req)));
+  cancelHistory = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => {
+    const query = cancelHistorySchema.parse(req.query);
+    return attendanceCancellationService.history(operator(req), query.page, query.limit, tokenVersion(req));
+  });
+  resetPreview = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceResetService.preview(req.body, operator(req), tokenVersion(req)));
+  resetConfirm = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceResetService.confirm(req.body, operator(req), req.get('Idempotency-Key') || '', tokenVersion(req)));
+  resetHistory = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => {
+    const query = resetHistorySchema.parse(req.query);
+    return attendanceResetService.history(operator(req), { page: query.page ?? 1, limit: query.limit ?? 25 }, tokenVersion(req));
+  });
   private async respond(res: Response, next: NextFunction, work: () => Promise<unknown>, status = 200) {
     try { const data = await work(); res.status(status).json({ success: true, data }); } catch (error) { next(error); }
   }
-  open = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.openSession(req.body.examHallId, operator(req)), 201);
+  open = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.openSession(req.body.examHallId, operator(req), { sessionId: req.body.sessionId, revision: req.body.revision }), 201);
   list = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.listSessions(sessionQuerySchema.parse(req.query)));
   detail = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getSession(req.params.sessionId));
+  currentHall = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.currentHallState(req.params.examHallId));
   candidates = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getCandidates(req.params.sessionId, rosterQuerySchema.parse(req.query)));
   mark = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.mark(req.params.sessionId, req.body, operator(req)), 201);
   close = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.closeSession(req.params.sessionId, req.body.markRemainingAbsent, operator(req)));
+  reopen = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.reopenSession(req.params.sessionId, req.body.reason, operator(req), tokenVersion(req)));
   scan = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = await attendanceService.scanOrMarkAttendance(req.body, operator(req));

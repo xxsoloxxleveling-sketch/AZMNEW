@@ -3,6 +3,13 @@ import { setToken, setRefreshToken, setUser, getUser, getToken } from './auth';
 import { apiFetch, apiDownloadPdf, apiOpenPdfForPrint, API_BASE_URL } from './apiClient';
 export { API_BASE_URL };
 
+export interface StudentDeletionProtection {
+  canPermanentlyDelete: boolean;
+  canDeactivate: boolean;
+  counts: Record<string, number>;
+  blockers: { kind: string; label: string; count: number }[];
+}
+
 export interface HallCandidate {
   legacyAllocationNeedsReview?: boolean;
   id: string;
@@ -255,12 +262,18 @@ export interface AttendancePagination {
   page: number; limit: number; total: number; totalPages: number;
 }
 export interface AttendanceSession {
+  revision: number;
   id: string;
+  attemptNumber?: number;
+  isCurrent?: boolean;
+  archivedAt?: string | null;
   examHallId: string;
   businessDate: string;
-  status: 'OPEN' | 'CLOSED';
-  openedByUserId: string;
-  openedAt: string;
+  status: 'PRE_OPEN' | 'OPEN' | 'CLOSED' | 'CANCELLED';
+  cancelledAt?: string | null;
+  cancelledByUserId?: string | null;
+  openedByUserId: string | null;
+  openedAt: string | null;
   closedByUserId: string | null;
   closedAt: string | null;
   hallNameSnapshot: string;
@@ -1199,6 +1212,11 @@ export const mockApi = {
     return res?.data || res;
   },
 
+  async getStudentDeletionProtection(studentId: string): Promise<StudentDeletionProtection> {
+    const res = await apiFetch<any>(`/api/students/${encodeURIComponent(studentId)}/deletion-protection`);
+    return res?.data || res;
+  },
+
   async deleteStudent(studentId: string): Promise<boolean> {
     await apiFetch<any>(`/api/students/${studentId}`, {
       method: 'DELETE',
@@ -1575,13 +1593,14 @@ export const mockApi = {
   },
 
   // 5. Hall-scoped attendance sessions
-  async getAttendanceSessions(query?: { page?: number; limit?: number; examHallId?: string; businessDate?: string; status?: 'OPEN' | 'CLOSED' }): Promise<AttendanceSessionListResponse> {
+  async getAttendanceSessions(query?: { page?: number; limit?: number; examHallId?: string; businessDate?: string; status?: 'PRE_OPEN' | 'OPEN' | 'CLOSED' | 'CANCELLED'; includeHistory?: boolean }): Promise<AttendanceSessionListResponse> {
     const params = new URLSearchParams();
     params.set('page', String(query?.page || 1));
     params.set('limit', String(query?.limit || 25));
     if (query?.examHallId) params.set('examHallId', query.examHallId);
     if (query?.businessDate) params.set('businessDate', query.businessDate);
     if (query?.status) params.set('status', query.status);
+    if (query?.includeHistory !== undefined) params.set('includeHistory', String(query.includeHistory));
     const res: any = await apiFetch<any>(`/api/attendance/sessions?${params.toString()}`);
     if (!Array.isArray(res?.sessions) || !res?.pagination) throw new Error('Invalid attendance sessions response');
     validateAttendancePagination(res.pagination);
@@ -1598,7 +1617,7 @@ export const mockApi = {
     return res as AttendanceSessionDetail;
   },
 
-  async createAttendanceSession(payload: { examHallId: string }): Promise<AttendanceSessionDetail> {
+  async createAttendanceSession(payload: { examHallId: string; sessionId: string; revision: number }): Promise<AttendanceSessionDetail> {
     const res: any = await apiFetch<any>('/api/attendance/sessions', {
       method: 'POST', body: JSON.stringify(payload),
     });
@@ -1618,7 +1637,7 @@ export const mockApi = {
     return res as AttendanceCandidatesResponse;
   },
 
-  async markAttendanceSession(id: string, payload: { studentId?: string; rollNumber?: string; qrToken?: string; status: AttendanceStatus }): Promise<AttendanceMarkResponse> {
+  async markAttendanceSession(id: string, payload: { revision: number; studentId?: string; rollNumber?: string; qrToken?: string; status: AttendanceStatus }): Promise<AttendanceMarkResponse> {
     const identifiers = [payload.studentId, payload.rollNumber, payload.qrToken].filter((value) => typeof value === 'string' && value.trim());
     if (identifiers.length !== 1) throw new Error('Provide exactly one studentId, rollNumber, or qrToken');
     const body = Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]));
@@ -1627,6 +1646,17 @@ export const mockApi = {
     });
     if (!res?.attendance || !res?.student) throw new Error('Invalid attendance mark response');
     return res;
+  },
+
+  async reopenAttendanceSession(id: string, payload: { reason: string; confirmationText: 'REOPEN SESSION' }): Promise<AttendanceSessionDetail> {
+    const res: any = await apiFetch<any>(`/api/attendance/sessions/${encodeURIComponent(id)}/reopen`, {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+    if (!res?.session || !res?.stats || !Array.isArray(res?.roster)) throw new Error('Invalid reopened attendance session');
+    validateAttendanceSessionIdentity(res.session);
+    validateAttendanceMetrics(res.stats);
+    validateAttendanceCandidates(res.roster);
+    return res as AttendanceSessionDetail;
   },
 
   async closeAttendanceSession(id: string, payload: { markRemainingAbsent?: boolean } = {}): Promise<AttendanceSessionDetail> {
@@ -1642,6 +1672,7 @@ export const mockApi = {
 
   // Compatibility adapter for deferred attendance callers. Session scope is mandatory at runtime.
   async scanAttendance(payload: {
+    revision: number;
     sessionId?: string;
     qrToken?: string;
     studentId?: string;
@@ -1658,7 +1689,7 @@ export const mockApi = {
     if (!qrToken) throw invalidQr();
     const res: AttendanceMarkResponse & { alreadyMarked?: boolean } = await apiFetch('/api/attendance/scan', {
       method: 'POST', timeoutMs: 15000,
-      body: JSON.stringify({ sessionId: sessionId.trim(), qrToken, status: 'PRESENT' }),
+      body: JSON.stringify({ sessionId: sessionId.trim(), revision: payload.revision, qrToken, status: 'PRESENT' }),
     });
     const attendance = res?.attendance, student = res?.student;
     const nonempty = (value: unknown) => typeof value === 'string' && !!value.trim();
