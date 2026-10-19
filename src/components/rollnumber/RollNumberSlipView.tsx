@@ -1,4 +1,5 @@
 import { extractSignedAttendanceToken } from '../../utils/signedAttendanceQr';
+import { getPrintableHsscGroup } from '../../utils/hsscGroup';
 import React, { useState, useEffect } from 'react';
 import { fetchVerifiedCandidatePortrait } from '../../services/candidatePortrait';
 import QRCode from 'qrcode';
@@ -37,6 +38,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [cnicOrBForm, setCnicOrBForm] = useState<string>('');
   const [selectedSlip, setSelectedSlip] = useState<RollNumberSlip | null>(null);
+  const hsscGroup = getPrintableHsscGroup({ currentClass: selectedSlip?.classLevel, hsscGroup: selectedSlip?.hsscGroup });
   const [verifiedCnic, setVerifiedCnic] = useState('');
   const [portraitUrl, setPortraitUrl] = useState<string | null>(null);
   const [portraitStatus, setPortraitStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
@@ -490,6 +492,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
                   <div>
                     <span className="text-slate-500 text-[10px] uppercase font-bold block">Class Level:</span>
                     <span className="font-bold text-emerald-800 text-xs">{selectedSlip.classLevel}</span>
+                    {hsscGroup && <span className="block text-xs font-bold text-slate-800">HSSC Group: {hsscGroup}</span>}
                   </div>
 
                   <div className="col-span-2 pt-2 border-t border-slate-100">

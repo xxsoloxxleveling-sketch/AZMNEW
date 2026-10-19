@@ -1500,6 +1500,7 @@ export class StudentsService {
         fatherName: student.fatherName,
         cnicBForm: student.cnicOrBForm,
         classLevel: student.currentClass || 'SSC-II (Class 10th)',
+        hsscGroup: student.hsscGroup,
         candidatePhoto:
           (student.photoUrl && !student.photoUrl.includes('unsplash') ? student.photoUrl : null) ||
           `/api/students/${student.id}/photo-thumbnail`,

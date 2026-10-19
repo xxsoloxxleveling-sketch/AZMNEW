@@ -135,6 +135,7 @@ export interface RollNumberSlip {
   fatherName: string;
   cnicBForm: string;
   classLevel: string;
+  hsscGroup?: string | null;
   candidatePhoto: string;
   testCenter: string | null;
   centerAddress: string | null;

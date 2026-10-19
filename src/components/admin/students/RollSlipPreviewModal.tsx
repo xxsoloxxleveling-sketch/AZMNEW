@@ -1,4 +1,5 @@
 import { buildSignedAttendanceQrUrl } from '../../../utils/signedAttendanceQr';
+import { getPrintableHsscGroup } from '../../../utils/hsscGroup';
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, Download, AlertTriangle, ShieldCheck, User, Calendar, MapPin, CheckCircle2, Loader2 } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -89,6 +90,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
   }, [student, isOpen, displayRoll, isProvisional, prepared]);
 
   if (!isOpen || !student) return null;
+  const hsscGroup = getPrintableHsscGroup(student);
 
   const handlePrint = async () => {
     if (prepared?.id !== student.id) return;
@@ -243,6 +245,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
                   <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 text-[11px] font-bold">
                     <span>Class:</span> {student.currentClass}
                   </div>
+                  {hsscGroup && <div className="mt-1 text-xs font-bold text-slate-800">HSSC Group: {hsscGroup}</div>}
                 </div>
               </div>
 
