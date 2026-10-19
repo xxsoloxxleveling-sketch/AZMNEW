@@ -68,7 +68,7 @@ function HallDialog({ title, busy, onClose, children }: { title: string; busy: b
 export const ExamHallsView: React.FC<{ onOpenQrScanner?: () => void }> = () => {
   const { isLoading: authLoading } = useAuth();
   const [halls, setHalls] = useState<ExamHall[]>([]), [centers, setCenters] = useState<MockTestCenter[]>([]);
-  const [centerFilter, setCenterFilter] = useState('all'), [selectedId, setSelectedId] = useState('');
+  const [centerFilter, setCenterFilter] = useState(()=>{try{return JSON.parse(sessionStorage.getItem('azm.placement-scope')||'null')?.testCenterId||'all';}catch{return 'all';}}), [selectedId, setSelectedId] = useState('');
   const [unassigned, setUnassigned] = useState<number | null>(null), [loading, setLoading] = useState(true), [loadError, setLoadError] = useState('');
   const [roster, setRoster] = useState<HallCandidate[]>([]), [rosterId, setRosterId] = useState(''), [rosterError, setRosterError] = useState('');
   const [refresh, setRefresh] = useState(0), [rosterSearch, setRosterSearch] = useState('');

@@ -1,3 +1,4 @@
+import { examLock } from '../attendance/examControl.service';
 import { prisma } from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { hallDate } from '../exam-halls/examHalls.service';
@@ -8,7 +9,7 @@ export class TestCentersService {
   private async transaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await prisma.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });
+        return await prisma.$transaction(async tx => {await examLock(tx);return work(tx);}, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });
       } catch (error: any) {
         if (error.code !== 'P2034') throw error;
         if (attempt >= 2) {

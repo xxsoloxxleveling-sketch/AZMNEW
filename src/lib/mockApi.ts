@@ -262,17 +262,18 @@ export interface AttendancePagination {
   page: number; limit: number; total: number; totalPages: number;
 }
 export interface AttendanceSession {
+  revision: number;
   id: string;
   attemptNumber?: number;
   isCurrent?: boolean;
   archivedAt?: string | null;
   examHallId: string;
   businessDate: string;
-  status: 'OPEN' | 'CLOSED' | 'CANCELLED';
+  status: 'PRE_OPEN' | 'OPEN' | 'CLOSED' | 'CANCELLED';
   cancelledAt?: string | null;
   cancelledByUserId?: string | null;
-  openedByUserId: string;
-  openedAt: string;
+  openedByUserId: string | null;
+  openedAt: string | null;
   closedByUserId: string | null;
   closedAt: string | null;
   hallNameSnapshot: string;
@@ -1592,7 +1593,7 @@ export const mockApi = {
   },
 
   // 5. Hall-scoped attendance sessions
-  async getAttendanceSessions(query?: { page?: number; limit?: number; examHallId?: string; businessDate?: string; status?: 'OPEN' | 'CLOSED' | 'CANCELLED'; includeHistory?: boolean }): Promise<AttendanceSessionListResponse> {
+  async getAttendanceSessions(query?: { page?: number; limit?: number; examHallId?: string; businessDate?: string; status?: 'PRE_OPEN' | 'OPEN' | 'CLOSED' | 'CANCELLED'; includeHistory?: boolean }): Promise<AttendanceSessionListResponse> {
     const params = new URLSearchParams();
     params.set('page', String(query?.page || 1));
     params.set('limit', String(query?.limit || 25));
@@ -1616,7 +1617,7 @@ export const mockApi = {
     return res as AttendanceSessionDetail;
   },
 
-  async createAttendanceSession(payload: { examHallId: string }): Promise<AttendanceSessionDetail> {
+  async createAttendanceSession(payload: { examHallId: string; sessionId: string; revision: number }): Promise<AttendanceSessionDetail> {
     const res: any = await apiFetch<any>('/api/attendance/sessions', {
       method: 'POST', body: JSON.stringify(payload),
     });
@@ -1636,7 +1637,7 @@ export const mockApi = {
     return res as AttendanceCandidatesResponse;
   },
 
-  async markAttendanceSession(id: string, payload: { studentId?: string; rollNumber?: string; qrToken?: string; status: AttendanceStatus }): Promise<AttendanceMarkResponse> {
+  async markAttendanceSession(id: string, payload: { revision: number; studentId?: string; rollNumber?: string; qrToken?: string; status: AttendanceStatus }): Promise<AttendanceMarkResponse> {
     const identifiers = [payload.studentId, payload.rollNumber, payload.qrToken].filter((value) => typeof value === 'string' && value.trim());
     if (identifiers.length !== 1) throw new Error('Provide exactly one studentId, rollNumber, or qrToken');
     const body = Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]));
@@ -1671,6 +1672,7 @@ export const mockApi = {
 
   // Compatibility adapter for deferred attendance callers. Session scope is mandatory at runtime.
   async scanAttendance(payload: {
+    revision: number;
     sessionId?: string;
     qrToken?: string;
     studentId?: string;
@@ -1687,7 +1689,7 @@ export const mockApi = {
     if (!qrToken) throw invalidQr();
     const res: AttendanceMarkResponse & { alreadyMarked?: boolean } = await apiFetch('/api/attendance/scan', {
       method: 'POST', timeoutMs: 15000,
-      body: JSON.stringify({ sessionId: sessionId.trim(), qrToken, status: 'PRESENT' }),
+      body: JSON.stringify({ sessionId: sessionId.trim(), revision: payload.revision, qrToken, status: 'PRESENT' }),
     });
     const attendance = res?.attendance, student = res?.student;
     const nonempty = (value: unknown) => typeof value === 'string' && !!value.trim();

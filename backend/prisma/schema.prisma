@@ -76,6 +76,7 @@ model Student {
   seatNo             String?
   testScore          Int?
   overallRank        Int?
+  resultSessionId    String?
   status             StudentStatus @default(ACTIVE)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @default(now()) @updatedAt
@@ -339,6 +340,7 @@ enum AttendanceMethod {
 }
 
 enum AttendanceSessionStatus {
+  PRE_OPEN
   OPEN
   CLOSED
   CANCELLED
@@ -353,8 +355,10 @@ model AttendanceSession {
   examHall                 ExamHall @relation(fields: [examHallId], references: [id], onDelete: Restrict)
   businessDate             DateTime @db.Date
   status                   AttendanceSessionStatus @default(OPEN)
-  openedByUserId           String
-  openedAt                 DateTime @default(now())
+  openedByUserId           String?
+  openedAt                 DateTime?
+  preparedByUserId         String?
+  revision                 Int @default(1)
   closedByUserId           String?
   closedAt                 DateTime?
   cancelledByUserId        String?
@@ -368,8 +372,6 @@ model AttendanceSession {
   updatedAt                DateTime @default(now()) @updatedAt
   candidates               AttendanceSessionCandidate[]
   attendance               Attendance[]
-  cancellation             AttendanceSessionCancellation?
-  reopenings               AttendanceSessionReopening[]
 
   @@unique([examHallId, businessDate, attemptNumber])
   @@index([businessDate])
@@ -395,10 +397,54 @@ model AttendanceResetOperation {
   @@index([completedAt])
 }
 
+// One sitting per center/business date. Student allocations remain exclusive current values.
+model ExamPlacementControl {
+  testCenterId String
+  businessDate DateTime @db.Date
+  frozen Boolean @default(false)
+  revision Int @default(0)
+  changedBy String?
+  changedAt DateTime?
+  reason String?
+  @@id([testCenterId,businessDate])
+}
+model ExamAttemptSequence {
+  examHallId String
+  businessDate DateTime @db.Date
+  generation Int
+  @@id([examHallId,businessDate])
+}
+model ExamControlOperation {
+  id String @id
+  actorId String
+  actorName String
+  idempotencyKey String
+  requestHash String
+  nonce String @unique
+  action String
+  reason String
+  scope Json
+  result Json
+  completedAt DateTime @default(now())
+  @@unique([actorId,idempotencyKey])
+}
+model ExamLifecycleEvent {
+  id String @id
+  sessionId String
+  examHallId String
+  businessDate DateTime @db.Date
+  testCenterId String?
+  action String
+  actorId String
+  actorName String
+  reason String
+  occurredAt DateTime @default(now())
+  @@index([testCenterId,businessDate,occurredAt])
+}
+
 model AttendanceSessionCancellation {
   id                          String @id
   sessionId                   String @unique
-  session                     AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
   actorId                     String
   actorName                   String
   idempotencyKey              String
@@ -427,7 +473,6 @@ model AttendanceSessionCancellation {
 model AttendanceSessionReopening {
   id                    String @id
   sessionId             String
-  session               AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
   actorId               String
   actorName             String
   reason                String
