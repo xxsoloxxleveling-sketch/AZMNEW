@@ -120,9 +120,9 @@ GRANT USAGE ON SCHEMA public TO :"grant_role";
 -- supplies a forged cancellation-audit context. Other application tables
 -- retain their existing DML surface. Database triggers remain mandatory.
 SELECT format('GRANT %s ON TABLE %I.%I TO %I',
-  CASE WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening')
+  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent') THEN 'SELECT' WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening')
     THEN 'SELECT, INSERT'
-    WHEN c.relname = 'Attendance' THEN 'SELECT, INSERT, UPDATE'
+    WHEN c.relname IN ('Attendance','AttendanceSession','AttendanceSessionCandidate') THEN 'SELECT, INSERT, UPDATE'
     ELSE 'SELECT, INSERT, UPDATE, DELETE'
   END,
   n.nspname,c.relname,:'grant_role')
@@ -132,7 +132,13 @@ WHERE n.nspname='public' AND c.relkind IN ('r','p')
   AND c.relname <> '_prisma_migrations'
 ORDER BY c.relname \gexec
 
+GRANT EXECUTE ON FUNCTION public.azm_execute_exam_control(TEXT,TEXT) TO :"grant_role";
+GRANT EXECUTE ON FUNCTION public.azm_exam_capability_probe(TEXT,TEXT) TO :"grant_role";
 -- Prisma-generated serial IDs / sequences need USAGE (nextval), not ownership.
+-- Private metadata remains inaccessible to PUBLIC/Data API roles. The dedicated
+-- backend group needs an explicit RLS policy after moving away from table ownership.
+DROP POLICY IF EXISTS azm_backend_private_documents ON public."StudentDocument";
+SELECT format('CREATE POLICY azm_backend_private_documents ON public."StudentDocument" FOR ALL TO %I USING (true) WITH CHECK (true)',:'grant_role') \gexec
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"grant_role";
 GRANT :"grant_role" TO :"login_role" WITH INHERIT TRUE, SET FALSE;
 
@@ -146,7 +152,7 @@ SELECT (
   AND has_table_privilege(:'login_role','public."AttendanceSession"','SELECT')
   AND has_table_privilege(:'login_role','public."AttendanceSession"','INSERT')
   AND has_table_privilege(:'login_role','public."AttendanceSession"','UPDATE')
-  AND has_table_privilege(:'login_role','public."AttendanceSession"','DELETE')
+  AND NOT has_table_privilege(:'login_role','public."AttendanceSession"','DELETE')
   AND EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolname=:'login_role' AND NOT r.rolreplication)
   AND NOT has_table_privilege(:'login_role','public."Attendance"','DELETE')
   AND NOT has_table_privilege(:'login_role','public."Attendance"','TRUNCATE')

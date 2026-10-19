@@ -2,13 +2,18 @@ import { z } from 'zod';
 import { AttendanceStatus, AttendanceSessionStatus } from '@prisma/client';
 import { hallDate } from '../exam-halls/examHalls.service';
 
-export const openSessionSchema = z.object({ examHallId: z.string().trim().min(1) }).strict();
+export const openSessionSchema = z.object({
+  examHallId: z.string().trim().min(1),
+  sessionId: z.string().trim().min(1),
+  revision: z.number().int().min(1),
+}).strict();
 export const closeSessionSchema = z.object({ markRemainingAbsent: z.boolean().default(false) }).strict();
 export const reopenSessionSchema = z.object({
   reason: z.string().trim().min(10).max(1000),
   confirmationText: z.literal('REOPEN SESSION'),
 }).strict();
 const identityFields = {
+  revision: z.number().int().min(1),
   studentId: z.string().trim().min(1).optional(),
   rollNumber: z.string().trim().min(1).optional(),
   qrToken: z.string().trim().min(1).optional(),

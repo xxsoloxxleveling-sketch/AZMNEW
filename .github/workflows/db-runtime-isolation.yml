@@ -3,6 +3,7 @@ name: AZM runtime DB privilege isolation - synthetic PostgreSQL 17
 on:
   push:
     branches:
+      - feature/superadmin-session-control-20261019
       - feature/db-runtime-role-isolation
       - feature/staged-attendance-preserve-only
       - codex/stage1-truncate-guard
@@ -74,12 +75,10 @@ jobs:
       - name: Backend TypeScript
         working-directory: backend
         run: ./node_modules/.bin/tsc --noEmit --pretty false
-      - name: Exercise non-owner runtime login and approved scoped cancellation
+      - name: Validate PRE_OPEN lifecycle, deletion capability, ownership and restricted runtime
         env:
-          AZM_SYNTHETIC_PG_CONTAINER: ${{ job.services.postgres.id }}
-        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/runtime-role-isolation.test.ts
-      - name: Regression - reset audit history serializes date-only business dates
-        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/attendance-reset-integrity.test.ts
+          REQUIRE_PG17: "true"
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/exam-session-control.test.ts
       - name: Validate Super Admin user deletion safety without touching a database
         run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/user-delete-safety.test.ts
       - name: Build matching frontend without publishing
@@ -93,11 +92,25 @@ jobs:
           chrome_path=$(command -v google-chrome)
           "$chrome_path" --version
           printf 'PUPPETEER_EXECUTABLE_PATH=%s\n' "$chrome_path" >> "$GITHUB_ENV"
+      - name: Authenticated session control browser verification
+        env:
+          REQUIRE_PG17: "true"
+          EXAM_CONTROL_BROWSER: "true"
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/exam-session-control.test.ts
+      - name: Upload synthetic session control screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exam-session-control-ui
+          path: verification/exam-control/
+          if-no-files-found: ignore
       - name: Verify legacy and future student document collections
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/student-document-collections.test.ts
       - name: Verify single-page roll-slip print layout and school attendance instruction
         run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/roll-slip-print-layout.test.ts
+      - name: Verify HSSC stream printing compatibility
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/hssc-group-printing.test.ts
       - name: Verify strict public and flexible admin registration
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/admin-registration.test.ts

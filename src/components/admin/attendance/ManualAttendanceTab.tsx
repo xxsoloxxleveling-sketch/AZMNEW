@@ -35,7 +35,7 @@ export const ManualAttendanceTab: React.FC<ManualAttendanceTabProps> = ({ detail
     event.preventDefault(); if (!candidate || busy || !canMark || session.status !== 'OPEN') return;
     setBusy(true); setMarkError('');
     try {
-      const response = await mockApi.markAttendanceSession(session.id, { studentId: candidate.studentId, status });
+      const response = await mockApi.markAttendanceSession(session.id, { revision:session.revision, studentId: candidate.studentId, status });
       if (!response.attendance?.id) throw new Error('Attendance was not confirmed. Refresh the session before retrying.');
       setCandidate(null); onDialogChange(false); onRecorded();
     } catch (failure: any) { setMarkError(failure.message || 'Attendance could not be recorded.'); }

@@ -13,6 +13,7 @@ async function run() {
   };
   const accounts = new Map<string, any>();
   const sources = [
+    'examControlOperation','examPlacementControl','examLifecycleEvent',
     'attendanceSession', 'attendance', 'attendanceResetOperation',
     'attendanceSessionCancellation', 'attendanceSessionReopening', 'staff', 'studentDocument',
     'studentDocumentAudit', 'partnerStatusAudit', 'transaction',

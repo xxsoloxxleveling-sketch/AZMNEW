@@ -276,8 +276,11 @@ export class UsersService {
     // User would orphan immutable evidence even when PostgreSQL permits the DELETE.
     const deleteUnused = async (tx: Prisma.TransactionClient) => {
       const usages = await Promise.all([
+        tx.examControlOperation.count({where:{actorId:id}}),
+        tx.examLifecycleEvent.count({where:{actorId:id}}),
+        tx.examPlacementControl.count({where:{changedBy:id}}),
         tx.attendanceSession.count({ where: { OR: [
-          { openedByUserId: id }, { closedByUserId: id }, { cancelledByUserId: id },
+          { preparedByUserId: id }, { openedByUserId: id }, { closedByUserId: id }, { cancelledByUserId: id },
         ] } }),
         tx.attendance.count({ where: { markedByUserId: id } }),
         tx.attendanceResetOperation.count({ where: { actorId: id } }),

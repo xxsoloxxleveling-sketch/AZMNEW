@@ -27,9 +27,10 @@ export class AttendanceController {
   private async respond(res: Response, next: NextFunction, work: () => Promise<unknown>, status = 200) {
     try { const data = await work(); res.status(status).json({ success: true, data }); } catch (error) { next(error); }
   }
-  open = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.openSession(req.body.examHallId, operator(req)), 201);
+  open = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.openSession(req.body.examHallId, operator(req), { sessionId: req.body.sessionId, revision: req.body.revision }), 201);
   list = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.listSessions(sessionQuerySchema.parse(req.query)));
   detail = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getSession(req.params.sessionId));
+  currentHall = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.currentHallState(req.params.examHallId));
   candidates = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.getCandidates(req.params.sessionId, rosterQuerySchema.parse(req.query)));
   mark = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.mark(req.params.sessionId, req.body, operator(req)), 201);
   close = (req: Request, res: Response, next: NextFunction) => this.respond(res, next, () => attendanceService.closeSession(req.params.sessionId, req.body.markRemainingAbsent, operator(req)));

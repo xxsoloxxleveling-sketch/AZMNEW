@@ -69,7 +69,7 @@ export const QrScannerTab: React.FC<Props> = ({ detail, onManualAttendance, onBu
       if (mountedRef.current) setError(scanError(new Error('Confirmation timeout')));
     }, 20000);
     try {
-      const confirmed = await mockApi.scanAttendance({ sessionId: detail.session.id, qrToken: token, status: 'PRESENT' });
+      const confirmed = await mockApi.scanAttendance({ sessionId: detail.session.id, revision: detail.session.revision, qrToken: token, status: 'PRESENT' });
       if (!mountedRef.current || confirmationTimedOut) return;
       setResult(confirmed);
       if (!confirmed.alreadyMarked) successFeedback();
