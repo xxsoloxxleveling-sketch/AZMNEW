@@ -52,7 +52,11 @@ const aliases: Record<string, HsscGroup> = {
 const unverifiedDefaults = new Set(['science / pre-medical', 'science (biology/pre-medical)']);
 export type GroupStatus = 'canonical' | 'alias' | 'missing' | 'unsupported' | 'conflicting' | 'unverified-default' | 'not-applicable';
 export type StudyGroupResolution = { status: GroupStatus; group: HsscGroup | null; label: string | null; ready: boolean };
-const equivalent = (value: string): HsscGroup | null => HSSC_GROUP_OPTIONS.find(o => key(o.value) === value)?.value || aliases[value] || null;
+const equivalent = (value: string): HsscGroup | null => {
+  const candidate = HSSC_GROUP_OPTIONS.find(o => key(o.value) === value)?.value ||
+    (Object.prototype.hasOwnProperty.call(aliases, value) ? aliases[value] : null);
+  return HSSC_GROUP_OPTIONS.some(o => o.value === candidate) ? candidate as HsscGroup : null;
+};
 export function resolveHsscGroup(student: { currentClass?: string | null; hsscGroup?: string | null }): StudyGroupResolution {
   const grade = classifyHsscClass(student.currentClass);
   const unresolved = (status: GroupStatus): StudyGroupResolution => ({ status, group: null, label: STUDY_GROUP_REVIEW, ready: false });

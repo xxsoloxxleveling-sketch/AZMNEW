@@ -2135,7 +2135,8 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
         if (after.kind === 'hssc' && (classChanged || groupChanged || (hasGroup && !baseData.hsscGroup))) {
           const resolution = resolveHsscGroup(effective);
           if (!resolution.group) throw fieldError('hsscGroup', STUDY_GROUP_REQUIRED);
-          baseData.hsscGroup = resolution.group;
+          // Validate the effective record without rewriting an omitted historical value.
+          if (hasGroup) baseData.hsscGroup = resolution.group;
         }
         const corrected = baseData.hsscGroup !== undefined && baseData.hsscGroup !== stored.hsscGroup;
         if (corrected) {
@@ -2852,6 +2853,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
         await this.persistDocumentMetadata(student.id, currentDocs);
       } catch (err) {
         logger.warn('Failed to update student document in PostgreSQL:', err);
+        throw Object.assign(new Error('The file was stored but its student attachment metadata could not be confirmed. Retry this attachment.'), { statusCode: 502 });
       }
     }
 

@@ -8,6 +8,9 @@ const aliases = ['HSSC-I (Class 11th)', 'HSSC-II (Class 12th)', 'First Year', 'S
   'Class 11th (HSSC-I)', 'Class 12th (HSSC-II)', 'Class 11', 'Class 12', 'Class 11th', 'Class 12th', '11th', '12th', '11', '12',
   '  hssc – ii ( class 12th )  ', ' FIRST   YEAR ', 'HSSC — I'];
 let combinations = 0;
+for (const hsscGroup of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+  assert.equal(resolveHsscGroup({ currentClass: 'First Year', hsscGroup }).status, 'unsupported');
+}
 for (const currentClass of aliases) for (const option of HSSC_GROUP_OPTIONS) {
   const student = { id: 'synthetic', applicationNo: 'SYNTHETIC-1', fullName: 'Synthetic Student', fatherName: 'Synthetic Guardian', currentClass, hsscGroup: option.value, cnicOrBForm: '0000000000000' };
   assert.equal(classifyHsscClass(currentClass).kind, 'hssc');

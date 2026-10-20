@@ -49,6 +49,7 @@ const expectedTriggers = [
   'AttendanceSessionReopening_immutable',
   'AttendanceSessionReopening_insert_validation',
   'AttendanceSessionReopening_coherence',
+  'StudentStudyGroupCorrection_immutable',
 ] as const;
 
 function loginFromUrl(value: string): string {
@@ -157,6 +158,7 @@ export async function assertRestrictedRuntimeDatabase(
       access.migrationWrite || access.migrationTruncate || access.triggerPrivilege) {
     blocked('runtime DML or immutable-audit privilege requirements not met');
   }
+  await assertStudyGroupAuditRuntime(db);
   const signingKey=process.env.EXAM_CONTROL_SIGNING_KEY;
   if(!signingKey||signingKey.length<64)blocked('Exam Session Control signing key is missing');
   const probe=randomUUID();
@@ -184,4 +186,24 @@ export async function assertRestrictedRuntimeDatabase(
   const enabled = new Map(results.triggers.map(x => [x.tgname,x.tgenabled]));
   if (expectedTriggers.some(name => !['O','A'].includes(enabled.get(name) || '')))
     blocked('required attendance/audit triggers are missing or disabled');
+}
+
+/** Read-only release assertion, also exercised through the actual restricted login. */
+export async function assertStudyGroupAuditRuntime(db: PrismaClient) {
+  const rows = await db.$queryRawUnsafe<any[]>(`SELECT
+    has_table_privilege(current_user,'public."StudentStudyGroupCorrection"','SELECT') AS readable,
+    has_table_privilege(current_user,'public."StudentStudyGroupCorrection"','INSERT') AS insertable,
+    has_table_privilege(current_user,'public."StudentStudyGroupCorrection"','UPDATE,DELETE,TRUNCATE,TRIGGER') AS mutable,
+    c.relrowsecurity AS rls,
+    EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=c.oid AND p.polcmd='*'
+      AND pg_get_expr(p.polqual,p.polrelid)='true' AND pg_get_expr(p.polwithcheck,p.polrelid)='true'
+      AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.oid=ANY(p.polroles) AND pg_has_role(current_user,r.oid,'USAGE'))) AS policy,
+    EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND t.tgname='StudentStudyGroupCorrection_immutable'
+      AND t.tgenabled IN ('O','A') AND t.tgtype=58) AS immutable,
+    EXISTS(SELECT 1 FROM pg_constraint f WHERE f.conrelid=c.oid AND f.contype='f'
+      AND f.confrelid='public."Student"'::regclass AND f.confdeltype='r') AS restrictive
+    FROM pg_class c WHERE c.oid='public."StudentStudyGroupCorrection"'::regclass`);
+  const access = rows[0];
+  if (!access?.readable || !access.insertable || access.mutable || !access.rls || !access.policy || !access.immutable || !access.restrictive)
+    blocked('study group correction audit access/protection is missing or unsafe');
 }

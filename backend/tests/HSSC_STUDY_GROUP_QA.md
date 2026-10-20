@@ -2,6 +2,67 @@
 
 20 October 2026. Implementation base: `8eea79f82f27a1d0de3f0b08c6bcd84bd3381109`, tree `014a525fb9dd24ca035f9f6526de863f66b28ca2`.
 
+## Corrective review pass
+
+Reviewed PR head: `1d20d0c8fe1f97539d9b802c3ad35eb3b78c0315`. GitHub and the clean local branch matched before editing. This pass changes source and synthetic tests only. The schema and every migration remain byte-for-byte unchanged from that reviewed head (`git diff --exit-code` verified). The production findings below are the **earlier historical snapshot**, not a fresh population count.
+
+### Reviewed failures and fixes
+
+1. **Edit uploads invalidated the loaded version.** The actual admin form now PATCHes details against the original loaded version before uploading replacements. It never refreshes a version to resubmit stale fields. After a partial upload failure, saved details are locked, the message distinguishes saved details from pending files, and retry uploads only the remaining attachments. Confirmed uploads are removed from the pending list. A later staff edit cannot be overwritten by that retry. Authoritative reload after completion is for display only. Blank optional income is omitted to match the existing API contract; this also prevents an unrelated null-validation error from blocking a normal edit. Upload metadata persistence failures return an error instead of reporting false success.
+2. **Class-only edits rewrote omitted groups.** Effective-record validation now leaves `hsscGroup` untouched when omitted. First-to-second-year changes preserve exact saved aliases and canonical groups without a correction basis or audit insert. Explicit group changes still require the actor, loaded version and source, and commit one audit entry atomically. Missing groups still block genuine year changes; unrelated contact edits on unresolved historical records remain possible.
+3. **Runtime provisioning depended on role order/name.** The unchanged migration supplies its original additive table/trigger/FK. The parameterized grants script now creates the audit policy for the configured grant group, grants only SELECT/INSERT, and verifies RLS, policy and immutable-trigger state transactionally. Repeated execution retains those rights. Startup checks reject missing policy/access, disabled RLS/immutability, excess mutation rights and a missing restrictive FK. Apply the reviewed migration and rerun the configured grants script before activating this backend. No application owner elevation or runtime-guard bypass is used.
+4. **Inherited alias properties crashed resolution.** Alias lookup now uses an own-property check and confirms canonical membership before label access. `constructor`, `__proto__`, `toString` and `hasOwnProperty` remain unsupported; create API requests receive field errors, and legacy values can enter review/readiness without a crash. Exact reviewed aliases and unverified-default rules are retained.
+5. **Local-only evidence was not repeated in CI.** A loopback-only fixture now uses the existing PostgreSQL 17 service in CI, with DBA setup separated from a generated restricted application LOGIN. Windows retains an isolated native-cluster fallback. The existing synthetic workflow runs runtime provisioning, the real capture/edit/API flow, correction UI, previews and geometry, and uploads synthetic evidence. Actual PDF checks use Poppler text/raster tools and the existing QR decoder; Windows may use its existing Python/pypdf runtime when `pdftotext` is absent. No dependency/lockfile changes were needed.
+
+### Current local automated evidence
+
+These results were rerun for the corrective source, separately from the original-head evidence later in this document. Logs have the `corrective-` prefix under `tmp/hssc-flow-20261020/`.
+
+| Check | Observed result |
+| --- | --- |
+| Restricted runtime provisioning | PASS, 3 independent disposable databases: group before migration; migration before group; alternate configured group. Each repeats the actual grants script, executes the actual correction service through a restricted LOGIN, reads its audit, rejects UPDATE/DELETE/TRUNCATE and student deletion, and proves a failed audit insert rolls back all student changes. Missing INSERT/policy, disabled RLS/trigger and extra UPDATE rights are rejected by the actual startup guard. |
+| Real admin edit form and HTTP API | PASS: HSSC group correction + photo + contact persist and reload; non-HSSC contact + photo persist; an injected second-file failure leaves the first upload and profile saved, and retry sends neither again; another staff member's intervening write returns 409, retains form values and starts no uploads. |
+| Complete HSSC flow | PASS, 11 integration groups through restricted application credentials, including class-only aliases/canonical groups, missing-group rejection, unrelated legacy contact edits, exactly one audit per explicit correction, API validation, review/readiness and final rendering recheck. |
+| Actual PDF identity | PASS: both single PDFs and two-page ready subset; A4 dimensions within browser point rounding; plain-language year/group extracted per page; requested ID order and decoded QR student/application pairing verified; no unresolved group labels. `*-evidence.json` records each page's pairing. |
+| PDF geometry | PASS: all 6 groups, 100 rows, 400 bubbles, timing/corner/version marks, photo and QR rectangles match pinned base within 0.1px in print layout; longest-label PDFs generated. |
+| Correction UI / previews / registration | PASS: correction/error/reload and role checks, explicit exclusions and exact ready-subset IDs at desktop/mobile widths, both retained selectors empty/required, registration closed; 18 preview scenarios. |
+| Existing affected checks | PASS: 150 class/group rendering pairs; admin/public registration validation; 4 roll-slip layout scenarios and 8 single-page PDF checks. |
+| Build / validation | PASS: frontend build, backend build and Prisma validation with synthetic variables. |
+| Application source type comparison | PASS: 71 baseline / 71 current diagnostics, zero added. Comparison now includes committed PR changes rather than only unstaged differences. |
+| Full repository lint | Existing failure retained (exit 2): unrelated attendance tests and historical temporary snapshots. No diagnostics for the new HSSC fixtures or changed HSSC application files. |
+
+### CI evidence and manual checks
+
+The [synthetic PostgreSQL 17 workflow for this branch](https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/workflows/db-runtime-isolation.yml?query=branch%3Acodex%2Fhssc-study-group-flow-20261020) is the authoritative CI record; use the exact head/run linked in PR #26 checks, not the earlier passing run at `1d20d0c8`. Its HSSC steps fail on test errors. The `hssc-study-group-evidence` artifact includes PDFs, rendered pages, screenshots, page/QR evidence and `verification-source.json` (checked-out revision/parents, tracked changes, platform and PostgreSQL version). PR merge checkouts record the merge revision and its head parent. Runtime security results are in the same job log. A local pass is not represented as a CI pass.
+
+Manual visual inspection in this pass: the partial-upload message clearly identifies saved details and offers retry, with details disabled; the rendered ICS OMR keeps both header lines readable and the grid/QR/portrait aligned. This is separate from automated PDF text, identity and geometry assertions.
+
+### Deployment verdict and outstanding production evidence
+
+**Source correction complete; not staged, deployed, migrated in production or merged.** Keep PR #26 draft. Ordinary authorized staff-session comparison for the three live detail APIs and the independently authorized restored-staging migration/grants rehearsal remain release requirements. No normal staff session or restored production staging fixture was supplied for this pass. No signing-secret probe or impersonation was attempted. The earlier 332 / 277 / 55 figures remain historical; no aliases or unresolved historical records were rewritten. Staff confirmation is still required for unresolved students.
+
+Rehearsal must run the matching migration, parameterized grants and runtime guard with the actual deployment group's name and rights before backend activation; main/frontend publication must remain coordinated with backend/schema readiness. Production deployment requires separate authorization.
+
+### Corrective-pass changed files (relative to reviewed head)
+
+- .github/workflows/db-runtime-isolation.yml
+- backend/ops/postgres/runtime-grants.sql
+- backend/src/modules/students/hsscContract.ts
+- backend/src/modules/students/students.service.ts
+- backend/src/security/dbRuntimeSafety.ts
+- backend/tests/HSSC_STUDY_GROUP_QA.md
+- backend/tests/exam-session-control.test.ts
+- backend/tests/hssc-edit.test.ts
+- backend/tests/hssc-fixture.ts
+- backend/tests/hssc-flow.test.ts
+- backend/tests/hssc-group-printing.test.ts
+- backend/tests/hssc-pdf-evidence.test.ts
+- backend/tests/hssc-runtime.test.ts
+- backend/tests/hssc-typecheck.cjs
+- src/components/admin/students/AdminWalkInModal.tsx
+
+## Original implementation evidence (preceding corrective review)
+
 ## Confirmed diagnosis and read-only repair dry run
 
 The real admin React form was submitted in an isolated browser. Before the fix, selecting `1st Year` and `Pre-Engineering` produced a serialized body with no `hsscGroup` property. After the fix, both `1st Year` / `Pre-Engineering` and `2nd Year` / `ICS` reach the real API, PostgreSQL row and reloaded detail response with the selected group.
@@ -72,7 +133,16 @@ This change is **implemented and locally validated, not staged or deployed**. Th
 
 No deployment, production migration, bulk correction, session reset, attendance change, placement move, score edit, document deletion, freeze-control change, auth architecture change or dependency/lockfile edit was performed.
 
-## Exact changed files
+## Full PR changed files (relative to base)
+
+- .github/workflows/db-runtime-isolation.yml
+- backend/ops/postgres/runtime-grants.sql
+- backend/src/security/dbRuntimeSafety.ts
+- backend/tests/exam-session-control.test.ts
+- backend/tests/hssc-edit.test.ts
+- backend/tests/hssc-fixture.ts
+- backend/tests/hssc-pdf-evidence.test.ts
+- backend/tests/hssc-runtime.test.ts
 
 - backend/prisma/schema.prisma
 - backend/prisma/migrations/20261020120000_hssc_group_correction_audit/migration.sql

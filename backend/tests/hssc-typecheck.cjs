@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const root = path.resolve(__dirname, '../..');
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true }).trim();
 const tracked = git('ls-tree', '-r', '--name-only', 'origin/main', 'src', 'backend/src', 'App.tsx', 'index.tsx', 'types.ts').split('\n').filter(f => /\.tsx?$/.test(f));
-const changed = git('diff', '--name-only').split('\n').filter(f => tracked.includes(f));
+const changed = git('diff', '--name-only', 'origin/main', '--', 'src', 'backend/src').split('\n').filter(f => tracked.includes(f));
 const originals = new Map(changed.map(f => [path.join(root, f).replace(/\\/g, '/').toLowerCase(), git('show', 'origin/main:' + f)]));
 const config = ts.readConfigFile(path.join(root, 'tsconfig.json'), ts.sys.readFile);
 const { options } = ts.parseJsonConfigFileContent(config.config, ts.sys, root);

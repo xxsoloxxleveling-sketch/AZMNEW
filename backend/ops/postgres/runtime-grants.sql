@@ -120,7 +120,7 @@ GRANT USAGE ON SCHEMA public TO :"grant_role";
 -- supplies a forged cancellation-audit context. Other application tables
 -- retain their existing DML surface. Database triggers remain mandatory.
 SELECT format('GRANT %s ON TABLE %I.%I TO %I',
-  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent') THEN 'SELECT' WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening')
+  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent') THEN 'SELECT' WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','StudentStudyGroupCorrection')
     THEN 'SELECT, INSERT'
     WHEN c.relname IN ('Attendance','AttendanceSession','AttendanceSessionCandidate') THEN 'SELECT, INSERT, UPDATE'
     ELSE 'SELECT, INSERT, UPDATE, DELETE'
@@ -139,6 +139,9 @@ GRANT EXECUTE ON FUNCTION public.azm_exam_capability_probe(TEXT,TEXT) TO :"grant
 -- backend group needs an explicit RLS policy after moving away from table ownership.
 DROP POLICY IF EXISTS azm_backend_private_documents ON public."StudentDocument";
 SELECT format('CREATE POLICY azm_backend_private_documents ON public."StudentDocument" FOR ALL TO %I USING (true) WITH CHECK (true)',:'grant_role') \gexec
+-- Reconcile the configured backend group after migrations, regardless of role creation order.
+DROP POLICY IF EXISTS azm_backend_study_group_audit ON public."StudentStudyGroupCorrection";
+SELECT format('CREATE POLICY azm_backend_study_group_audit ON public."StudentStudyGroupCorrection" FOR ALL TO %I USING (true) WITH CHECK (true)',:'grant_role') \gexec
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"grant_role";
 GRANT :"grant_role" TO :"login_role" WITH INHERIT TRUE, SET FALSE;
 
@@ -167,6 +170,15 @@ SELECT (
   AND NOT has_table_privilege(:'login_role','public."AttendanceSessionReopening"','UPDATE')
   AND NOT has_table_privilege(:'login_role','public."AttendanceSessionReopening"','DELETE')
   AND NOT has_table_privilege(:'login_role','public."AttendanceSessionReopening"','TRUNCATE')
+  AND has_table_privilege(:'login_role','public."StudentStudyGroupCorrection"','SELECT')
+  AND has_table_privilege(:'login_role','public."StudentStudyGroupCorrection"','INSERT')
+  AND NOT has_table_privilege(:'login_role','public."StudentStudyGroupCorrection"','UPDATE,DELETE,TRUNCATE,TRIGGER')
+  AND EXISTS (SELECT 1 FROM pg_class WHERE oid='public."StudentStudyGroupCorrection"'::regclass AND relrowsecurity)
+  AND EXISTS (SELECT 1 FROM pg_policy WHERE polrelid='public."StudentStudyGroupCorrection"'::regclass
+    AND polname='azm_backend_study_group_audit' AND (SELECT oid FROM pg_roles WHERE rolname=:'grant_role') = ANY(polroles)
+    AND polcmd='*' AND pg_get_expr(polqual,polrelid)='true' AND pg_get_expr(polwithcheck,polrelid)='true')
+  AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='public."StudentStudyGroupCorrection"'::regclass
+    AND tgname='StudentStudyGroupCorrection_immutable' AND tgenabled IN ('O','A') AND tgtype=58)
   AND NOT EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relname='_prisma_migrations'

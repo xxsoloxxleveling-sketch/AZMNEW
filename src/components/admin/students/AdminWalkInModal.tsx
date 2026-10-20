@@ -72,6 +72,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
   const [groupChanged, setGroupChanged] = useState(false);
   const [groupError, setGroupError] = useState('');
   const [correctionBasis, setCorrectionBasis] = useState('');
+  const [savedEdit, setSavedEdit] = useState<MockStudent | null>(null);
   const loadedStudent = useRef<MockStudent | null>(null);
 
   const dialog = useRef<HTMLDivElement>(null);
@@ -144,12 +145,12 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
     setSameContact(true);
     setCreated(null);
     setProgress('');
-    setGroupChanged(false); setGroupError(''); setCorrectionBasis('');
+    setGroupChanged(false); setGroupError(''); setCorrectionBasis(''); setSavedEdit(null);
   };
 
   useEffect(() => {
     if (!isOpen) return;
-    setGroupChanged(false); setGroupError(''); setCorrectionBasis('');
+    setGroupChanged(false); setGroupError(''); setCorrectionBasis(''); setSavedEdit(null);
     loadedStudent.current = studentToEdit;
     if (isEdit && studentToEdit) {
       const initData = getFormDataFromStudent(studentToEdit);
@@ -202,7 +203,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
 
   const close = () => {
     if (submitting.current) return;
-    if (isFormDirty() && !window.confirm(isEdit ? 'Discard unsaved changes?' : 'Discard this unsaved student registration?')) {
+    if (isFormDirty() && !window.confirm(savedEdit ? 'Close with pending attachments? Student details and confirmed uploads are already saved.' : isEdit ? 'Discard unsaved changes?' : 'Discard this unsaved student registration?')) {
       return;
     }
     reset();
@@ -317,6 +318,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
 
     submitting.current = true;
     setBusy(true);
+    let editDetailsCommitted = !!savedEdit;
 
     try {
       if (isEdit && studentToEdit) {
@@ -332,55 +334,61 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
           }
         }
 
-        // Upload any newly provided attachments
-        if (Object.keys(attachments).length > 0) {
-          for (const [key, attachment] of Object.entries(attachments) as [string, Attachment][]) {
-            setProgress(`Uploading updated ${documentTypes.find(([id]) => id === key)?.[1] || key}…`);
-            await mockApi.uploadStudentDocument({
-              cnicOrBForm: data.cnicOrBForm,
-              studentId: studentToEdit.id,
-              docType: key,
-              fileName: attachment.file.name,
-              contentType: attachment.file.type,
-              fileData: await readFile(attachment.file),
-            });
-          }
+        // Save against the loaded version before document writes change updatedAt.
+        // After a partial upload failure, retry only the remaining attachments.
+        let updatedStudent = savedEdit;
+        if (!updatedStudent) {
+          setProgress('Saving changes…');
+          const updatePayload: Record<string, any> = {
+            expectedUpdatedAt: loadedStudent.current?.updatedAt,
+            fullName: data.fullName.trim(),
+            fatherName: data.fatherName.trim(),
+            gender: data.gender,
+            dateOfBirth: data.dateOfBirth,
+            cnicOrBForm: data.cnicOrBForm.trim(),
+            nationality: data.nationality.trim(),
+            religion: data.religion?.trim() || null,
+            parentMobile: data.parentMobile.trim(),
+            studentMobile: data.studentMobile?.trim() || null,
+            whatsapp: data.whatsapp?.trim() || null,
+            email: data.email?.trim() || null,
+            address: data.address.trim(),
+            district: data.district.trim(),
+            province: data.province.trim(),
+            currentClass: data.currentClass.trim(),
+            schoolName: data.schoolName.trim(),
+            boardOrUniversity: data.boardOrUniversity.trim(),
+            currentRollNo: data.currentRollNo?.trim() || null,
+            scholarshipCategory: data.scholarshipCategory,
+            guardianOccupation: data.guardianOccupation?.trim() || null,
+            guardianMonthlyIncome: data.guardianMonthlyIncome === '' ? undefined : Number(data.guardianMonthlyIncome),
+            emergencyContact: sameContact ? data.parentMobile.trim() : data.emergencyContact.trim(),
+            emergencyRelation: data.emergencyRelation.trim(),
+            registrationCentre: data.registrationCentre?.trim() || null,
+            referralSource: data.referralSource?.trim() || null,
+            ...(hssc && groupChanged ? { hsscGroup: data.hsscGroup, correctionBasis: correctionBasis.trim(), expectedUpdatedAt: loadedStudent.current?.updatedAt } : {}),
+            bsDepartment: data.currentClass === 'BS' ? data.bsDepartment?.trim() || null : null,
+            bsSemester: data.currentClass === 'BS' ? data.bsSemester?.trim() || null : null,
+          };
+
+          updatedStudent = await mockApi.updateStudent(studentToEdit.id, updatePayload);
+          editDetailsCommitted = true;
+          setSavedEdit(updatedStudent);
+          window.dispatchEvent(new Event('students-updated'));
         }
-
-        setProgress('Saving changes…');
-        const updatePayload: Record<string, any> = {
-          expectedUpdatedAt: loadedStudent.current?.updatedAt,
-          fullName: data.fullName.trim(),
-          fatherName: data.fatherName.trim(),
-          gender: data.gender,
-          dateOfBirth: data.dateOfBirth,
-          cnicOrBForm: data.cnicOrBForm.trim(),
-          nationality: data.nationality.trim(),
-          religion: data.religion?.trim() || null,
-          parentMobile: data.parentMobile.trim(),
-          studentMobile: data.studentMobile?.trim() || null,
-          whatsapp: data.whatsapp?.trim() || null,
-          email: data.email?.trim() || null,
-          address: data.address.trim(),
-          district: data.district.trim(),
-          province: data.province.trim(),
-          currentClass: data.currentClass.trim(),
-          schoolName: data.schoolName.trim(),
-          boardOrUniversity: data.boardOrUniversity.trim(),
-          currentRollNo: data.currentRollNo?.trim() || null,
-          scholarshipCategory: data.scholarshipCategory,
-          guardianOccupation: data.guardianOccupation?.trim() || null,
-          guardianMonthlyIncome: data.guardianMonthlyIncome === '' ? null : Number(data.guardianMonthlyIncome),
-          emergencyContact: sameContact ? data.parentMobile.trim() : data.emergencyContact.trim(),
-          emergencyRelation: data.emergencyRelation.trim(),
-          registrationCentre: data.registrationCentre?.trim() || null,
-          referralSource: data.referralSource?.trim() || null,
-          ...(hssc && groupChanged ? { hsscGroup: data.hsscGroup, correctionBasis: correctionBasis.trim(), expectedUpdatedAt: loadedStudent.current?.updatedAt } : {}),
-          bsDepartment: data.currentClass === 'BS' ? data.bsDepartment?.trim() || null : null,
-          bsSemester: data.currentClass === 'BS' ? data.bsSemester?.trim() || null : null,
-        };
-
-        const updatedStudent = await mockApi.updateStudent(studentToEdit.id, updatePayload);
+        for (const [key, attachment] of Object.entries(attachments) as [string, Attachment][]) {
+          setProgress(`Uploading updated ${documentTypes.find(([id]) => id === key)?.[1] || key}…`);
+          const stored = await mockApi.uploadStudentDocument({
+            cnicOrBForm: data.cnicOrBForm, studentId: studentToEdit.id, docType: key,
+            fileName: attachment.file.name, contentType: attachment.file.type,
+            fileData: await readFile(attachment.file),
+          });
+          if (!stored.path) throw new Error(`Upload of ${attachment.file.name} was not confirmed.`);
+          URL.revokeObjectURL(attachment.preview);
+          setAttachments(prev => { const remaining = { ...prev }; delete remaining[key]; return remaining; });
+        }
+        // Refresh for display only; never use this fresh version to resubmit a stale form.
+        updatedStudent = await mockApi.getStudentById(studentToEdit.id);
         window.dispatchEvent(new Event('students-updated'));
         onSuccess(updatedStudent);
         reset();
@@ -459,7 +467,9 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
     } catch (err) {
       if ((err as any).details?.hsscGroup) setGroupError(STUDY_GROUP_REQUIRED);
       if ((err as any).details?.correctionBasis) setGroupError((err as any).details.correctionBasis.join(' '));
-      setError(err instanceof Error ? err.message : isEdit ? 'Changes could not be saved. Please retry.' : 'Registration could not be saved. Your details are still here; please retry.');
+      const message = err instanceof Error ? err.message : isEdit ? 'Changes could not be saved. Please retry.' : 'Registration could not be saved. Your details are still here; please retry.';
+      setError(isEdit && editDetailsCommitted
+        ? `Student details saved. ${message} Retry remaining uploads; confirmed files will not be uploaded again. Close and reopen to edit details further.` : message);
     } finally {
       submitting.current = false;
       setBusy(false);
@@ -551,7 +561,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
             </nav>
 
             <div className="overflow-y-auto px-4 py-5 sm:px-7">
-              <fieldset disabled={busy} className="space-y-5">
+              <fieldset disabled={busy || !!savedEdit} className="space-y-5">
                 {section('admin-Personal', 'Personal & contact information', (
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {field('fullName', 'Student full name', true)}
@@ -783,7 +793,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
                     className="flex items-center gap-2 rounded-xl bg-[#185b9d] hover:bg-[#13497d] px-5 py-2 text-xs font-bold text-white transition cursor-pointer disabled:opacity-60"
                   >
                     {busy ? <IconLoader size={18} className="animate-spin" /> : <IconCheckCircle size={18} />}
-                    {busy ? (isEdit ? 'Saving changes…' : 'Saving…') : (isEdit ? 'Save Changes' : 'Register Student & Issue Challan')}
+                    {busy ? (isEdit ? 'Saving changes…' : 'Saving…') : (savedEdit ? 'Retry remaining uploads' : isEdit ? 'Save Changes' : 'Register Student & Issue Challan')}
                   </button>
                 </div>
               </div>

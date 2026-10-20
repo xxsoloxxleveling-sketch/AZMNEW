@@ -48,6 +48,7 @@ async function run() {
         process.env.DIRECT_URL = url.toString();
         process.env.NODE_ENV = 'test';
         await admin.query(`CREATE POLICY azm_backend_private_documents ON public."StudentDocument" FOR ALL TO "${role}" USING (true) WITH CHECK (true)`);
+        await admin.query(`REVOKE UPDATE,DELETE,TRUNCATE ON "StudentStudyGroupCorrection" FROM "${role}"; DROP POLICY IF EXISTS azm_backend_study_group_audit ON "StudentStudyGroupCorrection"; CREATE POLICY azm_backend_study_group_audit ON "StudentStudyGroupCorrection" FOR ALL TO "${role}" USING (true) WITH CHECK (true)`);
         const { PrismaClient } = await import('@prisma/client');
         db = new PrismaClient();
         const { ExamControlService } = await import('../src/modules/attendance/examControl.service');
