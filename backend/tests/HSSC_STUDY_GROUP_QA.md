@@ -47,6 +47,7 @@ Use existing dependencies. On Windows, set `PUPPETEER_EXECUTABLE_PATH` to the in
 | `backend/tests/hssc-group-preview.test.ts` | PASS: 18 public/roll/OMR desktop/mobile scenarios, saved/missing/non-HSSC states and no page overflow |
 | `backend/tests/hssc-correction-ui.test.ts` | PASS: retained selectors start empty; registration stays closed; correction error retains selection, save/refetch/reload updates preview, unauthorized action absent, desktop/mobile ready-subset request contains exactly the chosen IDs |
 | `backend/tests/hssc-pdf-geometry.test.ts` | PASS: six groups compared to base source; 100 question rows, 400 bubbles, timing/version marks and portrait/QR rectangles match within 0.1px, including longest labels |
+| Existing roll-slip layout and admin-registration regressions | PASS: four desktop/mobile/long-details scenarios, eight one-page PDF checks; public document requirements and staff registration flexibility retained |
 | Actual PDF extraction/rendering | PASS: A4, one page per single, two pages in explicit subset order, resolved group text, no unresolved/measurement text, visible header/photo fixture/QR and no overlap; both bulk QR codes decode to the exact manifest candidate/application pairing |
 | Frontend `npm run build` | PASS |
 | Backend `npm run build` | PASS, including existing browser provisioning and TypeScript build |
@@ -54,6 +55,8 @@ Use existing dependencies. On Windows, set `PUPPETEER_EXECUTABLE_PATH` to the in
 | `backend/tests/hssc-typecheck.cjs` | PASS: application sources have 71 baseline and 71 current diagnostics, zero added |
 | Repository-wide `npm run lint` / `tsc --noEmit` | Existing failure: includes unrelated backend test errors and temporary historical snapshots; not represented as passing |
 | `git diff --check` | PASS |
+
+GitHub's initial restricted-login job passed backend typing and the session-control checks, then stopped because the older roll-slip layout fixture omitted its HSSC group while waiting for final printing to become enabled. The fixture now supplies explicit `Pre-Engineering`; unresolved-group behavior remains covered by the HSSC preview/readiness regressions.
 
 Temporary logs, sanitized aggregate inventory, screenshots, PDF files and synthetic candidate manifests are under `tmp/hssc-flow-20261020/`; they are not production student exports and are not part of the application release.
 
@@ -81,6 +84,7 @@ No deployment, production migration, bulk correction, session reset, attendance 
 - backend/src/modules/students/hsscContract.ts
 - backend/tests/hssc-group-preview.test.ts
 - backend/tests/hssc-group-printing.test.ts
+- backend/tests/roll-slip-print-layout.test.ts
 - backend/tests/hssc-capture.test.ts
 - backend/tests/hssc-flow.test.ts
 - backend/tests/hssc-correction-ui.test.ts

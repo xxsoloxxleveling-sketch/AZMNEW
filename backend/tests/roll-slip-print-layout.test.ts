@@ -34,7 +34,7 @@ async function run() {
     if (pathname.endsWith('/photo-thumbnail')) {res.setHeader('Content-Type','image/png'); return res.end(photo);}
     if (pathname.endsWith('/search-slip')) return json({success:true,data:{
       applicationId:'APP-SYNTHETIC-1', rollNo:'AZMVS-2026-0100', candidateName:long?'Synthetic Candidate With A Very Long Family Name':'Synthetic Candidate',
-      fatherName:long?'Synthetic Guardian With A Very Long Family Name':'Synthetic Guardian', cnicBForm:cnic, classLevel:'Class 11th (HSSC-I)',
+      fatherName:long?'Synthetic Guardian With A Very Long Family Name':'Synthetic Guardian', cnicBForm:cnic, classLevel:'Class 11th (HSSC-I)', hsscGroup:'Pre-Engineering',
       testCenter:long?'AZM Examination Centre - Dubai International School and College Boys Campus (Mansehra)':'Synthetic Examination Centre',
       centerAddress:long?'Near NHA Office Daara Bypass Mansehra, Main Campus Examination Building':'Synthetic City',
       examDate:'Sunday, 15 November 2026', reportingTime:'07:30 AM', examStartTime:'To be announced',
