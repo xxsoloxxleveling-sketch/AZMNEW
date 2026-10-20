@@ -1,9 +1,11 @@
+import { StudyGroupCorrectionDialog } from './StudyGroupCorrectionDialog';
+import { useAuth } from '../../../lib/authContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, Download, AlertTriangle, User, Loader2, CheckCircle2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
 import { apiFetchProtectedObjectUrl, apiFetch } from '../../../lib/apiClient';
-import { getPrintableHsscGroup } from '../../../utils/hsscGroup';
+import { getPrintableHsscGroup, resolveHsscGroup, getStudyClassLabel } from '../../../utils/hsscGroup';
 
 interface StudentOmrModalProps {
   student: MockStudent | null;
@@ -16,24 +18,29 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const { role } = useAuth();
+  const [correctGroup, setCorrectGroup] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [revision, setRevision] = useState(0);
+  useEffect(() => { const refresh = () => setRevision(value => value + 1); window.addEventListener('students-updated', refresh); return () => window.removeEventListener('students-updated', refresh); }, []);
   const [prepared, setPrepared] = useState<MockStudent | null>(null);
   const student = prepared?.id === initialStudent?.id ? prepared : initialStudent;
   useEffect(() => {
     if (!isOpen || !initialStudent) return;
     let active = true;
-    setPrepared(null);
-    apiFetch<MockStudent>(`/api/students/${initialStudent.id}/prepare-print`, { method: 'POST' })
+    setPrepared(null); setPreviewError('');
+    apiFetch<MockStudent>(`/api/students/${initialStudent.id}`, {})
       .then(value => { if (active) setPrepared(value); })
-      .catch(error => { if (active) alert(error.message || 'Unable to reserve roll number.'); });
+      .catch(error => { if (active) setPreviewError(error.message || 'Unable to load preview.'); });
     return () => { active = false; };
-  }, [initialStudent?.id, isOpen]);
+  }, [initialStudent?.id, isOpen, revision]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
 
   const isProvisional = !student?.rollNumber || student?.rollNumberStatus === 'PROVISIONAL';
-  const displayRoll = prepared?.displayRollNumber || student?.rollNumber || 'Reserving…';
+  const displayRoll = student?.displayRollNumber || student?.rollNumber || `PROV-${student?.applicationNo || ''}`;
 
   // Load photo
   useEffect(() => {
@@ -95,13 +102,16 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
 
   if (!isOpen || !student) return null;
   const hsscGroup = getPrintableHsscGroup(student);
+  const groupBlocked = !prepared || !resolveHsscGroup(student).ready;
 
   const handlePrint = async () => {
+    if (groupBlocked) return;
     try { await mockApi.printStudentOmrPdf(student.id); }
     catch (error: any) { alert(error.message || 'Unable to print document.'); }
   };
 
   const handleDownloadPdf = async () => {
+    if (groupBlocked) return;
     setIsDownloadingPdf(true);
     try {
       await mockApi.downloadStudentOmrPdf(student.id, displayRoll);
@@ -148,8 +158,13 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
+      {correctGroup && <StudyGroupCorrectionDialog student={student} authorized={role === 'ADMIN' || role === 'SUPER_ADMIN'} onClose={() => setCorrectGroup(false)} onSaved={setPrepared} />}
       {/* Modal Card */}
       <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[96vh]">
+        {(previewError || !resolveHsscGroup(student).ready) && <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 print:hidden">
+          <span role="status">{previewError || 'Study group needs verification'}</span>
+          {(role === 'ADMIN' || role === 'SUPER_ADMIN') && !resolveHsscGroup(student).ready && <button type="button" onClick={() => setCorrectGroup(true)} className="ml-3 font-semibold underline">Update study group</button>}
+        </div>}
         {/* Top Action Bar (Screen Only) */}
         <div className="flex items-center justify-between px-6 py-3.5 border-b border-slate-200 bg-slate-900 text-white print:hidden">
           <div className="flex items-center gap-3">
@@ -169,7 +184,8 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              disabled={groupBlocked}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Printer className="w-4 h-4" />
               <span>Print OMR (A4)</span>
@@ -177,7 +193,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
 
             <button
               onClick={handleDownloadPdf}
-              disabled={isDownloadingPdf}
+              disabled={isDownloadingPdf || groupBlocked}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
             >
               {isDownloadingPdf ? (
@@ -270,7 +286,7 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
                 </div>
                 <div>
                   <span className="font-bold text-slate-500 uppercase text-[9px] block">Class / Category</span>
-                  <span className="font-bold text-slate-800">{student.currentClass}</span>
+                  <span className="font-bold text-slate-800">{getStudyClassLabel(student.currentClass)}</span>
                   {hsscGroup && <span className="block font-bold text-slate-800">HSSC Group: {hsscGroup}</span>}
                 </div>
                 <div className="col-span-2 pt-1 border-t border-slate-200">
@@ -401,7 +417,8 @@ export const StudentOmrModal: React.FC<StudentOmrModalProps> = ({
             </button>
             <button
               onClick={handlePrint}
-              className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              disabled={groupBlocked}
+              className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Printer className="w-4 h-4" />
               <span>Print OMR Sheet</span>

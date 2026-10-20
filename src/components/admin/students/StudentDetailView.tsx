@@ -1,3 +1,5 @@
+import { StudyGroupCorrectionDialog } from './StudyGroupCorrectionDialog';
+import { resolveHsscGroup, getStudyClassLabel } from '../../../utils/hsscGroup';
 import React, { useState, useEffect } from 'react';
 import { isStudentDocumentEntry } from '../../../utils/studentDocuments';
 import {
@@ -225,6 +227,7 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: initialStudent, onBack }) => {
   const { role } = useAuth();
   const [student, setStudent] = useState<MockStudent>(initialStudent);
+  const [correctGroup, setCorrectGroup] = useState(false);
   const [profilePhotoBlobUrl, setProfilePhotoBlobUrl] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingSlip, setIsDownloadingSlip] = useState(false);
@@ -700,10 +703,15 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
                 </div>
                 <div>
                   <span className="block text-[11px] text-slate-500">Current Class &amp; Board</span>
-                  <strong className="text-slate-900">{student.currentClass || 'Not provided'}</strong>
+                  <strong className="text-slate-900">{getStudyClassLabel(student.currentClass) || 'Not provided'}</strong>
                   {student.boardOrUniversity && <span className="text-slate-600"> • {student.boardOrUniversity}</span>}
                 </div>
               </div>
+              {resolveHsscGroup(student).label && <div className="border-t border-slate-200 py-3 text-xs">
+                <span className="mr-2 text-slate-500">Study group:</span>
+                <strong className={resolveHsscGroup(student).ready ? 'text-slate-900' : 'text-amber-800'}>{resolveHsscGroup(student).label}</strong>
+                {(role === 'ADMIN' || role === 'SUPER_ADMIN') && <button type="button" onClick={() => setCorrectGroup(true)} className="ml-3 font-semibold text-[#185b9d] underline focus:ring-2 focus:ring-[#185b9d]">Update study group</button>}
+              </div>}
               {student.academicRecords && student.academicRecords.length > 0 ? (
                 <div className="border border-slate-100 rounded-2xl overflow-hidden">
                   <table className="w-full text-left text-xs">
@@ -1128,6 +1136,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
         onClose={() => setIsOmrModalOpen(false)}
       />
 
+      {correctGroup && <StudyGroupCorrectionDialog student={student} authorized={role === 'ADMIN' || role === 'SUPER_ADMIN'} onClose={() => setCorrectGroup(false)} onSaved={value => { setStudent(value); void loadFullStudent(); }} />}
       {/* Edit Student Modal */}
       {isEditModalOpen && (
         <AdminWalkInModal

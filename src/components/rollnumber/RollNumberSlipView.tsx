@@ -1,5 +1,5 @@
 import { extractSignedAttendanceToken } from '../../utils/signedAttendanceQr';
-import { getPrintableHsscGroup } from '../../utils/hsscGroup';
+import { getPrintableHsscGroup, resolveHsscGroup, getStudyClassLabel } from '../../utils/hsscGroup';
 import React, { useState, useEffect } from 'react';
 import { fetchVerifiedCandidatePortrait } from '../../services/candidatePortrait';
 import QRCode from 'qrcode';
@@ -39,6 +39,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
   const [cnicOrBForm, setCnicOrBForm] = useState<string>('');
   const [selectedSlip, setSelectedSlip] = useState<RollNumberSlip | null>(null);
   const hsscGroup = getPrintableHsscGroup({ currentClass: selectedSlip?.classLevel, hsscGroup: selectedSlip?.hsscGroup });
+  const groupReady = resolveHsscGroup({ currentClass: selectedSlip?.classLevel, hsscGroup: selectedSlip?.hsscGroup }).ready;
   const [verifiedCnic, setVerifiedCnic] = useState('');
   const [portraitUrl, setPortraitUrl] = useState<string | null>(null);
   const [portraitStatus, setPortraitStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
@@ -151,7 +152,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
   const printDocument = () => {
     // Do not print a slip before the private portrait has finished loading.
-    if (portraitStatus === 'loading' || qrPending) return;
+    if (portraitStatus === 'loading' || qrPending || !groupReady) return;
     window.print();
   };
 
@@ -383,7 +384,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
               <button
                 onClick={printDocument}
-                disabled={portraitStatus === 'loading' || qrPending}
+                disabled={portraitStatus === 'loading' || qrPending || !groupReady}
                 id="btn-print-slip"
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
@@ -393,7 +394,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
               <button
                 onClick={downloadSlipAlert}
-                disabled={portraitStatus === 'loading' || qrPending}
+                disabled={portraitStatus === 'loading' || qrPending || !groupReady}
                 id="btn-download-slip"
                 className="px-4 py-2 bg-[#185b9d] hover:bg-[#13497e] text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all focus:outline-hidden cursor-pointer disabled:opacity-50 disabled:cursor-wait"
               >
@@ -405,6 +406,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
 
 
+          {!groupReady && <p role="status" className="border-y border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 no-print">Study group needs verification. Contact administration before printing.</p>}
           {/* Document Canvas Container */}
           <div className="printable-document roll-number-slip bg-white rounded-3xl border-2 border-slate-300 shadow-xl p-6 sm:p-10 relative overflow-hidden bg-guilloche">
             {/* Guilloche Security Watermark Crest in Center Background */}
@@ -491,7 +493,7 @@ export const RollNumberSlipView: React.FC<RollNumberSlipViewProps> = ({ onSelect
 
                   <div>
                     <span className="text-slate-500 text-[10px] uppercase font-bold block">Class Level:</span>
-                    <span className="font-bold text-emerald-800 text-xs">{selectedSlip.classLevel}</span>
+                    <span className="font-bold text-emerald-800 text-xs">{getStudyClassLabel(selectedSlip.classLevel)}</span>
                     {hsscGroup && <span className="block text-xs font-bold text-slate-800">HSSC Group: {hsscGroup}</span>}
                   </div>
 

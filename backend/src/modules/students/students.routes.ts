@@ -163,6 +163,7 @@ router.post(
 router.post(
   '/bulk-omr-pdf',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateBody(selectedStudentsPdfSchema),
   studentsController.getBulkOmrPdf
 );
 
@@ -170,7 +171,15 @@ router.post(
 router.post(
   '/bulk-roll-slips-pdf',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateBody(selectedStudentsPdfSchema),
   studentsController.getBulkRollSlipsPdf
+);
+
+router.post(
+  '/print-readiness',
+  authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
+  validateBody(selectedStudentsPdfSchema),
+  studentsController.printReadiness
 );
 
 router.get(

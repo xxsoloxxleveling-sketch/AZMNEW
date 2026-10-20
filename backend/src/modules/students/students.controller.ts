@@ -212,7 +212,8 @@ export class StudentsController {
 
   async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const updated = await studentsService.updateStudent(req.params.id, req.body);
+      const updated = await studentsService.updateStudent(req.params.id, req.body,
+        req.user ? { userId: req.user.id, name: req.user.name, role: req.user.role } : undefined);
       res.status(200).json({
         success: true,
         message: 'Student updated successfully',
@@ -221,6 +222,12 @@ export class StudentsController {
     } catch (error) {
       next(error);
     }
+  }
+
+  async printReadiness(req: Request, res: Response, next: NextFunction) {
+    try {
+      res.json({ success: true, data: await studentsService.getPrintReadiness(req.body.studentIds) });
+    } catch (error) { next(error); }
   }
 
   async approvePayment(req: Request, res: Response, next: NextFunction) {

@@ -27,13 +27,8 @@ class PdfGenerationQueue {
   }
 }
 
-export function getPrintableHsscGroup(student: { currentClass?: string | null; hsscGroup?: string | null }): string | null {
-  const grade = (student.currentClass || '').trim();
-  if (!/^(?:HSSC[-\s]?(?:I{1,2}|[12])(?:\s*\(Class\s+1[12](?:th)?\))?|(?:first|second|1st|2nd)\s+year|(?:Class\s+)?1[12](?:th)?(?:\s*\(HSSC[-\s]?I{1,2}\))?)$/i.test(grade)) return null;
-  const value = (student.hsscGroup || '').trim();
-  const options = ['Pre-Medical', 'Pre-Engineering', 'ICS', 'FA', 'I.Com', 'General Science'];
-  return options.find(group => group.toLowerCase() === value.toLowerCase()) || 'Not specified';
-}
+import { getPrintableHsscGroup, getStudyClassLabel, assertStudyGroupsReady, HSSC_GROUP_OPTIONS } from '../students/hsscContract';
+export { getPrintableHsscGroup } from '../students/hsscContract';
 
 const pdfQueue = new PdfGenerationQueue();
 
@@ -414,7 +409,7 @@ export class PdfService {
     <table class="grid-table">
       <tr>
         <td class="label">Current Class / Level:</td>
-        <td class="value" colspan="3"><strong>${student.currentClass || ''}</strong> ${student.hsscGroup ? `(${student.hsscGroup})` : ''} ${student.bsDepartment ? `[Dept: ${student.bsDepartment}, Sem: ${student.bsSemester || '1st'}]` : ''}</td>
+        <td class="value" colspan="3"><strong>${this.escapeHtml(getStudyClassLabel(student.currentClass))}</strong> ${student.hsscGroup ? `(${student.hsscGroup})` : ''} ${student.bsDepartment ? `[Dept: ${student.bsDepartment}, Sem: ${student.bsSemester || '1st'}]` : ''}</td>
       </tr>
       <tr>
         <td class="label">Present School / College:</td>
@@ -595,13 +590,14 @@ export class PdfService {
    * Generates filled HTML template for the official Single-Page A4 Roll Number Slip Exam Entry Pass
    */
   generateRollSlipHtml(student: any, qrDataUrl?: string, photoBase64?: string): string {
+    assertStudyGroupsReady([student]);
     const isProvisional = !student.rollNumber;
     const rollNo = student.rollNumber || student.displayRollNumber || student.officeUse?.testRollNo || (student.applicationNo ? `PROV-${student.applicationNo}` : 'PROVISIONAL');
     const appNo = student.applicationNo || student.id || 'APP-2026';
     const candName = (student.fullName || '').toUpperCase();
     const fatherName = (student.fatherName || '').toUpperCase();
     const cnic = student.cnicOrBForm || 'N/A';
-    const classLevel = student.currentClass || 'SSC-II (Class 10th)';
+    const classLevel = getStudyClassLabel(student.currentClass) || 'SSC-II (Class 10th)';
     const assigned = student.placementStatus === 'ASSIGNED' && Boolean(student.assignedHallId);
     const testCenter = assigned && student.testCenterName || 'To be assigned';
     const centerAddress = assigned && student.testCenterAddress || '';
@@ -1271,15 +1267,21 @@ export class PdfService {
    * Uses exact mm-based fixed geometry (210mm x 297mm) matching browser print and scanner coordinates.
    */
   generateOmrSheetHtml(student: any, qrDataUrl = '', photoBase64?: string): string {
+    assertStudyGroupsReady([student]);
     const isProvisional = !student.rollNumber;
     const rollNo = student.rollNumber || student.displayRollNumber || student.officeUse?.testRollNo || (student.applicationNo ? `PROV-${student.applicationNo}` : 'PROVISIONAL');
     const appNo = student.applicationNo || student.id || 'APP-2026';
     const candName = (student.fullName || '').toUpperCase();
     const fatherName = (student.fatherName || '').toUpperCase();
     const cnic = student.cnicOrBForm || 'N/A';
-    const classLevel = student.currentClass || 'SSC-II (Class 10th)';
+    const classLevel = getStudyClassLabel(student.currentClass) || 'SSC-II (Class 10th)';
     const hsscGroup = getPrintableHsscGroup(student);
     const groupOrSubject = hsscGroup || student.bsDepartment || 'Not specified';
+    // Preserve the existing intrinsic table measurements: changing this cell's
+    // text width/height would move all optical bubbles below the candidate header.
+    // The invisible measurement text is never painted into the PDF or read by AT.
+    const legacyGroupWidth = HSSC_GROUP_OPTIONS.find(o => o.value.toLowerCase() === (student.hsscGroup || '').trim().toLowerCase())?.value || 'Not specified';
+    const studyGroupCell = hsscGroup ? `<span aria-hidden="true" style="visibility:hidden">${this.escapeHtml(student.currentClass || 'SSC-II (Class 10th)')} (${legacyGroupWidth})</span><span style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;font-size:6.5pt;line-height:9px;white-space:nowrap"><span>${this.escapeHtml(classLevel)}</span><span>${this.escapeHtml(groupOrSubject)}</span></span>` : `${classLevel} (${groupOrSubject})`;
     const assigned = student.placementStatus === 'ASSIGNED' && Boolean(student.assignedHallId);
     const testCenter = assigned && student.testCenterName || 'To be assigned';
     const hallName = assigned && student.assignedHall || 'To be assigned';
@@ -1824,7 +1826,7 @@ export class PdfService {
         </tr>
         <tr>
           <td class="dt-label">${hsscGroup ? 'Class / HSSC Group:' : 'Class / Group:'}</td>
-          <td class="dt-val">${classLevel} (${groupOrSubject})</td>
+          <td class="dt-val" style="position:relative">${studyGroupCell}</td>
           <td class="dt-label">Test Center:</td>
           <td class="dt-val">${testCenter}</td>
         </tr>

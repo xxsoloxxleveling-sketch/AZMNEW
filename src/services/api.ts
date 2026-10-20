@@ -1,3 +1,4 @@
+import { classifyHsscClass } from '../utils/hsscGroup';
 import {
   StudentApplicationData,
   PartnerSchoolData,
@@ -258,7 +259,7 @@ export async function submitStudentApplication(
       whatsapp: payload.whatsapp,
       email: payload.email,
       currentClass: payload.currentClass || 'SSC-II (Class 10th)',
-      hsscGroup: payload.discipline,
+      hsscGroup: classifyHsscClass(payload.currentClass).kind === 'hssc' ? payload.discipline : undefined,
       schoolName: payload.schoolName || 'School',
       boardOrUniversity: payload.boardUniversity || 'BISE Abbottabad',
       currentRollNo: payload.currentRollNo,

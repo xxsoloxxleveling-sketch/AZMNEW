@@ -1,3 +1,6 @@
+import { classifyHsscClass, resolveHsscGroup, assertStudyGroupsReady, studyGroupReadiness, STUDY_GROUP_REQUIRED } from './hsscContract';
+import { createStudentSchema } from './students.schema';
+import { z } from 'zod';
 import fs from 'fs';
 import { normalizeStudentDocuments, legacyDmcCollectionEntry, parseLegacyStudentStorageUrl } from './studentDocuments';
 import path from 'path';
@@ -425,8 +428,10 @@ export class StudentsService {
 
   async preparePrintStudent(id: string) {
     const student = await this.getStudentById(id);
+    assertStudyGroupsReady([student]);
     await this.reserveCandidateNumber(student.id);
     const refreshed = await this.getStudentById(student.id);
+    assertStudyGroupsReady([refreshed]);
     const schedule = await this.resolveExamPlacement(refreshed);
 
     return {
@@ -691,6 +696,8 @@ export class StudentsService {
    * Roll Number and Biometric QR Code will be issued upon Admin/Accountant fee approval.
    */
   async createStudent(input: CreateStudentInput) {
+    // Preserve the public controller's internal storage-verification flag.
+    input = { ...input, hsscGroup: createStudentSchema.parse(input).hsscGroup };
     const existing = await prisma.student.findUnique({
       where: { cnicOrBForm: input.cnicOrBForm },
     });
@@ -1708,6 +1715,12 @@ export class StudentsService {
 
     const where: any = conditions.length > 0 ? { AND: conditions } : {};
 
+    if (query.studyGroupReview === 'true') {
+      const candidates = await prisma.student.findMany({ where, select: { id: true, currentClass: true, hsscGroup: true } });
+      const ids = candidates.filter(candidate => !resolveHsscGroup(candidate).ready).map(candidate => candidate.id);
+      where.AND = [...conditions, { id: { in: ids } }];
+    }
+
     const listStudents = (includeDocumentMetadata: boolean) =>
       prisma.student.findMany({
         where,
@@ -1973,6 +1986,11 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
 
     // A roster with embedded portrait thumbnails is intentionally capped. This
     // keeps a single administrative export within the Render memory budget.
+    if (query.studyGroupReview === 'true') {
+      const candidates = await prisma.student.findMany({ where, select: { id: true, currentClass: true, hsscGroup: true } });
+      const ids = candidates.filter(candidate => !resolveHsscGroup(candidate).ready).map(candidate => candidate.id);
+      where.AND = [...conditions, { id: { in: ids } }];
+    }
     const students = await prisma.student.findMany({
       where,
       take: 250,
@@ -2098,30 +2116,73 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
   /**
    * Updates student information.
    */
-  async updateStudent(id: string, input: UpdateStudentInput) {
-    await this.getStudentById(id);
+  async updateStudent(id: string, input: UpdateStudentInput, actor?: { userId: string; name?: string; role: string }) {
+    const { academicRecords, documents, uploadedDocuments, signatureDataUrl, signature,
+      expectedUpdatedAt, correctionBasis, ...baseData } = input;
+    const fieldError = (field: string, message: string) => new z.ZodError([{ code: 'custom', path: [field], message }]);
+    try {
+      await prisma.$transaction(async tx => {
+        const stored = await tx.student.findUnique({ where: { id } });
+        if (!stored) throw Object.assign(new Error('Candidate not found.'), { statusCode: 404 });
+        const before = classifyHsscClass(stored.currentClass);
+        const effective = { ...stored, ...baseData };
+        const after = classifyHsscClass(effective.currentClass);
+        const hasGroup = Object.prototype.hasOwnProperty.call(baseData, 'hsscGroup');
+        const classChanged = baseData.currentClass !== undefined &&
+          !(before.kind === 'hssc' && after.kind === 'hssc' && before.year === after.year) && stored.currentClass !== baseData.currentClass;
+        const groupChanged = hasGroup && baseData.hsscGroup !== stored.hsscGroup;
+        if (after.kind === 'conflicting' && (classChanged || hasGroup)) throw fieldError('currentClass', 'Conflicting HSSC year labels. Select the correct year.');
+        if (after.kind === 'hssc' && (classChanged || groupChanged || (hasGroup && !baseData.hsscGroup))) {
+          const resolution = resolveHsscGroup(effective);
+          if (!resolution.group) throw fieldError('hsscGroup', STUDY_GROUP_REQUIRED);
+          // Validate the effective record without rewriting an omitted historical value.
+          if (hasGroup) baseData.hsscGroup = resolution.group;
+        }
+        const corrected = baseData.hsscGroup !== undefined && baseData.hsscGroup !== stored.hsscGroup;
+        if (corrected) {
+          if (!actor || !['ADMIN', 'SUPER_ADMIN'].includes(actor.role)) throw Object.assign(new Error('Administrative study group correction access required.'), { statusCode: 403 });
+          if (!expectedUpdatedAt) throw fieldError('expectedUpdatedAt', 'Reload this student before correcting the study group.');
+          if (!correctionBasis || correctionBasis.trim().length < 3) throw fieldError('correctionBasis', 'Enter the confirmation or documentary source for this correction.');
+        }
+        // Conditional write is the concurrency guard, including two simultaneous corrections.
+        if (expectedUpdatedAt && new Date(expectedUpdatedAt).getTime() !== stored.updatedAt.getTime()) {
+          throw Object.assign(new Error('This student changed. Reload the record and review the newer study group before saving.'), { statusCode: 409, code: 'STUDENT_EDIT_CONFLICT' });
+        }
+        const changed = await tx.student.updateMany({ where: { id, updatedAt: stored.updatedAt }, data: {
+          ...baseData, updatedAt: new Date(Math.max(Date.now(), stored.updatedAt.getTime() + 1)),
+        } });
+        if (changed.count !== 1) throw Object.assign(new Error('This student changed. Reload the record before saving.'), { statusCode: 409, code: 'STUDENT_EDIT_CONFLICT' });
+        if (corrected) await tx.studentStudyGroupCorrection.create({ data: {
+          studentId: id, actorId: actor!.userId, actorName: actor!.name || actor!.userId,
+          oldClass: stored.currentClass, newClass: effective.currentClass,
+          oldGroup: stored.hsscGroup, newGroup: baseData.hsscGroup,
+          basis: correctionBasis!.trim(), previousUpdatedAt: stored.updatedAt,
+        } });
+      });
+    } catch (error: any) {
+      if (error.code === 'P2034') throw Object.assign(new Error('This student changed. Reload before saving.'), { statusCode: 409, code: 'STUDENT_EDIT_CONFLICT' });
+      throw error;
+    }
+    return this.getStudentById(id);
+  }
 
-    const {
-      academicRecords,
-      documents,
-      uploadedDocuments,
-      signatureDataUrl,
-      signature,
-      ...baseData
-    } = input;
+  /** Read-only readiness: never reserve a number or generate a document. */
+  async getPrintReadiness(studentIds: string[]) {
+    const students = await Promise.all(studentIds.map(id => this.getStudentById(id)));
+    if (students.some((student, index) => student.id !== studentIds[index])) throw Object.assign(new Error('Selected student IDs must match the current roster. Refresh and select again.'), { statusCode: 404 });
+    return studyGroupReadiness(students);
+  }
 
-    const updated = await prisma.student.update({
-      where: { id },
-      data: baseData,
-      include: {
-        academicRecords: true,
-        documents: true,
-        officeUse: true,
-        feeRecords: true,
-      },
-    });
+  private async assertPrintGroups(studentIds: string[]) {
+    const details = await this.getPrintReadiness(studentIds);
+    if (details.unresolved.length) throw Object.assign(new Error(`${details.readyIds.length} ready to print. ${details.unresolved.length} students need a study group. Review groups before printing.`), { statusCode: 409, code: 'HSSC_GROUP_REVIEW_REQUIRED', details });
+  }
 
-    return this.formatStudentWithDocuments(updated);
+  private async recheckPrintGroups(sheets: Array<{ student: any }>) {
+    const latest = await Promise.all(sheets.map(sheet => this.getStudentById(sheet.student.id)));
+    assertStudyGroupsReady(latest);
+    sheets.forEach((sheet, index) => { sheet.student = { ...sheet.student,
+      currentClass: latest[index].currentClass, hsscGroup: latest[index].hsscGroup }; });
   }
 
   /**
@@ -2158,7 +2219,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       officeUse: true, documents: true,
     } });
     if (!student) throw Object.assign(new Error('Candidate not found.'), { statusCode: 404 });
-    const [frozenRosters, attendance, fees, financialTransactions, documents, documentAudits, academicRecords] = await Promise.all([
+    const [frozenRosters, attendance, fees, financialTransactions, documents, documentAudits, academicRecords, groupCorrections] = await Promise.all([
       tx.attendanceSessionCandidate.count({ where: { studentId: id } }),
       tx.attendance.count({ where: { studentId: id } }),
       tx.feeRecord.count({ where: { studentId: id } }),
@@ -2166,9 +2227,10 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       tx.studentDocument.count({ where: { studentId: id } }),
       tx.studentDocumentAudit.count({ where: { studentId: id } }),
       tx.academicRecord.count({ where: { studentId: id } }),
+      tx.studentStudyGroupCorrection.count({ where: { studentId: id } }),
     ]);
     const counts = {
-      frozenRosters, attendance, fees, financialTransactions, documents, documentAudits, academicRecords,
+      frozenRosters, attendance, fees, financialTransactions, documents, documentAudits, academicRecords, groupCorrections,
       legacyAttachments: student.photoUrl || (student.uploadedDocsJson && student.uploadedDocsJson !== '{}') ? 1 : 0,
       documentChecklist: student.documents && Object.entries(student.documents)
         .some(([key, value]) => key !== 'id' && key !== 'studentId' && Boolean(value)) ? 1 : 0,
@@ -2179,7 +2241,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
     const labels: Record<keyof typeof counts, string> = {
       frozenRosters: 'Frozen examination Hall rosters', attendance: 'Attendance records',
       fees: 'Fee records', financialTransactions: 'Financial transactions', documents: 'Stored documents',
-      documentAudits: 'Document audit events', academicRecords: 'Academic records',
+      documentAudits: 'Document audit events', academicRecords: 'Academic records', groupCorrections: 'Study group correction evidence',
       legacyAttachments: 'Registration attachments', examinationResults: 'Examination results', officeHistory: 'Office review history',
       documentChecklist: 'Document checklist history',
     };
@@ -2481,6 +2543,9 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
     }
 
     const photoBase64 = await this.resolveStudentPhotoBase64(student);
+    const latestGroup = await this.getStudentById(student.id);
+    assertStudyGroupsReady([latestGroup]);
+    student.currentClass = latestGroup.currentClass; student.hsscGroup = latestGroup.hsscGroup;
     const html = pdfService.generateRollSlipHtml(student, qrDataUrl, photoBase64);
     const buffer = await pdfService.generatePdfFromHtml(html);
     const filename = `RollNoSlip-${candNum.value}.pdf`;
@@ -2515,6 +2580,9 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
     }
 
     const photoBase64 = await this.resolveStudentPhotoBase64(student);
+    const latestGroup = await this.getStudentById(student.id);
+    assertStudyGroupsReady([latestGroup]);
+    student.currentClass = latestGroup.currentClass; student.hsscGroup = latestGroup.hsscGroup;
     const html = pdfService.generateOmrSheetHtml(student, qrDataUrl, photoBase64);
     const buffer = await pdfService.generatePdfFromHtml(html);
     const filename = `OMRSheet-${candNum.value}.pdf`;
@@ -2531,6 +2599,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       err.statusCode = 400;
       throw err;
     }
+    await this.assertPrintGroups(studentIds);
     const QRCode = await import('qrcode');
     const sheets: Array<{ student: any; qrDataUrl: string; photoBase64?: string }> = [];
 
@@ -2557,6 +2626,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       throw err;
     }
 
+    await this.recheckPrintGroups(sheets);
     const html = pdfService.generateBulkOmrSheetsHtml(sheets);
     const buffer = await pdfService.generatePdfFromHtml(html);
     const filename = `Bulk-OMR-Sheets-${sheets.length}-Candidates.pdf`;
@@ -2573,6 +2643,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       err.statusCode = 400;
       throw err;
     }
+    await this.assertPrintGroups(studentIds);
     for (const id of studentIds) this.assertOfficialRollSlipPlacement(await this.getStudentById(id));
     const QRCode = await import('qrcode');
     const slips: Array<{ student: any; qrDataUrl: string; photoBase64?: string }> = [];
@@ -2601,6 +2672,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       throw err;
     }
 
+    await this.recheckPrintGroups(slips);
     const html = pdfService.generateBulkRollSlipsHtml(slips);
     const buffer = await pdfService.generatePdfFromHtml(html);
     const filename = `Bulk-RollSlips-${slips.length}-Candidates.pdf`;
@@ -2781,6 +2853,7 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
         await this.persistDocumentMetadata(student.id, currentDocs);
       } catch (err) {
         logger.warn('Failed to update student document in PostgreSQL:', err);
+        throw Object.assign(new Error('The file was stored but its student attachment metadata could not be confirmed. Retry this attachment.'), { statusCode: 502 });
       }
     }
 

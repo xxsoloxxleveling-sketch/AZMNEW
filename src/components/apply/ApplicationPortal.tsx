@@ -1,3 +1,4 @@
+import { classifyHsscClass, resolveHsscGroup, HSSC_GROUP_OPTIONS, STUDY_GROUP_REQUIRED } from '../../utils/hsscGroup';
 import React, { useState, useEffect, useRef } from 'react';
 import { buildDmcDocuments } from '../../utils/studentDocuments';
 import { StudentApplicationData, PartnerSchoolData, PageTab } from '../../types';
@@ -183,7 +184,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
     email: '',
 
     currentClass: initialClass || 'Class 10th (SSC-II)',
-    discipline: 'Science (Biology/Pre-Medical)',
+    discipline: '',
     schoolName: '',
     boardUniversity: 'BISE Abbottabad',
     currentRollNo: '',
@@ -414,7 +415,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       whatsapp: '',
       email: '',
       currentClass: initialClass || 'Class 10th (SSC-II)',
-      discipline: 'Science (Biology/Pre-Medical)',
+      discipline: '',
       schoolName: '',
       boardUniversity: 'BISE Abbottabad',
       currentRollNo: '',
@@ -1015,6 +1016,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
       }
 
       case 3: {
+        if (classifyHsscClass(formData.currentClass).kind === 'hssc' && !resolveHsscGroup({ currentClass: formData.currentClass, hsscGroup: formData.discipline }).group) errs.push(STUDY_GROUP_REQUIRED);
         const classErr = validateGradeClass(formData.currentClass);
         if (classErr) errs.push(classErr);
         const schErr = validateSchoolName(formData.schoolName);
@@ -1145,7 +1147,7 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
         whatsapp: cleanData.whatsapp || studentMobileVal,
         email: emailVal && emailVal.includes('@') ? emailVal : undefined,
         currentClass: cleanData.currentClass || 'SSC-II (Class 10th)',
-        hsscGroup: cleanData.discipline || undefined,
+        hsscGroup: classifyHsscClass(cleanData.currentClass).kind === 'hssc' ? cleanData.discipline : undefined,
         schoolName: cleanData.schoolName || 'School',
         boardOrUniversity: cleanData.boardUniversity || 'BISE Abbottabad',
         currentRollNo: cleanData.currentRollNo || undefined,
@@ -2075,19 +2077,16 @@ export const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ initialCla
                       </select>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Discipline / Group *
-                      </label>
-                      <input
-                        id="field-discipline"
-                        type="text"
-                        placeholder="Science (Biology) / Pre-Engg / Computer Science"
-                        value={formData.discipline}
-                        onChange={(e) => setFormData({ ...formData, discipline: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:border-[#185b9d] focus:outline-hidden"
-                      />
-                    </div>
+{classifyHsscClass(formData.currentClass).kind === 'hssc' && <div>
+                    <label htmlFor="field-study-group" className="block text-xs font-bold text-slate-700 mb-1">Study group *</label>
+                    <select id="field-study-group" required value={formData.discipline} aria-describedby="study-group-help"
+                      onChange={e => setFormData(prev => ({ ...prev, discipline: e.target.value }))}
+                      className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-[#185b9d]">
+                      <option value="">Select study group</option>
+                      {HSSC_GROUP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    {!formData.discipline && <p id="study-group-help" className="mt-1 text-xs text-slate-600">{STUDY_GROUP_REQUIRED}</p>}
+                  </div>}
 
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-bold text-slate-700 mb-1">
