@@ -8,7 +8,7 @@ import sharp from 'sharp';
 import { prisma } from '../src/lib/prisma';
 import { studentsService } from '../src/modules/students/students.service';
 import { getPrintableHsscGroup as pdfGroup } from '../src/modules/documents/pdf.service';
-import { getPrintableHsscGroup } from '../../src/utils/hsscGroup';
+import { getPrintableHsscGroup, HSSC_GROUP_OPTIONS, STUDY_GROUP_REVIEW } from '../../src/utils/hsscGroup';
 
 const repo = path.resolve(__dirname, '../..');
 const cnic = '12345-1234567-1';
@@ -46,7 +46,7 @@ async function run() {
       'HSSC-I', 'HSSC-II', 'HSSC1', 'HSSC2', '1st Year', '2nd Year', 'Class 11th (HSSC-I)',
       'Class 12th (HSSC-II)', 'Class 11', 'Class 12', 'Class 11th', 'Class 12th', '11th', '12th', '11', '12'];
     for (const currentClass of aliases) for (const hsscGroup of groups) {
-      assert.equal(getPrintableHsscGroup({ currentClass, hsscGroup }), hsscGroup);
+      assert.equal(getPrintableHsscGroup({ currentClass, hsscGroup }), HSSC_GROUP_OPTIONS.find(o => o.value === hsscGroup)!.label);
       assert.equal(getPrintableHsscGroup({ currentClass, hsscGroup }), pdfGroup({ currentClass, hsscGroup }));
     }
     for (const hsscGroup of [...groups, null]) {
@@ -64,10 +64,13 @@ async function run() {
         import {RollNumberSlipView} from './src/components/rollnumber/RollNumberSlipView';
         import {RollSlipPreviewModal} from './src/components/admin/students/RollSlipPreviewModal';
         import {StudentOmrModal} from './src/components/admin/students/StudentOmrModal';
+        import {AuthProvider} from './src/lib/authContext';
+        import {setUser} from './src/lib/auth';
+        setUser({id:'fixture-admin',name:'Synthetic Staff',email:'staff@test.invalid',role:'ADMIN'});
         const mode=location.pathname.slice(1);
         fetch('/fixture-student').then(r=>r.json()).then(student=>createRoot(document.getElementById('root')).render(
-          mode==='public'?React.createElement(RollNumberSlipView,{onSelectTab:()=>{}}):
-          React.createElement(mode==='omr'?StudentOmrModal:RollSlipPreviewModal,{student,isOpen:true,onClose:()=>{}})));`,
+          React.createElement(AuthProvider,{},mode==='public'?React.createElement(RollNumberSlipView,{onSelectTab:()=>{}}):
+          React.createElement(mode==='omr'?StudentOmrModal:RollSlipPreviewModal,{student,isOpen:true,onClose:()=>{}}))));`,
         resolveDir: repo, loader: 'tsx' },
       bundle: true, write: false, format: 'iife', platform: 'browser', jsx: 'automatic',
       define: { 'import.meta.env.PROD': 'true', 'import.meta.env.VITE_API_URL': 'window.location.origin' },
@@ -87,6 +90,7 @@ async function run() {
         const response = await studentsService.searchPublicSlip(undefined, cnic);
         return json({ ...response, data: { ...response.data, qrPayload: qr } });
       }
+      if (pathname === '/api/auth/me') return json({success:true,data:{id:'fixture-admin',role:'ADMIN',name:'Synthetic Staff',email:'staff@test.invalid'}});
       if (pathname === '/fixture-student' || pathname.startsWith('/api/students/')) return json({ success: true, data: student, ...student });
       return json({ success: true, status: 'ok' });
     });
@@ -101,7 +105,7 @@ async function run() {
     for (const mode of ['public', 'roll', 'omr']) {
       for (const [label, grade, group, expected] of [
         ['saved', 'HSSC-II (Class 12th)', 'Pre-Medical', 'Pre-Medical'],
-        ['missing', 'First Year', null, 'Not specified'],
+        ['missing', 'First Year', null, STUDY_GROUP_REVIEW],
         ['non-hssc', 'Class 10th', 'Pre-Medical', null],
       ] as const) {
         student = makeStudent(grade, group);
@@ -113,7 +117,8 @@ async function run() {
             await page.type('#input-slip-cnic', cnic);
             await page.click('#btn-search-slip');
             await page.waitForSelector('.roll-number-slip');
-            await page.waitForFunction(() => !(document.querySelector('#btn-print-slip') as HTMLButtonElement)?.disabled);
+            if (label !== 'missing') await page.waitForFunction(() => !(document.querySelector('#btn-print-slip') as HTMLButtonElement)?.disabled);
+            else assert(await page.$eval('#btn-print-slip', el => (el as HTMLButtonElement).disabled));
           } else {
             await page.waitForFunction(() => document.body.textContent?.includes('Synthetic Candidate'));
           }
@@ -124,7 +129,7 @@ async function run() {
           if (expected) assert(text.includes('HSSC Group: ' + expected), mode + ' displays saved group/fallback');
           assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), mode + ' page overflow');
           if (output && label === 'saved') await sheet.screenshot({ path: path.join(output, mode + '-' + width + '-screen.png') });
-          if (mode === 'public' && expected) {
+          if (mode === 'public' && expected && label !== 'missing') {
             await page.emulateMediaType('print');
             assert(await sheet.evaluate((el, value) => (el as HTMLElement).innerText.includes('HSSC Group: ' + value), expected), 'Group stays visible when printing');
             const pdf = Buffer.from(await page.pdf({ format: 'A4', preferCSSPageSize: true, printBackground: true }));

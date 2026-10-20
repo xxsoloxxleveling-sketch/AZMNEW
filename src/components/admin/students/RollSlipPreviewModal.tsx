@@ -1,5 +1,7 @@
+import { StudyGroupCorrectionDialog } from './StudyGroupCorrectionDialog';
+import { useAuth } from '../../../lib/authContext';
 import { buildSignedAttendanceQrUrl } from '../../../utils/signedAttendanceQr';
-import { getPrintableHsscGroup } from '../../../utils/hsscGroup';
+import { getPrintableHsscGroup, resolveHsscGroup, getStudyClassLabel } from '../../../utils/hsscGroup';
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, Download, AlertTriangle, ShieldCheck, User, Calendar, MapPin, CheckCircle2, Loader2 } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -17,17 +19,22 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const { role } = useAuth();
+  const [correctGroup, setCorrectGroup] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [revision, setRevision] = useState(0);
+  useEffect(() => { const refresh = () => setRevision(value => value + 1); window.addEventListener('students-updated', refresh); return () => window.removeEventListener('students-updated', refresh); }, []);
   const [prepared, setPrepared] = useState<MockStudent | null>(null);
   const student = prepared?.id === initialStudent?.id ? prepared : initialStudent;
   useEffect(() => {
     if (!isOpen || !initialStudent) return;
     let active = true;
-    setPrepared(null);
+    setPrepared(null); setPreviewError('');
     apiFetch<MockStudent>(`/api/students/${initialStudent.id}`)
       .then(value => { if (active) setPrepared(value); })
-      .catch(error => { if (active) alert(error.message || 'Unable to load the read-only preview.'); });
+      .catch(error => { if (active) setPreviewError(error.message || 'Unable to load preview.'); });
     return () => { active = false; };
-  }, [initialStudent?.id, isOpen]);
+  }, [initialStudent?.id, isOpen, revision]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [qrResult, setQrResult] = useState<{ student: MockStudent; dataUrl: string } | null>(null);
   const qrDataUrl = qrResult?.student === student ? qrResult?.dataUrl || '' : '';
@@ -91,14 +98,17 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
 
   if (!isOpen || !student) return null;
   const hsscGroup = getPrintableHsscGroup(student);
+  const groupBlocked = !prepared || !resolveHsscGroup(student).ready;
 
   const handlePrint = async () => {
+    if (groupBlocked) return;
     if (prepared?.id !== student.id) return;
     try { await mockApi.printStudentRollSlipPdf(student.id); }
     catch (error: any) { alert(error.message || 'Unable to print document.'); }
   };
 
   const handleDownloadPdf = async () => {
+    if (groupBlocked) return;
     if (prepared?.id !== student.id) return;
     setIsDownloadingPdf(true);
     try {
@@ -121,8 +131,13 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
+      {correctGroup && <StudyGroupCorrectionDialog student={student} authorized={role === 'ADMIN' || role === 'SUPER_ADMIN'} onClose={() => setCorrectGroup(false)} onSaved={setPrepared} />}
       {/* Container */}
       <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[96vh]">
+        {(previewError || !resolveHsscGroup(student).ready) && <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 print:hidden">
+          <span role="status">{previewError || 'Study group needs verification'}</span>
+          {(role === 'ADMIN' || role === 'SUPER_ADMIN') && !resolveHsscGroup(student).ready && <button type="button" onClick={() => setCorrectGroup(true)} className="ml-3 font-semibold underline">Update study group</button>}
+        </div>}
         {/* Modal Top Header (Screen Only) */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 bg-slate-50 print:hidden">
           <div className="flex items-center gap-3">
@@ -142,7 +157,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              disabled={prepared?.id !== student.id || isDownloadingPdf}
+              disabled={groupBlocked || prepared?.id !== student.id || isDownloadingPdf}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
             >
               <Printer className="w-4 h-4" />
@@ -151,7 +166,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
 
             <button
               onClick={handleDownloadPdf}
-              disabled={prepared?.id !== student.id || isDownloadingPdf}
+              disabled={groupBlocked || prepared?.id !== student.id || isDownloadingPdf}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
             >
               {isDownloadingPdf ? (
@@ -243,7 +258,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
                   <div className="text-xs text-slate-600 mt-0.5">S/D/O {student.fatherName}</div>
                   <div className="text-xs font-mono text-slate-500 mt-1">CNIC: {student.cnicOrBForm}</div>
                   <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 text-[11px] font-bold">
-                    <span>Class:</span> {student.currentClass}
+                    <span>Class:</span> {getStudyClassLabel(student.currentClass)}
                   </div>
                   {hsscGroup && <div className="mt-1 text-xs font-bold text-slate-800">HSSC Group: {hsscGroup}</div>}
                 </div>
@@ -339,6 +354,7 @@ export const RollSlipPreviewModal: React.FC<RollSlipPreviewModalProps> = ({
             </button>
             <button
               onClick={handlePrint}
+              disabled={groupBlocked}
               className="px-4 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Printer className="w-4 h-4" />

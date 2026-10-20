@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Gender, ScholarshipCategory, StudentStatus, EligibilityStatus, FinalStatus } from '@prisma/client';
+import { classifyHsscClass, resolveHsscGroup, STUDY_GROUP_REQUIRED } from './hsscContract';
 
 export const academicRecordSchema = z.object({
   examLevel: z.string().default('Class 9th'),
@@ -55,7 +56,7 @@ export const officeUseUpdateSchema = z.object({
   authorizedBy: z.string().optional(),
 });
 
-export const createStudentSchema = z.object({
+const studentFieldsSchema = z.object({
   fullName: z.string().min(1, 'Full name is required'),
   fatherName: z.string().min(1, 'Father name is required'),
   gender: z
@@ -139,8 +140,17 @@ export const createStudentSchema = z.object({
 });
 
 
-export const updateStudentSchema = createStudentSchema.partial().extend({
+export const createStudentSchema = studentFieldsSchema.superRefine((data, ctx) => {
+  const grade = classifyHsscClass(data.currentClass);
+  if (grade.kind === 'conflicting') ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['currentClass'], message: 'Conflicting HSSC year labels. Select the correct year.' });
+  if (grade.kind === 'hssc' && !resolveHsscGroup(data).group) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['hsscGroup'], message: STUDY_GROUP_REQUIRED });
+}).transform(data => ({ ...data, ...(classifyHsscClass(data.currentClass).kind === 'hssc' ? { hsscGroup: resolveHsscGroup(data).group } : {}) }));
+
+// Effective-record validation belongs in the service; omission must survive parsing.
+export const updateStudentSchema = studentFieldsSchema.partial().extend({
   status: z.nativeEnum(StudentStatus).optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
+  correctionBasis: z.string().trim().max(500).optional(),
 });
 
 // A selected roster is explicit and bounded. Never fall back to exporting the full roster.
@@ -150,6 +160,7 @@ export const selectedStudentsPdfSchema = z.object({
 }).strict();
 
 export const studentQuerySchema = z.object({
+  studyGroupReview: z.enum(['true', 'false']).optional(),
   search: z.string().optional(),
   classLevel: z.string().optional(),
   status: z

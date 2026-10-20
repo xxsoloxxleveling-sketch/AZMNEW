@@ -1,182 +1,105 @@
-import React, { useState } from 'react';
-import { X, Printer, Download, Users, FileText, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { apiOpenPdfForPrint } from '../../../lib/apiClient';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, Download, Loader2, Printer } from 'lucide-react';
+import { apiFetch, apiOpenPdfForPrint } from '../../../lib/apiClient';
 import { mockApi, MockStudent } from '../../../lib/mockApi';
+import { useAuth } from '../../../lib/authContext';
+import { StudyGroupCorrectionDialog } from './StudyGroupCorrectionDialog';
+import { getStudyClassLabel } from '../../../utils/hsscGroup';
 
+type Readiness = { readyIds: string[]; unresolved: Array<{ id: string; applicationNo: string; status: string }> };
 interface BulkPrintModalProps {
-  students: MockStudent[];
-  type: 'OMR' | 'ROLL_SLIP';
-  isOpen: boolean;
-  onClose: () => void;
+  students: MockStudent[]; type: 'OMR' | 'ROLL_SLIP'; isOpen: boolean; onClose: () => void;
 }
-
-export const BulkPrintModal: React.FC<BulkPrintModalProps> = ({
-  students,
-  type,
-  isOpen,
-  onClose,
-}) => {
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  if (!isOpen || students.length === 0) return null;
-
+export const BulkPrintModal: React.FC<BulkPrintModalProps> = ({ students, type, isOpen, onClose }) => {
+  const { role } = useAuth();
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [readyOnly, setReadyOnly] = useState(false);
+  const [review, setReview] = useState(false);
+  const [correcting, setCorrecting] = useState<MockStudent | null>(null);
+  const [revision, setRevision] = useState(0);
+  const dialog = useRef<HTMLDivElement>(null);
+  const ids = students.map(s => s.id);
+  useEffect(() => {
+    if (!isOpen || !ids.length) return;
+    let active = true;
+    setChecking(true); setReadiness(null); setReadyOnly(false);
+    apiFetch<Readiness>('/api/students/print-readiness', { method: 'POST', body: JSON.stringify({ studentIds: ids }) })
+      .then(value => { if (active) setReadiness(value); })
+      .catch(err => { if (active) setError(err.message || 'Could not check study groups.'); })
+      .finally(() => { if (active) setChecking(false); });
+    return () => { active = false; };
+  }, [isOpen, ids.join('|'), revision]);
+  useEffect(() => { setError(''); }, [isOpen, ids.join('|')]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    dialog.current?.focus(); return () => previous?.focus();
+  }, [isOpen]);
+  if (!isOpen || !students.length) return null;
+  const unresolved = readiness?.unresolved || [];
+  const printIds = readyOnly ? readiness?.readyIds || [] : ids;
+  const disabled = busy || checking || !readiness || !printIds.length || (!!unresolved.length && !readyOnly);
   const isOmr = type === 'OMR';
-  const title = isOmr ? 'Batch Print OMR Answer Sheets' : 'Batch Print Roll Number Slips';
-  const studentIds = students.map((s) => s.id);
-
-  const handleDownloadBulkPdf = async () => {
-    setIsDownloading(true);
-    setErrorMsg(null);
+  const generate = async (print: boolean) => {
+    if (disabled) return;
+    setBusy(true); setError('');
     try {
-      if (isOmr) {
-        await mockApi.downloadBulkOmrPdf(studentIds);
-      } else {
-        await mockApi.downloadBulkRollSlipsPdf(studentIds);
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || `Failed to download bulk ${isOmr ? 'OMR' : 'Roll Slip'} PDF.`);
-    } finally {
-      setIsDownloading(false);
-    }
+      if (print) await apiOpenPdfForPrint(isOmr ? '/api/students/bulk-omr-pdf' : '/api/students/bulk-roll-slips-pdf', { method: 'POST', body: { studentIds: printIds } });
+      else if (isOmr) await mockApi.downloadBulkOmrPdf(printIds);
+      else await mockApi.downloadBulkRollSlipsPdf(printIds);
+    } catch (err: any) { setRevision(value => value + 1); setError(err.message || 'Could not generate documents. Recheck the selected students.'); }
+    finally { setBusy(false); }
   };
-
-  const handleBrowserPrint = async () => {
-    setIsDownloading(true);
-    setErrorMsg(null);
-    try {
-      await apiOpenPdfForPrint(isOmr ? '/api/students/bulk-omr-pdf' : '/api/students/bulk-roll-slips-pdf',
-        { method: 'POST', body: { studentIds } });
-    } catch (error: any) { setErrorMsg(error.message || 'Unable to print documents.'); }
-    finally { setIsDownloading(false); }
-  };
-
-  const unissuedCount = students.filter(
-    (s) => !s.rollNumber || s.rollNumberStatus === 'PROVISIONAL'
-  ).length;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-3 sm:p-5 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-900 text-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-500/20 border border-blue-400/30 text-blue-300 rounded-xl font-bold">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-white leading-tight">
-                {title}
-              </h2>
-              <p className="text-xs text-slate-400">
-                {students.length} candidates selected for batch generation
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content Body */}
-        <div className="p-6 space-y-4">
-          {errorMsg && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
-              {errorMsg}
-            </div>
-          )}
-
-          {unissuedCount > 0 && (
-            <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-900 leading-relaxed font-medium">
-                <strong className="font-bold">
-                  {unissuedCount} candidate{unissuedCount > 1 ? 's do' : ' does'} not have an official roll number yet.
-                </strong>{' '}
-                Their sheets will include the pre-issue warning banner (
-                <em>PRE-ISSUE COPY — OFFICIAL ROLL NUMBER NOT YET ISSUED</em>) and a reserved roll number that stays the same after release.
+  const unissued = students.filter(s => !s.rollNumber || s.rollNumberStatus === 'PROVISIONAL').length;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3">
+    {correcting && <StudyGroupCorrectionDialog student={correcting} authorized={role === 'ADMIN' || role === 'SUPER_ADMIN'} onClose={() => setCorrecting(null)} onSaved={() => setRevision(value => value + 1)} />}
+    <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="bulk-print-title" className="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-300 bg-white text-slate-900"
+      onKeyDown={event => {
+        if (event.key === 'Escape' && !busy && !correcting) onClose();
+        if (event.key === 'Tab' && !correcting) {
+          const nodes = Array.from(dialog.current?.querySelectorAll('button:not(:disabled)') || []) as HTMLElement[];
+          if (event.shiftKey && (document.activeElement === nodes[0] || document.activeElement === dialog.current)) { event.preventDefault(); nodes.at(-1)?.focus(); }
+          else if (!event.shiftKey && document.activeElement === nodes.at(-1)) { event.preventDefault(); nodes[0]?.focus(); }
+        }
+      }}>
+      <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
+        <h2 id="bulk-print-title" className="text-base font-semibold">{isOmr ? 'Print OMR sheets' : 'Print roll number slips'} · {students.length} selected</h2>
+        <button type="button" disabled={busy} aria-label="Close batch printing" onClick={onClose} className="rounded p-1.5 hover:bg-slate-100 focus:ring-2 focus:ring-[#185b9d]"><X size={18} /></button>
+      </header>
+      <div className="space-y-3 p-5 text-xs">
+        {error && <p role="alert" className="text-red-700">{error}</p>}
+        {checking && <p role="status">Checking selected students…</p>}
+        {!readiness && !checking && <button type="button" onClick={() => setRevision(value => value + 1)} className="font-semibold text-[#185b9d] underline">Recheck groups</button>}
+        {readiness && <div aria-live="polite" className="border-b border-slate-200 pb-3">
+          <strong>{readiness.readyIds.length} ready to print. {unresolved.length} students need a study group.</strong>
+          {!!unresolved.length && <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => setReview(value => !value)} className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-[#185b9d] hover:bg-slate-50">Review groups</button>
+            {!!readiness.readyIds.length && !readyOnly && <button type="button" onClick={() => setReadyOnly(true)} className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-[#185b9d] hover:bg-slate-50">Print {readiness.readyIds.length} ready students</button>}
+          </div>}
+          {readyOnly && <p role="status" className="mt-2 text-amber-800">Only {printIds.length} ready students will be included. Excluded: {unresolved.map(s => s.applicationNo).join(', ')}. <button type="button" onClick={() => setReadyOnly(false)} className="underline">Restore full selection</button></p>}
+        </div>}
+        {unissued > 0 && <p className="border-l-2 border-amber-400 pl-3 text-amber-900">{unissued} candidates have no official roll number. Their sheets retain the pre-issue warning and stable reserved candidate number.</p>}
+        <div className="max-h-64 overflow-y-auto divide-y divide-slate-200 border-y border-slate-200" aria-label="Selected candidates and exclusions">
+          {students.map((student, index) => {
+            const missing = unresolved.find(s => s.id === student.id);
+            return <div key={student.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <div><strong>{index + 1}. {student.fullName}</strong><br /><span className="text-slate-500">{student.applicationNo} · {getStudyClassLabel(student.currentClass)}</span></div>
+              <div className={missing ? 'text-amber-800' : 'text-slate-600'}>{checking || !readiness ? 'Checking' : missing ? readyOnly ? 'Excluded: group needs review' : 'Group needs review' : 'Ready'}
+                {review && missing && (role === 'ADMIN' || role === 'SUPER_ADMIN') && <button type="button" onClick={() => setCorrecting(student)} className="ml-3 font-semibold text-[#185b9d] underline">Update study group</button>}
               </div>
-            </div>
-          )}
-
-          {/* Selected candidates list summary */}
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <div className="bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700 border-b border-slate-200 flex justify-between">
-              <span>Selected Candidates ({students.length})</span>
-              <span>Status</span>
-            </div>
-            <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 text-xs">
-              {students.map((student, idx) => {
-                const isProv = !student.rollNumber || student.rollNumberStatus === 'PROVISIONAL';
-                const rollDisplay = student.displayRollNumber || (student.rollNumber ? student.rollNumber : `PROV-${student.applicationNo}`);
-                return (
-                  <div key={student.id} className="px-4 py-2 flex items-center justify-between hover:bg-slate-50">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-slate-400 font-mono w-5">{idx + 1}.</span>
-                      <div>
-                        <div className="font-bold text-slate-900">{student.fullName}</div>
-                        <div className="text-[11px] text-slate-500 font-mono">
-                          {rollDisplay} • {student.currentClass}
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      {isProv ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                          Provisional
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          Official
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="text-xs text-slate-600 bg-blue-50/60 border border-blue-200/80 rounded-xl p-3.5 space-y-1">
-            <div className="font-bold text-blue-900">Batch Printing Instructions:</div>
-            <div>
-              • Click <strong>Download Unified PDF</strong> to obtain a single consolidated, multi-page document with each candidate on their own page.
-            </div>
-            <div>
-              • High-speed thermal or laser printing ready with precise A4 margins.
-            </div>
-          </div>
+            </div>;
+          })}
         </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-xl transition cursor-pointer"
-          >
-            Cancel
-          </button>
-
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={handleDownloadBulkPdf}
-              disabled={isDownloading}
-              className="px-4 py-2 text-xs font-bold bg-[#185b9d] hover:bg-[#13497d] text-white rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-60"
-            >
-              {isDownloading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              <span>Download Consolidated PDF ({students.length})</span>
-            </button>
-          </div>
-        </div>
+        <p className="text-slate-500">Each selected candidate receives one A4 page. Group readiness is checked again when generating the PDF.</p>
       </div>
+      <footer className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-3">
+        <button type="button" onClick={onClose} disabled={busy} className="rounded-lg border border-slate-300 px-3 py-2 text-xs hover:bg-slate-50">Cancel</button>
+        <button type="button" onClick={() => generate(true)} disabled={disabled} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs hover:bg-slate-50 disabled:opacity-50"><Printer size={14} />Print ({printIds.length})</button>
+        <button type="button" onClick={() => generate(false)} disabled={disabled} className="flex items-center gap-2 rounded-lg bg-[#185b9d] px-3 py-2 text-xs font-semibold text-white hover:bg-[#13497d] disabled:opacity-50">{busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}Download PDF ({printIds.length})</button>
+      </footer>
     </div>
-  );
+  </div>;
 };

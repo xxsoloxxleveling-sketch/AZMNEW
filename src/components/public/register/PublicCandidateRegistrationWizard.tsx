@@ -1,3 +1,4 @@
+import { classifyHsscClass, resolveHsscGroup, HSSC_GROUP_OPTIONS, STUDY_GROUP_REQUIRED } from '../../../utils/hsscGroup';
 import React, { useState, useEffect } from 'react';
 import {
   School,
@@ -98,7 +99,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
 
     // Stage 3: Educational
     currentClass: 'SSC-II (Class 10th)',
-    hsscGroup: 'Science / Pre-Medical',
+    hsscGroup: '',
     schoolName: '',
     boardOrUniversity: 'BISE Abbottabad',
     currentRollNo: '',
@@ -293,6 +294,7 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
         break;
       }
       case 3: {
+        if (classifyHsscClass(formData.currentClass).kind === 'hssc' && !resolveHsscGroup({ currentClass: formData.currentClass, hsscGroup: formData.hsscGroup }).group) errs.push(STUDY_GROUP_REQUIRED);
         const e1 = validateGradeClass(formData.currentClass);
         if (e1) errs.push(e1);
         const e2 = validateSchoolName(formData.schoolName);
@@ -916,6 +918,16 @@ export const PublicCandidateRegistrationWizard: React.FC<PublicCandidateRegistra
                     </select>
                   </div>
 
+{classifyHsscClass(formData.currentClass).kind === 'hssc' && <div>
+                    <label htmlFor="field-study-group" className="block text-xs font-bold text-slate-700 mb-1">Study group *</label>
+                    <select id="field-study-group" required value={formData.hsscGroup} aria-describedby="study-group-help"
+                      onChange={e => setFormData(prev => ({ ...prev, hsscGroup: e.target.value }))}
+                      className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-[#185b9d]">
+                      <option value="">Select study group</option>
+                      {HSSC_GROUP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    {!formData.hsscGroup && <p id="study-group-help" className="mt-1 text-xs text-slate-600">{STUDY_GROUP_REQUIRED}</p>}
+                  </div>}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Current School / College Name *</label>
                     <input

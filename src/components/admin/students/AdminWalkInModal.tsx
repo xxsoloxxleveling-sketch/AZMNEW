@@ -12,6 +12,7 @@ import {
 import { mockApi, MockStudent } from '../../../lib/mockApi';
 import { apiFetch } from '../../../lib/apiClient';
 import { formatCnic, VALID_PROVINCES } from '../../../utils/formValidation';
+import { classifyHsscClass, resolveHsscGroup, HSSC_GROUP_OPTIONS, STUDY_GROUP_REQUIRED, STUDY_GROUP_REVIEW } from '../../../utils/hsscGroup';
 
 interface AdminWalkInModalProps {
   isOpen: boolean;
@@ -68,6 +69,10 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
   const [allowMissing, setAllowMissing] = useState(false);
   const [sameContact, setSameContact] = useState(true);
   const [created, setCreated] = useState<MockStudent | null>(null);
+  const [groupChanged, setGroupChanged] = useState(false);
+  const [groupError, setGroupError] = useState('');
+  const [correctionBasis, setCorrectionBasis] = useState('');
+  const loadedStudent = useRef<MockStudent | null>(null);
 
   const dialog = useRef<HTMLDivElement>(null);
   const attachmentRef = useRef(attachments);
@@ -102,7 +107,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
       district: s.district || 'Mansehra',
       province: s.province || 'Khyber Pakhtunkhwa',
       currentClass: s.currentClass || '',
-      hsscGroup: (s as any).hsscGroup || '',
+      hsscGroup: resolveHsscGroup(s).group || '',
       bsDepartment: (s as any).bsDepartment || '',
       bsSemester: (s as any).bsSemester || '',
       schoolName: s.schoolName || '',
@@ -139,10 +144,13 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
     setSameContact(true);
     setCreated(null);
     setProgress('');
+    setGroupChanged(false); setGroupError(''); setCorrectionBasis('');
   };
 
   useEffect(() => {
     if (!isOpen) return;
+    setGroupChanged(false); setGroupError(''); setCorrectionBasis('');
+    loadedStudent.current = studentToEdit;
     if (isEdit && studentToEdit) {
       const initData = getFormDataFromStudent(studentToEdit);
       const initRecords = getRecordsFromStudent(studentToEdit);
@@ -158,6 +166,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
 
       mockApi.getStudentById(studentToEdit.id).then((fullStudent) => {
         if (fullStudent) {
+          loadedStudent.current = fullStudent;
           const fullData = getFormDataFromStudent(fullStudent);
           const fullRecords = getRecordsFromStudent(fullStudent);
           const fullSame = !fullStudent.emergencyContact || fullStudent.emergencyContact === fullStudent.parentMobile;
@@ -273,12 +282,21 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
     if (attachments[key]) URL.revokeObjectURL(attachments[key].preview);
     setAttachments(prev => ({ ...prev, [key]: { file, preview: URL.createObjectURL(file) } }));
     setError('');
+
+
   };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting.current) return;
     setError('');
+
+    const hssc = classifyHsscClass(data.currentClass).kind === 'hssc';
+    const previous = classifyHsscClass(loadedStudent.current?.currentClass);
+    const next = classifyHsscClass(data.currentClass);
+    const needsGroup = hssc && (!isEdit || groupChanged || previous.kind !== 'hssc' || previous.year !== next.year);
+    if (needsGroup && !resolveHsscGroup(data).group) { setGroupError(STUDY_GROUP_REQUIRED); return; }
+    if (isEdit && groupChanged && correctionBasis.trim().length < 3) { setGroupError('Enter the confirmation or documentary source for this correction.'); return; }
 
     if (Object.entries(data as FormData).some(([key, value]) => ['fullName', 'fatherName', 'address', 'district', 'schoolName'].includes(key) && !value.trim())) {
       setError('Required details cannot contain only spaces.');
@@ -331,6 +349,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
 
         setProgress('Saving changes…');
         const updatePayload: Record<string, any> = {
+          expectedUpdatedAt: loadedStudent.current?.updatedAt,
           fullName: data.fullName.trim(),
           fatherName: data.fatherName.trim(),
           gender: data.gender,
@@ -356,7 +375,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
           emergencyRelation: data.emergencyRelation.trim(),
           registrationCentre: data.registrationCentre?.trim() || null,
           referralSource: data.referralSource?.trim() || null,
-          hsscGroup: (data.currentClass.includes('HSSC') || data.currentClass.includes('Year')) ? data.hsscGroup?.trim() || null : null,
+          ...(hssc && groupChanged ? { hsscGroup: data.hsscGroup, correctionBasis: correctionBasis.trim(), expectedUpdatedAt: loadedStudent.current?.updatedAt } : {}),
           bsDepartment: data.currentClass === 'BS' ? data.bsDepartment?.trim() || null : null,
           bsSemester: data.currentClass === 'BS' ? data.bsSemester?.trim() || null : null,
         };
@@ -415,7 +434,7 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
           ...Object.fromEntries(Object.entries(data as FormData).map(([key, value]) => [key, value.trim()])),
           guardianMonthlyIncome: data.guardianMonthlyIncome === '' ? undefined : Number(data.guardianMonthlyIncome),
           emergencyContact: sameContact ? data.parentMobile.trim() : data.emergencyContact.trim(),
-          hsscGroup: data.currentClass.includes('HSSC') ? data.hsscGroup : undefined,
+          hsscGroup: hssc ? data.hsscGroup : undefined,
           bsDepartment: data.currentClass === 'BS' ? data.bsDepartment : undefined,
           bsSemester: data.currentClass === 'BS' ? data.bsSemester : undefined,
           referralSource: data.referralSource.trim() || 'Admin walk-in registration',
@@ -438,6 +457,8 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
         onSuccess(student);
       }
     } catch (err) {
+      if ((err as any).details?.hsscGroup) setGroupError(STUDY_GROUP_REQUIRED);
+      if ((err as any).details?.correctionBasis) setGroupError((err as any).details.correctionBasis.join(' '));
       setError(err instanceof Error ? err.message : isEdit ? 'Changes could not be saved. Please retry.' : 'Registration could not be saved. Your details are still here; please retry.');
     } finally {
       submitting.current = false;
@@ -561,9 +582,21 @@ export const AdminWalkInModal: React.FC<AdminWalkInModalProps> = ({
                       {field('schoolName', 'School / college / university', true)}
                       {field('boardOrUniversity', 'Board / university', true)}
                       {field('currentRollNo', 'Current school roll number')}
-                      {(data.currentClass.includes('HSSC') || data.currentClass.includes('Year')) && field('hsscGroup', 'HSSC group', false, 'text', [
-                        'Pre-Medical', 'Pre-Engineering', 'ICS', 'FA', 'I.Com', 'General Science'
-                      ])}
+                      {classifyHsscClass(data.currentClass).kind === 'hssc' && <div>
+                        <label className="block text-xs font-semibold text-slate-600" htmlFor="admin-study-group">Study group *</label>
+                        <select id="admin-study-group" className={`${inputStyle} mt-1.5`} value={data.hsscGroup}
+                          required={!isEdit} onInvalid={e => { e.preventDefault(); setGroupError(STUDY_GROUP_REQUIRED); }}
+                          aria-invalid={!!groupError} aria-describedby="admin-study-group-error"
+                          onChange={e => { set('hsscGroup', e.target.value); setGroupChanged(true); setGroupError(''); }}>
+                          <option value="">Select study group</option>
+                          {HSSC_GROUP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                        {isEdit && !resolveHsscGroup(loadedStudent.current || data).ready && <p className="mt-1 text-xs text-amber-800">{STUDY_GROUP_REVIEW}. Contact edits can still be saved.</p>}
+                        {groupError && <p id="admin-study-group-error" role="alert" className="mt-1 text-xs text-red-700">{groupError}</p>}
+                      </div>}
+                      {isEdit && groupChanged && <label className="block text-xs font-semibold text-slate-600">Confirmation / source *
+                        <input className={`${inputStyle} mt-1.5`} value={correctionBasis} maxLength={500} onChange={e => setCorrectionBasis(e.target.value)} />
+                      </label>}
                       {data.currentClass === 'BS' && (
                         <>
                           {field('bsDepartment', 'BS department', false)}

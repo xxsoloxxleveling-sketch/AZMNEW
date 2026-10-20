@@ -1,3 +1,5 @@
+import { StudyGroupCorrectionDialog } from './StudyGroupCorrectionDialog';
+import { resolveHsscGroup, getStudyClassLabel } from '../../../utils/hsscGroup';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search as IconSearch,
@@ -42,6 +44,8 @@ export const StudentsListView: React.FC = () => {
   const [selectedStudent, setSelectedStudent] = useState<MockStudent | null>(null);
   const [isWalkInOpen, setIsWalkInOpen] = useState(false);
   const [classFilter, setClassFilter] = useState('ALL');
+  const [studyGroupReview, setStudyGroupReview] = useState(false);
+  const [groupStudent, setGroupStudent] = useState<MockStudent | null>(null);
   const [genderFilter, setGenderFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -108,6 +112,7 @@ export const StudentsListView: React.FC = () => {
       const [data, statusData] = await Promise.all([
         mockApi.getStudentsPage({
           classLevel: classFilter,
+          studyGroupReview,
           gender: genderFilter,
           status: statusFilter,
           search: searchQuery,
@@ -135,6 +140,7 @@ export const StudentsListView: React.FC = () => {
       await mockApi.downloadStudentsListPdf(
         {
           classLevel: classFilter,
+          studyGroupReview,
           gender: genderFilter,
           status: statusFilter,
           search: searchQuery,
@@ -199,19 +205,19 @@ export const StudentsListView: React.FC = () => {
     if (!authLoading) {
       fetchStudents(students.length === 0);
     }
-  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize, studyGroupReview]);
 
   useEffect(() => {
     const refresh = () => { void fetchStudents(); };
     window.addEventListener('students-updated', refresh);
     return () => window.removeEventListener('students-updated', refresh);
-  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize, studyGroupReview]);
 
   // Batch actions intentionally apply only to the visible result set.
   // Reset selection whenever paging or filters change so hidden candidates are never approved accidentally.
   useEffect(() => {
     setSelectedStudentIds([]);
-  }, [classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize]);
+  }, [classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize, studyGroupReview]);
 
   // Fetch thumbnails only for smaller pages. Large page sizes use compact list mode
   // to avoid dozens/hundreds of protected image requests and object URLs.
@@ -524,6 +530,15 @@ export const StudentsListView: React.FC = () => {
       )}
 
       {/* Main Roster Card */}
+      {studyGroupReview && (role === 'ADMIN' || role === 'SUPER_ADMIN') && <section aria-label="Study group review list" className="border-y border-slate-200 py-3">
+        <h2 className="mb-2 text-sm font-semibold">Study group review ({pagination.total})</h2>
+        <p className="mb-2 text-xs text-slate-500">Choose each student's verified group individually. No corrections are applied automatically.</p>
+        {students.map(candidate => <div key={candidate.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 py-2 text-xs">
+          <div className="min-w-0"><strong>{candidate.applicationNo}</strong> · {candidate.fullName}<br />{getStudyClassLabel(candidate.currentClass)} · {resolveHsscGroup(candidate).status}</div>
+          <button type="button" onClick={() => setGroupStudent(candidate)} className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-[#185b9d] hover:bg-slate-50">Update study group</button>
+        </div>)}
+        {!students.length && !isLoading && <p className="text-xs text-slate-600">No students need review for these filters.</p>}
+      </section>}
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
         {/* Toolbar: Search, Filters, and Operations */}
         <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-50/50">
@@ -560,6 +575,10 @@ export const StudentsListView: React.FC = () => {
               <option value="BS">BS / Undergraduate</option>
             </select>
 
+            {(role === 'ADMIN' || role === 'SUPER_ADMIN') && <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+              <input type="checkbox" checked={studyGroupReview} onChange={e => { setStudyGroupReview(e.target.checked); setCurrentPage(1); }} />
+              Study group needs review
+            </label>}
             <select
               value={genderFilter}
               onChange={(e) => { setGenderFilter(e.target.value); setCurrentPage(1); }}
@@ -1196,6 +1215,7 @@ export const StudentsListView: React.FC = () => {
         onClose={() => setOmrStudent(null)}
       />
 
+      {groupStudent && <StudyGroupCorrectionDialog student={groupStudent} authorized={role === 'ADMIN' || role === 'SUPER_ADMIN'} onClose={() => setGroupStudent(null)} onSaved={() => { void fetchStudents(false); }} />}
       {/* Bulk Print Modal (Selected Candidates) */}
       <BulkPrintModal
         students={students.filter((s) => selectedStudentIds.includes(s.id))}

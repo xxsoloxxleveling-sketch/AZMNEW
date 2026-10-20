@@ -65,7 +65,8 @@ export interface MockStudent {
   whatsapp?: string;
   email?: string;
   currentClass: string;
-  hsscGroup?: string;
+  hsscGroup?: string | null;
+  updatedAt?: string;
   schoolName: string;
   boardOrUniversity: string;
   currentRollNo?: string;
@@ -1075,11 +1076,12 @@ export const mockApi = {
 
   // 3. Students Management
 
-  async getStudentsPage(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; page?: number; limit?: number }): Promise<{
+  async getStudentsPage(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; studyGroupReview?: boolean; page?: number; limit?: number }): Promise<{
     students: MockStudent[];
     pagination: { page: number; limit: number; total: number; totalPages: number };
   }> {
     const params = new URLSearchParams();
+    if (filters?.studyGroupReview) params.append('studyGroupReview', 'true');
     params.append('page', String(filters?.page || 1));
     params.append('limit', String(filters?.limit || 50));
     if (filters?.classLevel && filters?.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
@@ -1457,11 +1459,12 @@ export const mockApi = {
   },
 
   async downloadStudentsListPdf(
-    filters?: { classLevel?: string; gender?: string; status?: string; search?: string },
+    filters?: { classLevel?: string; gender?: string; status?: string; search?: string; studyGroupReview?: boolean },
     preloadedStudents?: MockStudent[]
   ): Promise<void> {
     void preloadedStudents;
     const params = new URLSearchParams();
+    if (filters?.studyGroupReview) params.append('studyGroupReview', 'true');
     if (filters?.classLevel && filters.classLevel !== 'ALL') params.append('classLevel', filters.classLevel);
     if (filters?.gender && filters.gender !== 'ALL') params.append('gender', filters.gender);
     if (filters?.status && filters.status !== 'ALL') params.append('status', filters.status);
