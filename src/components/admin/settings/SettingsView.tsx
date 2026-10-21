@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { User, Users, MapPin, Calendar, BellRing } from 'lucide-react';
+import { User, Users, MapPin, Calendar, BellRing, Palette } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { MyAccountTab } from './MyAccountTab';
+import { AppearanceTab } from './AppearanceTab';
 import { UserManagementTab } from './UserManagementTab';
 import { TestCentersTab } from './TestCentersTab';
 import { RollNumberScheduleTab } from './RollNumberScheduleTab';
 import { AnnouncementsTab } from './AnnouncementsTab';
 
-type SettingsTab = 'my-account' | 'users' | 'schedule' | 'centers' | 'announcements';
+type SettingsTab = 'my-account' | 'appearance' | 'users' | 'schedule' | 'centers' | 'announcements';
 
 export const SettingsView: React.FC = () => {
   const { role } = useAuth();
@@ -52,6 +53,22 @@ export const SettingsView: React.FC = () => {
         >
           <User className="w-4 h-4" />
           <span>My Account</span>
+        </button>
+
+
+        {/* Personal appearance — available to all authenticated dashboard roles */}
+        <button
+          role="tab"
+          aria-selected={resolvedTab === 'appearance'}
+          onClick={() => setActiveTab('appearance')}
+          className={`flex-1 min-w-[130px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            resolvedTab === 'appearance'
+              ? 'bg-[#185b9d] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Palette className="w-4 h-4" />
+          <span>Appearance</span>
         </button>
 
         {/* User Accounts — SUPER_ADMIN only */}
@@ -126,6 +143,7 @@ export const SettingsView: React.FC = () => {
       {/* Tab Panels */}
       <div role="tabpanel">
         {resolvedTab === 'my-account' && <MyAccountTab />}
+        {resolvedTab === 'appearance' && <AppearanceTab />}
         {resolvedTab === 'users' && canAccessUsers && <UserManagementTab />}
         {resolvedTab === 'schedule' && canAccessSchedule && <RollNumberScheduleTab />}
         {resolvedTab === 'centers' && canAccessCenters && <TestCentersTab />}

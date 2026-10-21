@@ -52,12 +52,19 @@ export async function verifyExamControlUI() {
         checks++;
         const output = path.resolve(process.env.EXAM_CONTROL_QA_DIR || path.join(root, 'verification/exam-control'));
         fs.mkdirSync(output, { recursive: true });
-        browser = await puppeteer.launch({ headless: true, executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, args: ['--no-sandbox'] });
+        browser = await puppeteer.launch({ headless: true, executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
         const page = await browser.newPage();
         const errors: string[] = [];
         page.on('pageerror', (e: any) => errors.push(e.message));
         await page.evaluateOnNewDocument((tokens: Record<string, string>) => { const actor = new URLSearchParams(location.search).get('actor') || 'SUPER_ADMIN'; localStorage.setItem('jps_access_token', tokens[actor]); }, { SUPER_ADMIN: token('SUPER_ADMIN'), SUPER_ADMIN_OTHER: token('SUPER_ADMIN_OTHER') });
-        async function click(text: string) { const button = await page.evaluateHandle((label: string) => Array.from(document.querySelectorAll('button')).find(e => e.textContent?.trim() === label), text); assert(await button.asElement(), `Button ${text} exists`); await button.asElement()!.click(); }
+        async function click(text: string) {
+            // React can render the action in the microtask after the preceding click.
+            // Wait for the actual visible, enabled button, not an arbitrary sleep.
+            await page.waitForFunction((label: string) => Array.from(document.querySelectorAll('button')).some(e => e.textContent?.trim() === label && !e.disabled && !!e.getClientRects().length), { timeout: 15000 }, text);
+            const button = await page.evaluateHandle((label: string) => Array.from(document.querySelectorAll('button')).find(e => e.textContent?.trim() === label && !e.disabled && !!e.getClientRects().length), text);
+            assert(await button.asElement(), `Button ${text} exists`);
+            await button.asElement()!.click();
+        }
         await page.setViewport({ width: 1440, height: 1000 });
         await page.goto(origin, { waitUntil: 'networkidle0' });
         try {

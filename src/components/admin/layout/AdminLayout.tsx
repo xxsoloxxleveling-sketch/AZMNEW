@@ -3,6 +3,7 @@ import { AdminSidebar, AdminTab } from './AdminSidebar';
 import { AdminHeader } from './AdminHeader';
 import { useAuth } from '../../../lib/authContext';
 import { Loader2 } from 'lucide-react';
+import { DashboardThemeProvider, useDashboardTheme } from '../../../lib/dashboardTheme';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -17,7 +18,7 @@ interface AdminLayoutProps {
   onNavigatePublic?: (route: string) => void;
 }
 
-export const AdminLayout: React.FC<AdminLayoutProps> = ({
+const AdminLayoutContent: React.FC<AdminLayoutProps> = ({
   children,
   currentTab,
   onSelectTab,
@@ -30,6 +31,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onNavigatePublic,
 }) => {
   const { isLoading: authLoading } = useAuth();
+  const { theme } = useDashboardTheme();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   if (authLoading) {
@@ -44,7 +46,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex text-slate-900 font-sans">
+    <div data-dashboard-theme={theme} className="min-h-screen bg-slate-50 flex text-slate-900 font-sans">
       {/* Fixed Left Sidebar */}
       <AdminSidebar
         currentTab={currentTab}
@@ -73,3 +75,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     </div>
   );
 };
+
+// The appearance preference exists only within the signed-in dashboard subtree.
+export const AdminLayout: React.FC<AdminLayoutProps> = (props) => (
+  <DashboardThemeProvider>
+    <AdminLayoutContent {...props} />
+  </DashboardThemeProvider>
+);
