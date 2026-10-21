@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { useDashboardTheme } from '../../../lib/dashboardTheme';
+import { useOptionalDashboardTheme } from '../../../lib/dashboardTheme';
 
 export const attendancePrimary = 'inline-flex items-center justify-center rounded-xl bg-[#185b9d] px-3 py-2 text-xs font-semibold text-white hover:bg-[#13497d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#185b9d] disabled:opacity-50 disabled:cursor-not-allowed';
 export const attendanceSecondary = 'inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#185b9d] disabled:opacity-50 disabled:cursor-not-allowed';
@@ -13,7 +13,7 @@ export const attendanceValue = (value: unknown): string => value === null || val
 export function AttendanceDialog({ title, busy, onClose, children, footer, returnFocusId }: {
   returnFocusId?: string; title: string; busy: boolean; onClose: () => void; children: React.ReactNode; footer: React.ReactNode;
 }) {
-  const { theme } = useDashboardTheme();
+  const theme = useOptionalDashboardTheme();
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
   const latest = useRef({ busy, onClose }); latest.current = { busy, onClose };

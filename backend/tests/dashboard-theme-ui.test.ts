@@ -42,7 +42,13 @@ async function verifyDashboardAppearance() {
             </AttendanceDialog>}
           </AdminLayout>;
         }
-        createRoot(document.getElementById('root')).render(<AuthProvider><Fixture/></AuthProvider>);`,
+        createRoot(document.getElementById('root')).render(
+          location.pathname==='/standalone'
+            ? <AttendanceDialog title="Standalone synthetic dialog" busy={false} onClose={()=>{}} footer={<button>Close</button>}>
+                <span>Standalone confirmation still works</span>
+              </AttendanceDialog>
+            : <AuthProvider><Fixture/></AuthProvider>
+        );`,
       resolveDir: root,
       loader: 'tsx',
     },
@@ -162,8 +168,11 @@ async function verifyDashboardAppearance() {
     await page.goto(base+'/public',{waitUntil:'networkidle0'});
     assert.equal(await page.evaluate(()=>document.querySelector('[data-dashboard-theme]')), null);
     assert(await page.evaluate(()=>document.body.textContent?.includes('Synthetic public site')));
+    await page.goto(base+'/standalone',{waitUntil:'networkidle0'});
+    await page.waitForSelector('[data-dashboard-theme="light"] [role="dialog"]');
+    assert(await page.evaluate(()=>document.body.textContent?.includes('Standalone confirmation still works')));
     assert.deepEqual(errors,[]);
-    console.log('DASHBOARD_THEME_BROWSER_PASS: Light/Dark, account isolation, persistence, modal portal, print white, mobile, public isolation');
+    console.log('DASHBOARD_THEME_BROWSER_PASS: Light/Dark, account isolation, persistence, modal portal, standalone light fallback, print white, mobile, public isolation');
   } finally {
     await browser.close();
     await new Promise<void>(resolve=>server.close(()=>resolve()));

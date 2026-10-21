@@ -68,3 +68,8 @@ export function useDashboardTheme(): ThemeContextValue {
   if (!value) throw new Error('Dashboard theme must be used inside AdminLayout.');
   return value;
 }
+
+/** Standalone dialogs remain functional when rendered without the dashboard shell. */
+export function useOptionalDashboardTheme(): DashboardTheme {
+  return useContext(DashboardThemeContext)?.theme ?? 'light';
+}
