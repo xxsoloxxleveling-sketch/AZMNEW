@@ -52,7 +52,7 @@ export async function verifyExamControlUI() {
         checks++;
         const output = path.resolve(process.env.EXAM_CONTROL_QA_DIR || path.join(root, 'verification/exam-control'));
         fs.mkdirSync(output, { recursive: true });
-        browser = await puppeteer.launch({ headless: true, executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, args: ['--no-sandbox'] });
+        browser = await puppeteer.launch({ headless: true, executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
         const page = await browser.newPage();
         const errors: string[] = [];
         page.on('pageerror', (e: any) => errors.push(e.message));

@@ -198,7 +198,8 @@
   .roll-number-slip .roll-slip-footer { break-inside: avoid; }
 }
 
-/* Staff dashboard only: utility color remapping, never applied to public routes or paper output. */
+/* Staff dashboard only: screen colors must never recolor printed examination documents. */
+@media screen {
 [data-dashboard-theme="dark"] { color-scheme: dark; background-color: #0b1220; color: #e5edf7; --azm-dark-surface: #141f30; --azm-dark-subtle: #1b2940; --azm-dark-border: #34465e; }
 [data-dashboard-theme="dark"] :is([class~="bg-white"], [class~="bg-white/40"], [class~="bg-white/50"], [class~="bg-white/60"], [class~="bg-white/70"], [class~="bg-white/80"], [class~="bg-white/90"], [class~="bg-white/95"], [class~="bg-white/98"], [class~="bg-[#ffffff]"]):not(:where(.printable-document, .printable-document *, .roll-number-slip, .roll-number-slip *, .omr-sheet, .omr-sheet *, [data-dashboard-paper], [data-dashboard-paper] *)) { background-color: #141f30; }
 [data-dashboard-theme="dark"] :is([class~="bg-slate-50"], [class~="bg-slate-50/30"], [class~="bg-slate-50/40"], [class~="bg-slate-50/50"], [class~="bg-slate-50/60"], [class~="bg-slate-50/70"], [class~="bg-slate-50/80"], [class~="bg-slate-50/90"], [class~="bg-gray-50"], [class~="bg-gray-50/50"], [class~="bg-gray-100"], [class~="bg-[#f8fafc]"]):not(:where(.printable-document, .printable-document *, .roll-number-slip, .roll-number-slip *, .omr-sheet, .omr-sheet *, [data-dashboard-paper], [data-dashboard-paper] *)) { background-color: #1b2940; }
@@ -235,4 +236,5 @@
 [data-dashboard-theme="dark"] option { background-color: #111d2f; color: #eaf2fb; }
 [data-dashboard-theme="dark"] ::-webkit-scrollbar-track { background: #131e30; }
 [data-dashboard-theme="dark"] ::-webkit-scrollbar-thumb { background: #40536c; }
+}
 @media print { [data-dashboard-theme="dark"] { color-scheme: light; } }

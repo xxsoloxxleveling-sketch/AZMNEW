@@ -95,6 +95,27 @@ jobs:
           printf 'PUPPETEER_EXECUTABLE_PATH=%s\n' "$chrome_path" >> "$GITHUB_ENV"
           sudo apt-get update -qq
           sudo apt-get install -y poppler-utils postgresql-client
+      - name: Verify dashboard theme and isolation in real browser
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/dashboard-theme-ui.test.ts
+      - name: Upload dashboard theme synthetic screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-appearance-evidence
+          path: tmp/dashboard-appearance-evidence/
+          if-no-files-found: error
+      - name: Authenticated session control browser verification
+        env:
+          REQUIRE_PG17: "true"
+          EXAM_CONTROL_BROWSER: "true"
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/exam-session-control.test.ts
+      - name: Upload synthetic session control screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exam-session-control-ui
+          path: verification/exam-control/
+          if-no-files-found: ignore
       - name: Verify HSSC audit provisioning through restricted application logins
         env:
           REQUIRE_PG17: "true"
@@ -116,18 +137,6 @@ jobs:
           name: hssc-study-group-evidence
           path: tmp/hssc-flow-20261020/
           if-no-files-found: error
-      - name: Authenticated session control browser verification
-        env:
-          REQUIRE_PG17: "true"
-          EXAM_CONTROL_BROWSER: "true"
-        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/exam-session-control.test.ts
-      - name: Upload synthetic session control screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: exam-session-control-ui
-          path: verification/exam-control/
-          if-no-files-found: ignore
       - name: Verify legacy and future student document collections
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/student-document-collections.test.ts
