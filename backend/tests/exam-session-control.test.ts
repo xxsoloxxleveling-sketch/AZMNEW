@@ -47,6 +47,10 @@ async function run() {
         process.env.DATABASE_URL = url.toString();
         process.env.DIRECT_URL = url.toString();
         process.env.NODE_ENV = 'test';
+        // The fixture must mirror the additive OMR runtime contract, not grant blanket audit mutations.
+        const omrTables=['OmrExam','OmrExamPermission','OmrAnswerKeyRevision','OmrScanBatch','OmrScanBatchItem','OmrScan','OmrDetectedResponse','OmrExamResult','OmrCorrectionAudit','OmrPublicationAudit','OmrLegacyPublication'];
+        for(const table of omrTables) await admin.query(`REVOKE DELETE,TRUNCATE ON "${table}" FROM "${role}"; DROP POLICY IF EXISTS azm_backend_omr ON "${table}"; CREATE POLICY azm_backend_omr ON "${table}" FOR ALL TO "${role}" USING(true) WITH CHECK(true)`);
+        await admin.query(`REVOKE UPDATE ON "OmrCorrectionAudit","OmrPublicationAudit","OmrLegacyPublication" FROM "${role}"`);
         await admin.query(`CREATE POLICY azm_backend_private_documents ON public."StudentDocument" FOR ALL TO "${role}" USING (true) WITH CHECK (true)`);
         await admin.query(`REVOKE UPDATE,DELETE,TRUNCATE ON "StudentStudyGroupCorrection" FROM "${role}"; DROP POLICY IF EXISTS azm_backend_study_group_audit ON "StudentStudyGroupCorrection"; CREATE POLICY azm_backend_study_group_audit ON "StudentStudyGroupCorrection" FOR ALL TO "${role}" USING (true) WITH CHECK (true)`);
         const { PrismaClient } = await import('@prisma/client');

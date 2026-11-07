@@ -25,9 +25,9 @@ Branch: `codex/smart-omr-evaluation-mobile`. Initial retained checkpoint: `a79e8
 | Existing attendance reset UI regression | FAILED: existing fixture times out waiting for #attendance-session after its earlier checks; attendance source/fixture are unchanged |
 | Expanded web-only TypeScript invocation | FAILED in unchanged authContext.tsx/mockApi.ts because getUser's bound export is untyped (5 existing diagnostics); Vite build and mobile strict check separately passed |
 | Local native PostgreSQL regressions | BLOCKED: no PostgreSQL 17/18 server binaries or Docker discovered; hardcoded paths replaced with configurable tool discovery |
-| Native PostgreSQL 17 full-history/concurrency/grants/backup restore | Remote CI prepared; not yet an observed pass in this report |
+| Native PostgreSQL 17 | Hosted PostgreSQL 17.11: new OMR full-history/RLS/grant/concurrent-claim/duplicate tests passed; all three HSSC provisioning scenarios passed; clean Prisma deploy and repeat deploy passed. The older attendance target-upgrade rehearsal failed and is being repaired without changing its assertions |
 | Linux untrusted PDF execution/multi-page sandbox | BLOCKED locally: Windows runner deliberately refuses unsandboxed PDF. Parser bounds/refusal contracts passed; actual bubblewrap execution remains to validate |
-| Android development APK | BLOCKED locally: Gradle attempt reports missing JAVA_HOME/java; Android SDK/device unavailable. No local APK exists. A separate CI job is prepared |
+| Android development APK | PASSED on hosted Java 21 / Android SDK 36. Downloaded and archive digest verified; local APK: tmp/omr-dev/release/azm-omr-development.apk (4,201,448 bytes). Local Gradle/device testing remains unavailable |
 | iOS | Sources generated; camera usage/privacy cover prepared. No Xcode build or physical device test |
 | Physical filled-sheet/camera accuracy | NOT RUN; official release remains locked |
 
@@ -40,3 +40,14 @@ Synthetic checks cover mismatched QR identity/session/group/version, inactive/un
 PGlite serializes database access and cannot establish native multi-connection correctness. The PostgreSQL 17 CI test explicitly uses two native clients for SKIP LOCKED and concurrent duplicate submissions. Observe its actual result before accepting that evidence. Application rollback must preserve OMR audit tables and account for the old Results Desk's visibility behavior.
 
 **Verdict: working isolated synthetic development flow; not production-ready or authorized for real examination grading/publication.** Complete native database/PDF/mobile builds, resolve existing regressions, review legitimate historical release evidence, validate physical sheets and obtain separate release authorization first.
+
+## Hosted review evidence
+
+Draft PR: https://github.com/xxsoloxxleveling-sketch/AZMNEW/pull/28 (unmerged, no deploy).
+Initial hosted run: https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/runs/42424513554.
+APK SHA-256: `f7d5119e5c3b4c19645edb777274a9e513f62c1e648dcd4966509719dcf5415f`.
+Artifact ZIP SHA-256: `03a2c20eb20c60b7de71ff889e6b41be1044de64d1b34bf27a3bf65b74f9ce1c` (matches GitHub's artifact digest).
+
+The normal Git CLI has no authenticated account. The connected GitHub app published a review snapshot with a tree verified identical to the local milestone, retaining local commit history. Local and remote commit IDs differ; content equality is checked independently. Further fixture corrections are added as review commits with the same verification. No force push or local history reset is used.
+
+Hosted checks exposed a blanket-grant legacy runtime fixture and an old migration rehearsal which incorrectly included later migrations in its pre-target baseline. Fixture updates apply the real OMR permission contract, copy only migrations preceding the historical target and generate an isolated client matching that historical database. Existing assertions remain intact. Complete rerun results must be observed before declaring these broader regressions passed.

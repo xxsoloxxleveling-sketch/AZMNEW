@@ -68,7 +68,6 @@ jobs:
         run: |
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-native.test.ts
           node backend/node_modules/tsx/dist/cli.mjs backend/tests/hssc-runtime.test.ts
-          node backend/node_modules/tsx/dist/cli.mjs backend/tests/attendance-reset-migration-rehearsal.test.ts
       - name: Synthetic full application and recovery workflow
         run: |
           cd backend
@@ -77,6 +76,9 @@ jobs:
           cd ..
           export OMR_CHROME_PATH="$chrome"
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/integration.test.ts tools/omr-dev/queue-recovery.test.ts
+
+      - name: Existing attendance upgrade and backup restore rehearsal
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/attendance-reset-migration-rehearsal.test.ts
 
   android:
     runs-on: ubuntu-24.04
