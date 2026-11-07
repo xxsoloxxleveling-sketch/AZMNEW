@@ -7,10 +7,11 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'backend/package.json'));
 export async function generateSheet() {
   const puppeteer=require('puppeteer'),qr=require('qrcode');
+  let bundled:string|undefined;try{bundled=await puppeteer.executablePath();}catch{}
   const candidates=[process.env.OMR_CHROME_PATH,process.env.PUPPETEER_EXECUTABLE_PATH,
     path.join(process.env.ProgramFiles||'C:/Program Files','Google/Chrome/Application/chrome.exe'),
     path.join(process.env['ProgramFiles(x86)']||'C:/Program Files (x86)','Google/Chrome/Application/chrome.exe'),
-    puppeteer.executablePath()].filter(Boolean) as string[];
+    bundled].filter(Boolean) as string[];
   let executablePath:string|undefined;for(const candidate of candidates)if(await fs.stat(candidate).then(()=>true,()=>false)){executablePath=candidate;break;}
   if(!executablePath)throw new Error('Set OMR_CHROME_PATH to an installed Chrome/Chromium executable for synthetic sheet rendering');
   const identity={type:'AZM_OMR',session:'2026-V',studentId:'synthetic-omr-candidate',applicationNo:'SYNTHETIC-APP-0001',rollNumber:'SYNTHETIC-OMR-0001',rollType:'OFFICIAL',sheetVersion:2};

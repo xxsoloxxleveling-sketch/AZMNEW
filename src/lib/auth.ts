@@ -149,7 +149,7 @@ export const setRefreshToken = authStorage.setRefreshToken.bind(authStorage);
 export const getRefreshToken = authStorage.getRefreshToken.bind(authStorage);
 export const clearRefreshToken = authStorage.clearRefreshToken.bind(authStorage);
 export const setUser = authStorage.setUser.bind(authStorage);
-export const getUser = authStorage.getUser.bind(authStorage);
+export const getUser = <T = any>(): T | null => authStorage.getUser<T>();
 export const clearUser = authStorage.clearUser.bind(authStorage);
 export const clearAll = authStorage.clearAll.bind(authStorage);
 export const isAuthenticated = authStorage.isAuthenticated.bind(authStorage);
