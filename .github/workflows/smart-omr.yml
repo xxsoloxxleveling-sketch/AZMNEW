@@ -59,25 +59,26 @@ jobs:
           npx tsc
           cd ..
           npm run build
+          node node_modules/typescript/bin/tsc --noEmit --jsx react-jsx --esModuleInterop --moduleResolution bundler --module esnext --target ES2022 --lib ES2022,DOM --skipLibCheck src/components/admin/omr/OmrEvaluationCenter.tsx
           npm run build --prefix apps/omr-mobile
       - name: Scanner and synthetic API/security tests
         run: |
           python -m unittest discover -s workers/omr -v
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-scoring.test.ts backend/tests/omr-database.test.ts backend/tests/omr-migration-recovery.test.ts backend/tests/omr-api.test.ts backend/tests/omr-security.test.ts backend/tests/omr-public-results.test.ts backend/tests/postgres-binaries.test.ts tools/omr-dev/mobile-session.test.ts tools/omr-dev/answer-key-import.test.ts
       - name: Native PostgreSQL 17 full history, grants and concurrent claims
+        id: native
         run: |
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-native.test.ts
           node backend/node_modules/tsx/dist/cli.mjs backend/tests/hssc-runtime.test.ts
       - name: Synthetic full application and recovery workflow
         run: |
-          cd backend
-          npx puppeteer browsers install chrome
-          chrome=$(node -e "(async()=>process.stdout.write(await require('puppeteer').executablePath()))()")
-          cd ..
+          # Use the runner's installed Chrome/AppArmor profile; keep Chromium sandboxing enabled.
+          chrome="$(command -v google-chrome || command -v chromium)"
           export OMR_CHROME_PATH="$chrome"
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/integration.test.ts tools/omr-dev/queue-recovery.test.ts
 
       - name: Existing attendance upgrade and backup restore rehearsal
+        if: ${{ !cancelled() && steps.native.outcome == 'success' }}
         run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/attendance-reset-migration-rehearsal.test.ts
 
   android:

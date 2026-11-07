@@ -53,3 +53,10 @@ The normal Git CLI has no authenticated account. The connected GitHub app publis
 Hosted checks exposed a blanket-grant legacy runtime fixture and an old migration rehearsal which incorrectly included later migrations in its pre-target baseline. Fixture updates apply the real OMR permission contract, copy only migrations preceding the historical target and generate an isolated client matching that historical database. Existing assertions remain intact. Complete rerun results must be observed before declaring these broader regressions passed.
 
 The second hosted run passed the new native PostgreSQL 17 checks and HSSC scenarios again, and built the APK again. It then exposed an asynchronous Puppeteer path lookup in the new CI command and an old default PostgreSQL client on PATH in the broader workflow. The command now awaits the browser path; discovery skips incompatible PATH entries; the broader workflow selects the disposable PostgreSQL 17 clients explicitly. These are infrastructure corrections, not relaxed test assertions.
+
+## Broader PostgreSQL 17 regression result
+
+The complete runtime privilege isolation workflow passed on hosted PostgreSQL 17 after the fixture/tool corrections: https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/runs/42425612508.
+It includes PRE_OPEN lifecycle and deletion/ownership checks, signed capability guard, Super Admin user deletion, frontend build, dashboard/session-control browser flows, HSSC restricted-role provisioning/capture/edits/PDF identity/preview geometry, student document collections, roll-slip printing and strict public/flexible staff registration. No production service or data was used.
+
+The new OMR Linux application check reached its real browser launch and found Ubuntu AppArmor restrictions on the downloaded Chrome binary. CI now selects the runner-installed Chrome profile, retaining its sandbox. This does not disable PDF isolation or change application scoring. The application/legacy upgrade/backup-restore rerun remains to observe.
