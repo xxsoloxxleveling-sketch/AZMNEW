@@ -1,0 +1,82 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash,createHmac } from 'node:crypto';
+import { decodeIdentity,reconcileIdentity,candidateGroup } from '../src/modules/omr/identity';
+import { examInput } from '../src/modules/omr/omr.schema';
+import { officialActivation,recognitionHashes } from '../src/modules/omr/activation';
+import { recognitionEnvironment } from '../src/modules/omr/runner';
+import { fileType,storePrivate,readPrivate,MAX_UPLOAD } from '../src/modules/omr/storage';
+const qr={type:'AZM_OMR',session:'2026-V',sheetVersion:2,rollType:'OFFICIAL',studentId:'synthetic-student',applicationNo:'SYNTHETIC-APP',rollNumber:'SYNTHETIC-ROLL'};
+const student={id:qr.studentId,applicationNo:qr.applicationNo,rollNumber:qr.rollNumber,status:'ACTIVE',currentClass:'Class 6th',hsscGroup:null};
+const exam={session:'2026-V',candidateGroup:candidateGroup(student)!};
+test('legacy identity requires every database identity field and eligibility to agree',()=>{
+  assert.equal(reconcileIdentity(qr,student,exam),true);
+  for(const change of [{studentId:'other'},{applicationNo:'other'},{rollNumber:'other'},{rollType:'PROVISIONAL'},{session:'other'},{sheetVersion:3}]) assert.equal(reconcileIdentity({...qr,...change},student,exam),false);
+  assert.equal(reconcileIdentity(qr,{...student,status:'INACTIVE'},exam),false);
+  assert.equal(reconcileIdentity(qr,{...student,currentClass:'Class 10th'},exam),false);
+  assert.equal(reconcileIdentity(qr,null,exam),false);
+  assert.equal(reconcileIdentity({...qr,examId:'other'},student,{...exam,id:'selected'}),false);
+  assert.equal(reconcileIdentity({...qr,examId:'selected'},student,{...exam,id:'selected'}),true);
+});
+test('future signed QR envelope validates its signature and retains strict legacy reconciliation',()=>{
+  const secret='synthetic-qr-signing-key-for-unit-tests-only';
+  const payload=Buffer.from(JSON.stringify(qr)).toString('base64url');
+  const signature=createHmac('sha256',secret).update(payload).digest('hex');
+  assert.deepEqual(decodeIdentity({type:'AZM_OMR_SIGNED',payload,signature},secret),qr);
+  assert.equal(decodeIdentity({type:'AZM_OMR_SIGNED',payload,signature:'0'.repeat(64)},secret),null);
+  assert.equal(decodeIdentity({type:'AZM_OMR_SIGNED',payload,signature},'short'),null);
+});
+test('CV child environment excludes database, signing and storage credentials',()=>{
+  const env=recognitionEnvironment();
+  for(const name of ['DATABASE_URL','DIRECT_URL','JWT_ACCESS_SECRET','R2_SECRET_ACCESS_KEY','OMR_VALIDATION_SIGNING_KEY','OMR_TRUSTED_PDF_FIXTURE']) assert.equal(name in env,false);
+  assert.equal(env.OMP_NUM_THREADS,'1');
+});
+test('file signature, size and private scan reference checks reject spoofing and traversal',async()=>{
+  assert.throws(()=>fileType(Buffer.from('fake image')),/PNG/);
+  assert.throws(()=>fileType(Buffer.alloc(MAX_UPLOAD+1)),/20 MB/);
+  await assert.rejects(()=>readPrivate('../outside.key'),/Invalid private/);
+});
+test('private development storage round trips only generated references',async()=>{
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'azm-omr-storage-test-'));
+  const previous=process.env.OMR_PRIVATE_DIR; process.env.OMR_PRIVATE_DIR=root;
+  try {
+    const bytes=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+    const key=await storePrivate(bytes); assert.match(key,/^omr\/[a-f0-9-]{36}\.png$/);
+    assert.deepEqual(await readPrivate(key),bytes);
+  } finally {
+    if(previous===undefined) delete process.env.OMR_PRIVATE_DIR; else process.env.OMR_PRIVATE_DIR=previous;
+    if(path.dirname(root)===path.resolve(os.tmpdir()) && path.basename(root).startsWith('azm-omr-storage-test-')) await fs.rm(root,{recursive:true,force:true});
+  }
+});
+test('official activation fails closed and detects changed physical evidence',async()=>{
+  const names=['OMR_VALIDATION_MANIFEST','OMR_VALIDATION_SIGNING_KEY','OMR_PHYSICAL_REPORT'];
+  const previous=Object.fromEntries(names.map(name=>[name,process.env[name]]));
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'azm-omr-activation-test-'));
+  try {
+    for(const name of names) delete process.env[name];
+    assert.equal(officialActivation().approved,false);
+    const report=path.join(root,'synthetic-report.json'),manifest=path.join(root,'manifest.json');
+    const reportBytes=Buffer.from(JSON.stringify({fixture:'TEST_ONLY_NOT_PHYSICAL_APPROVAL'}));
+    await fs.writeFile(report,reportBytes);
+    const payload=Buffer.from(JSON.stringify({status:'PHYSICAL_VALIDATED',template:'AZM_OMR_V2_2026_V',...recognitionHashes(),reportSha256:createHash('sha256').update(reportBytes).digest('hex'),expiresAt:new Date(Date.now()+60000).toISOString(),approvedBy:'synthetic-release-actor'})).toString('base64url');
+    const secret='synthetic-release-signing-key-for-unit-tests-only';
+    await fs.writeFile(manifest,JSON.stringify({payload,signature:createHmac('sha256',secret).update(payload).digest('hex')}));
+    Object.assign(process.env,{OMR_VALIDATION_MANIFEST:manifest,OMR_VALIDATION_SIGNING_KEY:secret,OMR_PHYSICAL_REPORT:report});
+    assert.equal(officialActivation().approved,true);
+    await fs.writeFile(report,'tampered'); assert.equal(officialActivation().approved,false);
+  } finally {
+    for(const name of names) {if(previous[name]===undefined) delete process.env[name];else process.env[name]=previous[name];}
+    if(path.dirname(root)===path.resolve(os.tmpdir()) && path.basename(root).startsWith('azm-omr-activation-test-')) await fs.rm(root,{recursive:true,force:true});
+  }
+});
+
+test('examination configuration rejects hidden decimal rounding and an impossible score floor',()=>{
+  const exam={code:'SYNTHETIC',title:'Synthetic exam',session:'2026-V',candidateGroup:'CLASS 6TH',examDate:'2026-11-15T09:00:00Z',allowedVersions:['A']};
+  assert.equal(examInput.safeParse({...exam,correctMarks:1.125,incorrectPenalty:.25,minimumScore:0}).success,true);
+  assert.equal(examInput.safeParse({...exam,correctMarks:1.123456}).success,false);
+  assert.equal(examInput.safeParse({...exam,incorrectPenalty:.123456}).success,false);
+  assert.equal(examInput.safeParse({...exam,minimumScore:101}).success,false);
+});

@@ -1,3 +1,4 @@
+import { postgresExecutable } from './postgres-binaries';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -108,8 +109,8 @@ async function run() {
     await check('duplicate audit of an already reset old attempt is rejected even with fresh identifiers',async()=>{const operation=await db.attendanceResetOperation.findFirst();assert(operation,'valid rehearsal reset required');await rollbackAttack(()=>upgrade.query(`INSERT INTO "AttendanceResetOperation" (id,"actorId","actorName","idempotencyKey","challengeNonce","requestHash",reason,mode,"businessDate","affectedCandidates",scope,result,"completedAt") SELECT $1,"actorId","actorName",$2,$3,"requestHash",reason,mode,"businessDate","affectedCandidates",scope,jsonb_set(result,'{resetReference}',to_jsonb($1::text)),"completedAt" FROM "AttendanceResetOperation" WHERE id=$4`,[randomUUID(),randomUUID(),randomUUID(),operation.id]));});
     await check('archived attempts reject edits and repeated generations preserve the exact old CLOSED metadata',async()=>{for(const table of ['AttendanceSession','AttendanceSessionCandidate','Attendance'])await assert.rejects(()=>upgrade.query(`DELETE FROM "${table}" WHERE ${table==='AttendanceSession'?'id':'"sessionId"'}='closed'`));const previous=(await upgrade.query(`SELECT to_jsonb(t)-ARRAY['attemptNumber','isCurrent','archivedAt'] AS row FROM "AttendanceSession" t WHERE id='closed'`)).rows[0].row;assert.deepEqual(previous,(before.AttendanceSession as any[]).find(row=>row.id==='closed'));const currents=await db.attendanceSession.findMany({where:{isCurrent:true}});const preview=await reset.preview({mode:'CURRENT',businessDate:'2026-10-10',sessionIds:currents.map((row:any)=>row.id)},'migration-super');const result:any=await reset.confirm({challenge:preview.challenge,reason:'Repeated migration rehearsal reset',confirmationText:'RESET ATTENDANCE'},'migration-super',randomUUID());assert(result.attempts.every((row:any)=>row.attemptNumber===3));});
     await check('custom-format backup restores exact synthetic rows, FKs and immutable triggers into a fresh database', async () => {
-      const pgBin = process.env.ATTENDANCE_TEST_PG_BIN || 'C:/Program Files/PostgreSQL/18/bin';
-      const executable = (name: string) => path.join(pgBin, name + (process.platform === 'win32' ? '.exe' : ''));
+
+      const executable = postgresExecutable;
       assert(fs.existsSync(executable('pg_dump')) && fs.existsSync(executable('pg_restore')), 'Set ATTENDANCE_TEST_PG_BIN to local PostgreSQL backup tools');
       const credentials = { ...process.env, PGPASSWORD: decodeURIComponent(source.password), PGSSLMODE: 'disable' };
       const argumentsFor = (name: string) => ['--host', source.hostname, '--port', source.port || '5432', '--username', decodeURIComponent(source.username), '--dbname', name];

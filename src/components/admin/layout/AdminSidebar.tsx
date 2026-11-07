@@ -17,6 +17,7 @@ import {
   LogOut as IconLogOut,
   Shield as IconShield,
   QrCode as IconScanner,
+  FileCheck2 as IconOmr,
 } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { Role } from '../../../lib/mockApi';
@@ -33,6 +34,7 @@ export type AdminTab =
   | 'payroll'
   | 'transactions'
   | 'settings'
+  | 'omr'
   | 'scan';
 
 interface AdminSidebarProps {
@@ -53,6 +55,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const { user, role, logout } = useAuth();
 
   const navItems = [
+    {
+      id: 'omr' as AdminTab,
+      label: 'OMR Evaluation',
+      icon: IconOmr,
+      roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
+    },
     {
       id: 'dashboard' as AdminTab,
       label: 'Dashboard',

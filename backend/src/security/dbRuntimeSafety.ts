@@ -1,3 +1,4 @@
+import { assertOmrRuntime } from './omrRuntimeSafety';
 import { createHmac,randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
@@ -50,6 +51,14 @@ const expectedTriggers = [
   'AttendanceSessionReopening_insert_validation',
   'AttendanceSessionReopening_coherence',
   'StudentStudyGroupCorrection_immutable',
+  'OmrCorrectionAudit_immutable',
+  'OmrLegacyPublication_immutable',
+  'OmrLegacyPublication_release_guard',
+  'OmrPublicationAudit_immutable',
+  'OmrAnswerKeyRevision_guard',
+  'OmrExam_policy_guard',
+  'OmrScan_evidence_guard',
+  'OmrExamResult_identity_guard',
 ] as const;
 
 function loginFromUrl(value: string): string {
@@ -159,6 +168,7 @@ export async function assertRestrictedRuntimeDatabase(
     blocked('runtime DML or immutable-audit privilege requirements not met');
   }
   await assertStudyGroupAuditRuntime(db);
+  await assertOmrRuntime(db);
   const signingKey=process.env.EXAM_CONTROL_SIGNING_KEY;
   if(!signingKey||signingKey.length<64)blocked('Exam Session Control signing key is missing');
   const probe=randomUUID();

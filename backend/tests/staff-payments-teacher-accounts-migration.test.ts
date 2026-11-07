@@ -1,14 +1,15 @@
+import { postgresExecutable } from './postgres-binaries';
 import assert from 'node:assert/strict';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path'; import net from 'node:net';
 import { execFileSync, spawn } from 'node:child_process'; import { Client } from 'pg';
 export async function disposableStaffDatabase() {
   if(process.env.NODE_ENV==='production') throw new Error('Production testing prohibited.');
   const root=path.resolve(__dirname,'../..'), backend=path.join(root,'backend'), dir=fs.mkdtempSync(path.join(os.tmpdir(),'azm-staff-disposable-'));
-  const bin=process.env.STAFF_TEST_POSTGRES_BIN || 'C:/Program Files/PostgreSQL/18/bin';
-  execFileSync(path.join(bin,'initdb.exe'),['-D',path.join(dir,'data'),'-U','postgres','-A','trust','--encoding=UTF8','--no-locale'],{windowsHide:true,stdio:'pipe'});
+
+  execFileSync(postgresExecutable('initdb'),['-D',path.join(dir,'data'),'-U','postgres','-A','trust','--encoding=UTF8','--no-locale'],{windowsHide:true,stdio:'pipe'});
   const port=await new Promise<number>((resolve,reject)=>{const socket=net.createServer();socket.once('error',reject);socket.listen(Number(process.env.STAFF_TEST_POSTGRES_PORT || 0),'127.0.0.1',()=>{const p=(socket.address() as net.AddressInfo).port;socket.close(()=>resolve(p));});});
   const output=fs.openSync(path.join(dir,'postgres.log'),'a');
-  const child=spawn(path.join(bin,'postgres.exe'),['-D',path.join(dir,'data'),'-h','127.0.0.1','-p',String(port)],{windowsHide:true,stdio:['ignore',output,output]});
+  const child=spawn(postgresExecutable('postgres'),['-D',path.join(dir,'data'),'-h','127.0.0.1','-p',String(port)],{windowsHide:true,stdio:['ignore',output,output]});
   const url='postgresql://postgres@127.0.0.1:'+port+'/postgres'; let sql:Client|undefined;
   try {
     for(let n=0;n<100;n++){const c=new Client({connectionString:url,connectionTimeoutMillis:1000});try{await c.connect();sql=c;break;}catch{await c.end().catch(()=>{});await new Promise(r=>setTimeout(r,100));}}
@@ -17,8 +18,8 @@ export async function disposableStaffDatabase() {
       const sqlFile=path.join(backend,'prisma/migrations',name,'migration.sql');
       if(name!=='20261008120000_staff_payments_teacher_accounts' && fs.existsSync(sqlFile)) await sql.query(fs.readFileSync(sqlFile,'utf8'));
     }
-    return {url,sql,dir,close:async()=>{await sql!.end();execFileSync(path.join(bin,'pg_ctl.exe'),['-D',path.join(dir,'data'),'stop','-m','fast','-w'],{windowsHide:true,stdio:'pipe'});fs.closeSync(output);}};
-  }catch(error){await sql?.end().catch(()=>{});try{execFileSync(path.join(bin,'pg_ctl.exe'),['-D',path.join(dir,'data'),'stop','-m','fast','-w'],{windowsHide:true,stdio:'pipe'});}catch{child.kill();}fs.closeSync(output);throw error;}
+    return {url,sql,dir,close:async()=>{await sql!.end();execFileSync(postgresExecutable('pg_ctl'),['-D',path.join(dir,'data'),'stop','-m','fast','-w'],{windowsHide:true,stdio:'pipe'});fs.closeSync(output);}};
+  }catch(error){await sql?.end().catch(()=>{});try{execFileSync(postgresExecutable('pg_ctl'),['-D',path.join(dir,'data'),'stop','-m','fast','-w'],{windowsHide:true,stdio:'pipe'});}catch{child.kill();}fs.closeSync(output);throw error;}
 }
 export async function applyStaffMigration(sql:Client){
   const migration=fs.readFileSync(path.resolve(__dirname,'../prisma/migrations/20261008120000_staff_payments_teacher_accounts/migration.sql'),'utf8');

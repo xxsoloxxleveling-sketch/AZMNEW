@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AZM.AIO OMR</string>
+    <string name="title_activity_main">AZM.AIO OMR</string>
+    <string name="package_name">com.azmaio.omr</string>
+    <string name="custom_url_scheme">com.azmaio.omr</string>
+</resources>

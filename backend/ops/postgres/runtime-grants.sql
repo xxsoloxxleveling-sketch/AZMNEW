@@ -120,9 +120,10 @@ GRANT USAGE ON SCHEMA public TO :"grant_role";
 -- supplies a forged cancellation-audit context. Other application tables
 -- retain their existing DML surface. Database triggers remain mandatory.
 SELECT format('GRANT %s ON TABLE %I.%I TO %I',
-  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent') THEN 'SELECT' WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','StudentStudyGroupCorrection')
+  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent') THEN 'SELECT' WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','StudentStudyGroupCorrection','OmrCorrectionAudit','OmrPublicationAudit','OmrLegacyPublication')
     THEN 'SELECT, INSERT'
     WHEN c.relname IN ('Attendance','AttendanceSession','AttendanceSessionCandidate') THEN 'SELECT, INSERT, UPDATE'
+    WHEN c.relname LIKE 'Omr%' THEN 'SELECT, INSERT, UPDATE'
     ELSE 'SELECT, INSERT, UPDATE, DELETE'
   END,
   n.nspname,c.relname,:'grant_role')
@@ -142,6 +143,13 @@ SELECT format('CREATE POLICY azm_backend_private_documents ON public."StudentDoc
 -- Reconcile the configured backend group after migrations, regardless of role creation order.
 DROP POLICY IF EXISTS azm_backend_study_group_audit ON public."StudentStudyGroupCorrection";
 SELECT format('CREATE POLICY azm_backend_study_group_audit ON public."StudentStudyGroupCorrection" FOR ALL TO %I USING (true) WITH CHECK (true)',:'grant_role') \gexec
+-- Reconcile new OMR policy roles after migrations, including alternate backend groups.
+SELECT format('DROP POLICY IF EXISTS azm_backend_omr ON public.%I',c.relname)
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='public' AND c.relname IN ('OmrExam','OmrExamPermission','OmrAnswerKeyRevision','OmrScanBatch','OmrScanBatchItem','OmrScan','OmrDetectedResponse','OmrExamResult','OmrCorrectionAudit','OmrPublicationAudit','OmrLegacyPublication') \gexec
+SELECT format('CREATE POLICY azm_backend_omr ON public.%I FOR ALL TO %I USING(true) WITH CHECK(true)',c.relname,:'grant_role')
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='public' AND c.relname IN ('OmrExam','OmrExamPermission','OmrAnswerKeyRevision','OmrScanBatch','OmrScanBatchItem','OmrScan','OmrDetectedResponse','OmrExamResult','OmrCorrectionAudit','OmrPublicationAudit','OmrLegacyPublication') \gexec
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"grant_role";
 GRANT :"grant_role" TO :"login_role" WITH INHERIT TRUE, SET FALSE;
 

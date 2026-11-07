@@ -1,0 +1,53 @@
+# Smart OMR release and recovery runbook
+
+Status: development implementation; **not approved for production**. This runbook is a future release checklist, not authorization to deploy. The feature branch must remain unmerged until the release gates are met. No Oracle/database changes or real marks publication were performed during implementation.
+
+## Runtime and privacy contract
+
+- Express provides existing staff JWT authentication, active account checks and per-examination scan/review/manage grants. Super Admin alone creates examinations, assigns operators and publishes/withdraws marks. Assigned admins manage keys; teachers never receive keys or internal marks.
+- Run `dist/modules/omr/worker.js` separately from the API with the same restricted database identity and private storage configuration. Each process runs one recognition job at a time. Start with one worker process. Durable rows use serializable claims, `FOR UPDATE SKIP LOCKED`, random lease ownership, three attempts, bounded backoff, 180-second leases and a 45-second child timeout. Expired final claims become terminal. Failed/duplicate pages retain progress and evidence.
+- `OMR_PYTHON` selects the dedicated Python interpreter; `OMR_WORKER_ROOT` must point to the separately installed `workers/omr` directory. The compiled backend alone does not contain Python sources, geometry or dependencies. Pin `requirements.txt`. Optional local Tesseract improves printed-roll reconciliation; missing OCR always requires an authorized printed-identity review.
+- Python receives an allowlisted environment without database, JWT, storage, QR signing or validation signing secrets. It returns observations, never authoritative marks or release instructions.
+- Uploads require PNG/JPEG/PDF signatures, matching MIME and at most 20 MB. PDFs are limited to 25 pages, reject encryption, and require Linux Poppler + bubblewrap with unshared namespaces/network, restricted mounts and resource/time limits. Test actual parser isolation and multi-page operation on the intended Linux host. Unsupported environments fail closed. Never forward the trusted-fixture override to the HTTP worker.
+- Production scans use private R2 `student-documents/omr/` objects. The storage bucket must have no public exposure. Object keys and raw identity QR values are not returned to clients. Image routes require exam access and return `private, no-store`; originals/annotations never have a public static route. Nonproduction local storage is for synthetic development only. Provision private storage permissions, encryption and retention before accepting real sheets.
+- Browser/mobile images are temporary memory objects. Offline capture/storage and persistent mobile sessions are disabled. Object URLs and camera streams are cleared. Android disables backup and screenshots; iOS covers the app switcher. Validate actual device behavior; those controls do not establish physical security by themselves.
+
+## Identity, scoring and release
+
+Legacy QR JSON is untrusted. Reconcile student ID, application number, official roll, session, active eligibility and canonical study group. A printed-roll check must also agree. Legacy sheets without an exam ID are ambiguous if multiple approved exams share the session/group; authorized manual confirmation is required. Missing/mismatched QR never posts marks automatically. Future HMAC-signed QR envelopes are verified only in Node; the worker has no signing key.
+
+All 100 answers are validated against the latest approved key for the selected exam/group/version. Exact fixed-point arithmetic supports explicit penalties/floors. Raw observations and approved keys/policies stay immutable. Corrected responses, identity confirmation, verification, replacement, reevaluation, publication and withdrawal retain append-only history. A unique exam/student result prevents duplicate official records. Conflicting scans need explicit audited replacement. Published marks must be withdrawn before reevaluation and then reviewed again.
+
+The current recognition output remains `SYNTHETIC_ONLY` and `officialScoringAllowed=false`. Synthetic keys permit internal development drafts only. Real grading/publication requires an operator-signed physical-validation envelope whose payload binds the exact profile hash, ordered worker-source bundle hash, physical report hash, approver and expiry. `OMR_VALIDATION_MANIFEST`, `OMR_PHYSICAL_REPORT` and a 32+ character `OMR_VALIDATION_SIGNING_KEY` are operator-controlled files/settings, never HTTP parameters. Any absence, expiry or change locks release. The activation receipt is captured with the original scan and must match at publication. No activation envelope or signing secret is shipped with this feature.
+
+Publication additionally requires an active Super Admin, approved exam, reached release date, current approved nonsynthetic key, verified student/scan/result, and a distinct selected result set. One serializable transaction writes audit records and changes publication state. Repeated publication cannot silently rewrite history. Teacher APIs omit marks and confidential key material.
+
+The Results Desk reads dedicated published records, not the presence of `Student.testScore`. Display actual score/max and recorded rank; no invented percentile, interview invitation, venue, qualification cutoff or proportional subject marks. Without a validated subject mapping, no breakdown is issued. Exact identifiers prevent partial national-ID lookup. Only genuinely recorded ranks enter the merit list.
+
+## Historical compatibility review
+
+Do not backfill publication by inference. Existing student marks/ranks/session fields remain untouched. An authorized Super Admin must inspect the original examination maximum and release authority, cite evidence, and append a PUBLISHED/WITHHELD snapshot. Synthetic snapshots cannot be published. The latest explicit decision controls historical visibility; unknown stored-score release status returns a review-required response without marks. Legitimately published historical snapshots remain searchable; recorded ranks can enter the merit list.
+
+**Before any real Results Desk rollout**, prepare and independently review historical release decisions against the existing legitimate public results. Do not blanket-publish old scores or silently hide legitimate releases. Rehearse this transition in a protected copy with an approved data-handling plan. Current synthetic development cannot establish which historical scores were legitimately released.
+
+## Database release gate
+
+1. Verify the actual approved production PostgreSQL version read-only at release time; current project requirement is PostgreSQL 17. Native binaries are configurable through `AZM_TEST_POSTGRES_BIN`; never point fixtures to production.
+2. Pass native PostgreSQL 17 full-history migration/grant/startup tests, concurrent claims/submissions, idempotency and actual backup/restore rehearsal. The local WASM PostgreSQL 18.6 checks are useful but do not satisfy this gate. Feature CI provisions only a disposable PostgreSQL 17 service.
+3. Review the three additive, currently undeployed OMR migrations (`20261106170000`, `20261107090000`, `20261107100000`). Each is explicitly transactional. Injected final-statement failure/retry was exercised on a disposable full-history database. Runtime grants/RLS and startup guard now require 11 OMR tables, append-only audit permissions and mandatory triggers.
+4. Rehearse deployment with the existing migration-owner process and restricted application role. Reapply/review runtime grants for the configured role, including alternate role names. Do not run migrations as the application identity. Startup must reject missing tables, broad audit privileges, disabled RLS or missing triggers.
+5. Existing native regressions and the two currently failing attendance UI regressions must be resolved or explicitly assessed before release. Do not weaken assertions to manufacture a pass.
+
+## Failure and rollback procedure
+
+- Stop the OMR worker and disable new uploads/publication before maintenance. Keep private originals, raw observations and audit records.
+- A worker crash needs no evidence deletion: another process may claim the expired lease; stale completions cannot overwrite a newer owner. Third exhausted claims become FAILED. Retry only eligible failed scans with no raw evidence; otherwise retain the scan and upload a new capture.
+- If a feature migration fails, inspect the database and migration-tool journal first. A PostgreSQL transaction rolls back its DDL, but Prisma's failed-migration entry still needs the established `migrate resolve --rolled-back` operator procedure after inspection. Retry the corrected migration in the isolated rehearsal before considering production. Never resolve a migration as applied without proving its schema.
+- Prefer rolling application code back while preserving additive OMR tables and append-only history. Do not delete published results or edit audit rows to undo a release. Use the authorized withdrawal flow and retain the prior snapshot. Restore only an independently verified backup under separate authorization.
+- A frontend rollback to the old Results Desk reintroduces its non-null-score visibility behavior. Evaluate that historical privacy consequence explicitly; do not assume application rollback is semantically neutral.
+
+## Required physical and device evidence
+
+Use approved filled Template 2.0 sheets across every row/option/version; varied phones, orientations, lighting, glare, shadows, focus, perspective, compression, light marks, erasures, multiple marks, folds, damaged outlines and missing QR/markers. Include long header text that changes wrapping. Measure false confident answers, exact-sheet accuracy, rejection/review rates, identity matching and processing latency against human ground truth. Define acceptance thresholds with the examination owner before testing, retain the report privately, and obtain independent release approval. Synthetic 100% accuracy is not a substitute.
+
+Test actual Android permission denial/grant/revocation, retake/navigation/logout cleanup, network loss/retry, app suspension, memory pressure and APK installation. Build and test iOS using the required Apple tooling before claiming iOS support. Review app origins, HTTPS, private storage retention and approved launcher branding before distribution. No production release is approved by the present implementation.

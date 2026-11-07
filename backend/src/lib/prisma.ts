@@ -1127,6 +1127,11 @@ export const prisma = new Proxy(realPrisma, {
 
     // In production: STRICT FAIL-CLOSED. No fallback to MemoryStore under any circumstances.
     // Database unavailable = Request failure.
+    // Isolated development can require the real DB while retaining native PrismaPromise batching.
+    if (!isProduction && process.env.AZM_DISABLE_MEMORY_FALLBACK === '1') {
+      const value=target[prop];
+      return typeof value==='function'?value.bind(target):value;
+    }
     if (isProduction) {
       const targetVal = target[prop];
       if (typeof targetVal === 'function') {
@@ -1134,7 +1139,7 @@ export const prisma = new Proxy(realPrisma, {
           try {
             return await targetVal.apply(target, args);
           } catch (err: any) {
-            logger.error(`🚨 CRITICAL: Database operation "${String(prop)}" failed in production:`, err.message || err);
+            logger.error(`🚨 CRITICAL: Database operation "${String(prop)}" failed with database fallback disabled:`, err.message || err);
             throw err;
           }
         };
@@ -1149,7 +1154,7 @@ export const prisma = new Proxy(realPrisma, {
                   return await realMethod.apply(mTarget, args);
                 } catch (err: any) {
                   logger.error(
-                    `🚨 CRITICAL: Database query failed in production on ${String(prop)}.${String(mProp)}:`,
+                    `🚨 CRITICAL: Database query failed with database fallback disabled on ${String(prop)}.${String(mProp)}:`,
                     err.message || err
                   );
                   throw err;

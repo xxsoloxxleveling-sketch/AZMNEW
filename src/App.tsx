@@ -50,6 +50,7 @@ const FaqSection = lazy(() =>
 const AdminLayout = lazy(() =>
   import('./components/admin/layout/AdminLayout').then((m) => ({ default: m.AdminLayout }))
 );
+const OmrEvaluationCenter = lazy(() => import('./components/admin/omr/OmrEvaluationCenter').then(m => ({ default: m.OmrEvaluationCenter })));
 const DashboardView = lazy(() =>
   import('./components/admin/dashboard/DashboardView').then((m) => ({ default: m.DashboardView }))
 );
@@ -335,14 +336,14 @@ function AppContent() {
         setAdminTab(role === 'TEACHER' ? 'attendance' : 'partners');
         if (role === 'TEACHER') window.location.hash = 'attendance';
       } else if (
-        ['dashboard', 'students', 'partners', 'staff', 'transactions', 'settings', 'halls', 'attendance', 'storage'].includes(
+        ['dashboard', 'students', 'partners', 'staff', 'transactions', 'settings', 'halls', 'attendance', 'storage', 'omr'].includes(
           hash
         )
       ) {
         setCurrentRoute('admin');
         const canManageHalls = role === 'SUPER_ADMIN' || role === 'ADMIN';
         const canUseAttendance = canManageHalls || role === 'TEACHER';
-        const targetTab: AdminTab = role === 'TEACHER' && hash !== 'settings'
+        const targetTab: AdminTab = role === 'TEACHER' && hash !== 'settings' && hash !== 'omr'
           ? 'attendance'
           : ((hash === 'halls' || hash === 'storage') && !canManageHalls) || (hash === 'attendance' && !canUseAttendance)
             ? 'dashboard'
@@ -397,7 +398,7 @@ function AppContent() {
 
     if ((targetTab === 'halls' || targetTab === 'storage') && role !== 'SUPER_ADMIN' && role !== 'ADMIN') targetTab = 'dashboard';
     if (targetTab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN' && role !== 'TEACHER') targetTab = 'dashboard';
-    if (targetRoute === 'admin' && role === 'TEACHER' && targetTab !== 'settings') targetTab = 'attendance';
+    if (targetRoute === 'admin' && role === 'TEACHER' && targetTab !== 'settings' && targetTab !== 'omr') targetTab = 'attendance';
     setCurrentRoute(targetRoute);
     if (targetTab) setAdminTab(targetTab);
     window.location.hash = targetRoute === 'admin' ? targetTab || 'dashboard' : targetRoute === 'public' ? activeTab : targetRoute;
@@ -514,6 +515,9 @@ function AppContent() {
       );
     }
 
+    if (role === 'TEACHER' && adminTab === 'omr') {
+      return <Suspense fallback={<ViewLoadingFallback />}><AdminLayout currentTab="omr" onSelectTab={tab=>navigateTo('admin',tab)} title="OMR Evaluation Center" subtitle="Capture, review and verify examination sheets"><OmrEvaluationCenter /></AdminLayout></Suspense>;
+    }
     if (role === 'TEACHER') {
       if (adminTab === 'settings') {
         return (
@@ -571,6 +575,8 @@ function AppContent() {
     const getTabMeta = () => {
 
       switch (adminTab) {
+        case 'omr':
+          return { title: 'OMR Evaluation Center', subtitle: 'Examination keys, private scan evidence and controlled result release' };
         case 'dashboard':
           return { title: 'Executive Overview Dashboard', subtitle: 'Academic Session 2026-2027 Analytics' };
         case 'students':
@@ -640,6 +646,7 @@ function AppContent() {
               onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
             />
           )}
+          {adminTab === 'omr' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <OmrEvaluationCenter />}
           {adminTab === 'students' && <StudentsListView />}
           {adminTab === 'partners' && <AdminPartnersListView />}
           {adminTab === 'staff' && <StaffListView />}

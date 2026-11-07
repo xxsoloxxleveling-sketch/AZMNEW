@@ -1,3 +1,4 @@
+import { postgresExecutable } from './postgres-binaries';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,8 +12,7 @@ import { Client } from 'pg';
 export async function hsscFixture(options: { groupBeforeMigration?: boolean; alternateGroup?: boolean } = {}) {
   assert.notEqual(process.env.NODE_ENV, 'production');
   const root = path.resolve(__dirname, '../..');
-  const bin = process.env.STAFF_TEST_POSTGRES_BIN || 'C:/Program Files/PostgreSQL/18/bin';
-  const executable = (name: string) => process.platform === 'win32' ? path.join(bin, name + '.exe') : name;
+  const executable = postgresExecutable;
   let dir: string | undefined, log: number | undefined;
   let connection = process.env.ATTENDANCE_TEST_DATABASE_URL;
   if (!connection) {
