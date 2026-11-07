@@ -7,10 +7,10 @@
   "sheetExactMatch": 1.0,
   "rejectionRate": 0.0,
   "reviewRate": 0.0,
-  "medianSeconds": 1.2710446499913814,
-  "maxSeconds": 1.5570754999935161,
+  "medianSeconds": 0.8970069499919191,
+  "maxSeconds": 1.1016938999964623,
   "physicalCameraAccuracy": null,
   "officialScoringAllowed": false,
   "measuredAt": "2026-11-08",
-  "notes": "10 synthetic sheets after timing-track/header registration changes. Physical-camera accuracy remains unverified."
+  "notes": "10 synthetic sheets after complete-header registration fix; Linux and Windows generated captures separately verified. Physical-camera accuracy remains unverified."
 }

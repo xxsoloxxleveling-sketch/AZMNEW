@@ -10,7 +10,7 @@ export const examInput = z.object({
   minimumScore: z.number().min(-100000).max(100000).refine(fourDecimals,'Use at most four decimal places').nullable().optional(),
   allowedVersions: z.array(option).min(1).max(4).refine(a=>new Set(a).size===a.length),
   releaseAt: z.string().datetime({ offset: true }).nullable().optional(),
-}).strict().refine(value=>value.minimumScore==null||value.minimumScore<=value.questionCount*value.correctMarks,{message:'Minimum score exceeds maximum',path:['minimumScore']});
+}).strict().refine(value=>value.minimumScore==null||Math.round(value.minimumScore*10000)<=value.questionCount*Math.round(value.correctMarks*10000),{message:'Minimum score exceeds maximum',path:['minimumScore']});
 export const keyInput = z.object({ paperVersion: option, answers: z.array(option).length(100), isSynthetic: z.boolean().default(true) }).strict();
 export const reasonInput = z.object({ reason: z.string().trim().min(8).max(500) }).strict();
 export const reviewInput = z.object({

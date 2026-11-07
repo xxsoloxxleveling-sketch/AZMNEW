@@ -78,6 +78,7 @@ test('official activation fails closed and detects changed physical evidence',as
 test('examination configuration rejects hidden decimal rounding and an impossible score floor',()=>{
   const exam={code:'SYNTHETIC',title:'Synthetic exam',session:'2026-V',candidateGroup:'CLASS 6TH',examDate:'2026-11-15T09:00:00Z',allowedVersions:['A']};
   assert.equal(examInput.safeParse({...exam,correctMarks:1.125,incorrectPenalty:.25,minimumScore:0}).success,true);
+  assert.equal(examInput.safeParse({...exam,correctMarks:.0003,minimumScore:.03}).success,true);
   assert.equal(examInput.safeParse({...exam,correctMarks:1.123456}).success,false);
   assert.equal(examInput.safeParse({...exam,incorrectPenalty:.123456}).success,false);
   assert.equal(examInput.safeParse({...exam,minimumScore:101}).success,false);

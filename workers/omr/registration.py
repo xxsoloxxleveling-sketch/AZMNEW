@@ -19,7 +19,12 @@ def header_bottom(gray,rows,radius):
     x0=max(0,math.floor(min(x for x,y in first)-4*radius))
     x1=min(gray.shape[1],math.ceil(max(x for x,y in first)+4*radius))
     center=float(np.mean([y for x,y in first]))
-    y0=max(0,round(center-6*radius));y1=min(gray.shape[0],round(center+2*radius))
+    pitch=float(np.median([rows[n+1][0][1]-rows[n][0][1] for n in range(len(rows)-1)]))
+    expected_bottom=center-pitch/2
+    # Search the entire header rectangle, including its height. Cropping only around
+    # the bubble centers truncated a valid Linux-rendered header before it could be detected.
+    y0=max(0,round(expected_bottom-6*radius-4*radius))
+    y1=min(gray.shape[0],round(expected_bottom+6*radius+1))
     filled=np.mean(gray[y0:y1,x0:x1]<125,axis=1)>.82
     filled=cv2.morphologyEx(np.uint8(filled)[:,None],cv2.MORPH_CLOSE,np.ones((round(radius*1.2),1),np.uint8)).ravel()>0
     runs=[];start=None

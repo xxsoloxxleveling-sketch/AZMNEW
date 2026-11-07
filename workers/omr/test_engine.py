@@ -63,11 +63,14 @@ class RecognitionTests(unittest.TestCase):
         image=fixture();x0,y0,x1,y1=PROFILE['answerZone'];image[y0:y1,x0:x1]=0
         with self.assertRaises(InvalidScan): recognize(image,PROFILE)
     def test_header_driven_shift_preserves_question_numbering(self):
+        for shift in (-40,-80,70):
+            self.assert_header_shift(shift)
+    def assert_header_shift(self,shift):
         image=fixture({1:'A',100:'D'})
         # Printed header fixtures use the same two-pixel outline as the generated PDF.
         for row in PROFILE['questions']:
             for x,y in row: cv2.circle(image,(round(x),round(y)),round(PROFILE['radius']),(0,0,0),2)
-        x0,y0,x1,y1=PROFILE['answerZone'];shift=-40
+        x0,y0,x1,y1=PROFILE['answerZone']
         region=image[y0:y1,x0:x1].copy();image[y0:y1,x0:x1]=255;image[y0+shift:y1+shift,x0:x1]=region
         for col in range(4):
             rows=PROFILE['questions'][col*25:(col+1)*25];r=PROFILE['radius']
