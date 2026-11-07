@@ -5,7 +5,7 @@ Branch: `codex/smart-omr-evaluation-mobile`. Initial retained checkpoint: `a79e8
 | Check actually run | Result |
 |---|---|
 | Python recognition/classification/PDF contracts | 31 passed (original 23 retained; timing/header registration, erasure/glare-like outline loss, spoofed grid and PDF security contracts added) |
-| Feature Node tests: database/grading, 27 authenticated routes, identity/signatures, storage, activation, public/historical release, migration recovery, mobile session/network and key import | 40 passed (includes two native-tool discovery regressions) |
+| Feature Node tests: database/grading, 27 authenticated routes, identity/signatures, storage, activation, public/historical release, migration recovery, mobile session/network and key import | 43 passed (includes native-tool discovery, manual QR-conflict and native transaction retry regressions) |
 | Full real synthetic API + queue recovery | 5 passed, including parent/child recovery checks; 22 migrations applied under restricted role on PostgreSQL 18.6/WASM |
 | Generated real printable sheet | 100 A responses, version A; manual identity review when printed-roll OCR is unavailable; internal score 100/100, verification separate |
 | Synthetic benchmark | 10 sheets / 1000 answers, 1000 correct; 10/10 exact sheets, no rejection/review; median 1.271 s, max 1.557 s; physical accuracy unmeasured |
@@ -60,3 +60,7 @@ The complete runtime privilege isolation workflow passed on hosted PostgreSQL 17
 It includes PRE_OPEN lifecycle and deletion/ownership checks, signed capability guard, Super Admin user deletion, frontend build, dashboard/session-control browser flows, HSSC restricted-role provisioning/capture/edits/PDF identity/preview geometry, student document collections, roll-slip printing and strict public/flexible staff registration. No production service or data was used.
 
 The new OMR Linux application check reached its real browser launch and found Ubuntu AppArmor restrictions on the downloaded Chrome binary. CI now selects the runner-installed Chrome profile, retaining its sandbox. This does not disable PDF isolation or change application scoring. The application/legacy upgrade/backup-restore rerun remains to observe.
+
+Final identity hardening: authorized printed review may supply a missing QR but cannot override a known conflicting student/session/examination QR or an invalid signed envelope. Such sheets require a correct official capture and do not post marks. Added explicit regression tests for these cases.
+
+Eligibility is rechecked under a candidate row lock during grading/approval/publication, rather than trusting an earlier verification flag. A changed or inactive group blocks approval. Missing-QR reviews retain the checked printed roll/session/exam in immutable audit evidence. The real synthetic API test changes a fabricated candidate's group after grading and verifies that approval is rejected until eligibility is restored. Serializable raw-query conflicts/deadlocks have bounded retries with an explicit regression test.

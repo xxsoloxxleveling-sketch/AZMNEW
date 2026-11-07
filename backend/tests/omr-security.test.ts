@@ -4,7 +4,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash,createHmac } from 'node:crypto';
-import { decodeIdentity,reconcileIdentity,candidateGroup } from '../src/modules/omr/identity';
+import { decodeIdentity,reconcileIdentity,candidateGroup,manualQrAgrees } from '../src/modules/omr/identity';
+import { Prisma,PrismaClient } from '@prisma/client';
+import { serial } from '../src/modules/omr/omr.service';
 import { examInput } from '../src/modules/omr/omr.schema';
 import { officialActivation,recognitionHashes } from '../src/modules/omr/activation';
 import { recognitionEnvironment } from '../src/modules/omr/runner';
@@ -79,4 +81,25 @@ test('examination configuration rejects hidden decimal rounding and an impossibl
   assert.equal(examInput.safeParse({...exam,correctMarks:1.123456}).success,false);
   assert.equal(examInput.safeParse({...exam,incorrectPenalty:.123456}).success,false);
   assert.equal(examInput.safeParse({...exam,minimumScore:101}).success,false);
+});
+
+test('manual printed identity cannot override a conflicting QR student or session',()=>{
+  assert.equal(manualQrAgrees({identity:qr},student,exam),true);
+  assert.equal(manualQrAgrees({identity:{...qr,studentId:'other-student'}},student,exam),false);
+  assert.equal(manualQrAgrees({identity:{...qr,session:'other-session'}},student,exam),false);
+});
+test('missing QR can enter authorized printed review, but an invalid signed QR cannot become a missing-QR bypass',()=>{
+  assert.equal(manualQrAgrees({identity:null},student,exam),true);
+  assert.equal(manualQrAgrees({qrEnvelope:{type:'AZM_OMR_SIGNED',payload:'invalid',signature:'0'.repeat(64)}},student,exam),false);
+});
+
+test('serializable OMR transactions retry native raw-query serialization and deadlock errors only',async()=>{
+  for(const code of ['40001','40P01']) {
+    let attempts=0;
+    const db={$transaction:async(action:(tx:unknown)=>unknown)=>{if(++attempts<3)throw new Prisma.PrismaClientKnownRequestError('Synthetic concurrency conflict',{code:'P2010',clientVersion:'5.22.0',meta:{code}});return action({});}} as unknown as PrismaClient;
+    assert.equal(await serial(db,async()=>42),42);assert.equal(attempts,3);
+  }
+  let attempts=0;
+  const db={$transaction:async()=>{attempts++;throw new Error('Synthetic non-retryable failure');}} as unknown as PrismaClient;
+  await assert.rejects(serial(db,async()=>42),/non-retryable/);assert.equal(attempts,1);
 });

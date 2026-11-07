@@ -80,6 +80,16 @@ jobs:
       - name: Existing attendance upgrade and backup restore rehearsal
         if: ${{ !cancelled() && steps.native.outcome == 'success' }}
         run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/attendance-reset-migration-rehearsal.test.ts
+      - name: Retain fabricated sheet diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-omr-diagnostics
+          path: |
+            tmp/omr-dev/synthetic-*.png
+            tmp/omr-dev/recognition-diagnostic.json
+          if-no-files-found: ignore
+          retention-days: 3
 
   android:
     runs-on: ubuntu-24.04

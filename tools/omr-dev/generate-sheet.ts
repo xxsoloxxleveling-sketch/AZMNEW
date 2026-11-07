@@ -1,11 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { pdfService } from '../../backend/src/modules/documents/pdf.service';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'backend/package.json'));
-export async function generateSheet() {
+export async function generateSheet(filename=`synthetic-${randomUUID()}.png`) {
   const puppeteer=require('puppeteer'),qr=require('qrcode');
   let bundled:string|undefined;try{bundled=await puppeteer.executablePath();}catch{}
   const candidates=[process.env.OMR_CHROME_PATH,process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -23,9 +24,9 @@ export async function generateSheet() {
     await page.setRequestInterception(true);page.on('request',(request:any)=>{if(/^(data:|about:)/.test(request.url()))void request.continue();else void request.abort();});
     await page.setContent(html,{waitUntil:'load'});
     await page.evaluate(()=>{document.querySelectorAll('.omr-row').forEach(row=>{const bubble=row.querySelector<HTMLElement>('.bubble');if(bubble){bubble.style.background='#000';bubble.style.color='#000';}});const version=document.querySelector<HTMLElement>('.v-bubble');if(version)version.style.background='#000';});
-    const target=path.join(root,'tmp/omr-dev/synthetic-clean.png');await fs.mkdir(path.dirname(target),{recursive:true});
+    const target=path.join(root,'tmp/omr-dev',filename);await fs.mkdir(path.dirname(target),{recursive:true});
     await (await page.$('.omr-page'))!.screenshot({path:target});
     return target;
   } finally {await browser.close();}
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) console.log(await generateSheet());
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) console.log(await generateSheet('synthetic-clean.png'));

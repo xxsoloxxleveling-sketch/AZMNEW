@@ -14,7 +14,7 @@ Status: development implementation; **not approved for production**. This runboo
 
 ## Identity, scoring and release
 
-Legacy QR JSON is untrusted. Reconcile student ID, application number, official roll, session, active eligibility and canonical study group. A printed-roll check must also agree. Legacy sheets without an exam ID are ambiguous if multiple approved exams share the session/group; authorized manual confirmation is required. Missing/mismatched QR never posts marks automatically. Future HMAC-signed QR envelopes are verified only in Node; the worker has no signing key.
+Legacy QR JSON is untrusted. Reconcile student ID, application number, official roll, session, active eligibility and canonical study group. A printed-roll check must also agree. Legacy sheets without an exam ID are ambiguous if multiple approved exams share the session/group; authorized manual confirmation is required. Missing QR requires authorized printed-identity review. A known conflicting student/session/examination QR or invalid signed envelope cannot be overridden by manual lookup; use a correct official sheet. Future HMAC-signed QR envelopes are verified only in Node; the worker has no signing key.
 
 All 100 answers are validated against the latest approved key for the selected exam/group/version. Exact fixed-point arithmetic supports explicit penalties/floors. Raw observations and approved keys/policies stay immutable. Corrected responses, identity confirmation, verification, replacement, reevaluation, publication and withdrawal retain append-only history. A unique exam/student result prevents duplicate official records. Conflicting scans need explicit audited replacement. Published marks must be withdrawn before reevaluation and then reviewed again.
 

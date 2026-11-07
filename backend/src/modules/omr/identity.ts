@@ -34,3 +34,10 @@ export function reconcileIdentity(
     qr.studentId === student.id && qr.applicationNo === student.applicationNo &&
     (!qr.examId || qr.examId===exam.id) && qr.rollNumber === student.rollNumber && qr.session === exam.session && candidateGroup(student) === exam.candidateGroup);
 }
+
+/** Printed-identity review may fill missing QR evidence, never override a contradictory QR. */
+export function manualQrAgrees(evidence:unknown,student:Parameters<typeof reconcileIdentity>[1],exam:Parameters<typeof reconcileIdentity>[2]) {
+  const object=evidence&&typeof evidence==='object'?evidence as Record<string,unknown>:null;
+  const qr=object?.qrEnvelope||object?.identity;
+  return !qr || reconcileIdentity(qr,student,exam);
+}

@@ -3,7 +3,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { requireExam, requireSuper, omrError, OmrActor } from './access';
-import { candidateGroup } from './identity';
+import { candidateGroup, manualQrAgrees } from './identity';
 import { examInput, keyInput, reviewInput, permissionInput, pageInput } from './omr.schema';
 import { scoreOmr, OmrOption, OmrResponse } from './scoring';
 
@@ -11,7 +11,7 @@ export const jsonValue = (value: unknown): Prisma.InputJsonValue => JSON.parse(J
 export async function serial<T>(db: PrismaClient, action: (tx: Prisma.TransactionClient)=>Promise<T>): Promise<T> {
   for (let attempt=0;;attempt++) {
     try { return await db.$transaction(action,{isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:15000}); }
-    catch(error) { if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code!=='P2034' || attempt>=2) throw error; }
+    catch(error) { if (!(error instanceof Prisma.PrismaClientKnownRequestError) || !(error.code==='P2034'||(error.code==='P2010'&&['40001','40P01'].includes(String(error.meta?.code)))) || attempt>=2) throw error; }
   }
 }
 export async function lockScan(tx: Prisma.TransactionClient, id: string) {
@@ -20,9 +20,23 @@ export async function lockScan(tx: Prisma.TransactionClient, id: string) {
   if(!scan) throw omrError(404,'Scan not found');
   return scan;
 }
+export async function assertCandidateStillEligible(tx:Prisma.TransactionClient,scan:{id:string;studentId:string|null;rawDetection:Prisma.JsonValue},exam:{id:string;session:string;candidateGroup:string}) {
+  if(!scan.studentId)throw omrError(409,'Candidate identity requires review');
+  await tx.$queryRaw`SELECT id FROM "Student" WHERE id=${scan.studentId} FOR SHARE`;
+  const student=await tx.student.findUnique({where:{id:scan.studentId}});
+  if(!student||student.status!=='ACTIVE'||!student.rollNumber||candidateGroup(student)!==exam.candidateGroup)throw omrError(409,'Candidate eligibility changed; this result cannot be approved');
+  if(!manualQrAgrees(scan.rawDetection,student,exam))throw omrError(409,'Candidate QR identity changed; use a correct official sheet');
+  const raw=scan.rawDetection as Prisma.JsonObject|null;
+  if(!raw?.qrEnvelope&&!raw?.identity) {
+    const proof=await tx.omrCorrectionAudit.findFirst({where:{scanId:scan.id,question:null,next:{path:['studentId'],equals:scan.studentId}},orderBy:[{createdAt:'desc'},{id:'desc'}]});
+    const next=proof?.next as Prisma.JsonObject|undefined;
+    if(next?.printedRollNumber!==student.rollNumber||next?.examId!==exam.id||next?.session!==exam.session)throw omrError(409,'Printed candidate identity must be confirmed against the current examination record');
+  }
+}
 export async function evaluateDraft(tx: Prisma.TransactionClient, scanId: string, actorId?: string, reason='Initial server evaluation',replaceExisting=false) {
   const scan=await lockScan(tx,scanId);
   if(!scan.studentId || !scan.identityVerified || scan.responses.length!==scan.exam.questionCount || !['A','B','C','D'].includes(scan.paperVersion||'')) return null;
+  await assertCandidateStillEligible(tx,scan,scan.exam);
   const key=await tx.omrAnswerKeyRevision.findFirst({where:{examId:scan.examId,candidateGroup:scan.exam.candidateGroup,paperVersion:scan.paperVersion!,status:'APPROVED'},orderBy:{revision:'desc'}});
   if(!key) return null;
   // Unvalidated recognition may exercise synthetic development keys only.
@@ -134,8 +148,9 @@ export class OmrService {
         const students=await tx.student.findMany({where:{OR:[{rollNumber:value.identityLookup},{applicationNo:value.identityLookup}]},take:2});
         const student=students[0];
         if(students.length!==1 || !student?.rollNumber || student.status!=='ACTIVE' || student.rollNumber!==value.printedRollNumber || value.identityConfirmed!==true || candidateGroup(student)!==exam.candidateGroup) throw omrError(409,'Candidate identity or examination eligibility does not match');
+        if(!manualQrAgrees(scan.rawDetection,student,exam)) throw omrError(409,'Conflicting QR identity requires a correct official sheet; no marks were posted');
         if(await tx.omrExamResult.findFirst({where:{sourceScanId:id,studentId:{not:student.id}}})) throw omrError(409,'This evidence is already attached to a different candidate result; retain it and use a new capture');
-        await tx.omrCorrectionAudit.create({data:{scanId:id,actorId:actor.id,previous:jsonValue({studentId:scan.studentId}),next:{studentId:student.id,examId:exam.id,session:exam.session,examConfirmed:value.examConfirmed||false},reason:value.reason}});
+        await tx.omrCorrectionAudit.create({data:{scanId:id,actorId:actor.id,previous:jsonValue({studentId:scan.studentId}),next:{studentId:student.id,printedRollNumber:value.printedRollNumber!,examId:exam.id,session:exam.session,examConfirmed:value.examConfirmed||false},reason:value.reason}});
         await tx.omrScan.update({where:{id},data:{studentId:student.id,identityVerified:true,identityOverrideReason:value.reason}});
       }
       const refreshed=await tx.omrScan.findUniqueOrThrow({where:{id}});
@@ -221,6 +236,7 @@ export class OmrService {
       const results=await tx.omrExamResult.findMany({where:{id:{in:resultIds},examId},include:{key:true,scan:true}});
       if(results.length!==resultIds.length) throw omrError(404,'Result set does not match this examination');
       for(const result of results) {
+        await assertCandidateStillEligible(tx,result.scan,exam);
         const evidence=result.scan.rawDetection as Prisma.JsonObject|null;
         const latest=await tx.omrAnswerKeyRevision.findFirst({where:{examId,paperVersion:result.key.paperVersion,candidateGroup:exam.candidateGroup,status:'APPROVED'},orderBy:{revision:'desc'}});
         if(result.status!=='VERIFIED' || result.key.isSynthetic || !result.scan.identityVerified || result.scan.status!=='VERIFIED' || evidence?.activationReceipt!==activation.receipt || latest?.id!==result.answerKeyId) throw omrError(409,'All results must be verified under the current official key and validated recognition release');

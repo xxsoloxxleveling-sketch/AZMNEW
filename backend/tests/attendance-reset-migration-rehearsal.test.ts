@@ -107,7 +107,7 @@ async function run() {
     // Exercise the historical target schema with its own generated client; the current full-history client
     // includes later PRE_OPEN/session fields which intentionally do not exist in this target-only rehearsal.
     const legacyClient=path.join(fixture,'generated-client');
-    fs.writeFileSync(oldSchema,fs.readFileSync(oldSchema,'utf8').replace(/generator client\s*\{[^}]*\}/s,`generator client {\n provider = "prisma-client-js"\n output = ${JSON.stringify(legacyClient)}\n}`));
+    fs.writeFileSync(oldSchema,fs.readFileSync(oldSchema,'utf8').replace(/generator client\s*\{[^}]*\}/s,`generator client {\n provider = ${JSON.stringify('node '+JSON.stringify(path.join(backend,'node_modules/@prisma/client/generator-build/index.js').split(path.sep).join('/')))}\n output = ${JSON.stringify(legacyClient)}\n}`));
     const legacyEnv={...process.env,NODE_ENV:'test',DATABASE_URL:urlFor(names[1]),DIRECT_URL:urlFor(names[1])};
     execFileSync(process.execPath,[cli,'db','pull','--schema',oldSchema],{cwd:backend,env:legacyEnv,stdio:'pipe'});
     execFileSync(process.execPath,[cli,'generate','--schema',oldSchema],{cwd:backend,env:legacyEnv,stdio:'pipe'});
