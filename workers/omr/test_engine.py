@@ -76,6 +76,8 @@ class RecognitionTests(unittest.TestCase):
             rows=PROFILE['questions'][col*25:(col+1)*25];r=PROFILE['radius']
             bottom=round(rows[0][0][1]-24+shift)
             cv2.rectangle(image,(round(rows[0][0][0]-4*r),bottom-round(2*r)),(round(rows[0][-1][0]+4*r),bottom),(0,0,0),-1)
+            # A second dark instruction band must not be mistaken for the column header.
+            cv2.rectangle(image,(round(rows[0][0][0]-4*r),bottom-70-round(r)),(round(rows[0][-1][0]+4*r),bottom-70),(0,0,0),-1)
         result,_=recognize(image,PROFILE)
         self.assertEqual(result['responses'][0]['answer'],'A')
         self.assertEqual(result['responses'][99]['answer'],'D')
@@ -95,6 +97,18 @@ class RecognitionTests(unittest.TestCase):
     def test_missing_marker_rejected(self):
         image=fixture(); image[:80,:80]=255
         with self.assertRaises(InvalidScan): recognize(image,PROFILE)
+    def test_gray_camera_markers_keep_full_registration_checks(self):
+        image=fixture({1:'A',100:'D'})
+        for x,y in PROFILE['markers']:
+            r=round(3/210*PROFILE['size'][0])
+            cv2.rectangle(image,(round(x)-r,round(y)-r),(round(x)+r,round(y)+r),(130,130,130),-1)
+        result,_=recognize(image,PROFILE)
+        self.assertEqual(result['responses'][0]['answer'],'A')
+        self.assertEqual(result['responses'][99]['answer'],'D')
+        self.assertFalse(result['officialScoringAllowed'])
+        x=round(3.5/210*PROFILE['size'][0]);y=round(71/297*PROFILE['size'][1])
+        image[y-12:y+13,x-12:x+13]=255
+        with self.assertRaisesRegex(InvalidScan,'timing_track_mismatch'): recognize(image,PROFILE)
     def test_blur_rejected(self):
         with self.assertRaises(InvalidScan): recognize(cv2.GaussianBlur(fixture(),(31,31),10),PROFILE)
 

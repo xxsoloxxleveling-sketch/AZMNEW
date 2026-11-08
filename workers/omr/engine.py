@@ -30,6 +30,17 @@ def markers(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape
     _, binary = cv2.threshold(gray, 70, 255, cv2.THRESH_BINARY_INV)
+    try:
+        return marker_points(binary)
+    except InvalidScan:
+        # Camera exposure can make a solid printed marker gray. Local contrast only
+        # proposes corners; timing tracks and the full bubble grid still must validate.
+        block = max(31, min(151, round(.07*w) | 1))
+        local = cv2.adaptiveThreshold(gray,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,block,15)
+        return marker_points(local)
+
+def marker_points(binary):
+    h,w=binary.shape
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     candidates = []
     for contour in contours:
@@ -95,18 +106,21 @@ def outline_support(gray,centers,radius):
 
 def recognize(image, profile):
     choices = []
+    aligned_without_tracks = False
     for turns in range(4):
         rotated = np.rot90(image, turns).copy()
         try:
             aligned = normalize(rotated, profile)
             gray = cv2.cvtColor(aligned, cv2.COLOR_BGR2GRAY)
-            if not timing_tracks(gray,profile): continue
+            if not timing_tracks(gray,profile):
+                aligned_without_tracks = True
+                continue
             registered,offsets,version_supported=register(gray,profile)
             choices.append((registration_score(gray,registered),aligned,gray,registered,offsets,version_supported))
         except (InvalidScan,ValueError):
             continue
     if not choices:
-        raise InvalidScan('registration_failed')
+        raise InvalidScan('timing_track_mismatch' if aligned_without_tracks else 'registration_failed')
     score, normalized, gray, measured_profile, offsets, version_supported = max(choices, key=lambda item:item[0])
     if score < profile['thresholds']['registration']:
         raise InvalidScan('template_registration_failed')

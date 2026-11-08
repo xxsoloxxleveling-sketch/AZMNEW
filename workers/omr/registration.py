@@ -14,7 +14,7 @@ def timing_tracks(gray,profile):
             if np.mean(gray[y-2:y+3,x-2:x+3]<125)<.9: return False
     return True
 
-def header_bottom(gray,rows,radius):
+def header_candidates(gray,rows,radius):
     first=rows[0]
     x0=max(0,math.floor(min(x for x,y in first)-4*radius))
     x1=min(gray.shape[1],math.ceil(max(x for x,y in first)+4*radius))
@@ -33,7 +33,7 @@ def header_bottom(gray,rows,radius):
         if not value and start is not None:
             if .7*radius<=index-start<=4*radius: runs.append(y0+index-1)
             start=None
-    return runs[0] if len(runs)==1 else None
+    return runs
 
 def refine(gray,centers,radius,dy):
     x0=math.floor(min(x for x,y in centers)-radius-3);x1=math.ceil(max(x for x,y in centers)+radius+3)
@@ -50,6 +50,17 @@ def refine(gray,centers,radius,dy):
     _,score,_,location=cv2.minMaxLoc(scores)
     return (sx+location[0]-x0,sy+location[1]-y0),score*score
 
+def boundary_support(gray,centers,radius,offset):
+    # First and last rows reject a whole-row alias even if most intermediate circles align.
+    dx,dy=offset;values=[]
+    for x,y in centers:
+        hits=[]
+        for angle in np.linspace(0,2*np.pi,16,endpoint=False):
+            px=round(x+dx+radius*np.cos(angle));py=round(y+dy+radius*np.sin(angle))
+            hits.append(bool(np.any(gray[py-1:py+2,px-1:px+2]<180)))
+        values.append(np.mean(hits))
+    return float(np.median(values))
+
 def adjusted(profile,offsets):
     result=copy.deepcopy(profile)
     for index,row in enumerate(result['questions']):
@@ -64,17 +75,23 @@ def register(gray,profile):
     radius=profile['radius'];offsets={'columns':[],'version':[0,0]}
     for col in range(4):
         rows=profile['questions'][col*25:(col+1)*25]
-        bottom=header_bottom(gray,rows,radius)
-        if bottom is None:
+        candidates=header_candidates(gray,rows,radius)
+        if not candidates:
             offsets['columns'].append([0,0]);continue
         headers_present=True
         pitch=float(np.median([rows[n+1][0][1]-rows[n][0][1] for n in range(24)]))
         expected=profile.get('registrationAnchors',{}).get('headerBottom',[None]*4)[col]
         if expected is None: expected=rows[0][0][1]-pitch/2
-        shift=bottom-expected
-        if abs(shift)>6*radius: raise ValueError('excessive_grid_displacement')
-        offset,support=refine(gray,[center for row in rows for center in row],radius,shift)
-        if support<.5: raise ValueError('column_registration_failed')
+        matches={}
+        for bottom in candidates:
+            shift=bottom-expected
+            if abs(shift)>6*radius: continue
+            offset,support=refine(gray,[center for row in rows for center in row],radius,shift)
+            if support<.5: continue
+            if min(boundary_support(gray,row,radius,offset) for row in (rows[0],rows[-1]))<.8: continue
+            matches[offset]=support
+        if len(matches)!=1: raise ValueError('ambiguous_column_registration')
+        offset=next(iter(matches))
         offsets['columns'].append(list(offset))
     shift=float(np.median([offset[1] for offset in offsets['columns']]))
     version,support=refine(gray,profile['versions'],radius,shift) if headers_present else ((0,0),1.0)

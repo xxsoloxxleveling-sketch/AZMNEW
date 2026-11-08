@@ -4,7 +4,8 @@ Branch: `codex/smart-omr-evaluation-mobile`. Initial retained checkpoint: `a79e8
 
 | Check actually run | Result |
 |---|---|
-| Python recognition/classification/PDF contracts | 31 passed (original 23 retained; timing/header registration, erasure/glare-like outline loss, spoofed grid and PDF security contracts added) |
+| Python recognition/classification/PDF contracts | 32 passed (original 23 retained; gray camera markers retain timing/grid checks; header aliases, erasure/glare-like outline loss, spoofed grid and PDF security contracts covered) |
+| Private PDF answer-key parser | 3 passed on fabricated text; supplied local PDF validated as 44 unique class/group/version keys, each with exactly 100 answers; key content remains private |
 | Feature Node tests: database/grading, 27 authenticated routes, identity/signatures, storage, activation, public/historical release, migration recovery, mobile session/network and key import | 43 passed (includes native-tool discovery, manual QR-conflict and native transaction retry regressions) |
 | Full real synthetic API + queue recovery | 5 passed, including parent/child recovery checks; 22 migrations applied under restricted role on PostgreSQL 18.6/WASM |
 | Generated real printable sheet | 100 A responses, version A; manual identity review when printed-roll OCR is unavailable; internal score 100/100, verification separate |
@@ -25,11 +26,11 @@ Branch: `codex/smart-omr-evaluation-mobile`. Initial retained checkpoint: `a79e8
 | Existing attendance reset UI regression | FAILED: existing fixture times out waiting for #attendance-session after its earlier checks; attendance source/fixture are unchanged |
 | Scoped OMR web TypeScript compilation | PASSED after preserving the existing getUser helper's generic type; five previously observed untyped-export diagnostics resolved without changing session behavior |
 | Local native PostgreSQL regressions | BLOCKED: no PostgreSQL 17/18 server binaries or Docker discovered; hardcoded paths replaced with configurable tool discovery |
-| Native PostgreSQL 17 | Hosted PostgreSQL 17.11: new OMR full-history/RLS/grant/concurrent-claim/duplicate tests passed; all three HSSC provisioning scenarios passed; clean Prisma deploy and repeat deploy passed. The older attendance target-upgrade rehearsal failed and is being repaired without changing its assertions |
+| Native PostgreSQL 17 | Hosted PostgreSQL 17.11: OMR full-history/RLS/grant/concurrent-claim/duplicate tests passed; all three HSSC provisioning scenarios passed; clean/repeat Prisma deploy passed. Historical attendance upgrade/recovery/backup-restore now passed all 16 checks after fixture repairs |
 | Linux untrusted PDF execution/multi-page sandbox | BLOCKED locally: Windows runner deliberately refuses unsandboxed PDF. Parser bounds/refusal contracts passed; actual bubblewrap execution remains to validate |
 | Android development APK | PASSED on hosted Java 21 / Android SDK 36. Downloaded and archive digest verified; local APK: tmp/omr-dev/release/azm-omr-development.apk (4,201,448 bytes). Local Gradle/device testing remains unavailable |
 | iOS | Sources generated; camera usage/privacy cover prepared. No Xcode build or physical device test |
-| Physical filled-sheet/camera accuracy | NOT RUN; official release remains locked |
+| Supplied private photos through actual application | 24/24 uploaded using web Bulk Upload, processed by real API/queue/worker, retained in review history; 24 INVALID, zero responses and zero marks/results. After local-contrast corner handling, 2 reach alignment but fail timing tracks and 22 fail page alignment. Recognition accuracy is not established; official release remains locked |
 
 The two attendance regression failures were retained and documented; assertions were not weakened and unrelated attendance functionality was not rewritten. They are release blockers pending investigation in the broader application. The scoped web type-check diagnostics were resolved and the check rerun successfully.
 
@@ -39,7 +40,7 @@ Synthetic checks cover mismatched QR identity/session/group/version, inactive/un
 
 PGlite serializes database access and cannot establish native multi-connection correctness. The PostgreSQL 17 CI test explicitly uses two native clients for SKIP LOCKED and concurrent duplicate submissions. Observe its actual result before accepting that evidence. Application rollback must preserve OMR audit tables and account for the old Results Desk's visibility behavior.
 
-**Verdict: working isolated synthetic development flow; not production-ready or authorized for real examination grading/publication.** Complete native database/PDF/mobile builds, resolve existing regressions, review legitimate historical release evidence, validate physical sheets and obtain separate release authorization first.
+**Verdict: working isolated synthetic development flow; not production-ready or authorized for real examination grading/publication.** The supplied photographs currently fail alignment/layout validation. Fix and independently validate that compatibility, complete Linux PDF/device validation, review historical release evidence and obtain separate release authorization first. Hosted native database and Android builds have passed; they do not establish physical-camera correctness.
 
 ## Hosted review evidence
 
@@ -66,3 +67,13 @@ Final identity hardening: authorized printed review may supply a missing QR but 
 Eligibility is rechecked under a candidate row lock during grading/approval/publication, rather than trusting an earlier verification flag. A changed or inactive group blocks approval. Missing-QR reviews retain the checked printed roll/session/exam in immutable audit evidence. The real synthetic API test changes a fabricated candidate's group after grading and verifies that approval is rejected until eligibility is restored. Serializable raw-query conflicts/deadlocks have bounded retries with an explicit regression test.
 
 The Linux fixture diagnosis was a cropped header-search window, not a weak answer classification. The search now includes the full printed header height while keeping the same permitted displacement, circle evidence and classification thresholds. Both downloaded fabricated Linux captures now yield 100 A responses, version A and registration 1.0 locally. The regression covers -40, -80 and +70 pixel header shifts without changing question numbering; all 31 Python tests passed again. The PostgreSQL 17 historical upgrade/recovery/backup-restore rehearsal passed 16 checks in hosted run 42426992722.
+
+## Latest continuation and private application test
+
+Both hosted workflows for review commit `80103e100b5cb32af2980692c8e51618339f2b56` completed successfully: Smart OMR run `42427662000` (including Android) and broader PostgreSQL 17 runtime isolation run `42427661976`. This supersedes earlier pending-run notes above. Subsequent source changes require their own hosted rerun.
+
+Private examples were tested through the newly implemented application, not treated as fixtures that should automatically pass. The test uses a disposable database with fabricated accounts, actual web file selection/upload, the real API/queue/worker and the review history/evidence screens. Reports, originals, screenshots and converted answer keys are under ignored `tmp/omr-reference/` and are never CI artifacts. All 24 scans remain INVALID with zero detected responses and zero results; no student was attached. No scores or recognition-accuracy claims can be derived from these failures. The supplied key is grading data, not an independent transcription of photographed marks.
+
+Printed layouts in this sample set appear to differ from the generated template's alignment marks. Local-contrast corner detection improves gray-marker handling without bypassing timing tracks or full grid validation. Failed evidence now opens the original automatically and gives actionable alignment/layout guidance. The permitted answer thresholds are unchanged. Whole-row header aliases are rejected with first/last row evidence. Retake clears the native file input, and the development worker waits for its active job on shutdown.
+
+After these changes: 32 scanner tests, 3 private-key parser tests, 43 feature Node tests and 5 full API/recovery checks passed locally. Web/backend/mobile builds and the scoped web type-check passed. All ten web screens plus mobile camera lifecycle, same-file retake, offline refusal, upload failure/retry, 100-row review, history and logout passed in the browser. The new positive two-page PDF integration test is explicitly skipped on Windows; Linux bubblewrap/Poppler execution is queued for hosted validation, with no sandbox bypass.

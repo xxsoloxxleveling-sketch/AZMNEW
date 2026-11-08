@@ -12,11 +12,12 @@ const backendRequire=createRequire(path.join(root,'backend/package.json'));
 const namespaced=(module:Record<string,unknown>,name:string):any=>module[name]??(module.default as Record<string,unknown>|undefined)?.[name];
 const quote=(value:string)=>'"'+value.replaceAll('"','""')+'"';
 
-export async function startDevelopment(options:{apiPort?:number;workerEnabled?:boolean}={}) {
+export async function startDevelopment(options:{apiPort?:number;workerEnabled?:boolean;privateDirectory?:string}={}) {
   if(process.env.NODE_ENV==='production') throw new Error('Disposable OMR environment cannot run in production');
   const db=await PGlite.create();
   let socket:PGLiteSocketServer|undefined,api:ReturnType<typeof import('node:http').createServer>|undefined;
   let timer:ReturnType<typeof setInterval>|undefined,job:Promise<unknown>=Promise.resolve(),prisma:any;
+  let ticking=false;
   const stop=async()=>{
     if(timer) clearInterval(timer); await job.catch(()=>{});
     if(api) await new Promise<void>(resolve=>api!.close(()=>resolve()));
@@ -57,7 +58,7 @@ export async function startDevelopment(options:{apiPort?:number;workerEnabled?:b
     const version=await db.query<{version:string}>('SELECT version()');
     socket=new PGLiteSocketServer({db,host:'127.0.0.1',port:0,maxConnections:1,inspect:false,debug:false}); await socket.start();
     const url=`postgresql://postgres@${socket.getServerConn()}/postgres?connection_limit=1&pool_timeout=30`;
-    Object.assign(process.env,{NODE_ENV:'development',AZM_DISABLE_MEMORY_FALLBACK:'1',OMR_SYNTHETIC_ENVIRONMENT:'1',DATABASE_URL:url,DIRECT_URL:url,JWT_ACCESS_SECRET:randomBytes(32).toString('hex'),JWT_REFRESH_SECRET:randomBytes(32).toString('hex'),QR_SECRET:randomBytes(32).toString('hex'),EXAM_CONTROL_SIGNING_KEY:capabilitySecret,OMR_PRIVATE_DIR:path.join(root,'tmp/omr-dev/private'),OMR_WORKER_ROOT:path.join(root,'workers/omr')});
+    Object.assign(process.env,{NODE_ENV:'development',AZM_DISABLE_MEMORY_FALLBACK:'1',OMR_SYNTHETIC_ENVIRONMENT:'1',DATABASE_URL:url,DIRECT_URL:url,JWT_ACCESS_SECRET:randomBytes(32).toString('hex'),JWT_REFRESH_SECRET:randomBytes(32).toString('hex'),QR_SECRET:randomBytes(32).toString('hex'),EXAM_CONTROL_SIGNING_KEY:capabilitySecret,OMR_PRIVATE_DIR:options.privateDirectory??path.join(root,'tmp/omr-dev/private'),OMR_WORKER_ROOT:path.join(root,'workers/omr')});
     for(const variable of ['R2_BUCKET','R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_ENDPOINT','SUPABASE_SERVICE_ROLE_KEY','OMR_VALIDATION_MANIFEST','OMR_VALIDATION_SIGNING_KEY','OMR_PHYSICAL_REPORT']) process.env[variable]='';
     const venv=path.join(root,'workers/omr/.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python');
     if(await fs.stat(venv).then(()=>true,()=>false)) process.env.OMR_PYTHON=venv;
@@ -70,7 +71,7 @@ export async function startDevelopment(options:{apiPort?:number;workerEnabled?:b
     api=app.listen(options.apiPort??5055,'127.0.0.1'); await new Promise<void>((resolve,reject)=>{api!.once('listening',resolve);api!.once('error',reject);});
     const queue=namespaced(await import(pathToFileURL(path.join(root,'backend/src/modules/omr/queue.ts')).href),'omrQueue');
     if(options.workerEnabled!==false) {
-      timer=setInterval(()=>{job=queue.tick().catch(()=>console.error('Synthetic development worker failed; original jobs retained'));},1000);
+      timer=setInterval(()=>{if(ticking)return;ticking=true;job=queue.tick().catch(()=>console.error('Synthetic development worker failed; original jobs retained')).finally(()=>{ticking=false;});},1000);
     }
     const address=api.address() as import('node:net').AddressInfo;
     return {url:`http://127.0.0.1:${address.port}`,version:version.rows[0].version,appliedMigrations:applied,tick:()=>queue.tick(),stop};

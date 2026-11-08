@@ -6,7 +6,8 @@ import { createRequire } from 'node:module';
 import { pdfService } from '../../backend/src/modules/documents/pdf.service';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'backend/package.json'));
-export async function generateSheet(filename=`synthetic-${randomUUID()}.png`) {
+export async function generateSheet(filename=`synthetic-${randomUUID()}.png`,options:{pdfPages?:number}={}) {
+  if(options.pdfPages!==undefined&&(!Number.isInteger(options.pdfPages)||options.pdfPages<1||options.pdfPages>25))throw new Error('Use 1–25 fabricated PDF pages');
   const puppeteer=require('puppeteer'),qr=require('qrcode');
   let bundled:string|undefined;try{bundled=await puppeteer.executablePath();}catch{}
   const candidates=[process.env.OMR_CHROME_PATH,process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -25,7 +26,10 @@ export async function generateSheet(filename=`synthetic-${randomUUID()}.png`) {
     await page.setContent(html,{waitUntil:'load'});
     await page.evaluate(()=>{document.querySelectorAll('.omr-row').forEach(row=>{const bubble=row.querySelector<HTMLElement>('.bubble');if(bubble){bubble.style.background='#000';bubble.style.color='#000';}});const version=document.querySelector<HTMLElement>('.v-bubble');if(version)version.style.background='#000';});
     const target=path.join(root,'tmp/omr-dev',filename);await fs.mkdir(path.dirname(target),{recursive:true});
-    await (await page.$('.omr-page'))!.screenshot({path:target});
+    if(options.pdfPages) {
+      await page.evaluate((count:number)=>{const sheet=document.querySelector<HTMLElement>('.omr-page')!;sheet.style.breakAfter='page';for(let number=1;number<count;number++)sheet.parentElement!.appendChild(sheet.cloneNode(true));},options.pdfPages);
+      await page.pdf({path:target,format:'A4',printBackground:true,preferCSSPageSize:true,margin:{top:0,bottom:0,left:0,right:0}});
+    } else await (await page.$('.omr-page'))!.screenshot({path:target});
     return target;
   } finally {await browser.close();}
 }

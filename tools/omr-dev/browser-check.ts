@@ -33,6 +33,9 @@ try {
   await click('Open camera');await page.waitForFunction(()=>{const video=document.querySelector('video');return !!video?.videoWidth;});
   await click('Close camera');await page.waitForFunction(()=>{const video=document.querySelector('video');return !video?.srcObject;});
   const upload=await page.$('input[type=file]');await upload.uploadFile(path.resolve('tmp/omr-dev/synthetic-clean.png'));
+  await new Promise(resolve=>setTimeout(resolve,300));await click('Retake or choose again');
+  if(await page.$eval('input[type=file]',(element:HTMLInputElement)=>element.value)!=='')throw new Error('Retake retained the previous file reference');
+  await upload.uploadFile(path.resolve('tmp/omr-dev/synthetic-clean.png'));
   await new Promise(resolve=>setTimeout(resolve,300));await page.screenshot({path:path.join(output,'mobile-preview.png'),fullPage:true});
   console.log('Visible upload actions:',await page.$$eval('button',(buttons:Element[])=>buttons.map(button=>button.textContent?.trim()).join(' | ')));
   const storage=await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length}));if(storage.local||storage.session)throw new Error('Mobile persisted session storage');

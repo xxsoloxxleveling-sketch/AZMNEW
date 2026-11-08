@@ -7,13 +7,14 @@ export function ScanReview({client,scanId,onClose,onChanged,canReview}:Props) {
   const [image,setImage]=useState(''),[mime,setMime]=useState(''),[kind,setKind]=useState<'original'|'annotation'>('annotation'),[zoom,setZoom]=useState(100);
   const [edits,setEdits]=useState<Record<number,Answer>>({}),[version,setVersion]=useState(''),[reason,setReason]=useState(''),[lookup,setLookup]=useState(''),[printedRoll,setPrintedRoll]=useState(''),[confirmed,setConfirmed]=useState(false);
   const open=['RECOGNIZED','REVIEW_REQUIRED'].includes(scan?.status||'');
+  const evidenceKind=kind==='annotation'&&scan&&!scan.hasAnnotation?'original':kind;
   const reload=async()=>{const next=await client.scan(scanId);setScan(next);setVersion(next.paperVersion||'');setEdits({});if(next.identityVerified){setLookup('');setPrintedRoll('');setConfirmed(false);}};
   useEffect(()=>{let cancelled=false;setScan(null);setReason('');setLookup('');setPrintedRoll('');setConfirmed(false);client.scan(scanId).then(value=>{if(!cancelled){setScan(value);setVersion(value.paperVersion||'');}},problem=>{if(!cancelled)setError(problem.message);});return()=>{cancelled=true;};},[client,scanId]);
   useEffect(()=>{
-    let cancelled=false,url='';setImage('');
-    client.image(scanId,kind).then(blob=>{url=URL.createObjectURL(blob);if(cancelled)URL.revokeObjectURL(url);else{setImage(url);setMime(blob.type);}},problem=>{if(!cancelled)setError(problem.message);});
+    let cancelled=false,url='';setImage('');if(!scan)return;
+    client.image(scanId,evidenceKind).then(blob=>{url=URL.createObjectURL(blob);if(cancelled)URL.revokeObjectURL(url);else{setImage(url);setMime(blob.type);}},problem=>{if(!cancelled)setError(problem.message);});
     return()=>{cancelled=true;if(url)URL.revokeObjectURL(url);};
-  },[client,scanId,kind]);
+  },[client,scanId,evidenceKind,!!scan]);
   async function act(operation:()=>Promise<unknown>) {
     setBusy(true);setError('');try{await operation();await reload();onChanged();}catch(problem){setError(problem instanceof Error?problem.message:'Review failed');}finally{setBusy(false);}
   }
@@ -28,9 +29,10 @@ export function ScanReview({client,scanId,onClose,onChanged,canReview}:Props) {
     {error&&<p role="alert" className="omr-notice omr-error mb-3">{error}</p>}
     {!scan?<p role="status">Loading scan evidence…</p>:<>
       <p className="text-sm mb-3">{scan.student?.fullName||'Identity requires confirmation'} · {scan.student?.rollNumber||scan.student?.applicationNo||'No candidate attached'} · {scan.status.replaceAll('_',' ')}</p>
+      {scan.status==='INVALID'&&<p role="status" className="omr-notice omr-error mb-3">{scan.errorCode==='PRINT_LAYOUT_MISMATCH'?'This printed layout does not match the scanner’s alignment marks. Keep this sheet for compatibility review; retaking the same layout may not resolve it.':scan.errorCode==='PAGE_ALIGNMENT_FAILED'?'The page could not be aligned. Capture all four corner marks with even lighting and a plain background.':'This capture could not be read safely. Inspect the original and upload a clearer supported sheet.'} No answers or marks were saved.</p>}
       <div className="grid min-w-0 lg:grid-cols-2 gap-5">
         <div className="min-w-0">
-          <div className="flex flex-wrap gap-3 items-end mb-3"><label className="omr-field">Evidence<select value={kind} onChange={event=>setKind(event.target.value as typeof kind)}><option value="annotation">Recognition overlay</option><option value="original">Original file</option></select></label><label className="omr-field">Zoom {zoom}%<input type="range" min="100" max="250" step="10" value={zoom} onChange={event=>setZoom(Number(event.target.value))}/></label></div>
+          <div className="flex flex-wrap gap-3 items-end mb-3"><label className="omr-field">Evidence<select value={evidenceKind} onChange={event=>setKind(event.target.value as typeof kind)}><option value="annotation" disabled={!scan.hasAnnotation}>Recognition overlay</option><option value="original">Original file</option></select></label><label className="omr-field">Zoom {zoom}%<input type="range" min="100" max="250" step="10" value={zoom} onChange={event=>setZoom(Number(event.target.value))}/></label></div>
           <div className="max-h-[75vh] overflow-auto border border-slate-300 rounded-lg min-h-32">
             {image?(mime==='application/pdf'?<iframe src={image} title="Original OMR PDF" className="w-full h-[65vh]"/>:<img src={image} alt="OMR scan evidence with detected bubble regions" style={{width:`${zoom}%`,maxWidth:'none'}}/>):<p className="p-4 text-sm">Evidence is loading or not available yet. Try the original file if processing is pending.</p>}
           </div>
