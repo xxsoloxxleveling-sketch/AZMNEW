@@ -378,5 +378,32 @@
     "currentReferenceTimingContractPassed": true,
     "legacyTimingTracksExpected": 0,
     "legacyCompleteRowRulerContractsPassed": 17
+  },
+  "automatedValidation": {
+    "runtimeLocalCommit": "81de3623085c66692d213321d8c0cb00ebb09d90",
+    "runtimeReviewCommit": "e6be8ffd3a370886c1b9e141474f6fd1cf92eb3b",
+    "omrRun": 42477804341,
+    "omrJob": "SUCCESS",
+    "overallWorkflow": "FAILURE",
+    "broaderPostgres17Run": 42477804343,
+    "broaderPostgres17Result": "SUCCESS",
+    "pythonScannerTests": 37,
+    "pythonHelperTests": 5,
+    "nodeFeatureTests": 44,
+    "syntheticApiRecoveryTests": 5,
+    "sandboxedPdfIntegration": "PASSED_LINUX",
+    "historicalRecoveryChecks": 16,
+    "actualPrivateBulkApplication": {
+      "photos": 24,
+      "mapped": 17,
+      "rejected": 7,
+      "responsesAgreeWithFrozenEngine": 1700,
+      "originalStudentResultsCreated": 0
+    },
+    "androidSourceCompilation": "PASSED",
+    "androidAssembly": "EXTERNAL_GRADLE_DOWNLOAD_FAILURE_AFTER_3_ATTEMPTS",
+    "newApkProduced": false,
+    "actualAndroidDeviceTest": false,
+    "iosXcodeTest": false
   }
 }
