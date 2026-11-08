@@ -20,3 +20,5 @@ Access and refresh tokens remain in memory, refresh requests are serialized, log
 Tests exercise a browser with a fake camera; that is not an Android/iOS device or physical-sheet accuracy test. Native permission behavior, app suspension, memory pressure, camera orientation and actual release APK behavior remain release gates. Launcher artwork is generated scaffold artwork and should be replaced with approved branding before distribution.
 
 The wrapper uses the smaller binary-only Gradle 8.14.3 archive, with its SHA-256 pinned to the [official checksum list](https://gradle.org/release-checksums/) and a bounded 60-second network timeout. This retains the Gradle version while avoiding the documentation/source archive that repeatedly returned HTTP 504 during hosted downloads.
+
+Latest verified development APK from successful run `42469745679`: `../../tmp/omr-dev/release/azm-omr-development-d134a27.apk`, SHA-256 `a0e105762f3e8695c37aa59ed2585ecb76414656cd187b3d6edb143da13d975c`. It has not been installed or tested on a physical device.

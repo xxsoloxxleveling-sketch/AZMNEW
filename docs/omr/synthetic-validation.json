@@ -7,10 +7,10 @@
   "sheetExactMatch": 1.0,
   "rejectionRate": 0.0,
   "reviewRate": 0.0,
-  "medianSeconds": 0.8970069499919191,
-  "maxSeconds": 1.1016938999964623,
+  "medianSeconds": 0.9730589000100736,
+  "maxSeconds": 1.1237678000179585,
   "physicalCameraAccuracy": null,
   "officialScoringAllowed": false,
   "measuredAt": "2026-11-08",
-  "notes": "10 synthetic sheets after complete-header registration fix; Linux and Windows generated captures separately verified. Physical-camera accuracy remains unverified."
+  "notes": "10 synthetic sheets rerun after full-header alias checks and gray-corner fallback. Supplied 24 private photographs separately tested through the application: all INVALID, zero responses/results. Physical-camera accuracy remains unverified."
 }
