@@ -41,7 +41,18 @@ jobs:
           npm ci --prefix apps/omr-mobile --ignore-scripts --legacy-peer-deps
           python -m pip install -r workers/omr/requirements.txt
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends bubblewrap poppler-utils
+          sudo apt-get install -y --no-install-recommends bubblewrap poppler-utils apparmor-profiles apparmor-utils
+      - name: Verify PDF namespaces with Ubuntu's packaged bubblewrap profile
+        shell: bash
+        run: |
+          # Preserve Ubuntu's global user-namespace restrictions. Grant bwrap its
+          # packaged profile, which strips capabilities from sandboxed children.
+          profile=/etc/apparmor.d/bwrap-userns-restrict
+          if [ ! -f "$profile" ] && [ -f /usr/share/apparmor/extra-profiles/bwrap-userns-restrict ]; then
+            sudo install -m 0644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict "$profile"
+          fi
+          if [ -f "$profile" ]; then sudo apparmor_parser -r "$profile"; fi
+          bwrap --unshare-all --die-with-parent --new-session --ro-bind /usr /usr --ro-bind /lib /lib --proc /proc --dev /dev /usr/bin/true
       - name: Use PostgreSQL 17 client tools from the disposable service
         shell: bash
         run: |
