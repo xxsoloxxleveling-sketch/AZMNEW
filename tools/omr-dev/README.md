@@ -63,7 +63,22 @@ The first command selects the actual images in the web Bulk Upload screen, runs 
 
 The PDF helper requires `pypdf`. It validates each exact class/group and A–D key independently, requires questions 1–100 exactly once and writes private `Question,Answer` CSVs plus a mapping manifest under ignored `tmp/omr-reference/private-keys/`. Select the matching exam/group and version in Answer Key Manager; preparing CSVs does not approve keys or activate official scoring. Never infer a key from the highest achieved score. A key is grading data, not human ground truth for what a photographed bubble contains.
 
-The supplied 24-photo set currently produces 24 INVALID scans and zero responses/results in this workflow. Compatibility and camera alignment must be fixed and independently validated before recognition accuracy or marks can be assessed. Two samples reach alignment but fail the timing-track check; 22 fail page alignment. This is a measured blocker, not a successful recognition benchmark. The samples and confidential key contents are excluded from source control and CI.
+The baseline was 24 INVALID scans. The separate provisional framed profile now maps 17 originals (all REVIEW_REQUIRED) and rejects 7, with no original identity/results attached. This is geometry/observation progress, not physical answer accuracy. See docs/omr/physical-validation.md. The samples, observations, comparison files and confidential key contents are excluded from source control and CI.
+
+The private application checker defaults to the first 18 calibration photos. Freeze the optical algorithm/dataset before opening the reserved six:
+
+```powershell
+workers/omr/.venv/Scripts/python.exe tools/omr-dev/physical-benchmark.py "C:\path\to\photos" --split calibration --freeze
+workers/omr/.venv/Scripts/python.exe tools/omr-dev/physical-benchmark.py "C:\path\to\photos" --split validation
+$env:OMR_PRIVATE_SPLIT='all'
+node --import ./backend/node_modules/tsx/dist/loader.mjs tools/omr-dev/private-sample-check.ts
+```
+
+The fixed experiment has 24 files sorted by filename: S01–S18 calibration, S19–S24 reserved. Freeze history and earlier evidence must be preserved. A changed code/dataset hash refuses validation; do not tune on those six and then call them unseen. Each application run writes a new private directory rather than overwriting baseline evidence.
+
+`label-physical.py` provides a token-protected loopback screen with empty responses, no keys and no predictions. It requires all 100 marks plus explicit reviewer confirmation, preserves revisions and checks the source hash. If the local link is inaccessible, use private text/CSV comparison files and a blank transcription CSV. Feedback after viewing predictions is an unblinded comparison, not independent human ground truth.
+
+Set `OMR_PRIVATE_KEY_MANIFEST` to the prepared manifest and run `private-key-check.ts` to verify all 44 exact CSVs, key mismatches and revision behavior without approving any official key. `private-photo-flow.ts` tests the raw S01 mobile upload plus a separately labeled **derived** identity copy: only the header is replaced with a fabricated QR/roll, answer/version pixels are preserved, a synthetic test key creates an internal draft, and uncertainty/publication protections remain. Its raw-photo, derived-copy, correction, duplicate and crop checks are reported separately under ignored tmp/omr-reference/photo-flow. Neither private runner may run in CI.
 
 The Linux-only `pdf-integration.test.ts` sends a fabricated two-page printable PDF through authenticated upload and bubblewrap/Poppler, asserting two separate scans with all 100 responses. Windows skips this positive test explicitly and retains its sandbox refusal contract; a hosted result must be observed before calling it passed.
 

@@ -4,12 +4,12 @@ Branch: `codex/smart-omr-evaluation-mobile`. Initial retained checkpoint: `a79e8
 
 | Check actually run | Result |
 |---|---|
-| Python recognition/classification/PDF contracts | 32 passed (original 23 retained; gray camera markers retain timing/grid checks; header aliases, erasure/glare-like outline loss, spoofed grid and PDF security contracts covered) |
-| Private PDF answer-key parser | 3 passed on fabricated text; supplied local PDF validated as 44 unique class/group/version keys, each with exactly 100 answers; key content remains private |
-| Feature Node tests: database/grading, 27 authenticated routes, identity/signatures, storage, activation, public/historical release, migration recovery, mobile session/network and key import | 43 passed (includes native-tool discovery, manual QR-conflict and native transaction retry regressions) |
+| Python recognition/classification/PDF contracts | 37 passed (original 23 retained; five framed-layout tests add full background/frame, 24/26-row rejection, missing corner/column and damaged current timing-track contracts) |
+| Private key parser / human-label helper tests | 5 passed (3 parser, 2 explicit human-confirmation tests); current local PDF validated as 44 unique keys × 100 answers. All 1892 cross-key pairings rejected; no official keys approved |
+| Feature Node tests: database/grading, 27 authenticated routes, identity/signatures, storage, activation, public/historical release, migration recovery, mobile session/network and key import | 44 passed; includes crop/grid diagnostics, provisional layout refusal despite original-template activation, and new-profile hash tampering invalidation |
 | Full real synthetic API + queue recovery | 5 passed, including parent/child recovery checks; 22 migrations applied under restricted role on PostgreSQL 18.6/WASM |
 | Generated real printable sheet | 100 A responses, version A; manual identity review when printed-roll OCR is unavailable; internal score 100/100, verification separate |
-| Synthetic benchmark | 10 sheets / 1000 answers, 1000 correct; 10/10 exact sheets, no rejection/review; latest local median 0.973 s, max 1.124 s; physical accuracy unmeasured |
+| Synthetic benchmark | 10 sheets / 1000 answers, 1000 correct; 10/10 exact sheets, no rejection/review; latest local median 1.084 s, max 1.245 s; physical answer accuracy unmeasured |
 | Private digital blank reference | 100 blanks; registration 1.0; identifying content excluded from committed artifacts |
 | Real web/browser checks | Ten OMR screens loaded; responsive phone layout inspected; screenshots retained locally under ignored tmp/omr-dev/browser |
 | Mobile browser workflow | Login, fake-camera open/close, preview, offline disabled, forced upload failure/retry, processing, all 100 review rows, history, memory-only storage and logout passed |
@@ -30,7 +30,8 @@ Branch: `codex/smart-omr-evaluation-mobile`. Initial retained checkpoint: `a79e8
 | Linux untrusted PDF execution/multi-page sandbox | PASSED hosted: actual two-page PDF via authenticated API, queue, bubblewrap/Poppler and worker; two distinct scans, each 100 A responses/version A and private annotation. Windows explicitly skips this positive test and retains its unsandboxed-PDF refusal |
 | Android development APK | PASSED latest run 42469745679 on hosted Java 21 / Android SDK 36. Downloaded and verified: tmp/omr-dev/release/azm-omr-development-d134a27.apk (4,201,756 bytes). Local Gradle/device testing remains unavailable |
 | iOS | Sources generated; camera usage/privacy cover prepared. No Xcode build or physical device test |
-| Supplied private photos through actual application | 24/24 uploaded using web Bulk Upload, processed by real API/queue/worker, retained in review history; 24 INVALID, zero responses and zero marks/results. After local-contrast corner handling, 2 reach alignment but fail timing tracks and 22 fail page alignment. Recognition accuracy is not established; official release remains locked |
+| Supplied private photos through actual application | 24/24 uploaded through actual web/API/queue: 17 REVIEW_REQUIRED × 100 positions, 7 INVALID; no original attached to a student or assigned results. Calibration 12/18 mapped; frozen reserved evaluation 5/6 mapped. See physical-validation.md; independent human answer accuracy remains unknown |
+| Real-photo web/mobile workflow | Passed raw S01 mobile selection/shared review; separately passed derived synthetic-header/QR copy, exact Class 8/B synthetic key, internal draft, correction/reversal/audits, crop guidance, duplicates, confidentiality and publication boundary. This is not original-photo identity validation or a device test |
 
 The two attendance regression failures were retained and documented; assertions were not weakened and unrelated attendance functionality was not rewritten. They are release blockers pending investigation in the broader application. The scoped web type-check diagnostics were resolved and the check rerun successfully.
 
@@ -40,7 +41,7 @@ Synthetic checks cover mismatched QR identity/session/group/version, inactive/un
 
 PGlite serializes database access and cannot establish native multi-connection correctness. The PostgreSQL 17 CI test explicitly uses two native clients for SKIP LOCKED and concurrent duplicate submissions. Observe its actual result before accepting that evidence. Application rollback must preserve OMR audit tables and account for the old Results Desk's visibility behavior.
 
-**Verdict: working isolated synthetic development flow; not production-ready or authorized for real examination grading/publication.** The supplied photographs currently fail alignment/layout validation. Fix and independently validate that compatibility, complete physical device validation, review historical release evidence and obtain separate release authorization first. Hosted native database, sandboxed multi-page PDF and Android builds have passed; they do not establish physical-camera correctness.
+**Verdict: working isolated application with provisional physical-layout progress; not production-ready or authorized for real examination grading/publication.** Seventeen photographs now map; seven fail and all mapped sheets require review. Independent human answer transcriptions, original QR/identity validation, physical device checks and release approval remain required. Earlier hosted native database/PDF/Android checks passed; the new milestone's hosted results must be observed separately.
 
 ## Hosted review evidence
 
@@ -89,3 +90,9 @@ The Gradle download issue was resolved using the smaller binary archive at the s
 The supplied 24 photographs remain unreadable by this scanner layout and are the primary recognition release blocker. A separate legacy-layout compatibility implementation and independent physical ground truth are still needed. No public score, real student association or production activation was performed.
 
 The broader PostgreSQL 17 runtime regression also passed at the same runtime review commit: [42469745725](https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/runs/42469745725). Both workflows are observed successes, rather than inferred from an earlier milestone.
+
+## Physical compatibility continuation
+
+The newer physical milestone supersedes the old 24-INVALID recognition result without erasing it: 17/24 original photographs now produce 100 ordered observations, all REVIEW_REQUIRED; seven remain rejected. The six reserved photos were excluded from compatibility tuning and first processed after freezing optical code hash `59a7779250d157059ca95aa63860fd81a860e426d1a23fcdbf51adcd62e3c08a` (5 mapped, 1 rejected). The actual bulk application reproduces all 24 outcomes. Independent physical accuracy is unknown: 996 uncertain responses and five multiple marks still need review, no original QR decoded, and three versions are uncertain.
+
+See [physical-validation.md](physical-validation.md) and [sanitized metrics](physical-validation-summary.json) for causes, exact rejected samples, split/results, private comparison files and unblinded-versus-independent review rules. The original blank still produces 100 blanks under its original timing-track profile. Local current checks: 37 scanner, 5 Python helper, 44 feature Node and 5 real synthetic API/recovery passed; one positive PDF test is explicitly skipped on Windows. All ten web screens and the full fake-camera/retake/offline/retry/review browser workflow passed again. The private web/mobile flow passed with its derived-identity nature explicitly recorded; synthetic-key drafts/publication refusal are not official marks. Native/Android/Linux PDF reruns for the new source milestone are pending at this documentation checkpoint.

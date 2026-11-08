@@ -9,9 +9,19 @@ const require=createRequire(new URL('../../backend/package.json',import.meta.url
 if(process.env.CI)throw new Error('Private sample testing is local-only; never run it in CI');
 const folder=process.env.OMR_PRIVATE_SAMPLE_DIR,executablePath=process.env.OMR_CHROME_PATH;
 if(!folder||!executablePath)throw new Error('Set OMR_PRIVATE_SAMPLE_DIR and OMR_CHROME_PATH');
-const files=(await fs.readdir(folder)).filter(name=>/\.(png|jpe?g)$/i.test(name)).sort().map(name=>path.join(folder,name));
+const allFiles=(await fs.readdir(folder)).filter(name=>/\.(png|jpe?g)$/i.test(name)).sort().map(name=>path.join(folder,name));
+const split=process.env.OMR_PRIVATE_SPLIT||'calibration';
+assert.ok(['calibration','validation','all'].includes(split));
+if(split!=='calibration') {
+  const frozen=JSON.parse(await fs.readFile('tmp/omr-reference/physical-validation/frozen-validation.json','utf8'));
+  const current=createHash('sha256');for(const name of ['engine.py','physical_layout.py','registration.py','responses.py','template-v2.json','template-framed-legacy-v1.json'])current.update(await fs.readFile(path.join('workers/omr',name)));
+  assert.equal(current.digest('hex'),frozen.recognitionSha256,'Freeze the exact algorithm before using held-out images');
+  const sourceHashes=await Promise.all(allFiles.map(async file=>createHash('sha256').update(await fs.readFile(file)).digest('hex')));
+  assert.ok(JSON.stringify(sourceHashes)===JSON.stringify(frozen.sourceHashes),'The private dataset changed after calibration');
+}
+const files=allFiles.filter((_,index)=>split==='all'||(split==='calibration'?index<18:index>=18));
 assert.ok(files.length>0&&files.length<=100,'Choose a folder with 1–100 JPEG/PNG samples');
-const output=path.resolve('tmp/omr-reference/application-check');await fs.mkdir(output,{recursive:true});
+const output=path.resolve(`tmp/omr-reference/application-check/${split}-${Date.now()}`);await fs.mkdir(output,{recursive:true});
 const development=await startDevelopment({apiPort:5055,workerEnabled:false,privateDirectory:path.join(output,'private')});
 let browser:any;
 try {
@@ -44,7 +54,9 @@ try {
     }
     assert.ok(batch.items.length&&batch.items.every((item:any)=>item.scan&&!['QUEUED','PROCESSING'].includes(item.scan.status)),'Sample did not finish processing');
     const scan=batch.items[0].scan,bytes=await fs.readFile(files[index]);
-    report.push({sample:`S${String(index+1).padStart(2,'0')}`,sha256:createHash('sha256').update(bytes).digest('hex'),status:scan.status,reason:scan.rawDetection?.reason??scan.errorCode,paperVersion:scan.paperVersion,responses:scan.responses.length,uncertain:scan.responses.filter((row:any)=>['UNCERTAIN','MULTIPLE'].includes(row.detectedAnswer)).length,identityAttached:!!scan.studentId,officialScoringAllowed:scan.rawDetection?.officialScoringAllowed===true});
+    const sample=`S${String(allFiles.indexOf(files[index])+1).padStart(2,'0')}`;
+    await fs.writeFile(path.join(output,`${sample}-observation.json`),JSON.stringify(scan.rawDetection,null,2));
+    report.push({sample,sha256:createHash('sha256').update(bytes).digest('hex'),status:scan.status,layout:scan.templateVersion,reason:scan.rawDetection?.reason??scan.errorCode,paperVersion:scan.paperVersion,responses:scan.responses.length,uncertain:scan.responses.filter((row:any)=>['UNCERTAIN','MULTIPLE'].includes(row.detectedAnswer)).length,identityAttached:!!scan.studentId,officialScoringAllowed:scan.rawDetection?.officialScoringAllowed===true});
     console.log(`${report.at(-1).sample}: ${scan.status}; ${scan.responses.length} responses`);
   }
   assert.equal(await prisma.omrExamResult.count(),0,'Private sample intake must not create marks');
@@ -59,5 +71,5 @@ try {
   }
   await page.screenshot({path:path.join(output,'first-evidence.png'),fullPage:true});
   await fs.writeFile(path.join(output,'report.json'),JSON.stringify({testedAt:new Date().toISOString(),pipeline:'web bulk upload -> authenticated API -> durable queue -> Python worker -> review history',samples:report,resultsCreated:0,answerKeyComparison:'Not performed until recognition and exact paper/group mapping are validated',productionReady:false},null,2));
-  console.log(`Private application test completed: ${report.length} samples. Report retained locally under tmp/omr-reference/application-check.`);
+  console.log(`Private application test completed: ${report.length} ${split} samples. Report retained locally under tmp/omr-reference/application-check.`);
 } finally {await browser?.close();await development.stop();}

@@ -1,0 +1,382 @@
+{
+  "date": "2026-11-08",
+  "algorithmSha256": "59a7779250d157059ca95aa63860fd81a860e426d1a23fcdbf51adcd62e3c08a",
+  "before": {
+    "photos": 24,
+    "mapped": 0,
+    "rejected": 24,
+    "answersExtracted": 0
+  },
+  "after": {
+    "photos": 24,
+    "mapped": 17,
+    "rejected": 7,
+    "answersExtracted": 1700,
+    "reviewRequiredSheets": 17,
+    "officiallyAcceptedSheets": 0
+  },
+  "split": {
+    "calibration": {
+      "photos": 18,
+      "mapped": 12,
+      "rejected": 6
+    },
+    "validation": {
+      "photos": 6,
+      "mapped": 5,
+      "rejected": 1
+    }
+  },
+  "inventory": {
+    "resolution": {
+      "720x1280": 24
+    },
+    "orientation": {
+      "portrait": 24
+    },
+    "observedPhysicalLayoutFamilies": [
+      "framed legacy 100 / small corner markers / no timing tracks"
+    ],
+    "supportedCurrentReference": "AZM_OMR_V2_2026_V / 6 mm markers / 25 timing blocks per side",
+    "duplicateReview": "Assistant visual inspection found 24 distinct printed identifier pairs; original values remain private. This is not independent human answer labeling."
+  },
+  "responses": {
+    "singleOption": 697,
+    "blank": 2,
+    "multiple": 5,
+    "uncertain": 996
+  },
+  "paperVersion": {
+    "unambiguous": 14,
+    "reviewRequired": 3,
+    "accuracy": null
+  },
+  "qr": {
+    "decodedOriginalMappedPhotos": 0,
+    "mappedPhotosAttempted": 17,
+    "invalidPhotosNotEvaluated": 7,
+    "derivedSyntheticIdentityQrDecoded": true,
+    "originalIdentityAccuracy": null
+  },
+  "metrics": {
+    "questionAccuracy": null,
+    "sheetExactMatchAccuracy": null,
+    "blankAccuracy": null,
+    "multipleMarkAccuracy": null,
+    "falseConfidentAnswerRate": null,
+    "independentHumanGroundTruthAvailable": false,
+    "medianMappedSeconds": 4.198,
+    "maximumMappedSeconds": 4.555,
+    "rejectionRate": 0.2916666666666667,
+    "reviewRequiredRateOfMapped": 1.0,
+    "independentHumanLabeledSheets": 0
+  },
+  "samples": [
+    {
+      "sample": "S01",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "B",
+      "qrDecoded": false,
+      "uncertain": 57,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 0.995,
+      "seconds": 4.323
+    },
+    {
+      "sample": "S02",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "C",
+      "qrDecoded": false,
+      "uncertain": 61,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 1.0,
+      "seconds": 4.003
+    },
+    {
+      "sample": "S03",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "B",
+      "qrDecoded": false,
+      "uncertain": 44,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 1.0,
+      "seconds": 4.21
+    },
+    {
+      "sample": "S04",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "C",
+      "qrDecoded": false,
+      "uncertain": 62,
+      "multiple": 0,
+      "blank": 2,
+      "registration": 1.0,
+      "seconds": 4.464
+    },
+    {
+      "sample": "S05",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "A",
+      "qrDecoded": false,
+      "uncertain": 39,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 0.9975,
+      "seconds": 4.555
+    },
+    {
+      "sample": "S06",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "D",
+      "qrDecoded": false,
+      "uncertain": 57,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 1.0,
+      "seconds": 4.11
+    },
+    {
+      "sample": "S07",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "UNCERTAIN",
+      "qrDecoded": false,
+      "uncertain": 58,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 0.9975,
+      "seconds": 4.47
+    },
+    {
+      "sample": "S08",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "A",
+      "qrDecoded": false,
+      "uncertain": 66,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 1.0,
+      "seconds": 4.243
+    },
+    {
+      "sample": "S09",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "A",
+      "qrDecoded": false,
+      "uncertain": 78,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 1.0,
+      "seconds": 3.789
+    },
+    {
+      "sample": "S10",
+      "status": "INVALID",
+      "reason": "registration_failed",
+      "rejectionStages": [
+        "physical_page_cropped",
+        "physical_missing_or_ambiguous_markers"
+      ],
+      "responses": 0,
+      "seconds": 2.669
+    },
+    {
+      "sample": "S11",
+      "status": "INVALID",
+      "reason": "registration_failed",
+      "rejectionStages": [
+        "physical_row_ruler_mismatch",
+        "physical_missing_or_ambiguous_markers",
+        "physical_four_headers_required"
+      ],
+      "responses": 0,
+      "seconds": 2.641
+    },
+    {
+      "sample": "S12",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "B",
+      "qrDecoded": false,
+      "uncertain": 56,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 0.9975,
+      "seconds": 3.935
+    },
+    {
+      "sample": "S13",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "UNCERTAIN",
+      "qrDecoded": false,
+      "uncertain": 50,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 0.9975,
+      "seconds": 3.994
+    },
+    {
+      "sample": "S14",
+      "status": "INVALID",
+      "reason": "timing_track_mismatch",
+      "rejectionStages": [
+        "physical_missing_or_ambiguous_markers",
+        "physical_page_cropped"
+      ],
+      "responses": 0,
+      "seconds": 2.822
+    },
+    {
+      "sample": "S15",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "B",
+      "qrDecoded": false,
+      "uncertain": 62,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 1.0,
+      "seconds": 4.549
+    },
+    {
+      "sample": "S16",
+      "status": "INVALID",
+      "reason": "registration_failed",
+      "rejectionStages": [
+        "physical_missing_or_ambiguous_markers"
+      ],
+      "responses": 0,
+      "seconds": 2.711
+    },
+    {
+      "sample": "S17",
+      "status": "INVALID",
+      "reason": "registration_failed",
+      "rejectionStages": [
+        "physical_missing_or_ambiguous_markers"
+      ],
+      "responses": 0,
+      "seconds": 2.659
+    },
+    {
+      "sample": "S18",
+      "status": "INVALID",
+      "reason": "registration_failed",
+      "rejectionStages": [
+        "physical_missing_or_ambiguous_markers"
+      ],
+      "responses": 0,
+      "seconds": 2.681
+    },
+    {
+      "sample": "S19",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "UNCERTAIN",
+      "qrDecoded": false,
+      "uncertain": 66,
+      "multiple": 1,
+      "blank": 0,
+      "registration": 0.9975,
+      "seconds": 4.436
+    },
+    {
+      "sample": "S20",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "D",
+      "qrDecoded": false,
+      "uncertain": 39,
+      "multiple": 1,
+      "blank": 0,
+      "registration": 1.0,
+      "seconds": 3.973
+    },
+    {
+      "sample": "S21",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "B",
+      "qrDecoded": false,
+      "uncertain": 69,
+      "multiple": 1,
+      "blank": 0,
+      "registration": 0.995,
+      "seconds": 3.999
+    },
+    {
+      "sample": "S22",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "A",
+      "qrDecoded": false,
+      "uncertain": 68,
+      "multiple": 2,
+      "blank": 0,
+      "registration": 0.9975,
+      "seconds": 4.198
+    },
+    {
+      "sample": "S23",
+      "status": "REVIEW_REQUIRED",
+      "layout": "AZM_FRAMED_100_LEGACY_V1",
+      "responses": 100,
+      "version": "C",
+      "qrDecoded": false,
+      "uncertain": 64,
+      "multiple": 0,
+      "blank": 0,
+      "registration": 0.9975,
+      "seconds": 4.084
+    },
+    {
+      "sample": "S24",
+      "status": "INVALID",
+      "reason": "registration_failed",
+      "rejectionStages": [
+        "physical_missing_or_ambiguous_markers"
+      ],
+      "responses": 0,
+      "seconds": 2.481
+    }
+  ],
+  "officialScoringAllowed": false,
+  "productionReady": false,
+  "pageGeometry": {
+    "fourMarkerPoseProposed": 20,
+    "proposedPageWithinFrame": 18,
+    "completeFramedLayout": 17,
+    "layoutClassificationAccuracy": null,
+    "currentReferenceTimingContractPassed": true,
+    "legacyTimingTracksExpected": 0,
+    "legacyCompleteRowRulerContractsPassed": 17
+  }
+}

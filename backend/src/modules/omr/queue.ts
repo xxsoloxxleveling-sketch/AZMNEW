@@ -7,6 +7,7 @@ import { runRecognition } from './runner';
 import { decodeIdentity, reconcileIdentity } from './identity';
 import { serial, jsonValue, evaluateDraft } from './omr.service';
 import { officialActivation, recognitionHashes } from './activation';
+import { invalidCaptureCode } from './capture-diagnostics';
 
 const LEASE_MS=180000;
 export class OmrQueue {
@@ -87,7 +88,7 @@ export class OmrQueue {
         const eligibleExams=qr?.examId?1:await tx.omrExam.count({where:{status:'APPROVED',session:current.exam.session,candidateGroup:current.exam.candidateGroup}});
         const matches=eligibleExams===1 && qrMatches && !!observation.printedRollNumber && observation.printedRollNumber===student?.rollNumber;
         const status=observation.status==='INVALID'?'INVALID':matches?observation.status:'REVIEW_REQUIRED';
-        const captureError=observation.reason==='timing_track_mismatch'?'PRINT_LAYOUT_MISMATCH':observation.reason==='registration_failed'?'PAGE_ALIGNMENT_FAILED':'INVALID_CAPTURE';
+        const captureError=invalidCaptureCode(observation);
         const version=observation.paperVersion?.answer;
         await tx.omrScan.update({where:{id:scan.id},data:{status,templateVersion:observation.template,paperVersion:version&&['A','B','C','D'].includes(version)?version:null,studentId:matches?student!.id:null,identityVerified:matches,rawDetection:jsonValue({...observation,...hashes,activationReceipt:activation.receipt}),annotationObjectKey,errorCode:observation.status==='INVALID'?captureError:matches?null:eligibleExams!==1?'EXAM_IDENTITY_REVIEW_REQUIRED':'IDENTITY_REVIEW_REQUIRED',processedAt:new Date(),lockedAt:null,lockedBy:null}});
         if(observation.responses) await tx.omrDetectedResponse.createMany({data:observation.responses.map(row=>({scanId:scan.id,question:row.question,detectedAnswer:row.answer,evidence:jsonValue({darkness:row.darkness,reviewRequired:row.reviewRequired,outlineSupport:row.outlineSupport,reason:row.reason})}))});

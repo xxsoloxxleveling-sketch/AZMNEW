@@ -77,7 +77,7 @@ jobs:
       - name: Scanner and synthetic API/security tests
         run: |
           python -m unittest discover -s workers/omr -v
-          python -m unittest discover -s tools/omr-dev -p test_private_keys.py -v
+          python -m unittest discover -s tools/omr-dev -p 'test_*.py' -v
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-scoring.test.ts backend/tests/omr-database.test.ts backend/tests/omr-migration-recovery.test.ts backend/tests/omr-api.test.ts backend/tests/omr-security.test.ts backend/tests/omr-public-results.test.ts backend/tests/postgres-binaries.test.ts tools/omr-dev/mobile-session.test.ts tools/omr-dev/answer-key-import.test.ts
       - name: Native PostgreSQL 17 full history, grants and concurrent claims
         id: native

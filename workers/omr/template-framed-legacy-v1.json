@@ -1,0 +1,16 @@
+{
+  "id": "AZM_FRAMED_100_LEGACY_V1",
+  "validation": "PROVISIONAL_PHYSICAL_GEOMETRY_ONLY",
+  "size": [1980, 2800],
+  "markerWidth": [24, 44],
+  "headerY": [520, 850],
+  "headerWidth": [390, 500],
+  "headerHeight": [22, 55],
+  "columnCount": 4,
+  "rowsPerColumn": 25,
+  "rowPitch": [45, 54],
+  "optionFractions": [0.425, 0.522, 0.619, 0.716],
+  "radius": 18.6,
+  "geometryContract": "Four complete small corner marks, in-frame page boundary, four aligned framed headers, continuous side frames and bottom rules, exactly 25 ordered four-circle rows per column. Timing-track layouts cannot enter this profile.",
+  "officialScoringAllowed": false
+}

@@ -34,5 +34,6 @@ try:
             with os.fdopen(fd,'wb') as output: output.write(encoded.tobytes())
         print(json.dumps(result))
 except (InvalidScan,cv2.error,OSError,ValueError) as error:
-    print(json.dumps({'status':'INVALID','reason':str(error) if isinstance(error,InvalidScan) else 'processing_failed','officialScoringAllowed':False}))
+    diagnostic=getattr(error,'diagnostics',None)
+    print(json.dumps({'status':'INVALID','reason':str(error) if isinstance(error,InvalidScan) else 'processing_failed','officialScoringAllowed':False,**({'layoutDiagnostics':diagnostic} if diagnostic else {})}))
     raise SystemExit(2)

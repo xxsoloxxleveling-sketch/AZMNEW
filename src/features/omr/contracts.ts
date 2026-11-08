@@ -3,7 +3,7 @@ export type Answer=Option|'BLANK'|'MULTIPLE'|'UNCERTAIN';
 export interface Exam { id:string;code:string;title:string;session:string;candidateGroup:string;examDate:string;questionCount:number;correctMarks:number|string;incorrectPenalty:number|string;minimumScore:number|string|null;allowedVersions:Option[];status:string;publicationStatus:string;releaseAt:string|null;permissions?:Array<{canScan:boolean;canReview:boolean;canManage:boolean}> }
 export interface KeyRevision {id:string;paperVersion:Option;revision:number;answers:Option[];status:string;isSynthetic:boolean}
 export interface Candidate {id:string;fullName:string;applicationNo:string;rollNumber:string|null}
-export interface Scan {id:string;status:string;paperVersion:Option|null;identityVerified:boolean;errorCode:string|null;createdAt:string;student:Candidate|null}
+export interface Scan {id:string;status:string;paperVersion:Option|null;templateVersion?:string|null;identityVerified:boolean;errorCode:string|null;createdAt:string;student:Candidate|null}
 export interface ResponseRow {question:number;detectedAnswer:Answer;reviewedAnswer:Answer|null;evidence:{darkness?:number[];reviewRequired?:boolean}}
 export interface Correction {id:string;question:number|null;reason:string;createdAt:string;previous:unknown;next:unknown}
 export interface ScanDetail extends Scan {responses:ResponseRow[];corrections:Correction[];hasAnnotation:boolean;quality:{focus:number;registration:number}|null;results:Array<{id:string;status:string;score?:string;maximumScore?:string}>}

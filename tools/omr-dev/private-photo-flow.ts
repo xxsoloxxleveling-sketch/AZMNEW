@@ -1,0 +1,75 @@
+/** Local-only raw-photo mobile intake and explicitly derived synthetic-identity web evaluation. */
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {startDevelopment} from './start';
+const require=createRequire(new URL('../../backend/package.json',import.meta.url));
+if(process.env.CI)throw new Error('Never upload private examples or keys into CI');
+const executablePath=process.env.OMR_CHROME_PATH,sourceFolder=process.env.OMR_PRIVATE_SAMPLE_DIR;
+assert.ok(executablePath&&sourceFolder,'Set local Chrome and private sample folder');
+const rawFiles=(await fs.readdir(sourceFolder)).filter(name=>/\.jpe?g$/i.test(name)).sort();
+const source=path.join(sourceFolder,rawFiles[0]);
+const reference=path.resolve('tmp/omr-reference/compatibility/calibration');
+const output=path.resolve(`tmp/omr-reference/photo-flow/${Date.now()}`);await fs.mkdir(output,{recursive:true});
+const manifest=JSON.parse(await fs.readFile('tmp/omr-reference/private-keys/manifest.json','utf8'));
+// S01's printed group and visible B circle were inspected directly, never selected by score.
+const key=manifest.keys.find((value:any)=>value.group==='Class 8'&&value.paperVersion==='B');assert.ok(key,'Exact printed class/version key is required');
+const development=await startDevelopment({apiPort:5055,workerEnabled:true,privateDirectory:path.join(output,'private')});
+let browser:any;
+try {
+  const request=async(url:string,token:string,method='GET',body?:unknown,mime='application/json')=>{
+    const response=await fetch(development.url+url,{method,headers:{...(token?{Authorization:`Bearer ${token}`} :{}),...(body?{'Content-Type':mime}:{})},body:body?mime==='application/json'?JSON.stringify(body):body as BodyInit:undefined});
+    const value=await response.json();return {status:response.status,data:value.data};
+  };
+  const login=async(email:string)=>{const response=await request('/api/auth/login','','POST',{email,password:'Synthetic-Omr-Only-2026!'});assert.equal(response.status,200);return response.data.accessToken;};
+  const superAdmin=await login('super@omr.test'),admin=await login('admin@omr.test'),teacher=await login('teacher@omr.test');
+  const {prisma}=require('./src/lib/prisma.ts');
+  const existing=await prisma.student.findUniqueOrThrow({where:{id:'synthetic-omr-candidate'}});
+  const {id,createdAt,updatedAt,...data}=existing;
+  const candidate=await prisma.student.create({data:{...data,id:'synthetic-photo-candidate',fullName:'Synthetic Photo Candidate',applicationNo:'SYNTHETIC-PHOTO-APP',rollNumber:'SYNTHETIC-PHOTO-0001',currentClass:'Class 8th',qrToken:'synthetic-photo-qr',cnicOrBForm:'SYNTHETIC-PHOTO-IDENTITY'}});
+  const created=await request('/api/omr/exams',superAdmin,'POST',{code:'SYNTHETIC-PHYSICAL-PHOTO',title:'Synthetic physical-photo workflow - Class 8',session:'2026-V',candidateGroup:'CLASS 8TH',examDate:'2026-11-15T09:00:00Z',allowedVersions:['A','B','C','D']});assert.equal(created.status,201);const exam=created.data.id;
+  for(const user of ['synthetic-admin','synthetic-teacher'])assert.equal((await request(`/api/omr/exams/${exam}/permissions`,superAdmin,'PUT',{userId:user,canScan:true,canReview:user==='synthetic-admin',canManage:user==='synthetic-admin'})).status,200);
+  assert.equal((await request(`/api/omr/exams/${exam}/approve`,superAdmin,'POST')).status,200);
+  const draft=await request(`/api/omr/exams/${exam}/keys`,admin,'POST',{paperVersion:'B',answers:key.answers,isSynthetic:true});assert.equal(draft.status,201);
+  assert.equal((await request(`/api/omr/exams/${exam}/keys/${draft.data.id}/approve`,admin,'POST')).status,200);
+  assert.equal((await request(`/api/omr/exams/${exam}/keys`,teacher)).status,403);
+  const qrPath=path.join(output,'synthetic-identity-qr.png');
+  await require('qrcode').toFile(qrPath,JSON.stringify({type:'AZM_OMR',session:'2026-V',sheetVersion:2,rollType:'OFFICIAL',studentId:candidate.id,applicationNo:candidate.applicationNo,rollNumber:candidate.rollNumber,examId:exam}),{width:380,margin:4,errorCorrectionLevel:'M'});
+  const derived=path.join(output,'derived-synthetic-identity.png');
+  await promisify(execFile)(process.env.OMR_PYTHON!,['tools/omr-dev/prepare-physical-fixture.py',path.join(reference,'S01-normalized.png'),path.join(reference,'S01.json'),qrPath,derived],{windowsHide:true,timeout:15000});
+  browser=await require('puppeteer').launch({headless:true,executablePath,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
+  const page=await browser.newPage();await page.setViewport({width:1440,height:1000});
+  await page.setRequestInterception(true);page.on('request',(request:any)=>{if(/^(http:\/\/(127\.0\.0\.1|localhost)(:|\/)|data:|blob:|about:)/.test(request.url()))void request.continue();else void request.abort();});
+  const click=async(label:string)=>{assert.ok(await page.evaluate((label:string)=>{const button=[...document.querySelectorAll('button')].find(value=>value.textContent?.trim()===label);button?.click();return !!button;},label),`Missing ${label}`);};
+  await page.goto('http://127.0.0.1:5173/#login');await page.waitForSelector('input[type=email]');await page.type('input[type=email]','admin@omr.test');await page.type('input[type=password]','Synthetic-Omr-Only-2026!');await page.click('button[type=submit]');await page.waitForFunction(()=>!document.querySelector('input[type=password]'));
+  await page.goto('http://127.0.0.1:5173/#omr');await page.waitForSelector(`[aria-label="Selected examination"] option[value="${exam}"]`);await page.select('[aria-label="Selected examination"]',exam);await click('Single scan');const input=await page.waitForSelector('input[type=file]');await input.uploadFile(derived);await click('Upload for processing');
+  const awaitScans=async(count:number)=>{for(let attempt=0;attempt<100;attempt++){const scans=await prisma.omrScan.findMany({where:{examId:exam},orderBy:{createdAt:'asc'}});if(scans.length>=count&&scans.every((scan:any)=>!['QUEUED','PROCESSING'].includes(scan.status)))return scans;await new Promise(resolve=>setTimeout(resolve,1000));}throw new Error('Private photo workflow did not finish');};
+  const [scan]=await awaitScans(1);assert.equal(scan.status,'REVIEW_REQUIRED');assert.equal(scan.paperVersion,'B');
+  assert.equal((scan.rawDetection as any).template,'AZM_FRAMED_100_LEGACY_V1');
+  assert.equal((scan.rawDetection as any).identity?.studentId,candidate.id,'The fabricated test QR must decode to its synthetic candidate');
+  const reviewed=await request(`/api/omr/scans/${scan.id}/review`,admin,'PATCH',{identityLookup:candidate.applicationNo,printedRollNumber:candidate.rollNumber,identityConfirmed:true,examConfirmed:true,reason:'Automated derived synthetic-identity fixture proof; not human physical validation',answers:[]});assert.equal(reviewed.status,200);
+  const results=(await request(`/api/omr/exams/${exam}/results`,admin)).data;assert.equal(results.total,1);assert.equal(results.items[0].status,'DRAFT');assert.equal(results.items[0].answerKeyId,draft.data.id);
+  const detail=(await request(`/api/omr/scans/${scan.id}`,admin)).data;
+  const ambiguous=detail.responses.find((value:any)=>value.detectedAnswer==='UNCERTAIN');assert.ok(ambiguous);
+  assert.equal((await request(`/api/omr/scans/${scan.id}/review`,admin,'PATCH',{reason:'Synthetic correction exercise only; not human physical ground truth',answers:[{question:ambiguous.question,answer:'BLANK'}]})).status,200);
+  assert.equal((await request(`/api/omr/scans/${scan.id}/review`,admin,'PATCH',{reason:'Restore original uncertainty after the synthetic correction exercise',answers:[{question:ambiguous.question,answer:'UNCERTAIN'}]})).status,200);
+  assert.ok((await request(`/api/omr/scans/${scan.id}`,admin)).data.corrections.filter((value:any)=>value.question===ambiguous.question).length>=2);
+  assert.equal((await request(`/api/omr/scans/${scan.id}/approve`,admin,'POST',{reason:'Unresolved uncertainty must prevent verification'})).status,409);
+  assert.equal((await request(`/api/omr/exams/${exam}/publish`,superAdmin,'POST',{resultIds:[results.items[0].id],reason:'Synthetic physical-photo release must remain blocked'})).status,409);
+  await click('Scan history');await page.waitForSelector('tbody button');await page.click('tbody button');await page.waitForFunction(()=>document.querySelectorAll('[aria-label="Scan review"] tbody tr').length===100);await page.screenshot({path:path.join(output,'web-derived-review.png'),fullPage:true});
+  const teacherEvidence=(await request(`/api/omr/scans/${scan.id}`,teacher)).data;assert.equal(teacherEvidence.results[0].score,undefined);
+  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await page.goto('http://127.0.0.1:5174');await page.waitForSelector('input[type=email]');await page.type('input[type=email]','teacher@omr.test');await page.type('input[type=password]','Synthetic-Omr-Only-2026!');await click('Sign in');await page.waitForFunction(()=>document.body.textContent?.includes('Ready to scan'));await page.select('select',exam);await click('Scan sheet');const mobileFile=await page.waitForSelector('input[type=file]');await mobileFile.uploadFile(source);await click('Upload for processing');await page.waitForFunction(()=>document.body.textContent?.includes('1 / 1 pages processed'),{timeout:100000});await click('View evaluation evidence');await page.waitForFunction(()=>document.querySelectorAll('[aria-label="Scan review"] tbody tr').length===100);await page.screenshot({path:path.join(output,'mobile-original-review.png'),fullPage:true});
+  const scans=await awaitScans(2);const raw=scans.find((value:any)=>value.id!==scan.id);assert.equal(raw.studentId,null);assert.equal(raw.status,'REVIEW_REQUIRED');
+  const duplicated=await request(`/api/omr/exams/${exam}/batches`,teacher,'POST',await fs.readFile(source),'image/jpeg');assert.equal(duplicated.status,202);
+  for(let attempt=0;attempt<30;attempt++){const batch=(await request(`/api/omr/batches/${duplicated.data.id}`,teacher)).data;if(batch.items?.[0]?.status==='DUPLICATE')break;await new Promise(resolve=>setTimeout(resolve,1000));}
+  assert.equal((await request(`/api/omr/batches/${duplicated.data.id}`,teacher)).data.items[0].status,'DUPLICATE');
+  const rejected=await request(`/api/omr/exams/${exam}/batches`,teacher,'POST',await fs.readFile(path.join(sourceFolder,rawFiles[9])),'image/jpeg');assert.equal(rejected.status,202);
+  const three=await awaitScans(3);const invalid=three.find((value:any)=>value.status==='INVALID');assert.ok(invalid);assert.equal(invalid.errorCode,'PAGE_CROPPED');
+  assert.equal((await request('/api/results/search?query='+encodeURIComponent(candidate.rollNumber),'')).status,404);
+  const audits=await prisma.omrCorrectionAudit.count({where:{scanId:scan.id}});assert.ok(audits>0);
+  await fs.writeFile(path.join(output,'report.json'),JSON.stringify({web:'Derived identity copy of physical answer image; 100 responses and internal synthetic DRAFT',mobile:'Unmodified S01 selected in real mobile web app; 100 responses in shared admin review queue',actualAndroidDevice:false,sourceResponsePixelsUnchanged:true,syntheticTestKeyOnly:true,correctExactKeyRevision:true,derivedSyntheticQrDecoded:true,originalPhotoQrDecoded:!!raw.rawDetection?.identity,teacherKeyAndScoreConfidentiality:true,uncertaintyBlocksApproval:true,publicationBlocked:true,duplicateDetected:true,auditRetained:true,rawPhotoIdentityAttached:false,independentHumanAccuracy:null,officialScoringAllowed:false},null,2));
+  console.log('Private physical-photo web/mobile flow passed. Derived identity fixture and raw-photo intake reported separately; no public marks.');
+} finally {await browser?.close();await development.stop();}

@@ -20,7 +20,12 @@ export function CameraCapture({onCapture,disabled}:Props) {
       const gray=new Float32Array(240*180);let sum=0,bright=0;
       for(let p=0;p<gray.length;p++){const value=.299*data[p*4]+.587*data[p*4+1]+.114*data[p*4+2];gray[p]=value;sum+=value;if(value>252)bright++;}
       let edges=0;for(let y=1;y<179;y++)for(let x=1;x<239;x++){const p=y*240+x;const value=gray[p-1]+gray[p+1]+gray[p-240]+gray[p+240]-4*gray[p];edges+=value*value;}
-      setWarning(sum/gray.length<65?'More light is needed':edges/(238*178)<35?'Hold still and check focus':sum/gray.length<230&&bright/gray.length>.25?'Check reflections and uneven lighting':'');
+      const warnings:string[]=[];
+      if(Math.min(element.videoWidth,element.videoHeight)<1200)warnings.push('Use the highest camera quality; low-resolution images may need review');
+      if(sum/gray.length<65)warnings.push('More light is needed');
+      else if(edges/(238*178)<35)warnings.push('Hold still and check focus');
+      else if(sum/gray.length<230&&bright/gray.length>.25)warnings.push('Check reflections and uneven lighting');
+      setWarning(warnings.join(' · '));
     },750);return()=>clearInterval(timer);
   },[active]);
   async function start() {
@@ -44,8 +49,8 @@ export function CameraCapture({onCapture,disabled}:Props) {
     {error&&<p role="alert" className="text-red-700">{error}</p>}
     <div className={active?'relative overflow-hidden rounded-lg bg-slate-950':'hidden'}>
       <video ref={video} autoPlay muted playsInline className="w-full max-h-[65vh] object-contain" aria-label="Live camera preview"/>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-y-[8%] left-[22%] right-[22%] border-2 border-white/90 rounded-sm"/>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-y-[8%] left-[22%] right-[22%] border border-white/50 rounded-sm">{['top-0 left-0 border-t-4 border-l-4','top-0 right-0 border-t-4 border-r-4','bottom-0 left-0 border-b-4 border-l-4','bottom-0 right-0 border-b-4 border-r-4'].map(position=><span key={position} className={`absolute h-6 w-6 border-white ${position}`}/>)}</div>
     </div>
-    {active?<><p className="text-sm my-2">Fit all four black corner markers inside the guide. Keep the page flat.</p><p role="status" className="text-sm text-amber-700 min-h-5">{warning}</p><div className="flex gap-2"><button type="button" className="omr-primary" onClick={capture} disabled={disabled||!online}>Capture sheet</button><button type="button" className="omr-button" onClick={stop}>Close camera</button></div><p className="text-xs text-slate-500 mt-2">Capture checks provide guidance. The server validates each submitted sheet.</p></>:<button type="button" className="omr-button" onClick={start} disabled={disabled||!online}>Open camera</button>}
+    {active?<><p className="text-sm my-2">Fit the whole page and all four black corner markers inside the guide, leaving a small margin. Flatten the sheet and keep the camera parallel to it. If opposite edges converge, adjust the camera angle.</p><p role="status" className="text-sm text-amber-700 min-h-5">{warning}</p><div className="flex gap-2"><button type="button" className="omr-primary" onClick={capture} disabled={disabled||!online}>Capture sheet</button><button type="button" className="omr-button" onClick={stop}>Close camera</button></div><p className="text-xs text-slate-500 mt-2">Use an original full-resolution photo. These framing and quality hints do not confirm recognition; the server validates each submitted sheet.</p></>:<button type="button" className="omr-button" onClick={start} disabled={disabled||!online}>Open camera</button>}
   </section>;
 }

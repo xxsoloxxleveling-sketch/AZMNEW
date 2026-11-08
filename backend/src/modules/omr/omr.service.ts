@@ -40,7 +40,7 @@ export async function evaluateDraft(tx: Prisma.TransactionClient, scanId: string
   const key=await tx.omrAnswerKeyRevision.findFirst({where:{examId:scan.examId,candidateGroup:scan.exam.candidateGroup,paperVersion:scan.paperVersion!,status:'APPROVED'},orderBy:{revision:'desc'}});
   if(!key) return null;
   // Unvalidated recognition may exercise synthetic development keys only.
-  if(!key.isSynthetic && !officialActivation().approved) throw omrError(409,'Official scanning remains disabled pending physical validation and release approval');
+  if(!key.isSynthetic && ((scan.rawDetection as Prisma.JsonObject|null)?.physicalValidationRequired===true || !officialActivation().approved)) throw omrError(409,'Official scanning remains disabled pending physical validation and release approval');
   const existing=await tx.omrExamResult.findUnique({where:{examId_studentId:{examId:scan.examId,studentId:scan.studentId}}});
   if(existing && ((!replaceExisting && existing.sourceScanId!==scan.id) || existing.status!=='DRAFT')) throw omrError(409,'An existing result requires an explicit audited replacement workflow');
   const answers=scan.responses.map(row=>(row.reviewedAnswer||row.detectedAnswer) as OmrResponse);

@@ -14,7 +14,9 @@ OPTIONS = 'ABCD'
 MAX_BYTES = 20 * 1024 * 1024
 
 class InvalidScan(ValueError):
-    pass
+    def __init__(self, reason, diagnostics=None):
+        super().__init__(reason)
+        self.diagnostics=diagnostics
 
 def load_image(path):
     with open(path, 'rb') as stream:
@@ -120,8 +122,19 @@ def recognize(image, profile):
         except (InvalidScan,ValueError):
             continue
     if not choices:
-        raise InvalidScan('timing_track_mismatch' if aligned_without_tracks else 'registration_failed')
+        from physical_layout import align,LayoutFailure
+        try:
+            normalized,gray,measured_profile,diagnostic=align(image,profile)
+        except LayoutFailure as error:
+            raise InvalidScan('timing_track_mismatch' if aligned_without_tracks else 'registration_failed',error.diagnostics)
+        score=registration_score(gray,measured_profile)
+        result=observations(normalized,gray,measured_profile,profile,score,None,True)
+        result.update({'template':measured_profile['id'],'status':'REVIEW_REQUIRED','physicalValidationRequired':True,'layoutDiagnostics':diagnostic,'geometry':{key:measured_profile[key] for key in ('questions','versions','radius')}})
+        return result,normalized
     score, normalized, gray, measured_profile, offsets, version_supported = max(choices, key=lambda item:item[0])
+    return observations(normalized,gray,measured_profile,profile,score,offsets,version_supported),normalized
+
+def observations(normalized,gray,measured_profile,profile,score,offsets,version_supported):
     if score < profile['thresholds']['registration']:
         raise InvalidScan('template_registration_failed')
     x0,y0,x1,y1 = profile['answerZone']
@@ -153,9 +166,10 @@ def recognize(image, profile):
         identity={k:identity[k] for k in ('type','session','sheetVersion','rollType','studentId','applicationNo','rollNumber','examId') if k in identity}
     review = not supported or version['answer'] not in OPTIONS or any(r['reviewRequired'] for r in responses)
     result = {'template':profile['id'], 'status':'REVIEW_REQUIRED' if review else 'RECOGNIZED', 'responses':responses, 'paperVersion':version, 'identity':identity if supported else None, 'qrEnvelope':envelope, 'identityVerified':False, 'officialScoringAllowed':False, 'quality':{'registration':score,'focus':focus}, 'registrationOffsets':offsets, 'calibration':'SYNTHETIC_ONLY'}
-    return result, normalized
+    return result
 
 def annotate(image, result, profile):
+    if result.get('geometry'): profile={**profile,**result['geometry']}
     if result.get('registrationOffsets'): profile=adjusted(profile,result['registrationOffsets'])
     output = image.copy()
     for item, centers in zip(result['responses'], profile['questions']):

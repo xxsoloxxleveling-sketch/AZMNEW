@@ -6,14 +6,22 @@ import path from 'node:path';
 import { createHash,createHmac } from 'node:crypto';
 import { decodeIdentity,reconcileIdentity,candidateGroup,manualQrAgrees } from '../src/modules/omr/identity';
 import { Prisma,PrismaClient } from '@prisma/client';
-import { serial } from '../src/modules/omr/omr.service';
+import { serial,evaluateDraft } from '../src/modules/omr/omr.service';
 import { examInput } from '../src/modules/omr/omr.schema';
 import { officialActivation,recognitionHashes } from '../src/modules/omr/activation';
 import { recognitionEnvironment } from '../src/modules/omr/runner';
+import { invalidCaptureCode } from '../src/modules/omr/capture-diagnostics';
 import { fileType,storePrivate,readPrivate,MAX_UPLOAD } from '../src/modules/omr/storage';
 const qr={type:'AZM_OMR',session:'2026-V',sheetVersion:2,rollType:'OFFICIAL',studentId:'synthetic-student',applicationNo:'SYNTHETIC-APP',rollNumber:'SYNTHETIC-ROLL'};
 const student={id:qr.studentId,applicationNo:qr.applicationNo,rollNumber:qr.rollNumber,status:'ACTIVE',currentClass:'Class 6th',hsscGroup:null};
 const exam={session:'2026-V',candidateGroup:candidateGroup(student)!};
+test('physical rejection guidance distinguishes cropped pages from unsupported timing and ambiguous rows',()=>{
+  assert.equal(invalidCaptureCode({reason:'timing_track_mismatch',layoutDiagnostics:{attempts:[{reason:'physical_page_cropped'},{reason:'physical_missing_or_ambiguous_markers'}]}}),'PAGE_CROPPED');
+  assert.equal(invalidCaptureCode({reason:'registration_failed',layoutDiagnostics:{attempts:[{reason:'physical_row_ruler_mismatch'},{reason:'physical_four_headers_required'}]}}),'GRID_ALIGNMENT_FAILED');
+  assert.equal(invalidCaptureCode({reason:'timing_track_mismatch'}),'PRINT_LAYOUT_MISMATCH');
+  assert.equal(invalidCaptureCode({reason:'registration_failed'}),'PAGE_ALIGNMENT_FAILED');
+  assert.equal(invalidCaptureCode({reason:'malformed_image',layoutDiagnostics:{attempts:'untrusted shape'}}),'INVALID_CAPTURE');
+});
 test('legacy identity requires every database identity field and eligibility to agree',()=>{
   assert.equal(reconcileIdentity(qr,student,exam),true);
   for(const change of [{studentId:'other'},{applicationNo:'other'},{rollNumber:'other'},{rollType:'PROVISIONAL'},{session:'other'},{sheetVersion:3}]) assert.equal(reconcileIdentity({...qr,...change},student,exam),false);
@@ -54,7 +62,7 @@ test('private development storage round trips only generated references',async()
   }
 });
 test('official activation fails closed and detects changed physical evidence',async()=>{
-  const names=['OMR_VALIDATION_MANIFEST','OMR_VALIDATION_SIGNING_KEY','OMR_PHYSICAL_REPORT'];
+  const names=['OMR_VALIDATION_MANIFEST','OMR_VALIDATION_SIGNING_KEY','OMR_PHYSICAL_REPORT','OMR_WORKER_ROOT'];
   const previous=Object.fromEntries(names.map(name=>[name,process.env[name]]));
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'azm-omr-activation-test-'));
   try {
@@ -68,6 +76,14 @@ test('official activation fails closed and detects changed physical evidence',as
     await fs.writeFile(manifest,JSON.stringify({payload,signature:createHmac('sha256',secret).update(payload).digest('hex')}));
     Object.assign(process.env,{OMR_VALIDATION_MANIFEST:manifest,OMR_VALIDATION_SIGNING_KEY:secret,OMR_PHYSICAL_REPORT:report});
     assert.equal(officialActivation().approved,true);
+    const scan={id:'synthetic-provisional-scan',studentId:student.id,identityVerified:true,paperVersion:'A',rawDetection:{identity:qr,physicalValidationRequired:true},responses:Array.from({length:100},(_,index)=>({question:index+1,detectedAnswer:'A',reviewedAnswer:null})),exam:{id:'synthetic-exam',...exam,questionCount:100}};
+    const tx={$queryRaw:async()=>[],omrScan:{findUnique:async()=>scan},student:{findUnique:async()=>student},omrAnswerKeyRevision:{findFirst:async()=>({isSynthetic:false})}} as unknown as Prisma.TransactionClient;
+    await assert.rejects(()=>evaluateDraft(tx,scan.id),/Official scanning remains disabled/,'A global approval for the original template must not activate the provisional physical layout');
+    const worker=path.resolve('workers/omr'),copy=path.join(root,'worker');await fs.mkdir(copy);
+    await Promise.all(['template-v2.json','template-framed-legacy-v1.json','engine.py','responses.py','pdf_input.py','worker_cli.py','printed_identity.py','registration.py','physical_layout.py'].map(name=>fs.copyFile(path.join(worker,name),path.join(copy,name))));
+    process.env.OMR_WORKER_ROOT=copy;assert.equal(officialActivation().approved,true);
+    await fs.appendFile(path.join(copy,'template-framed-legacy-v1.json'),'\n');assert.equal(officialActivation().approved,false,'Changing the new physical profile must invalidate approval');
+    if(previous.OMR_WORKER_ROOT===undefined)delete process.env.OMR_WORKER_ROOT;else process.env.OMR_WORKER_ROOT=previous.OMR_WORKER_ROOT;
     await fs.writeFile(report,'tampered'); assert.equal(officialActivation().approved,false);
   } finally {
     for(const name of names) {if(previous[name]===undefined) delete process.env[name];else process.env[name]=previous[name];}
