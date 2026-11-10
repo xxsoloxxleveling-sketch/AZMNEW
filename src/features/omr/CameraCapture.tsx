@@ -6,7 +6,7 @@ export function CameraCapture({onCapture,disabled}:Props) {
   const [active,setActive]=useState(false),[error,setError]=useState(''),[warning,setWarning]=useState('');
   const [online,setOnline]=useState(navigator.onLine);
   const [capturing,setCapturing]=useState(false),[resolution,setResolution]=useState('');
-  const stop=()=>{generation.current++;stream.current?.getTracks().forEach(track=>track.stop());stream.current=null;if(video.current){video.current.pause();video.current.srcObject=null;}setActive(false);};
+  const stop=()=>{generation.current++;stream.current?.getTracks().forEach(track=>track.stop());stream.current=null;if(video.current){video.current.pause();video.current.srcObject=null;}setActive(false);setCapturing(false);};
   useEffect(()=>{
     const change=()=>setOnline(navigator.onLine);window.addEventListener('online',change);window.addEventListener('offline',change);
     return()=>{generation.current++;stream.current?.getTracks().forEach(track=>track.stop());if(video.current)video.current.srcObject=null;window.removeEventListener('online',change);window.removeEventListener('offline',change);};
@@ -53,7 +53,7 @@ export function CameraCapture({onCapture,disabled}:Props) {
       if(!blob)throw new Error('No image was captured. Try again or choose the original camera photo.');
       onCapture(new File([blob],blob.type==='image/png'?'omr-capture.png':'omr-capture.jpg',{type:blob.type}));stop();
     }catch(reason){if(ticket===generation.current)setError(reason instanceof Error?reason.message:'Capture failed. Try again.');}
-    finally{setCapturing(false);}
+    finally{if(ticket===generation.current)setCapturing(false);}
   }
   return <section className="omr-camera" aria-label="OMR camera capture">
     {!online&&<p role="status">Connect to the internet before capturing. Offline image storage is disabled.</p>}

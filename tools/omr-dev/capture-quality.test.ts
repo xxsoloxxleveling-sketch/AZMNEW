@@ -17,3 +17,11 @@ test('sensor still is preferred, unsupported or oversized photos fall back safel
     assert.equal(await (await captureStill({} as any,frame))?.text(),'frame');assert.equal(fallback,2);
   }finally{global.ImageCapture=oldCapture;global.createImageBitmap=oldBitmap;}
 });
+test('a stalled sensor still times out and falls back without hanging retake',async()=>{
+  const global=globalThis as any,previous=global.ImageCapture;
+  try{
+    global.ImageCapture=class{takePhoto(){return new Promise(()=>{});}};
+    const frame=new Blob(['fallback'],{type:'image/jpeg'});
+    assert.equal(await captureStill({} as any,()=>Promise.resolve(frame),10),frame);
+  }finally{global.ImageCapture=previous;}
+});

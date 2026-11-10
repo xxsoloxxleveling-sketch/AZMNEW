@@ -52,6 +52,14 @@ try {
     };
   },sensorBytes);
   await click('Open camera');await page.waitForFunction(()=>!!document.querySelector('video')?.videoWidth);
+  await page.evaluate(()=>{(globalThis as any).ImageCapture=class{takePhoto(){return new Promise(resolve=>{(globalThis as any).resolveStalledPhoto=resolve;});}};});
+  await click('Capture sheet');await page.waitForFunction(()=>document.body.textContent?.includes('Capturing…'));
+  await click('Close camera');await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='Open camera'&&!b.disabled));
+  await page.evaluate(()=>{(globalThis as any).resolveStalledPhoto(new Blob(['late camera result'],{type:'image/jpeg'}));});
+  await new Promise(resolve=>setTimeout(resolve,250));
+  if(await page.$('img[alt="Captured OMR preview before upload"]'))throw new Error('Cancelled sensor capture delivered a late image');
+  await page.evaluate((encoded:string)=>{(globalThis as any).ImageCapture=class{async takePhoto(){return new Blob([Uint8Array.from(atob(encoded),c=>c.charCodeAt(0))],{type:'image/png'});}};},sensorBytes);
+  await click('Open camera');await page.waitForFunction(()=>!!document.querySelector('video')?.videoWidth);
   await click('Capture sheet');await page.waitForSelector('img[alt="Captured OMR preview before upload"]');
   if(!await page.$eval('video',(element:HTMLVideoElement)=>!element.srcObject))throw new Error('Captured sensor image retained an active camera stream');
   await new Promise(resolve=>setTimeout(resolve,300));await page.screenshot({path:path.join(output,'mobile-preview.png'),fullPage:true});

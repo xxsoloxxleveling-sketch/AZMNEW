@@ -5,11 +5,15 @@ export function resolutionGuidance(width:number,height:number) {
 }
 
 /** Prefer the sensor's still image over a potentially low-resolution video frame. */
-export async function captureStill(track:MediaStreamTrack, fallback:()=>Promise<Blob|null>):Promise<Blob|null> {
+export async function captureStill(track:MediaStreamTrack, fallback:()=>Promise<Blob|null>,timeoutMs=12000):Promise<Blob|null> {
   const Constructor=(globalThis as unknown as {ImageCapture?:new(track:MediaStreamTrack)=>{takePhoto:()=>Promise<Blob>}}).ImageCapture;
   if(Constructor) {
     try {
-      const blob=await new Constructor(track).takePhoto();
+      let timeout:ReturnType<typeof setTimeout>|undefined;
+      const blob=await Promise.race([
+        new Constructor(track).takePhoto(),
+        new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Still capture timed out')),timeoutMs);}),
+      ]).finally(()=>{if(timeout)clearTimeout(timeout);});
       if(['image/jpeg','image/png'].includes(blob.type)&&blob.size<=20*1024*1024) {
         const bitmap=await createImageBitmap(blob);
         const acceptable=bitmap.width*bitmap.height<=20_000_000&&Math.min(bitmap.width,bitmap.height)>=600;
