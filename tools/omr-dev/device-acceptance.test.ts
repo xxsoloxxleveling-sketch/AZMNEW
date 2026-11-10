@@ -13,6 +13,7 @@ test('device acceptance starts a nonce-attested disposable API and preserves ori
  const currentFile=path.resolve('tmp/omr-reference/device-acceptance/current-session.json'),priorCurrent=await fs.readFile(currentFile,'utf8').catch(()=>null);
  const session=await startDeviceAcceptance({apiPort:0,workerEnabled:false});
  try{
+  const connection=new URL(process.env.DATABASE_URL!);assert.equal(connection.searchParams.get('max_idle_connection_lifetime'),'0');assert.equal(connection.searchParams.get('max_connection_lifetime'),'0');assert.equal(connection.searchParams.get('connection_limit'),'1');
   assert.equal(await attestSession(session.state),session.state.apiOrigin);
   assert.equal((await fetch(session.state.apiOrigin+'/__omr-device-session')).status,403);
   assert.equal((await fetch(session.state.apiOrigin+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'admin@omr.test',password:'Synthetic-Omr-Only-2026!'})})).status,403,'Fixture credentials alone must not expose private scans');

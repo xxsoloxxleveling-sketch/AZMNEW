@@ -1,6 +1,6 @@
 # Android acceptance checkpoint â€” updated 2026-11-11
 
-**Current status: actual device connected and signed in; camera/scan acceptance pending.** The 2026-11-10 readiness checkpoint had no attached device. On 2026-11-11 the SM-X710 / Android 16 device was USB-authorized, its installed APK checksum verified, its disposable session attested, and actual synthetic-admin sign-in observed. The app is on the scan screen. No camera has been opened and no photo uploaded in this continuation, so scan/QR/accuracy metrics remain unmeasured.
+**Current status: actual device upload and review observed; camera acceptance pending.** The 2026-11-10 readiness checkpoint had no attached device. On 2026-11-11 the SM-X710 / Android 16 device was USB-authorized, its installed APK checksum verified, its disposable session attested, and actual synthetic-admin sign-in observed. A recovered, byte-identical 720×1280 image was uploaded through the device app and its review screen opened. No native camera capture was observed; question accuracy remains unmeasured without independent labels.
 
 Two actual-device startup issues were found and corrected: the debug WebView was not immediately available after app startup (bounded readiness retry added), and the app had cached its fetch client before the acceptance transport was injected (reload after preload registration added). The initial sign-in failed with a CORS missing-origin-header error because the required private transport header was absent; no server allowlist or authentication gate was weakened. After reload, actual sign-in succeeded. Ten diagnostics/browser regression checks passed, including cached-fetch preload and startup readiness. This is a connection pass, not a camera or sheet-recognition pass.
 
@@ -10,8 +10,8 @@ Two actual-device startup issues were found and corrected: the debug WebView was
 | Isolation | Disposable loopback PGlite database, restricted runtime role, synthetic roster/keys, local private storage; production/cloud/official activation refused |
 | Connection protection | Verified installed APK and private session attestation; session transport token required on API requests; observer restricts destinations to app/local test API |
 | Physical-device camera sessions completed | 0 |
-| Physical-device scan success | Not measured; no attested device/upload denominator |
-| Physical-device QR decoding | Not measured |
+| Actual-device upload/mapping | 1/1 accepted and mapped; recovered file selection, not a proven new camera capture |
+| Actual-device QR decoding | 0/1; verified original QR crop 134×165 pixels, four unsuccessful decoder attempts |
 | Independently labeled physical question accuracy | Not measured; no independent label files |
 | Automated acceptance API fixture | 1/1 mapped, 100 response positions; authorized synthetic identity/version review creates private 100/100 DRAFT |
 | Original preservation | Byte/hash-identical originals, separate blind copies, observations, content-addressed audit/result revisions; retained after disposable database shutdown |
@@ -35,3 +35,13 @@ Remaining hardware tests: permission denial/allow, physical sheet capture and ac
 `SYNTHETIC_ONLY`, `officialScoringAllowed=false` and publication locks remain enforced. No merge, deployment, official-key approval or real student-result changes. The verified APK is unchanged; additions are non-production acceptance tools and documentation.
 
 Hosted validation of final tooling local `949bbc5` / review `d197665f4064c5cef120b09c68cb03a9dc8496cd`, identical tree `1e768ff29d4b1d85b33faea125a87c9ba5a1366d`: [Smart OMR run 42809029056](https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/runs/42809029056) and [broader runtime run 42809029243](https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/runs/42809029243) both completed SUCCESS, including native database/PDF/recovery checks and Android compilation. The private-APK harness test is explicitly skipped in CI and passed locally. Hardware results remain NOT RUN. Later report changes are documentation only.
+
+## Upload failure investigation — 2026-11-11
+
+The observed `Failed to fetch` upload did not reach the API: the disposable backend watchdog had shut down after a database/evidence-check failure while the USB connection remained active. Its final evidence snapshot was saved. The exact pending original was preserved before restarting the app and restored without changing its bytes.
+
+The disposable database now disables Prisma connection lifetime recycling for its single-slot WASM socket bridge. A roughly five-minute recurrence suggested connection replacement as a contributor; this is a test-environment mitigation, not a proven root cause. The watchdog and all attestation/scoring gates remain enforced, and future guard failures record a private diagnostic cause.
+
+Recovered upload D001 completed mapping in 2,903 ms from upload to processed (6,108 ms to observer terminal detection). It produced 100 response positions, 69 uncertain, version B, no QR decode and `IDENTITY_REVIEW_REQUIRED`. The device displayed the complete review table. Identity remains unverified, with zero draft results/corrections. Original: 720×1280, 151,527 bytes. No new full-resolution camera capture or independent answer transcription was observed. This one sample does not alter the frozen 24-photo checkpoint or establish Android camera acceptance.
+
+After the connection-lifetime change, the replacement session remained attested with saved snapshots for at least 300 seconds, including the accepted upload and full review. No stderr/guard failure was observed in that interval. Longer-session stability remains under observation. The disposable acceptance harness passed locally, as did all ten diagnostics/browser checks.

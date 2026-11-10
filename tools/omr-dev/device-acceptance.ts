@@ -122,7 +122,7 @@ export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabl
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const session=await startDeviceAcceptance({publishCurrent:true});
   console.log('Disposable Android acceptance API:',session.state.apiOrigin);console.log('Private evidence folder:',session.state.folder);console.log('APK checksum verified; official scoring/publication locked. Device tests are NOT RUN.');
-  let stopping=false;const timer=setInterval(()=>{void session.periodicSnapshot().catch(()=>{console.error('Acceptance evidence or isolation check failed; stopping test API');void close();});},5000);
+  let stopping=false;const timer=setInterval(()=>{void session.periodicSnapshot().catch(async(error)=>{await privateJson(path.join(session.state.folder,'guard-failure.json'),{at:new Date().toISOString(),phase:'acceptanceSnapshot',errorName:error?.name||'Error',code:typeof error?.code==='string'?error.code:null,message:String(error?.message||'Snapshot failed')}).catch(()=>{});console.error('Acceptance evidence or isolation check failed; stopping test API. Private cause recorded in guard-failure.json.');void close();});},5000);
   async function close(){if(stopping)return;stopping=true;clearInterval(timer);try{await session.stop();console.log('Final evidence snapshot saved; disposable database destroyed.');process.exit(0);}catch{console.error('Final snapshot incomplete; previously archived originals/revisions remain private. Check closed.json before treating the session as complete.');process.exit(1);}}
   process.on('SIGINT',()=>void close());process.on('SIGTERM',()=>void close());
 }
