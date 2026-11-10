@@ -1,5 +1,7 @@
 # Physical-sheet compatibility — 2026-11-08
 
+Latest continuation: [reliability milestone — 2026-11-10](reliability-milestone.md). It preserves these frozen physical counts, documents original-pixel QR recovery attempts, portable independent labeling, capture/review improvements and the newly successful Android build. Historical evidence below remains the original checkpoint.
+
 Branch: `codex/smart-omr-evaluation-mobile`; draft PR #28 remains unmerged. Frozen optical algorithm SHA-256: `59a7779250d157059ca95aa63860fd81a860e426d1a23fcdbf51adcd62e3c08a`. No production service, database, genuine student record or official mark was changed.
 
 ## Before and after

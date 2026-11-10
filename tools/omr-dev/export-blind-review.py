@@ -31,6 +31,7 @@ $('save').textContent='Download independent labels';$('save').onclick=()=>{ready
 samples.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.id;$('sample').append(o)});load();'''.replace('DATA',json.dumps(samples))
     html=helper.HTML.split('<script>')[0].replace('I personally inspected every response and the visible paper version. I did not copy an answer key or scanner output.','I personally inspected every response and the version. I have not seen scanner predictions or answer keys for these sheets and did not copy them.')
     target.parent.mkdir(parents=True,exist_ok=True)
+    html=html.replace('<title>', '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data:; connect-src \'none\'; base-uri \'none\'"><title>')
     target.write_text(html+'<script>'+script+'</script></html>',encoding='utf-8')
     return len(samples)
 

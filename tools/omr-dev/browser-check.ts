@@ -35,7 +35,25 @@ try {
   const upload=await page.$('input[type=file]');await upload.uploadFile(path.resolve('tmp/omr-dev/synthetic-clean.png'));
   await new Promise(resolve=>setTimeout(resolve,300));await click('Retake or choose again');
   if(await page.$eval('input[type=file]',(element:HTMLInputElement)=>element.value)!=='')throw new Error('Retake retained the previous file reference');
-  await upload.uploadFile(path.resolve('tmp/omr-dev/synthetic-clean.png'));
+  // Exercise the actual capture button with a fabricated sensor result, then carry
+  // that captured File through offline refusal, retry, queue and review below.
+  const sensorBytes=(await fs.readFile('tmp/omr-dev/synthetic-clean.png')).toString('base64');
+  await page.evaluate('globalThis.__name = value => value'); // tsx named-function helper for injected test callbacks
+  await page.evaluate(async(encoded:string)=>{
+    (globalThis as any).ImageCapture=class {async takePhoto(){return new Blob([Uint8Array.from(atob(encoded),c=>c.charCodeAt(0))],{type:'image/png'});}};
+    // Chrome's fake device can disappear after stop on Windows. Supply an explicit
+    // fabricated camera stream for this second capture rather than a real device.
+    const photo=new Image();photo.src='data:image/png;base64,'+encoded;await photo.decode();
+    navigator.mediaDevices.getUserMedia=async()=>{
+      const canvas=document.createElement('canvas');canvas.width=photo.width;canvas.height=photo.height;
+      const draw=()=>canvas.getContext('2d')!.drawImage(photo,0,0);draw();const timer=setInterval(draw,100);
+      const stream=canvas.captureStream(10),track=stream.getVideoTracks()[0],stop=track.stop.bind(track);
+      track.stop=()=>{clearInterval(timer);stop();canvas.width=0;canvas.height=0;};return stream;
+    };
+  },sensorBytes);
+  await click('Open camera');await page.waitForFunction(()=>!!document.querySelector('video')?.videoWidth);
+  await click('Capture sheet');await page.waitForSelector('img[alt="Captured OMR preview before upload"]');
+  if(!await page.$eval('video',(element:HTMLVideoElement)=>!element.srcObject))throw new Error('Captured sensor image retained an active camera stream');
   await new Promise(resolve=>setTimeout(resolve,300));await page.screenshot({path:path.join(output,'mobile-preview.png'),fullPage:true});
   console.log('Visible upload actions:',await page.$$eval('button',(buttons:Element[])=>buttons.map(button=>button.textContent?.trim()).join(' | ')));
   const storage=await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length}));if(storage.local||storage.session)throw new Error('Mobile persisted session storage');

@@ -1,5 +1,7 @@
 # Smart OMR validation report — 2026-11-08
 
+See [2026-11-10 reliability milestone](reliability-milestone.md) for the latest implementation, QR investigation, independent-label workflow, physical replay and current Android build evidence. The entries below retain historical checkpoint results.
+
 Branch: `codex/smart-omr-evaluation-mobile`. Initial retained checkpoint: `a79e8449`. No production database, service, student/financial/attendance record or real marks were changed. This report separates observed results from unavailable release checks.
 
 | Check actually run | Result |

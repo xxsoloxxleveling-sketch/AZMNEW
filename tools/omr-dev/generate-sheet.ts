@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { pdfService } from '../../backend/src/modules/documents/pdf.service';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'backend/package.json'));
-export async function generateSheet(filename=`synthetic-${randomUUID()}.png`,options:{pdfPages?:number}={}) {
+export async function generateSheet(filename=`synthetic-${randomUUID()}.png`,options:{pdfPages?:number;missingQr?:boolean;uncertainVersion?:boolean}={}) {
   if(options.pdfPages!==undefined&&(!Number.isInteger(options.pdfPages)||options.pdfPages<1||options.pdfPages>25))throw new Error('Use 1–25 fabricated PDF pages');
   const puppeteer=require('puppeteer'),qr=require('qrcode');
   let bundled:string|undefined;try{bundled=await puppeteer.executablePath();}catch{}
@@ -24,7 +24,7 @@ export async function generateSheet(filename=`synthetic-${randomUUID()}.png`,opt
     const page=await browser.newPage();await page.setViewport({width:794,height:1124,deviceScaleFactor:2.5});
     await page.setRequestInterception(true);page.on('request',(request:any)=>{if(/^(data:|about:)/.test(request.url()))void request.continue();else void request.abort();});
     await page.setContent(html,{waitUntil:'load'});
-    await page.evaluate(()=>{document.querySelectorAll('.omr-row').forEach(row=>{const bubble=row.querySelector<HTMLElement>('.bubble');if(bubble){bubble.style.background='#000';bubble.style.color='#000';}});const version=document.querySelector<HTMLElement>('.v-bubble');if(version)version.style.background='#000';});
+    await page.evaluate((options:{missingQr?:boolean;uncertainVersion?:boolean})=>{document.querySelectorAll('.omr-row').forEach(row=>{const bubble=row.querySelector<HTMLElement>('.bubble');if(bubble){bubble.style.background='#000';bubble.style.color='#000';}});const version=document.querySelector<HTMLElement>('.v-bubble');if(version)version.style.background=options.uncertainVersion?'#888':'#000';if(options.missingQr)document.querySelector('.qr-box img')?.remove();},options);
     const target=path.join(root,'tmp/omr-dev',filename);await fs.mkdir(path.dirname(target),{recursive:true});
     if(options.pdfPages) {
       await page.evaluate((count:number)=>{const sheet=document.querySelector<HTMLElement>('.omr-page')!;sheet.style.breakAfter='page';for(let number=1;number<count;number++)sheet.parentElement!.appendChild(sheet.cloneNode(true));},options.pdfPages);

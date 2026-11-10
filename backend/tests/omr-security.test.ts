@@ -44,6 +44,11 @@ test('CV child environment excludes database, signing and storage credentials',(
   for(const name of ['DATABASE_URL','DIRECT_URL','JWT_ACCESS_SECRET','R2_SECRET_ACCESS_KEY','OMR_VALIDATION_SIGNING_KEY','OMR_TRUSTED_PDF_FIXTURE']) assert.equal(name in env,false);
   assert.equal(env.OMP_NUM_THREADS,'1');
 });
+
+test('conflicting QR recovery cannot become a missing-QR manual review bypass',()=>{
+  assert.equal(manualQrAgrees({identity:null,qrDiagnostics:{reason:'CONFLICTING_QR'}},student,exam),false);
+  assert.equal(manualQrAgrees({identity:null,qrDiagnostics:{reason:'QR_UNREADABLE'}},student,exam),true);
+});
 test('file signature, size and private scan reference checks reject spoofing and traversal',async()=>{
   assert.throws(()=>fileType(Buffer.from('fake image')),/PNG/);
   assert.throws(()=>fileType(Buffer.alloc(MAX_UPLOAD+1)),/20 MB/);

@@ -405,5 +405,38 @@
     "newApkProduced": false,
     "actualAndroidDeviceTest": false,
     "iosXcodeTest": false
+  },
+  "reliabilityContinuation": {
+    "date": "2026-11-10",
+    "mapped": 17,
+    "rejected": 7,
+    "sameRejectedSources": true,
+    "responsesUnchanged": 1700,
+    "uncertain": 996,
+    "originalQrDecoded": 0,
+    "originalQrAttempted": 17,
+    "extendedOpenCvAttempts": 476,
+    "extendedAlternateDecoderAttempts": 238,
+    "uncertainPaperVersions": 3,
+    "independentHumanLabelsReturned": 0,
+    "independentAccuracy": null,
+    "falseAcceptanceRate": null,
+    "answerReviewPositions": 1001,
+    "answerReviewRate": 0.5888235294117647,
+    "blindReviewPrepared": [
+      "S01",
+      "S07",
+      "S13",
+      "S19",
+      "S20",
+      "S23"
+    ],
+    "reviewerAvailabilityConfirmed": true,
+    "priorUserPredictionComparison": "reported correct, unblinded; not independent ground truth",
+    "androidBuild": "SUCCESS_RUN_42783721218",
+    "androidDeviceTest": false,
+    "retakesProvided": 0,
+    "officialScoringAllowed": false,
+    "productionReady": false
   }
 }

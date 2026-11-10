@@ -50,10 +50,24 @@ The portable file and all actual responses/images/diagnostics remain in ignored 
 
 - Local scanner suite: 41 passed (37 retained + four QR recovery/conflict/original-pixel tests).
 - Python helper suite: eight passed, including source/exposure refusal and correct false-acceptance/uncertainty accounting.
-- Feature Node suite: 46 passed, including sensor-still fallback and low-resolution guidance; activation hashes include the QR module.
+- Feature Node suite: 46 passed initially; the follow-up security suite passed all 12 tests after adding a conflicting-QR manual-review bypass refusal (47 tests across the feature suites). Activation hashes include the QR module.
 - Disposable full-history application and queue recovery: five passed, with fabricated students/keys, private draft, conflicting identity refusal, audit/review and public release refusal.
-- Backend TypeScript compilation passed. Web/mobile build and browser results are recorded below when observed.
+- Backend compilation, scoped web compilation, web production build and mobile strict TypeScript/production build passed. An incidental whole-repository TypeScript invocation reported existing unrelated type errors; it is not represented as a passing whole-repository lint.
 - Hosted Android now uses a checksum-keyed archive cache and bounded retries against official Gradle distribution endpoints. Every cache hit/download is independently checked against the same pinned SHA-256 before extraction/execution. Source commit and APK SHA-256 accompany the APK artifact. The older APK is never the current artifact.
 - Android device/ADB/Java/SDK were not found locally. Real camera/device and iOS/Xcode tests remain unavailable.
 
 Hosted build completion and downloaded artifact verification must be observed before the current APK is reported as built. No independent human label files have yet been returned; no physical accuracy improvement is claimed.
+
+## Observed hosted checkpoint and browser evidence
+
+Local runtime `9fa6864` and review runtime `1b9304b78be14cc164983317fa39dd16dbea94f7` share tree `b0629c8301389882253ae82071ab6d06dc5579ce`. [Smart OMR run 42783721218](https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/runs/42783721218) and [broader PostgreSQL/runtime run 42783721489](https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/runs/42783721489) both completed SUCCESS. OMR includes the scanner/helper/feature suites, native PostgreSQL 17, synthetic API/queue recovery, Linux sandboxed PDF integration and historical migration/recovery/restore checks. The Android distribution download, SHA-256 verification, native compilation and APK artifact upload all passed. Cache miss used the official distribution endpoint successfully and saved the verified archive.
+
+Downloaded artifact 13747183396 ZIP SHA-256 `4e24c129772fdaeac9873b172a6eea23d311f998c5bf9efd7582c05583e004cd` matches GitHub's digest. APK SHA-256 `14edbee622eafa482ed491373fbdf67db28df8dd6204aca4beee50859ea3a57f`, 4,203,136 bytes, matches the accompanying checksum. AndroidManifest.xml/classes.dex are present. Its recorded source is PR test-merge `394a7a8c313fa484d878d9a53443a48240c372e7`; GitHub compare reports no file differences from the review runtime. This is a CI test merge, not a merged PR or deployment. Private downloaded APK: `tmp/omr-dev/release/azm-omr-reliability-1b9304b.apk`.
+
+The ordinary ten-screen web/mobile browser regression passed. A stricter follow-up also passed the actual Capture sheet button using an explicitly fabricated sensor still and camera stream, then offline refusal, retained preview/retry, upload, actual worker recognition, 100-row review, history and logout. Two intermediate test-fixture attempts failed (Windows fake camera disappeared on reopen; then an injected tsx named-function helper was missing); both are preserved as fixture failures and were corrected without weakening app checks. No physical device is implied.
+
+Portable blind HTML browser verification passed six original photo choices, 100 initially empty controls, completion/confirmation gating and reset on changing sample. No fabricated human labels were downloaded or stored. Independent labels remain pending.
+
+Subsequent security/test changes are validated and checkpointed separately below; the first successful build above is not substituted for checks of changed executable code.
+
+The added real API/worker test for missing QR plus an uncertain version passed locally. Before authorized review it has no student, no usable version and no result. Teacher review is forbidden; a wrong printed roll is rejected. Correct fabricated roster/version review creates a private 100/100 DRAFT under the matching synthetic key, retains identity/version audit entries and the original UNCERTAIN version evidence, hides the score from teachers and blocks public publication/search. This tests workflow mechanics with fabricated evidence, not human physical accuracy.

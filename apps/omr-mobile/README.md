@@ -1,5 +1,7 @@
 # AZM.AIO OMR mobile
 
+Current reliability build status (2026-11-10): Android assembly passed in [run 42783721218](https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/runs/42783721218) for the reliability runtime. Verified local download: `../../tmp/omr-dev/release/azm-omr-reliability-1b9304b.apk`. The earlier d134a27 APK mentioned in historical notes below is not the current reliability build. See `../../docs/omr/reliability-milestone.md` for source/checksum provenance and subsequent validation. No physical Android device/camera test is claimed.
+
 Capacitor 8 / React 19 / TypeScript, sharing the application's OMR transport, camera, upload and review components. It calls the existing AZM backend; it does not contain another student service.
 
 ```powershell

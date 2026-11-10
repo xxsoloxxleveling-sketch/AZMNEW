@@ -89,7 +89,7 @@ jobs:
           # Use the runner's installed Chrome/AppArmor profile; keep Chromium sandboxing enabled.
           chrome="$(command -v google-chrome || command -v chromium)"
           export OMR_CHROME_PATH="$chrome"
-          node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/integration.test.ts tools/omr-dev/queue-recovery.test.ts
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/integration.test.ts tools/omr-dev/queue-recovery.test.ts tools/omr-dev/reliability-flow.test.ts
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/pdf-integration.test.ts
 
       - name: Existing attendance upgrade and backup restore rehearsal
@@ -152,6 +152,7 @@ jobs:
           "$OMR_VERIFIED_GRADLE" assembleDebug --no-daemon
           sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/app-debug.apk.sha256
           printf '%s\n' "$GITHUB_SHA" > app/build/outputs/apk/debug/source-commit.txt
+          git rev-parse 'HEAD^{tree}' > app/build/outputs/apk/debug/source-tree.txt
       - uses: actions/upload-artifact@v4
         with:
           name: synthetic-omr-development-apk
@@ -159,4 +160,5 @@ jobs:
             apps/omr-mobile/android/app/build/outputs/apk/debug/app-debug.apk
             apps/omr-mobile/android/app/build/outputs/apk/debug/app-debug.apk.sha256
             apps/omr-mobile/android/app/build/outputs/apk/debug/source-commit.txt
+            apps/omr-mobile/android/app/build/outputs/apk/debug/source-tree.txt
           retention-days: 7
