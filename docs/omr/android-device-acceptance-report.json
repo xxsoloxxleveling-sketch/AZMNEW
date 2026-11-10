@@ -50,6 +50,27 @@
     "originalRootCauseConfirmed": false
   },
   "officialScoringAllowed": false,
+  "hostedValidation": {
+    "reviewCommit": "d197665f4064c5cef120b09c68cb03a9dc8496cd",
+    "sourceTree": "1e768ff29d4b1d85b33faea125a87c9ba5a1366d",
+    "omrRun": 42809029056,
+    "omrResult": "SUCCESS",
+    "broaderRun": 42809029243,
+    "broaderResult": "SUCCESS",
+    "privateApkHarnessInCi": "EXPLICIT_SKIP_PRIVATE_ARTIFACT_ABSENT",
+    "privateApkHarnessLocal": "PASSED"
+  },
+  "environmentObservation": {
+    "commandSupervisedSessionStalled": true,
+    "transactionTimeoutMs": 15000,
+    "reportedTransactionElapsedMs": 289283,
+    "watchdogClosedApi": true,
+    "finalSnapshotSaved": true,
+    "backgroundRelaunchAttested": true,
+    "snapshotObservedAfterSeconds": 205,
+    "rootCauseConfirmed": false,
+    "sustainedActiveDeviceStabilityProven": false
+  },
   "publicationAllowed": false,
   "productionReady": false
 }

@@ -23,6 +23,8 @@ The database is disposable; scans and evidence persist under ignored `tmp/omr-re
 1. Verify the APK above. On the Android device, enable Developer options and USB debugging. Connect a USB **data** cable, unlock the device, and accept its debugging authorization prompt. Never silently grant camera permission with ADB; exercise the app's own permission flow.
 2. Start the disposable environment in PowerShell and leave it running:
 
+   First run the helper with `-Probe`. If `backendAttested` is already true, reuse that session and skip starting a second backend; the assistant may have prepared a background session. If false, start the console session below.
+
    ```powershell
    & 'C:\Users\hisha\.codex\worktrees\smart-omr-evaluation-mobile\Azm\tools\omr-dev\device-test.ps1'
    ```
@@ -65,6 +67,7 @@ Mark each step PASS / FAIL / NOT RUN, with the session ID, Dxxx sample/source ha
 | Test | Evidence required / expected behavior |
 |---|---|
 | APK and backend | Verified installed APK hash; matching disposable nonce attestation; official scoring/publication false |
+| Session stability | Latest private snapshot continues advancing during idle and active use; an expired transaction or failed attestation is a failed session, not permission to continue grading |
 | Camera permission denied | Android denial produces useful error, no image/upload; record the permission error name |
 | Camera permission allowed | Actual camera opens; measured track resolution/facing mode recorded |
 | Sensor/frame capture | Measured saved-image width/height/bytes/hash and sensor-still or video-frame source; requested resolution alone is insufficient |
@@ -104,3 +107,5 @@ No physical Android camera acceptance pass has been observed in this milestone. 
 The earlier temporary API session contained one FAILED scan (`WORKER_FAILED`, zero responses, no attached student/result). Its exact original, API review record and provenance were preserved privately under `tmp/omr-reference/device-acceptance/prior-session/` before shutdown. Source: 3096×4128, 7,535,841 bytes. A separate direct replay took 82.623 seconds and ended INVALID / registration_failed. This exceeds the API worker's 45-second deadline and is consistent with a timeout, but the original attempt has no detailed worker cause and earlier session database-connection errors also existed. Do not label it as a verified camera test or confidently assign its original failure to a single cause. No alignment threshold or timeout was relaxed to force success.
 
 Fresh retakes, actual permission/camera/network/resume tests and independent human labels remain pending. The private session report and device readiness JSON are populated by the scripts; only actual attached-device evidence can change NOT RUN hardware status. No merge, deployment, official-key approval or actual student-result changes are authorized.
+
+An initial command-supervised acceptance process hit an idle Prisma transaction expiration (15,000 ms limit; 289,283 ms elapsed), lost its database connection and was stopped by the watchdog. Its `closed.json` confirms the final snapshot was saved. A separate hidden background launch was then started, and the same session was still attested with fresh snapshots more than 205 seconds after startup. The original stall's root cause and long-running active-device stability remain unproven; do not describe the relaunch as a guaranteed fix. Check `-Probe` and the latest snapshot before connecting. Background service output/error logs remain private under `tmp/omr-reference/device-acceptance/service-*.log`.
