@@ -1,5 +1,7 @@
 # AZM.AIO OMR mobile
 
+Physical-device acceptance setup is now available in [android-device-acceptance.md](../../docs/omr/android-device-acceptance.md), with a protected disposable backend, verified USB installation and private capture diagnostics. No attached-device camera acceptance is claimed; see [the current report](../../docs/omr/android-device-acceptance-report.md). The verified APK below remains the acceptance target; the new tools do not change its code.
+
 Current reliability build status (2026-11-10): final Android assembly passed in [run 42786293332](https://github.com/xxsoloxxleveling-sketch/AZMNEW/actions/runs/42786293332), including the sensor timeout/cancellation fix. Verified local download: `../../tmp/omr-dev/release/azm-omr-reliability-965c4ff.apk`, SHA-256 `0c92215362bd2966589036459f100e0679c5a66616b3ef2fbede948dbdae3095`. Its recorded source tree exactly matches the tested runtime. Earlier reliability/d134a27 APKs mentioned below are historical. See `../../docs/omr/reliability-milestone.md` for source/checksum provenance. No physical Android device/camera test is claimed.
 
 Capacitor 8 / React 19 / TypeScript, sharing the application's OMR transport, camera, upload and review components. It calls the existing AZM backend; it does not contain another student service.

@@ -1,0 +1,55 @@
+{
+  "date": "2026-11-10",
+  "milestone": "PHYSICAL_ANDROID_DEVICE_ACCEPTANCE",
+  "status": "READY_FOR_ATTACHED_DEVICE_NOT_ACCEPTED",
+  "apk": {
+    "reviewRuntime": "965c4ff9d9cae8152228099eaf7ea6ec585454c2",
+    "sha256": "0c92215362bd2966589036459f100e0679c5a66616b3ef2fbede948dbdae3095",
+    "bytes": 4203204,
+    "verifiedLocally": true,
+    "changedByThisMilestone": false
+  },
+  "physicalDevice": {
+    "connectedAtReadinessCheck": 0,
+    "cameraAcceptanceCompleted": false,
+    "matchedTerminalScans": 0,
+    "scanSuccessRate": null,
+    "qrDecodingRate": null,
+    "independentQuestionAccuracy": null,
+    "falseAcceptanceRate": null,
+    "independentLabels": 0
+  },
+  "localAutomatedChecks": {
+    "retainedFeatureTestsPassed": 48,
+    "deviceDiagnosticsAndBrowserSimulationPassed": 9,
+    "pythonHelpersPassed": 10,
+    "apiRecoveryAndAcceptancePassed": 7,
+    "physicalDeviceEvidence": false
+  },
+  "historicalPhysicalCheckpoint": {
+    "photos": 24,
+    "mapped": 17,
+    "rejected": 7,
+    "uncertainPositions": 996,
+    "qrDecoded": 0,
+    "qrAttemptedMappedPhotos": 17,
+    "uncertainVersions": 3,
+    "androidAcceptanceEvidence": false
+  },
+  "priorUnattestedFailure": {
+    "preservedPrivately": true,
+    "originalApiStatus": "FAILED",
+    "errorCode": "WORKER_FAILED",
+    "responses": 0,
+    "sourceWidth": 3096,
+    "sourceHeight": 4128,
+    "sourceBytes": 7535841,
+    "directReplaySeconds": 82.623,
+    "directReplayStatus": "INVALID",
+    "directReplayReason": "registration_failed",
+    "originalRootCauseConfirmed": false
+  },
+  "officialScoringAllowed": false,
+  "publicationAllowed": false,
+  "productionReady": false
+}

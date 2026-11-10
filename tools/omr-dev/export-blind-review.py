@@ -15,6 +15,8 @@ helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
 
 def export(folder, target, selected):
     files=sorted(p for p in folder.iterdir() if p.suffix.lower() in {'.jpg','.jpeg','.png'})
+    if selected==['ALL']:selected=[f'S{index:02d}' for index in range(1,len(files)+1)]
+    if not selected:raise ValueError('No original photos are available to label')
     samples=[]
     for index,photo in enumerate(files,1):
         sample=f'S{index:02d}'

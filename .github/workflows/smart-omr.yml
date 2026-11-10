@@ -79,6 +79,7 @@ jobs:
           python -m unittest discover -s workers/omr -v
           python -m unittest discover -s tools/omr-dev -p 'test_*.py' -v
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-scoring.test.ts backend/tests/omr-database.test.ts backend/tests/omr-migration-recovery.test.ts backend/tests/omr-api.test.ts backend/tests/omr-security.test.ts backend/tests/omr-public-results.test.ts backend/tests/postgres-binaries.test.ts tools/omr-dev/mobile-session.test.ts tools/omr-dev/answer-key-import.test.ts tools/omr-dev/capture-quality.test.ts
+          node --test tools/omr-dev/device-diagnostics.test.mjs tools/omr-dev/device-observer.test.mjs
       - name: Native PostgreSQL 17 full history, grants and concurrent claims
         id: native
         run: |
@@ -90,6 +91,9 @@ jobs:
           chrome="$(command -v google-chrome || command -v chromium)"
           export OMR_CHROME_PATH="$chrome"
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/integration.test.ts tools/omr-dev/queue-recovery.test.ts tools/omr-dev/reliability-flow.test.ts
+          # The physical acceptance harness test requires the privately verified APK.
+          # It runs locally; CI reports its missing-artifact skip explicitly.
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/device-acceptance.test.ts
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/pdf-integration.test.ts
 
       - name: Existing attendance upgrade and backup restore rehearsal

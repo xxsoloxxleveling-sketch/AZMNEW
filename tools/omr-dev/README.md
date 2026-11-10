@@ -1,5 +1,7 @@
 # Isolated Smart OMR development
 
+For physical Android acceptance, use the dedicated nonce-protected session and USB observer described in [the device checklist](../../docs/omr/android-device-acceptance.md), rather than the general-purpose launcher below. Run `tools/omr-dev/device-test.ps1`, then `tools/omr-dev/device-test.ps1 -Connect -Install` in a second PowerShell window. The unchanged verified APK is pinned by checksum; no connected device means hardware acceptance remains NOT RUN. See [the current acceptance report](../../docs/omr/android-device-acceptance-report.md).
+
 This tool starts a new **in-memory, synthetic-only** database, applies all 22 migrations, provisions a restricted role, and starts the real Express API and bounded worker on loopback. It ignores supplied database URLs, clears cloud/activation settings, disables memory fallback, and refuses production mode. Stopping it destroys the database. Private synthetic uploads and screenshots remain under ignored `tmp/omr-dev/`.
 
 From the repository root (Node 24, Python 3.11):

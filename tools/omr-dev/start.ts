@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath,pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
-import { randomBytes } from 'node:crypto';
+import { randomBytes,timingSafeEqual } from 'node:crypto';
+import {createServer} from 'node:http';
 import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 
@@ -12,8 +13,9 @@ const backendRequire=createRequire(path.join(root,'backend/package.json'));
 const namespaced=(module:Record<string,unknown>,name:string):any=>module[name]??(module.default as Record<string,unknown>|undefined)?.[name];
 const quote=(value:string)=>'"'+value.replaceAll('"','""')+'"';
 
-export async function startDevelopment(options:{apiPort?:number;workerEnabled?:boolean;privateDirectory?:string}={}) {
+export async function startDevelopment(options:{apiPort?:number;workerEnabled?:boolean;privateDirectory?:string;deviceSession?:{id:string;nonce:string}}={}) {
   if(process.env.NODE_ENV==='production') throw new Error('Disposable OMR environment cannot run in production');
+  if(options.deviceSession&&(!/^[a-f0-9-]{36}$/.test(options.deviceSession.id)||!/^[a-f0-9]{64}$/.test(options.deviceSession.nonce)))throw new Error('Invalid device acceptance session');
   const db=await PGlite.create();
   let socket:PGLiteSocketServer|undefined,api:ReturnType<typeof import('node:http').createServer>|undefined;
   let timer:ReturnType<typeof setInterval>|undefined,job:Promise<unknown>=Promise.resolve(),prisma:any;
@@ -68,7 +70,26 @@ export async function startDevelopment(options:{apiPort?:number;workerEnabled?:b
     if(role[0]?.current_user!=='azm_app_dml') throw new Error('Disposable database did not retain its restricted role');
     const appModule=await import(pathToFileURL(path.join(root,'backend/src/app.ts')).href);
     const app=typeof appModule.default==='function'?appModule.default:appModule.default.default;
-    api=app.listen(options.apiPort??5055,'127.0.0.1'); await new Promise<void>((resolve,reject)=>{api!.once('listening',resolve);api!.once('error',reject);});
+    api=createServer((request,response)=>{
+      // Local acceptance attestation exists only in this disposable launcher.
+      // The random nonce is never included in diagnostics or general logs.
+      const supplied=request.headers['x-omr-device-session'];
+      const sessionTokenMatches=!!options.deviceSession&&typeof supplied==='string'&&/^[a-f0-9]{64}$/.test(supplied)&&timingSafeEqual(Buffer.from(supplied,'hex'),Buffer.from(options.deviceSession.nonce,'hex'));
+      if(options.deviceSession&&request.url==='/__omr-device-session'){
+        const local=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(request.socket.remoteAddress||'');
+        response.setHeader('Cache-Control','no-store');response.setHeader('Content-Type','application/json');
+        if(!local||request.method!=='GET'||!sessionTokenMatches){response.writeHead(403);response.end('{"error":"Private device-session token required"}');return;}
+        response.end(JSON.stringify({id:options.deviceSession.id,scope:'DISPOSABLE_SYNTHETIC_ONLY',pid:process.pid,officialScoringAllowed:false,publicationAllowed:false}));return;
+      }
+      if(options.deviceSession&&request.url?.startsWith('/api/')){
+        if(request.method==='OPTIONS'){
+          if(request.headers.origin!=='https://localhost'){response.writeHead(403);response.end();return;}
+          response.writeHead(204,{'Access-Control-Allow-Origin':'https://localhost','Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Content-Type,Authorization,Accept,X-OMR-Device-Session','Vary':'Origin','Cache-Control':'no-store'});response.end();return;
+        }
+        if(!sessionTokenMatches){response.writeHead(403,{'Content-Type':'application/json','Cache-Control':'no-store'});response.end('{"error":"Private device acceptance connection required"}');return;}
+      }
+      app(request,response);
+    }).listen(options.apiPort??5055,'127.0.0.1');await new Promise<void>((resolve,reject)=>{api!.once('listening',resolve);api!.once('error',reject);});
     const queue=namespaced(await import(pathToFileURL(path.join(root,'backend/src/modules/omr/queue.ts')).href),'omrQueue');
     if(options.workerEnabled!==false) {
       timer=setInterval(()=>{if(ticking)return;ticking=true;job=queue.tick().catch(()=>console.error('Synthetic development worker failed; original jobs retained')).finally(()=>{ticking=false;});},1000);
