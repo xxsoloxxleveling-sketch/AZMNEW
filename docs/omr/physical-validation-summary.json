@@ -433,10 +433,26 @@
     ],
     "reviewerAvailabilityConfirmed": true,
     "priorUserPredictionComparison": "reported correct, unblinded; not independent ground truth",
-    "androidBuild": "SUCCESS_RUN_42783721218",
+    "androidBuild": "SUCCESS_RUN_42786293332",
     "androidDeviceTest": false,
     "retakesProvided": 0,
     "officialScoringAllowed": false,
-    "productionReady": false
+    "productionReady": false,
+    "userAllPapersCheckedReported": true,
+    "userReviewMethod": "UNBLINDED_COMPARISON_WITH_DISPLAYED_READINGS",
+    "finalLocalRuntime": "fb30f63",
+    "finalReviewRuntime": "965c4ff9d9cae8152228099eaf7ea6ec585454c2",
+    "finalRuntimeTree": "707d057b97b0c6d861505c622f2d760915425527",
+    "omrWorkflow": "SUCCESS_RUN_42786293332",
+    "broaderWorkflow": "SUCCESS_RUN_42786293372",
+    "scannerTests": 41,
+    "helperTests": 8,
+    "featureTests": 48,
+    "apiRecoveryReliabilityTests": 6,
+    "apkSha256": "0c92215362bd2966589036459f100e0679c5a66616b3ef2fbede948dbdae3095",
+    "apkBytes": 4203204,
+    "apkArtifactId": 13749797524,
+    "apkSourceTreeVerified": true,
+    "privatePhotoFlowRerun": true
   }
 }
