@@ -32,7 +32,7 @@ export async function assertAcceptanceIsolation(prisma:any){
   if(await prisma.omrExamResult.count({where:{status:'PUBLISHED'}}))throw Error('Published result detected; acceptance stopped');
 }
 
-export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabled?:boolean}={}){
+export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabled?:boolean;publishCurrent?:boolean}={}){
   if(process.env.NODE_ENV==='production')throw Error('Device acceptance cannot run in production');
   const apk=path.join(root,'tmp/omr-dev/release/azm-omr-reliability-965c4ff.apk');
   if(hash(await fs.readFile(apk))!==ACCEPTANCE_APK_SHA)throw Error('Verified current APK missing or checksum mismatch; do not install another build');
@@ -40,7 +40,7 @@ export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabl
   for(const child of ['private','observations','originals','uploads','blind-originals','independent-labels','diagnostics','revisions'])await fs.mkdir(path.join(folder,child),{recursive:true,mode:0o700});
   const dev=await startDevelopment({...options,privateDirectory:path.join(folder,'private'),deviceSession:{id,nonce}});
   const {prisma}=require('../../backend/src/lib/prisma.ts');let closed=false,snapshotBusy=false,snapshotJob:Promise<unknown>=Promise.resolve();
-  const state={id,pid:process.pid,apiOrigin:dev.url,nonce,apk,apkSha256:ACCEPTANCE_APK_SHA,folder,scope:'DISPOSABLE_SYNTHETIC_ONLY',createdAt:new Date().toISOString()};
+  const state={id,pid:process.pid,apiOrigin:dev.url,nonce,apk,apkSha256:ACCEPTANCE_APK_SHA,folder,scope:'DISPOSABLE_SYNTHETIC_ONLY',purpose:options.publishCurrent?'OPERATOR_DEVICE_ACCEPTANCE':'AUTOMATED_API_CHECK',createdAt:new Date().toISOString()};
   const aliases=new Map<string,string>(),batchAliases=new Map<string,string>();
   const snapshot=async()=>{
     await assertAcceptanceIsolation(prisma);
@@ -113,16 +113,16 @@ export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabl
     await privateJson(path.join(folder,'blind-originals','source-map.json'),evidence.filter(e=>e.imageSource).sort((a,b)=>a.sample.localeCompare(b.sample)).map((e,i)=>({blindSample:'S'+String(i+1).padStart(2,'0'),sample:e.sample,sourceSha256:e.sourceSha256})));
     return report;
   };
-  try{await assertAcceptanceIsolation(prisma);await privateJson(path.join(folder,'session.json'),state);await privateJson(path.join(acceptanceRoot,'current-session.json'),state);await snapshot();}
+  try{await assertAcceptanceIsolation(prisma);await privateJson(path.join(folder,'session.json'),state);if(options.publishCurrent)await privateJson(path.join(acceptanceRoot,'current-session.json'),state);await snapshot();}
   catch(error){await dev.stop();throw error;}
-  const stop=async()=>{if(closed)return;closed=true;await snapshotJob.catch(()=>{});try{await snapshot();}finally{await dev.stop();await privateJson(path.join(folder,'closed.json'),{closedAt:new Date().toISOString(),databaseDestroyed:true});}};
+  const stop=async()=>{if(closed)return;closed=true;await snapshotJob.catch(()=>{});let finalSnapshotSaved=false;try{await snapshot();finalSnapshotSaved=true;}finally{await dev.stop();await privateJson(path.join(folder,'closed.json'),{closedAt:new Date().toISOString(),databaseDestroyed:true,finalSnapshotSaved});}};
   return {state,snapshot,stop,dev,periodicSnapshot:()=>{if(snapshotBusy)return snapshotJob;snapshotBusy=true;snapshotJob=snapshot().finally(()=>{snapshotBusy=false;});return snapshotJob;}};
 }
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
-  const session=await startDeviceAcceptance();
+  const session=await startDeviceAcceptance({publishCurrent:true});
   console.log('Disposable Android acceptance API:',session.state.apiOrigin);console.log('Private evidence folder:',session.state.folder);console.log('APK checksum verified; official scoring/publication locked. Device tests are NOT RUN.');
   let stopping=false;const timer=setInterval(()=>{void session.periodicSnapshot().catch(()=>{console.error('Acceptance evidence or isolation check failed; stopping test API');void close();});},5000);
-  async function close(){if(stopping)return;stopping=true;clearInterval(timer);try{await session.stop();}finally{process.exit();}}
+  async function close(){if(stopping)return;stopping=true;clearInterval(timer);try{await session.stop();console.log('Final evidence snapshot saved; disposable database destroyed.');process.exit(0);}catch{console.error('Final snapshot incomplete; previously archived originals/revisions remain private. Check closed.json before treating the session as complete.');process.exit(1);}}
   process.on('SIGINT',()=>void close());process.on('SIGTERM',()=>void close());
 }

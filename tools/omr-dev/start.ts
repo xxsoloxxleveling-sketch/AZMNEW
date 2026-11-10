@@ -81,7 +81,8 @@ export async function startDevelopment(options:{apiPort?:number;workerEnabled?:b
         if(!local||request.method!=='GET'||!sessionTokenMatches){response.writeHead(403);response.end('{"error":"Private device-session token required"}');return;}
         response.end(JSON.stringify({id:options.deviceSession.id,scope:'DISPOSABLE_SYNTHETIC_ONLY',pid:process.pid,officialScoringAllowed:false,publicationAllowed:false}));return;
       }
-      if(options.deviceSession&&request.url?.startsWith('/api/')){
+      // Express routes are case-insensitive by default; protect the same surface.
+      if(options.deviceSession&&/^\/api(?:\/|$)/i.test((request.url||'').split('?')[0])){
         if(request.method==='OPTIONS'){
           if(request.headers.origin!=='https://localhost'){response.writeHead(403);response.end();return;}
           response.writeHead(204,{'Access-Control-Allow-Origin':'https://localhost','Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Content-Type,Authorization,Accept,X-OMR-Device-Session','Vary':'Origin','Cache-Control':'no-store'});response.end();return;

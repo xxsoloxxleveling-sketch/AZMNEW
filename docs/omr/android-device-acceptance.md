@@ -16,7 +16,7 @@ Each session has a random ID and private nonce. The connection tool requires a m
 
 All acceptance API calls also require the session-specific transport header, injected privately by the observer. The published synthetic password alone cannot access the session's private scans. The nonce is never printed, included in events or committed. This guard exists only in the disposable launcher; production API behavior is unchanged. The connection observer must be running before signing in.
 
-The database is disposable; scans and evidence persist under ignored `tmp/omr-reference/device-acceptance/<session-id>/`. A five-second snapshot preserves exact originals, immutable revision records, original scanner observations, correction/result audits and private diagnostics before shutdown. Stop with Ctrl+C to take a final snapshot and destroy the database. This is not a production backup/restore feature. A force-killed process can lose unsnapshotted transient metadata; original uploads already written to the private directory are retained.
+The database is disposable; scans and evidence persist under ignored `tmp/omr-reference/device-acceptance/<session-id>/`. A five-second snapshot preserves exact originals, immutable revision records, original scanner observations, correction/result audits and private diagnostics before shutdown. Ctrl+C attempts a final snapshot and destroys the database; check `closed.json` for `finalSnapshotSaved=true`. Failure is reported instead of being called a complete save. This is not a production backup/restore feature. A force-killed process can lose unsnapshotted transient metadata; original uploads already written to the private directory are retained.
 
 ## Exact Windows setup
 

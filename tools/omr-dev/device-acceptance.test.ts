@@ -10,11 +10,13 @@ import {attestSession} from './device-diagnostics.mjs';
 const require=createRequire(import.meta.url);
 test('device acceptance starts a nonce-attested disposable API and preserves original evidence separately from predictions',{timeout:180000,skip:!existsSync('tmp/omr-dev/release/azm-omr-reliability-965c4ff.apk')?'Requires the privately retained verified APK; run locally after artifact verification':false},async()=>{
  const image=await generateSheet('synthetic-device-acceptance.png',{missingQr:true,uncertainVersion:true});
+ const currentFile=path.resolve('tmp/omr-reference/device-acceptance/current-session.json'),priorCurrent=await fs.readFile(currentFile,'utf8').catch(()=>null);
  const session=await startDeviceAcceptance({apiPort:0,workerEnabled:false});
  try{
   assert.equal(await attestSession(session.state),session.state.apiOrigin);
   assert.equal((await fetch(session.state.apiOrigin+'/__omr-device-session')).status,403);
   assert.equal((await fetch(session.state.apiOrigin+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'admin@omr.test',password:'Synthetic-Omr-Only-2026!'})})).status,403,'Fixture credentials alone must not expose private scans');
+  assert.equal((await fetch(session.state.apiOrigin+'/API/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'admin@omr.test',password:'Synthetic-Omr-Only-2026!'})})).status,403,'Capitalized Express routes must not bypass the session guard');
   const preflight=await fetch(session.state.apiOrigin+'/api/auth/login',{method:'OPTIONS',headers:{Origin:'https://localhost','Access-Control-Request-Headers':'content-type,x-omr-device-session'}});assert.equal(preflight.status,204);assert.match(preflight.headers.get('access-control-allow-headers')||'',/X-OMR-Device-Session/);
   const request=async(route:string,token:string,method='GET',body?:unknown,raw=false)=>{
    const response=await fetch(session.state.apiOrigin+route,{method,headers:{'X-OMR-Device-Session':session.state.nonce,...(token?{Authorization:`Bearer ${token}`} :{}),...(body?{'Content-Type':raw?'image/png':'application/json'}:{})},body:body?(raw?body as BodyInit:JSON.stringify(body)):undefined});return {status:response.status,data:(await response.json()).data};
@@ -36,4 +38,6 @@ test('device acceptance starts a nonce-attested disposable API and preserves ori
   const {prisma}=require('../../backend/src/lib/prisma.ts');const stored=await prisma.omrScan.findUniqueOrThrow({where:{id}});assert.equal(stored.rawDetection.officialScoringAllowed,false);
  }finally{await session.stop();}
  assert.equal(JSON.parse(await fs.readFile(path.join(session.state.folder,'closed.json'),'utf8')).databaseDestroyed,true);
+ assert.equal(JSON.parse(await fs.readFile(path.join(session.state.folder,'closed.json'),'utf8')).finalSnapshotSaved,true);
+ assert.equal(await fs.readFile(currentFile,'utf8').catch(()=>null),priorCurrent,'Automated API checks must not replace a running operator session');
 });
