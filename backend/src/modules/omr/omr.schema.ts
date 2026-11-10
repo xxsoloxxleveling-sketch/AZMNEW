@@ -1,5 +1,6 @@
 import { z } from 'zod';
 const fourDecimals=(value:number)=>Math.abs(Math.round(value*10000)/10000-value)<1e-9;
+const qrAttempt=z.object({decoded:z.boolean(),attempts:z.number().int().min(0).max(4),reason:z.string().max(32),detected:z.boolean().optional(),symbolSidePixels:z.number().nonnegative().nullable().optional()});
 export const option = z.enum(['A','B','C','D']);
 export const response = z.enum(['A','B','C','D','BLANK','MULTIPLE','UNCERTAIN']);
 export const examInput = z.object({
@@ -27,6 +28,7 @@ export const workerOutput = z.object({
   reason: z.string().max(128).optional(), calibration: z.literal('SYNTHETIC_ONLY').optional(),
   officialScoringAllowed: z.literal(false), identity: z.unknown().optional(), qrEnvelope: z.unknown().optional(),
   physicalValidationRequired:z.boolean().optional(),
+  qrDiagnostics:z.union([qrAttempt,z.object({normalized:qrAttempt,original:qrAttempt,reason:z.string().max(32).optional()})]).optional(),
   layoutDiagnostics:z.record(z.unknown()).optional(),
   geometry:z.object({radius:z.number().positive().max(50),questions:z.array(z.array(z.tuple([z.number().min(0).max(1980),z.number().min(0).max(2800)])).length(4)).length(100),versions:z.array(z.tuple([z.number().min(0).max(1980),z.number().min(0).max(2800)])).length(4)}).optional(),
   paperVersion: z.object({ answer: response }).passthrough().optional(),

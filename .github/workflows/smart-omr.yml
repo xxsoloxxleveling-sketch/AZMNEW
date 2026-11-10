@@ -78,7 +78,7 @@ jobs:
         run: |
           python -m unittest discover -s workers/omr -v
           python -m unittest discover -s tools/omr-dev -p 'test_*.py' -v
-          node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-scoring.test.ts backend/tests/omr-database.test.ts backend/tests/omr-migration-recovery.test.ts backend/tests/omr-api.test.ts backend/tests/omr-security.test.ts backend/tests/omr-public-results.test.ts backend/tests/postgres-binaries.test.ts tools/omr-dev/mobile-session.test.ts tools/omr-dev/answer-key-import.test.ts
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-scoring.test.ts backend/tests/omr-database.test.ts backend/tests/omr-migration-recovery.test.ts backend/tests/omr-api.test.ts backend/tests/omr-security.test.ts backend/tests/omr-public-results.test.ts backend/tests/postgres-binaries.test.ts tools/omr-dev/mobile-session.test.ts tools/omr-dev/answer-key-import.test.ts tools/omr-dev/capture-quality.test.ts
       - name: Native PostgreSQL 17 full history, grants and concurrent claims
         id: native
         run: |
@@ -116,6 +116,28 @@ jobs:
         with: {node-version: '24', cache: npm}
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '21'}
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/omr-gradle/gradle-8.14.3-bin.zip
+          key: omr-gradle-8.14.3-bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+      - name: Fetch or verify pinned Gradle distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/omr-gradle/gradle-8.14.3-bin.zip"
+          mkdir -p "$(dirname "$archive")"
+          expected=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+          verify() { echo "$expected  $archive" | sha256sum --check --status; }
+          if ! test -f "$archive" || ! verify; then
+            rm -f "$archive"
+            for origin in https://downloads.gradle.org/distributions https://services.gradle.org/distributions; do
+              if curl --fail --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 240 "$origin/gradle-8.14.3-bin.zip" --output "$archive" && verify; then break; fi
+              rm -f "$archive"
+            done
+          fi
+          verify
+          unzip -q -o "$archive" -d "$RUNNER_TEMP/omr-gradle"
+          echo "OMR_VERIFIED_GRADLE=$RUNNER_TEMP/omr-gradle/gradle-8.14.3/bin/gradle" >> "$GITHUB_ENV"
       - name: Install Android SDK platform
         run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'platforms;android-36' 'build-tools;36.0.0'"
       - name: Build development APK only
@@ -127,9 +149,14 @@ jobs:
           npx cap sync android
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug --no-daemon
+          "$OMR_VERIFIED_GRADLE" assembleDebug --no-daemon
+          sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/app-debug.apk.sha256
+          printf '%s\n' "$GITHUB_SHA" > app/build/outputs/apk/debug/source-commit.txt
       - uses: actions/upload-artifact@v4
         with:
           name: synthetic-omr-development-apk
-          path: apps/omr-mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            apps/omr-mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/omr-mobile/android/app/build/outputs/apk/debug/app-debug.apk.sha256
+            apps/omr-mobile/android/app/build/outputs/apk/debug/source-commit.txt
           retention-days: 7

@@ -14,7 +14,7 @@ sys.path.insert(0,str(REPO/'workers/omr'))
 from engine import recognize,load_image,InvalidScan,annotate
 
 OUTPUT=REPO/'tmp/omr-reference/physical-validation'
-FILES=['engine.py','physical_layout.py','registration.py','responses.py','template-v2.json','template-framed-legacy-v1.json']
+FILES=['engine.py','physical_layout.py','registration.py','responses.py','qr_decode.py','template-v2.json','template-framed-legacy-v1.json']
 
 
 def recognition_hash():

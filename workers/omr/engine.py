@@ -9,6 +9,7 @@ import numpy as np
 
 cv2.setNumThreads(1)
 from responses import classify
+from qr_decode import decode_qr,original_region
 from registration import timing_tracks,register,adjusted
 OPTIONS = 'ABCD'
 MAX_BYTES = 20 * 1024 * 1024
@@ -128,13 +129,13 @@ def recognize(image, profile):
         except LayoutFailure as error:
             raise InvalidScan('timing_track_mismatch' if aligned_without_tracks else 'registration_failed',error.diagnostics)
         score=registration_score(gray,measured_profile)
-        result=observations(normalized,gray,measured_profile,profile,score,None,True)
+        result=observations(normalized,gray,measured_profile,profile,score,None,True,original_region(image,diagnostic,measured_profile['qrZone']))
         result.update({'template':measured_profile['id'],'status':'REVIEW_REQUIRED','physicalValidationRequired':True,'layoutDiagnostics':diagnostic,'geometry':{key:measured_profile[key] for key in ('questions','versions','radius')}})
         return result,normalized
     score, normalized, gray, measured_profile, offsets, version_supported = max(choices, key=lambda item:item[0])
     return observations(normalized,gray,measured_profile,profile,score,offsets,version_supported),normalized
 
-def observations(normalized,gray,measured_profile,profile,score,offsets,version_supported):
+def observations(normalized,gray,measured_profile,profile,score,offsets,version_supported,original_qr=None):
     if score < profile['thresholds']['registration']:
         raise InvalidScan('template_registration_failed')
     x0,y0,x1,y1 = profile['answerZone']
@@ -154,7 +155,13 @@ def observations(normalized,gray,measured_profile,profile,score,offsets,version_
     version = classify(measurements(gray, measured_profile['versions'], profile['radius']), profile['thresholds'])
     if not version_supported: version={'answer':'UNCERTAIN','darkness':version['darkness'],'reviewRequired':True}
     x0,y0,x1,y1 = measured_profile['qrZone']
-    qr, _, _ = cv2.QRCodeDetector().detectAndDecode(normalized[y0:y1,x0:x1])
+    qr,qr_diagnostic = decode_qr(normalized[y0:y1,x0:x1])
+    if original_qr is not None:
+        original_text,original_diagnostic=decode_qr(original_qr)
+        qr_diagnostic={'normalized':qr_diagnostic,'original':original_diagnostic}
+        if qr_diagnostic['normalized'].get('reason')=='CONFLICTING_QR' or original_diagnostic.get('reason')=='CONFLICTING_QR' or (qr and original_text and qr!=original_text):
+            qr='';qr_diagnostic['reason']='CONFLICTING_QR'
+        elif original_text: qr=original_text
     try:
         identity = json.loads(qr)
     except (ValueError, TypeError):
@@ -165,7 +172,7 @@ def observations(normalized,gray,measured_profile,profile,score,offsets,version_
     if supported:
         identity={k:identity[k] for k in ('type','session','sheetVersion','rollType','studentId','applicationNo','rollNumber','examId') if k in identity}
     review = not supported or version['answer'] not in OPTIONS or any(r['reviewRequired'] for r in responses)
-    result = {'template':profile['id'], 'status':'REVIEW_REQUIRED' if review else 'RECOGNIZED', 'responses':responses, 'paperVersion':version, 'identity':identity if supported else None, 'qrEnvelope':envelope, 'identityVerified':False, 'officialScoringAllowed':False, 'quality':{'registration':score,'focus':focus}, 'registrationOffsets':offsets, 'calibration':'SYNTHETIC_ONLY'}
+    result = {'template':profile['id'], 'status':'REVIEW_REQUIRED' if review else 'RECOGNIZED', 'responses':responses, 'paperVersion':version, 'identity':identity if supported else None, 'qrEnvelope':envelope, 'qrDiagnostics':qr_diagnostic, 'identityVerified':False, 'officialScoringAllowed':False, 'quality':{'registration':score,'focus':focus}, 'registrationOffsets':offsets, 'calibration':'SYNTHETIC_ONLY'}
     return result
 
 def annotate(image, result, profile):
