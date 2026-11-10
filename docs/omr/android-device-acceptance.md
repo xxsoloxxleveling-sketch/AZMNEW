@@ -1,5 +1,7 @@
 # Physical Android device acceptance — 2026-11-10
 
+2026-11-11 continuation: the actual SM-X710 / Android 16 device is now authorized, the installed target APK verified, and synthetic-admin sign-in passed through the protected USB connection. The app is on its scan screen. Camera capture, upload, QR decoding and independent accuracy remain pending. The observer now waits for WebView startup and reloads after installing its preload, before the app caches fetch. See the updated acceptance report for the observed initial failures and verified connection result.
+
 Continues the completed reliability milestone on `codex/smart-omr-evaluation-mobile`, draft PR #28. This milestone prepares and measures physical-device testing; browser mocks/API tests are separate evidence. There is currently no attached authorized Android device. No camera permission/capture/upload success is claimed from the earlier installation/USB readiness check.
 
 ## Verified installation target

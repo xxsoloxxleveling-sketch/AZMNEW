@@ -1,7 +1,7 @@
 {
   "date": "2026-11-10",
   "milestone": "PHYSICAL_ANDROID_DEVICE_ACCEPTANCE",
-  "status": "READY_FOR_ATTACHED_DEVICE_NOT_ACCEPTED",
+  "status": "DEVICE_CONNECTED_AUTHENTICATED_CAPTURE_PENDING",
   "apk": {
     "reviewRuntime": "965c4ff9d9cae8152228099eaf7ea6ec585454c2",
     "sha256": "0c92215362bd2966589036459f100e0679c5a66616b3ef2fbede948dbdae3095",
@@ -10,18 +10,19 @@
     "changedByThisMilestone": false
   },
   "physicalDevice": {
-    "connectedAtReadinessCheck": 0,
+    "connectedAtReadinessCheck": 1,
     "cameraAcceptanceCompleted": false,
     "matchedTerminalScans": 0,
     "scanSuccessRate": null,
     "qrDecodingRate": null,
     "independentQuestionAccuracy": null,
     "falseAcceptanceRate": null,
-    "independentLabels": 0
+    "independentLabels": 0,
+    "syntheticAdminSignInPassed": true
   },
   "localAutomatedChecks": {
     "retainedFeatureTestsPassed": 48,
-    "deviceDiagnosticsAndBrowserSimulationPassed": 9,
+    "deviceDiagnosticsAndBrowserSimulationPassed": 10,
     "pythonHelpersPassed": 10,
     "apiRecoveryAndAcceptancePassed": 7,
     "physicalDeviceEvidence": false
@@ -72,5 +73,24 @@
     "sustainedActiveDeviceStabilityProven": false
   },
   "publicationAllowed": false,
-  "productionReady": false
+  "productionReady": false,
+  "asOfDate": "2026-11-11",
+  "deviceConnectionContinuation": {
+    "date": "2026-11-11",
+    "model": "SM-X710",
+    "android": "16",
+    "installedApkVerified": true,
+    "usbReverseVerified": true,
+    "diagnosticObserverActive": true,
+    "actualSignInPassed": true,
+    "captureScreenReady": true,
+    "cameraOpened": false,
+    "capturedImages": 0,
+    "uploads": 0,
+    "startupFixes": [
+      "bounded WebView readiness wait",
+      "reload after observer preload before app caches fetch"
+    ],
+    "diagnosticChecksPassed": 10
+  }
 }

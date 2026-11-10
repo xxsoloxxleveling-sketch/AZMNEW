@@ -8,6 +8,15 @@ export function privateSessionDirectory(state,root){
   if(path.resolve(state.folder||'')!==directory)throw Error('Acceptance evidence directory does not match its private session');
   return directory;
 }
+export async function waitForOmrWebView(getTargets,{timeoutMs=10000,intervalMs=250}={}){
+  const deadline=Date.now()+timeoutMs;
+  do{
+    try{const targets=await getTargets();const page=targets.find(p=>p.url==='https://localhost/'&&p.title==='AZM.AIO OMR Scanner');if(page)return page;}catch{}
+    if(Date.now()>=deadline)break;
+    await new Promise(resolve=>setTimeout(resolve,intervalMs));
+  }while(Date.now()<deadline);
+  throw Error('The OMR WebView did not become ready; unlock the device and open the verified app');
+}
 
 export function localAcceptanceOrigin(value){
   const url=new URL(value);

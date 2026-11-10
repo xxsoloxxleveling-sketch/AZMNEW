@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {localAcceptanceOrigin,attestSession,signDeviceEvent,verifiedDeviceEvents,joinDeviceEvidence,captureObserverSource,validateRetakeNote,privateSessionDirectory} from './device-diagnostics.mjs';
+import {localAcceptanceOrigin,attestSession,signDeviceEvent,verifiedDeviceEvents,joinDeviceEvidence,captureObserverSource,validateRetakeNote,privateSessionDirectory,waitForOmrWebView} from './device-diagnostics.mjs';
 import path from 'node:path';
 test('device diagnostics refuse production, LAN and credential-bearing API origins',()=>{
  assert.equal(localAcceptanceOrigin('http://127.0.0.1:5055'),'http://127.0.0.1:5055');
@@ -45,4 +45,9 @@ test('a private manifest cannot redirect device evidence outside its session fol
  assert.equal(privateSessionDirectory({id,folder:path.join(root,id)},root),path.join(root,id));
  assert.throws(()=>privateSessionDirectory({id,folder:path.resolve('outside')},root));
  assert.throws(()=>privateSessionDirectory({id:'../../outside',folder:path.resolve('outside')},root));
+});
+test('device connection waits through WebView startup without accepting a different app',async()=>{
+ let calls=0;const expected={url:'https://localhost/',title:'AZM.AIO OMR Scanner'};
+ assert.equal(await waitForOmrWebView(async()=>{calls++;if(calls===1)throw Error('Socket not ready');if(calls===2)return [{url:'https://example.test',title:'Other app'}];return [expected];},{timeoutMs:100,intervalMs:1}),expected);
+ await assert.rejects(()=>waitForOmrWebView(async()=>[],{timeoutMs:5,intervalMs:1}),/did not become ready/);
 });

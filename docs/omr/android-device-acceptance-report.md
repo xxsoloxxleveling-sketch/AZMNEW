@@ -1,6 +1,8 @@
-# Android acceptance checkpoint — 2026-11-10
+# Android acceptance checkpoint — updated 2026-11-11
 
-**Status: environment and installation readiness prepared; physical-device acceptance NOT RUN.** No authorized Android device is attached at this checkpoint. The earlier installed-APK/USB check is readiness evidence only, not camera/scan acceptance.
+**Current status: actual device connected and signed in; camera/scan acceptance pending.** The 2026-11-10 readiness checkpoint had no attached device. On 2026-11-11 the SM-X710 / Android 16 device was USB-authorized, its installed APK checksum verified, its disposable session attested, and actual synthetic-admin sign-in observed. The app is on the scan screen. No camera has been opened and no photo uploaded in this continuation, so scan/QR/accuracy metrics remain unmeasured.
+
+Two actual-device startup issues were found and corrected: the debug WebView was not immediately available after app startup (bounded readiness retry added), and the app had cached its fetch client before the acceptance transport was injected (reload after preload registration added). The initial sign-in failed with a CORS missing-origin-header error because the required private transport header was absent; no server allowlist or authentication gate was weakened. After reload, actual sign-in succeeded. Ten diagnostics/browser regression checks passed, including cached-fetch preload and startup readiness. This is a connection pass, not a camera or sheet-recognition pass.
 
 | Measurement | Observed result |
 |---|---|
@@ -13,7 +15,7 @@
 | Independently labeled physical question accuracy | Not measured; no independent label files |
 | Automated acceptance API fixture | 1/1 mapped, 100 response positions; authorized synthetic identity/version review creates private 100/100 DRAFT |
 | Original preservation | Byte/hash-identical originals, separate blind copies, observations, content-addressed audit/result revisions; retained after disposable database shutdown |
-| Device diagnostics tests | Nine local JavaScript checks passed, including a desktop-browser observer simulation; not Android hardware evidence |
+| Device diagnostics tests | Ten local JavaScript checks passed, including a desktop-browser observer simulation; not Android hardware evidence |
 | Private acceptance harness test | Passed locally using the pinned verified APK and disposable database; CI explicitly skips it if that private artifact is absent |
 | Retained application/recovery checks | Six passed; seven including the new acceptance harness test |
 | Python label/evidence helpers | Ten passed |

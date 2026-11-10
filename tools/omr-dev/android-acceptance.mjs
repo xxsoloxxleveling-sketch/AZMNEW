@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {attestSession,captureObserverSource,signDeviceEvent,privateSessionDirectory} from './device-diagnostics.mjs';
+import {attestSession,captureObserverSource,signDeviceEvent,privateSessionDirectory,waitForOmrWebView} from './device-diagnostics.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const expected='0c92215362bd2966589036459f100e0679c5a66616b3ef2fbede948dbdae3095';
 const apk=path.join(root,'tmp/omr-dev/release/azm-omr-reliability-965c4ff.apk');
@@ -36,9 +36,7 @@ await device('shell','am','start','--user','0','-n','com.azmaio.omr/.MainActivit
 const model=await device('shell','getprop','ro.product.model'),android=await device('shell','getprop','ro.build.version.release');
 const pid=await device('shell','pidof','com.azmaio.omr');if(!/^\d+$/.test(pid))throw Error('Could not identify the OMR app process');
 await device('forward','tcp:9223','localabstract:webview_devtools_remote_'+pid);
-const targets=await (await fetch('http://127.0.0.1:9223/json/list',{signal:AbortSignal.timeout(5000)})).json();
-const page=targets.find(p=>p.url==='https://localhost/'&&p.title==='AZM.AIO OMR Scanner');
-if(!page)throw Error('The expected OMR WebView is not available; unlock the device and open the verified app');
+const page=await waitForOmrWebView(async()=>await (await fetch('http://127.0.0.1:9223/json/list',{signal:AbortSignal.timeout(1500)})).json());
 const ws=new WebSocket(page.webSocketDebuggerUrl);await new Promise((resolve,reject)=>{ws.onopen=resolve;ws.onerror=reject;});
 let nextId=0,closed=false;const pending=new Map();
 const call=(method,params={})=>new Promise((resolve,reject)=>{
@@ -65,6 +63,12 @@ try{
  // Browser-level interception also covers XHR/navigation, not just app fetch.
  await call('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'}]});
  await call('Page.addScriptToEvaluateOnNewDocument',{source});await evaluate(source);
+ // App session clients capture fetch at initialization. Reload after registering
+ // the preload so the private transport wrapper exists before those clients.
+ await call('Page.reload',{ignoreCache:false});
+ const readyDeadline=Date.now()+10000;let appReady=false;
+ while(Date.now()<readyDeadline){try{appReady=await evaluate('!!globalThis.__azmDeviceAcceptance && !!document.querySelector("input[type=email]")');if(appReady)break;}catch{}await new Promise(resolve=>setTimeout(resolve,250));}
+ if(!appReady)throw Error('The OMR sign-in screen did not initialize with acceptance transport enabled');
  await append({type:'DEVICE_ATTESTED',at:new Date().toISOString(),physicalAndroid:true,serialSha256:sha(serial),model,android,apkSha256:expected,backendAttested:true,networkRestrictedTo:origin});
  console.log('Verified Android app connected to disposable session. Model:',model,'Android:',android);console.log('App API server:',origin);console.log('Use admin@omr.test / Synthetic-Omr-Only-2026!; keep USB connected. Diagnostic observer is active; Ctrl+C stops it.');
  let polling=false,lastReview='';const timer=setInterval(()=>{
