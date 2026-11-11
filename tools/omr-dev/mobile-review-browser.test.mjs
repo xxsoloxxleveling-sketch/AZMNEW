@@ -42,7 +42,18 @@ test('mobile clears a recovered polling error and treats an OCR roll as an uncon
   await page.type('input[type=email]','staff@omr.test');await page.type('input[type=password]','fabricated-browser-fixture');await page.click('form button');if(process.env.OMR_BROWSER_DEBUG)console.log(await page.evaluate(()=>({text:document.body.innerText,fields:[...document.querySelectorAll('input')].map(x=>({type:x.type,value:x.type==='password'?'redacted':x.value,valid:x.checkValidity()}))})));
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='Scan OMR sheet'&&!b.disabled));
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Scan OMR sheet').click());
-  await page.evaluate(async()=>{const canvas=document.createElement('canvas');canvas.width=800;canvas.height=1200;const blob=await new Promise(resolve=>canvas.toBlob(resolve));const data=new DataTransfer();data.items.add(new File([blob],'fabricated.png',{type:'image/png'}));const input=document.querySelector('input[type=file]');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));});
+  const chooseSyntheticPage=async(width,height)=>page.evaluate(async(w,h)=>{
+    const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+    const data=new DataTransfer();data.items.add(new File([blob],'fabricated.png',{type:'image/png'}));
+    const input=document.querySelector('input[type=file]');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+  },width,height);
+  // The mobile scanner must now refuse the old low-resolution fixture, rather than silently upload it.
+  await chooseSyntheticPage(800,1200);
+  await page.waitForFunction(()=>document.body.innerText.includes('Photo is only 800 × 1200 pixels'));
+  assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Upload for processing')?.disabled),true);
+  // Continue the existing polling/review regression using a sufficiently detailed synthetic image.
+  await chooseSyntheticPage(1600,2000);
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='Upload for processing'&&!b.disabled));
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Upload for processing').click());
   await page.waitForFunction(()=>document.body.innerText.includes('Cannot reach the local test server'));failPolling=false;
