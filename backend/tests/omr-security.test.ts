@@ -7,7 +7,7 @@ import { createHash,createHmac } from 'node:crypto';
 import { decodeIdentity,reconcileIdentity,candidateGroup,manualQrAgrees } from '../src/modules/omr/identity';
 import { Prisma,PrismaClient } from '@prisma/client';
 import { serial,evaluateDraft } from '../src/modules/omr/omr.service';
-import { examInput } from '../src/modules/omr/omr.schema';
+import { examInput,workerOutput } from '../src/modules/omr/omr.schema';
 import { officialActivation,recognitionHashes } from '../src/modules/omr/activation';
 import { recognitionEnvironment } from '../src/modules/omr/runner';
 import { invalidCaptureCode } from '../src/modules/omr/capture-diagnostics';
@@ -66,6 +66,26 @@ test('private development storage round trips only generated references',async()
     if(path.dirname(root)===path.resolve(os.tmpdir()) && path.basename(root).startsWith('azm-omr-storage-test-')) await fs.rm(root,{recursive:true,force:true});
   }
 });
+test('second-pass worker output is schema-validated and audit channels are preserved',()=>{
+  const v=[.94,.08,.05,.06],reference=[246,245,243,247];
+  const row={question:1,answer:'A',reviewRequired:false,darkness:v,rawDarkness:v,paperReference:reference,
+    measurementMethod:'LOCAL_PAPER_DUAL_CHANNEL_V2',
+    coreDarkness:[.93,.2,.2,.2],innerDarkness:[.9,.15,.13,.12],
+    innerPaperQuantile20:[.87,.03,.04,.02],innerTextureStd:[.02,.2,.18,.22],
+    innerTextureSpan:[.08,.51,.48,.55],outlineSupport:[1,1,1,1],
+    reason:'DOMINANT_FILL_OPTICALLY_CONFIRMED'};
+  const output={status:'REVIEW_REQUIRED',officialScoringAllowed:false,
+    responses:Array.from({length:100},(_,i)=>({...row,question:i+1}))};
+  const accepted=workerOutput.parse(output);
+  assert.equal(accepted.responses?.[0].measurementMethod,'LOCAL_PAPER_DUAL_CHANNEL_V2');
+  assert.deepEqual(accepted.responses?.[0].innerPaperQuantile20,row.innerPaperQuantile20);
+  assert.deepEqual(accepted.responses?.[0].innerTextureStd,row.innerTextureStd);
+  assert.deepEqual(accepted.responses?.[0].coreDarkness,row.coreDarkness);
+  assert.equal(workerOutput.safeParse({...output,responses:[{...row,measurementMethod:'UNREVIEWED_OPTICAL_BYPASS'},...output.responses.slice(1)]}).success,false);
+  assert.equal(workerOutput.safeParse({...output,officialScoringAllowed:true}).success,false);
+  assert.equal(workerOutput.safeParse({...output,responses:[{...row,innerPaperQuantile20:[.5,.7,-.1,.1]},...output.responses.slice(1)]}).success,false);
+});
+
 test('official activation fails closed and detects changed physical evidence',async()=>{
   const names=['OMR_VALIDATION_MANIFEST','OMR_VALIDATION_SIGNING_KEY','OMR_PHYSICAL_REPORT','OMR_WORKER_ROOT'];
   const previous=Object.fromEntries(names.map(name=>[name,process.env[name]]));
