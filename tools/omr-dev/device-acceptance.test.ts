@@ -8,7 +8,7 @@ import {generateSheet} from './generate-sheet';
 import {startDeviceAcceptance} from './device-acceptance';
 import {attestSession} from './device-diagnostics.mjs';
 const require=createRequire(import.meta.url);
-test('device acceptance starts a nonce-attested disposable API and preserves original evidence separately from predictions',{timeout:180000,skip:!existsSync('tmp/omr-dev/release/azm-omr-reliability-965c4ff.apk')?'Requires the privately retained verified APK; run locally after artifact verification':false},async()=>{
+test('device acceptance starts a nonce-attested disposable API and preserves original evidence separately from predictions',{timeout:180000,skip:!existsSync('tmp/omr-dev/release/azm-omr-confidence-3dc8522.apk')?'Requires the privately retained verified APK; run locally after artifact verification':false},async()=>{
  const image=await generateSheet('synthetic-device-acceptance.png',{missingQr:true,uncertainVersion:true});
  const currentFile=path.resolve('tmp/omr-reference/device-acceptance/current-session.json'),priorCurrent=await fs.readFile(currentFile,'utf8').catch(()=>null);
  const session=await startDeviceAcceptance({apiPort:0,workerEnabled:false});

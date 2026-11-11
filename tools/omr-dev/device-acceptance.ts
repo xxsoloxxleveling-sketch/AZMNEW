@@ -9,7 +9,7 @@ import {promisify} from 'node:util';
 import {startDevelopment} from './start';
 import {verifiedDeviceEvents,joinDeviceEvidence,validateRetakeNote} from './device-diagnostics.mjs';
 const require=createRequire(import.meta.url),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
-export const ACCEPTANCE_APK_SHA='0c92215362bd2966589036459f100e0679c5a66616b3ef2fbede948dbdae3095';
+export const ACCEPTANCE_APK_SHA='639ddfddb9e65b3596745091b85054b1cac1a3f85f83a60c7a257ddfd62f2182';
 export const acceptanceRoot=path.join(root,'tmp/omr-reference/device-acceptance');
 const hash=(data:Buffer|string)=>createHash('sha256').update(data).digest('hex');
 async function privateJson(filename:string,value:unknown){await fs.writeFile(filename,JSON.stringify(value,null,2)+'\n',{mode:0o600});}
@@ -34,7 +34,7 @@ export async function assertAcceptanceIsolation(prisma:any){
 
 export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabled?:boolean;publishCurrent?:boolean}={}){
   if(process.env.NODE_ENV==='production')throw Error('Device acceptance cannot run in production');
-  const apk=path.join(root,'tmp/omr-dev/release/azm-omr-reliability-965c4ff.apk');
+  const apk=path.join(root,'tmp/omr-dev/release/azm-omr-confidence-3dc8522.apk');
   if(hash(await fs.readFile(apk))!==ACCEPTANCE_APK_SHA)throw Error('Verified current APK missing or checksum mismatch; do not install another build');
   const id=randomUUID(),folder=path.join(acceptanceRoot,id),nonce=randomBytes(32).toString('hex');
   for(const child of ['private','observations','originals','uploads','blind-originals','independent-labels','diagnostics','revisions'])await fs.mkdir(path.join(folder,child),{recursive:true,mode:0o700});
