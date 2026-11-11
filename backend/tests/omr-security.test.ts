@@ -85,8 +85,12 @@ test('official activation fails closed and detects changed physical evidence',as
     const tx={$queryRaw:async()=>[],omrScan:{findUnique:async()=>scan},student:{findUnique:async()=>student},omrAnswerKeyRevision:{findFirst:async()=>({isSynthetic:false})}} as unknown as Prisma.TransactionClient;
     await assert.rejects(()=>evaluateDraft(tx,scan.id),/Official scanning remains disabled/,'A global approval for the original template must not activate the provisional physical layout');
     const worker=path.resolve('workers/omr'),copy=path.join(root,'worker');await fs.mkdir(copy);
-    await Promise.all(['template-v2.json','template-framed-legacy-v1.json','engine.py','responses.py','pdf_input.py','worker_cli.py','printed_identity.py','registration.py','physical_layout.py','qr_decode.py','identity_detail.py','requirements.txt','requirements-ocr.txt'].map(name=>fs.copyFile(path.join(worker,name),path.join(copy,name))));
+    await Promise.all(['template-v2.json','template-framed-legacy-v1.json','engine.py','bubble_evidence.py','responses.py','pdf_input.py','worker_cli.py','printed_identity.py','registration.py','physical_layout.py','qr_decode.py','identity_detail.py','requirements.txt','requirements-ocr.txt'].map(name=>fs.copyFile(path.join(worker,name),path.join(copy,name))));
     process.env.OMR_WORKER_ROOT=copy;assert.equal(officialActivation().approved,true);
+    await fs.appendFile(path.join(copy,'bubble_evidence.py'),'\n# tampered second-pass recognition logic');
+    assert.equal(officialActivation().approved,false,'Changing the second-pass optical evidence checker must invalidate approval');
+    await fs.copyFile(path.join(worker,'bubble_evidence.py'),path.join(copy,'bubble_evidence.py'));
+    assert.equal(officialActivation().approved,true,'Restoring identical optical evidence logic restores the signed hash');
     await fs.appendFile(path.join(copy,'template-framed-legacy-v1.json'),'\n');assert.equal(officialActivation().approved,false,'Changing the new physical profile must invalidate approval');
     if(previous.OMR_WORKER_ROOT===undefined)delete process.env.OMR_WORKER_ROOT;else process.env.OMR_WORKER_ROOT=previous.OMR_WORKER_ROOT;
     await fs.writeFile(report,'tampered'); assert.equal(officialActivation().approved,false);
