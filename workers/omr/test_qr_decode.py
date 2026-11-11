@@ -6,6 +6,14 @@ from qr_decode import decode_qr, original_region
 
 
 class QrRetryTests(unittest.TestCase):
+    def test_closeup_keeps_full_sheet_dimension_rejection_separate(self):
+        from engine import load_image,InvalidScan
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as folder:
+            source=Path(folder)/'closeup.png';cv2.imwrite(str(source),np.full((400,400,3),255,np.uint8))
+            with self.assertRaises(InvalidScan):load_image(source)
+            self.assertEqual(load_image(source,minimum_side=320).shape,(400,400,3))
     def test_actual_encoded_text_is_returned_unverified(self):
         symbol=cv2.QRCodeEncoder_create().encode('SYNTHETIC-QR-ONLY')
         image=cv2.resize(symbol,None,fx=5,fy=5,interpolation=cv2.INTER_NEAREST)

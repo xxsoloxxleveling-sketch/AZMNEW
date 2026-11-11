@@ -8,6 +8,8 @@ import { OmrActor, omrError, requireExam } from './access';
 import { LegacyReleaseService } from './legacy';
 import { reasonInput } from './omr.schema';
 import { readPrivate, fileType, MAX_UPLOAD } from './storage';
+import {IdentityCaptureService} from './identity-capture';
+import {createHash} from 'node:crypto';
 
 function actor(req:Request):OmrActor { if(!req.user) throw omrError(401,'Staff authentication required'); return req.user; }
 const id=(value:unknown)=>z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).parse(value);
@@ -16,6 +18,7 @@ const uploading=new Set<string>();
 export function createOmrRouter(service:OmrService=omrService,queue:OmrQueue=omrQueue,auth:RequestHandler=authenticate) {
   const router=express.Router(); router.use(auth);
   const legacy=new LegacyReleaseService(service);
+  const identityCaptures=new IdentityCaptureService(service.db);
   const action=(handler:(req:Request,res:Response)=>Promise<unknown>):RequestHandler=>(req,res,next)=>{Promise.resolve(handler(req,res)).catch(next);};
   const json=(handler:(req:Request)=>Promise<unknown>,status=200)=>action(async(req,res)=>res.status(status).json({success:true,data:await handler(req)}));
   const uploadLimiter=rateLimit({windowMs:60000,limit:30,keyGenerator:req=>actor(req).id,standardHeaders:true,legacyHeaders:false,message:{success:false,error:{message:'Upload limit reached; retry shortly'}}});
@@ -61,6 +64,12 @@ export function createOmrRouter(service:OmrService=omrService,queue:OmrQueue=omr
   },202));
   router.get('/batches/:batchId',json(req=>queue.batch(actor(req),id(req.params.batchId))));
   router.get('/scans/:scanId',json(req=>service.scan(actor(req),id(req.params.scanId))));
+  router.post('/scans/:scanId/identity-captures',uploadLimiter,
+    (req,res,next)=>{identityCaptures.access(actor(req),id(req.params.scanId),req.query.originalSha256).then(()=>next(),next);},
+    capacity,express.raw({type:['image/png','image/jpeg'],limit:MAX_UPLOAD}),json(req=>{
+      if(!Buffer.isBuffer(req.body))throw omrError(415,'Upload an original JPEG or PNG close-up');
+      return identityCaptures.capture(actor(req),id(req.params.scanId),req.query.originalSha256,req.body);
+    },201));
   router.post('/scans/:scanId/retry',json(req=>queue.retry(actor(req),id(req.params.scanId))));
   router.patch('/scans/:scanId/review',json(req=>service.review(actor(req),id(req.params.scanId),req.body)));
   router.post('/scans/:scanId/approve',json(req=>service.decide(actor(req),id(req.params.scanId),true,reasonInput.parse(req.body).reason)));
@@ -77,6 +86,17 @@ export function createOmrRouter(service:OmrService=omrService,queue:OmrQueue=omr
     if(!key) throw omrError(404,'Scan evidence is not available yet');
     const bytes=await readPrivate(key),type=fileType(bytes);
     res.set({'Content-Type':type.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'",'Content-Disposition':`inline; filename="omr-scan.${type.extension}"`}).send(bytes);
+  }));
+  router.get('/scans/:scanId/identity-captures/:captureId/image',action(async(req,res)=>{
+    const scan=await service.db.omrScan.findUnique({where:{id:id(req.params.scanId)}});
+    if(!scan)throw omrError(404,'Scan not found');await requireExam(service.db,actor(req),scan.examId,'review');
+    const receipt=await service.db.omrCorrectionAudit.findFirst({where:{id:id(req.params.captureId),scanId:scan.id}});
+    const detail=receipt?.next as Record<string,unknown>|undefined;
+    if(detail?.kind!=='IDENTITY_DETAIL_CAPTURE'||typeof detail.objectKey!=='string')throw omrError(404,'Identity detail not found for this scan');
+    if(detail.originalSha256!==scan.fileHash||detail.pageIndex!==scan.pageIndex)throw omrError(409,'Identity detail source/page mismatch');
+    const bytes=await readPrivate(detail.objectKey),type=fileType(bytes);
+    if(type.extension==='pdf'||createHash('sha256').update(bytes).digest('hex')!==detail.detailSha256)throw omrError(409,'Identity detail integrity check failed');
+    res.set({'Content-Type':type.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'",'Content-Disposition':`inline; filename="omr-identity-detail.${type.extension}"`}).send(bytes);
   }));
   router.use((error:unknown,_req:Request,res:Response,_next:NextFunction)=>{
     const expected=error as {statusCode?:number;code?:string;type?:string};

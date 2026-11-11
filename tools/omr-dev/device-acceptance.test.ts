@@ -34,7 +34,12 @@ test('device acceptance starts a nonce-attested disposable API and preserves ori
   assert.equal((await fs.readdir(path.join(session.state.folder,'independent-labels'))).length,0);
   const review=await request('/api/omr/scans/'+id+'/review',admin,'PATCH',{reason:'Automated synthetic acceptance fixture, not human validation',identityLookup:'SYNTHETIC-APP-0001',printedRollNumber:'SYNTHETIC-OMR-0001',identityConfirmed:true,examConfirmed:true,paperVersion:'A',answers:[]});assert.equal(review.status,200);
   const reviewed=(await request('/api/omr/scans/'+id,admin)).data;assert.equal(reviewed.results[0].status,'DRAFT');assert.equal(Number(reviewed.results[0].score),100);
-  await session.snapshot();assert.ok((await fs.readdir(path.join(session.state.folder,'revisions'))).length>=2);
+  const {prisma:receiptDb}=require('../../backend/src/lib/prisma.ts');
+  const {storePrivate}=await import('../../backend/src/modules/omr/storage');const {createHash}=await import('node:crypto');const bytes=await fs.readFile(image),key=await storePrivate(bytes),detailHash=createHash('sha256').update(bytes).digest('hex');
+  const sourceRow=await receiptDb.omrScan.findUniqueOrThrow({where:{id}});
+  await receiptDb.omrCorrectionAudit.create({data:{scanId:id,actorId:'synthetic-admin',previous:{},next:{kind:'IDENTITY_DETAIL_CAPTURE',originalSha256:sourceRow.fileHash,pageIndex:sourceRow.pageIndex,detailSha256:detailHash,objectKey:key},reason:'Fabricated supplemental-image preservation fixture'}});
+  await session.snapshot();const retained=(await fs.readdir(path.join(session.state.folder,'identity-details')))[0];assert.deepEqual(await fs.readFile(path.join(session.state.folder,'identity-details',retained)),bytes);
+  assert.ok((await fs.readdir(path.join(session.state.folder,'revisions'))).length>=2);
   assert.equal((await request('/api/omr/exams/synthetic-omr-exam/publish',superAdmin,'POST',{reason:'Acceptance fixture publication must remain locked',resultIds:[reviewed.results[0].id]})).status,409);
   const {prisma}=require('../../backend/src/lib/prisma.ts');const stored=await prisma.omrScan.findUniqueOrThrow({where:{id}});assert.equal(stored.rawDetection.officialScoringAllowed,false);
  }finally{await session.stop();}

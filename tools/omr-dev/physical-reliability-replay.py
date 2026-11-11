@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT/'workers/omr'))
 from engine import recognize, load_image, InvalidScan
 from printed_identity import read_printed_roll
 
-FILES = ['engine.py','physical_layout.py','registration.py','responses.py','qr_decode.py','printed_identity.py','template-v2.json','template-framed-legacy-v1.json']
+FILES = ['engine.py','physical_layout.py','registration.py','responses.py','qr_decode.py','printed_identity.py','template-v2.json','template-framed-legacy-v1.json','identity_detail.py','requirements.txt','requirements-ocr.txt']
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)

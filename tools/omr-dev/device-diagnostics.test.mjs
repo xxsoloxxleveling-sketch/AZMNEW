@@ -58,3 +58,8 @@ test('device connection waits through WebView startup without accepting a differ
  assert.equal(await waitForOmrWebView(async()=>{calls++;if(calls===1)throw Error('Socket not ready');if(calls===2)return [{url:'https://example.test',title:'Other app'}];return [expected];},{timeoutMs:100,intervalMs:1}),expected);
  await assert.rejects(()=>waitForOmrWebView(async()=>[],{timeoutMs:5,intervalMs:1}),/did not become ready/);
 });
+
+test('an identity-detail camera image does not count as full-sheet camera acceptance',()=>{
+ const events=[{type:'DEVICE_ATTESTED',physicalAndroid:true,sessionId:'test'},{type:'CAPTURE',captureSource:'sensor-still',capturePurpose:'identity-detail'}];
+ assert.equal(joinDeviceEvidence([],events).cameraCapturesObserved,0);
+});

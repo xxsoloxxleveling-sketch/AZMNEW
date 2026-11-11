@@ -6,7 +6,7 @@ export interface Candidate {id:string;fullName:string;applicationNo:string;rollN
 export interface Scan {id:string;status:string;paperVersion:Option|null;templateVersion?:string|null;identityVerified:boolean;errorCode:string|null;createdAt:string;student:Candidate|null}
 export interface ResponseRow {question:number;detectedAnswer:Answer;reviewedAnswer:Answer|null;evidence:{darkness?:number[];reviewRequired?:boolean}}
 export interface Correction {id:string;question:number|null;reason:string;createdAt:string;previous:unknown;next:unknown}
-export interface ScanDetail extends Scan {printedRollNumber?:string|null;printedRollStatus?:string;responses:ResponseRow[];corrections:Correction[];hasAnnotation:boolean;quality:{focus:number;registration:number}|null;results:Array<{id:string;status:string;score?:string;maximumScore?:string}>}
+export interface ScanDetail extends Scan {sourceSha256?:string;printedRollNumber?:string|null;printedRollStatus?:string;responses:ResponseRow[];corrections:Correction[];hasAnnotation:boolean;quality:{focus:number;registration:number}|null;results:Array<{id:string;status:string;score?:string;maximumScore?:string}>}
 export interface Result {id:string;sourceScanId:string;status:string;score:string|number;maximumScore:string|number;student:{fullName:string;rollNumber:string|null;applicationNo:string};publications:Array<{id:string;action:string;reason:string;createdAt:string}>}
 export interface Page<T> {items:T[];total:number;page:number;pageSize:number}
 export interface Stats {scans:Array<{status:string;_count:number}>;results:Array<{status:string;_count:number}>;batches:number;officialRecognitionEnabled:boolean;offlineCaptureEnabled:boolean}
@@ -14,7 +14,7 @@ export interface Batch {id:string;status:string;source?:string;errorCode?:string
 export interface Review {examConfirmed?:true;reason:string;answers?:Array<{question:number;answer:Answer}>;paperVersion?:Option;identityLookup?:string;printedRollNumber?:string;identityConfirmed?:true}
 export type Transport=<T>(path:string,options?:RequestInit)=>Promise<T>;
 export class OmrClient {
-  constructor(readonly request:Transport,readonly image:(scanId:string,kind:'original'|'annotation')=>Promise<Blob>) {}
+  constructor(readonly request:Transport,readonly image:(scanId:string,kind:'original'|'annotation'|'identity-detail',captureId?:string)=>Promise<Blob>) {}
   exams=()=>this.request<Exam[]>('/api/omr/exams');
   groups=()=>this.request<Array<{group:string;count:number}>>('/api/omr/groups');
   createExam=(body:unknown)=>this.request<Exam>('/api/omr/exams',{method:'POST',body:JSON.stringify(body)});
@@ -30,6 +30,7 @@ export class OmrClient {
   batch=(id:string)=>this.request<Batch>(`/api/omr/batches/${encodeURIComponent(id)}`);
   scans=(id:string,page=1,status='',search='')=>this.request<Page<Scan>>(`/api/omr/exams/${encodeURIComponent(id)}/scans?${new URLSearchParams({page:String(page),...(status?{status}:{}),...(search?{search}:{})})}`);
   scan=(id:string)=>this.request<ScanDetail>(`/api/omr/scans/${encodeURIComponent(id)}`);
+  identityCapture=(id:string,originalSha256:string,file:File)=>this.request<{id:string;status:string;qrDecoded:boolean;rosterMatched:boolean;originalMatched:boolean;rollCandidate:string|null;canPrefill:boolean;identityVerified:false}>(`/api/omr/scans/${encodeURIComponent(id)}/identity-captures?${new URLSearchParams({originalSha256})}`,{method:'POST',headers:{'Content-Type':file.type},body:file});
   review=(id:string,body:Review)=>this.request(`/api/omr/scans/${encodeURIComponent(id)}/review`,{method:'PATCH',body:JSON.stringify(body)});
   decide=(id:string,approve:boolean,reason:string)=>this.request(`/api/omr/scans/${encodeURIComponent(id)}/${approve?'approve':'reject'}`,{method:'POST',body:JSON.stringify({reason})});
   retry=(id:string)=>this.request(`/api/omr/scans/${encodeURIComponent(id)}/retry`,{method:'POST'});

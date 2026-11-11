@@ -6,7 +6,7 @@ import subprocess
 import numpy as np
 import cv2
 import importlib.util
-from printed_identity import canonical_roll, reconcile_reads, verify_ocr_models, read_printed_roll, recognize_crop
+from printed_identity import canonical_roll, reconcile_reads, reconcile_fallback, verify_ocr_models, read_printed_roll, recognize_crop, ENGLISH_MODEL
 
 class PrintedIdentityTests(unittest.TestCase):
     def test_complete_roll_and_synthetic_fixture_only(self):
@@ -21,6 +21,12 @@ class PrintedIdentityTests(unittest.TestCase):
         self.assertIsNone(reconcile_reads([good,[]])['value'])
         self.assertIsNone(reconcile_reads([good,[('AZMVS-2026-9875',.1)]])['value'])
         self.assertIsNone(reconcile_reads([[('AZMVS-2026-9876',.89)]]*2)['value'])
+
+    def test_fallback_recovers_absent_text_but_never_votes_away_a_conflict(self):
+        good=[('AZMVS-2026-9876',.95)]
+        self.assertEqual(reconcile_fallback([[],[]],[good,good])['value'],'AZMVS-2026-9876')
+        self.assertIsNone(reconcile_fallback([[('AZMVS-2026-9875',.1)],[]],[good,good])['value'])
+        self.assertIsNone(reconcile_fallback([[],[]],[good,[]])['value'])
 
     def test_missing_or_modified_model_fails_closed(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -42,5 +48,26 @@ class PrintedIdentityTests(unittest.TestCase):
             result=recognize_crop(crop)
             self.assertEqual(result['value'],roll)
             self.assertEqual(result['status'],'READ_UNVERIFIED')
+
+    @unittest.skipUnless(importlib.util.find_spec('rapidocr_onnxruntime') and ENGLISH_MODEL.is_file(), 'Provision the pinned English model for the fallback smoke test')
+    def test_english_fallback_reuses_detected_text_without_redetecting(self):
+        import rapidocr_onnxruntime
+        native=rapidocr_onnxruntime.RapidOCR
+        calls={'constructors':0,'detections':0}
+        def construct(*args,**kwargs):
+            engine=native(*args,**kwargs);calls['constructors']+=1
+            detect,recognize=engine.text_det,engine.text_rec
+            def counted(image):calls['detections']+=1;return detect(image)
+            def unreadable(images,*args,**kwargs):
+                results,elapsed=recognize(images,*args,**kwargs)
+                return [('UNREADABLE',score) for _,score in results],elapsed
+            engine.text_det=counted;engine.text_rec=unreadable
+            return engine
+        crop=np.full((135,590,3),255,np.uint8)
+        cv2.putText(crop,'AZMVS-2026-9876',(20,55),cv2.FONT_HERSHEY_SIMPLEX,.8,(0,0,0),2)
+        with patch('rapidocr_onnxruntime.RapidOCR',side_effect=construct):result=recognize_crop(crop)
+        self.assertEqual(result['value'],'AZMVS-2026-9876')
+        self.assertEqual(result['reader'],'ENGLISH_FALLBACK')
+        self.assertEqual(calls,{'constructors':1,'detections':2})
 
 if __name__ == '__main__':unittest.main()

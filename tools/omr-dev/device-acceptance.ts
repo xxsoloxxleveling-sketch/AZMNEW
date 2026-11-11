@@ -37,7 +37,7 @@ export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabl
   const apk=path.join(root,'tmp/omr-dev/release/azm-omr-confidence-3dc8522.apk');
   if(hash(await fs.readFile(apk))!==ACCEPTANCE_APK_SHA)throw Error('Verified current APK missing or checksum mismatch; do not install another build');
   const id=randomUUID(),folder=path.join(acceptanceRoot,id),nonce=randomBytes(32).toString('hex');
-  for(const child of ['private','observations','originals','uploads','blind-originals','independent-labels','diagnostics','revisions'])await fs.mkdir(path.join(folder,child),{recursive:true,mode:0o700});
+    for(const child of ['private','observations','originals','uploads','blind-originals','independent-labels','diagnostics','revisions','identity-details'])await fs.mkdir(path.join(folder,child),{recursive:true,mode:0o700});
   const dev=await startDevelopment({...options,privateDirectory:path.join(folder,'private'),deviceSession:{id,nonce}});
   const {prisma}=require('../../backend/src/lib/prisma.ts');let closed=false,snapshotBusy=false,snapshotJob:Promise<unknown>=Promise.resolve();
   const state={id,pid:process.pid,apiOrigin:dev.url,nonce,apk,apkSha256:ACCEPTANCE_APK_SHA,folder,scope:'DISPOSABLE_SYNTHETIC_ONLY',purpose:options.publishCurrent?'OPERATOR_DEVICE_ACCEPTANCE':'AUTOMATED_API_CHECK',createdAt:new Date().toISOString()};
@@ -72,6 +72,16 @@ export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabl
         if(!old)await fs.writeFile(target,bytes,{flag:'wx',mode:0o600});
       }
       const record={sample,sourceSha256:sha,scan,original:path.relative(folder,original),blindOriginal:path.relative(folder,blind)};
+      for(const audit of scan.corrections){
+        const detail=audit.next;
+        if(detail?.kind!=='IDENTITY_DETAIL_CAPTURE')continue;
+        if(detail.originalSha256!==sha||detail.pageIndex!==scan.pageIndex)throw Error('Identity detail is bound to a different source/page');
+        const detailBytes=await readPrivate(detail.objectKey);
+        if(hash(detailBytes)!==detail.detailSha256)throw Error('Identity detail source hash mismatch');
+        const detailExtension=detailBytes[0]===137?'png':'jpg',target=path.join(folder,'identity-details',sample+'-'+audit.id+'.'+detailExtension);
+        const old=await fs.readFile(target).catch(()=>null);if(old&&hash(old)!==detail.detailSha256)throw Error('Preserved identity detail cannot be replaced');
+        if(!old)await fs.writeFile(target,detailBytes,{flag:'wx',mode:0o600});
+      }
       const revision=hash(JSON.stringify(record));const revisionFile=path.join(folder,'revisions',sample+'-'+revision+'.json');
       await privateRevision(revisionFile,record);
       const diagnosticsPath=path.join(folder,'diagnostics',sample+'.json');let diagnostic:any=null;
@@ -101,7 +111,7 @@ export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabl
     for(const sample of evidence){
       const upload=device.deviceObserved&&deviceEvents.some((e:any)=>e.type==='UPLOAD_ACCEPTED'&&e.status===202&&e.sha256===sample.sourceSha256);
       (sample as any).physicalDeviceUploadObserved=upload;
-      sample.physicalDeviceCaptureObserved=!!upload&&deviceEvents.some((e:any)=>e.type==='CAPTURE'&&['sensor-still','video-frame'].includes(e.captureSource)&&e.sha256===sample.sourceSha256);
+      sample.physicalDeviceCaptureObserved=!!upload&&deviceEvents.some((e:any)=>e.type==='CAPTURE'&&['sensor-still','video-frame'].includes(e.captureSource)&&e.capturePurpose!=='identity-detail'&&e.sha256===sample.sourceSha256);
       (sample as any).reviewDisplayed=!!upload&&deviceEvents.some((e:any)=>e.type==='REVIEW_DISPLAYED'&&e.scanId===sample.scanId&&e.responseRows===100);
       const accepted=deviceEvents.find((e:any)=>e.type==='UPLOAD_ACCEPTED'&&e.sha256===sample.sourceSha256&&e.status===202);
       const terminal=accepted&&deviceEvents.find((e:any)=>e.type==='PROCESSING_STATUS'&&e.batchId===accepted.batchId&&['COMPLETE','FAILED'].includes(e.status)&&e.contextId===accepted.contextId&&e.monotonicMs>=accepted.monotonicMs);

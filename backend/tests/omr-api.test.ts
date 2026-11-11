@@ -9,6 +9,7 @@ import { OmrQueue } from '../src/modules/omr/queue';
 import { signAccessToken,verifyAccessToken } from '../src/lib/jwt';
 const endpoints:Array<[string,string]>=[['GET','/legacy'],['POST','/legacy/review'],['GET','/exams/exam/batches'],['POST','/exams/exam/results/approve'],['POST','/exams/exam/results/result/withdraw'],['POST','/exams/exam/results/result/reevaluate'],['GET','/groups'],['GET','/exams'],['POST','/exams'],['PUT','/exams/exam'],['POST','/exams/exam/approve'],['PUT','/exams/exam/permissions'],['GET','/exams/exam/keys'],['POST','/exams/exam/keys'],['POST','/exams/exam/keys/key/approve'],['GET','/exams/exam/stats'],['GET','/exams/exam/scans'],['GET','/exams/exam/results'],['POST','/exams/exam/batches'],['GET','/batches/batch'],['GET','/scans/scan'],['GET','/scans/scan/image'],['POST','/scans/scan/retry'],['PATCH','/scans/scan/review'],['POST','/scans/scan/approve'],['POST','/scans/scan/reject'],['POST','/exams/exam/publish']];
 const token=(id:string,role:string)=>signAccessToken({userId:id,role,email:`${id}@test.invalid`,name:'Synthetic Staff',tokenVersion:1});
+endpoints.push(['POST','/scans/scan/identity-captures?originalSha256='+ 'a'.repeat(64)],['GET','/scans/scan/identity-captures/capture/image']);
 test('all OMR endpoints require existing authentication middleware',async()=>{
   const app=express(); app.use(express.json()); app.use('/api/omr',createOmrRouter());
   const server=app.listen(0,'127.0.0.1'); await new Promise<void>(resolve=>server.once('listening',resolve));

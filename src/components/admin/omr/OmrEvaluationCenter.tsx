@@ -11,8 +11,9 @@ import { LegacyReleaseReview } from './LegacyReleaseReview';
 import { AnswerKeyManager } from './AnswerKeyManager';
 import '../../../features/omr/omr.css';
 
-const client=new OmrClient((url,options)=>apiFetch(url,options),async(id,kind)=>{
-  const request=()=>fetch(`${API_BASE_URL}/api/omr/scans/${encodeURIComponent(id)}/image?kind=${kind}`,{headers:{Authorization:`Bearer ${getToken()||''}`},cache:'no-store'});
+const client=new OmrClient((url,options)=>apiFetch(url,options),async(id,kind,captureId)=>{
+  const resource=kind==='identity-detail'?`/api/omr/scans/${encodeURIComponent(id)}/identity-captures/${encodeURIComponent(captureId||'')}/image`:`/api/omr/scans/${encodeURIComponent(id)}/image?kind=${kind}`;
+  const request=()=>fetch(`${API_BASE_URL}${resource}`,{headers:{Authorization:`Bearer ${getToken()||''}`},cache:'no-store'});
   let response=await request();if(response.status===401){await apiFetch('/api/auth/me');response=await request();}
   if(!response.ok)throw new Error(response.status===401?'Session expired; sign in again':'Private scan evidence is not available yet');
   return response.blob();

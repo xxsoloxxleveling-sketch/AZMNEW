@@ -41,7 +41,7 @@ export function createMemorySession(onExpired:()=>void,fetcher:typeof fetch=fetc
     return payload.data as T;
   };
   return {
-    client:new OmrClient(request,async(id,kind)=>{const response=await authorized(`/api/omr/scans/${encodeURIComponent(id)}/image?kind=${kind}`);if(!response.ok)throw new Error('Private scan evidence is not available');return response.blob();}),
+    client:new OmrClient(request,async(id,kind,captureId)=>{const resource=kind==='identity-detail'?`/api/omr/scans/${encodeURIComponent(id)}/identity-captures/${encodeURIComponent(captureId||'')}/image`:`/api/omr/scans/${encodeURIComponent(id)}/image?kind=${kind}`;const response=await authorized(resource);if(!response.ok)throw new Error('Private scan evidence is not available');return response.blob();}),
     async login(base:string,email:string,password:string):Promise<Staff> {
       clear();origin=apiOrigin(base);const ticket=generation;
       const response=await send('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})});

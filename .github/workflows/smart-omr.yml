@@ -33,6 +33,10 @@ jobs:
         with: {node-version: '24', cache: npm}
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
+      - uses: actions/cache@v4
+        with:
+          path: workers/omr/.models/en_PP-OCRv4_rec_mobile.onnx
+          key: omr-english-ocr-e8770c967605983d1570cdf5352041dfb68fa0c21664f49f47b155abd3e0e318
       - name: Install isolated dependencies
         run: |
           npm ci --ignore-scripts --legacy-peer-deps
@@ -41,7 +45,7 @@ jobs:
           npm ci --prefix apps/omr-mobile --ignore-scripts --legacy-peer-deps
           python -m pip install -r workers/omr/requirements.txt
           python -m pip install --no-deps -r workers/omr/requirements-ocr.txt
-          python tools/omr-dev/setup-ocr.py
+          python tools/omr-dev/setup-ocr.py --install-english
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends bubblewrap poppler-utils apparmor-profiles apparmor-utils
       - name: Verify PDF namespaces with Ubuntu's packaged bubblewrap profile
@@ -92,7 +96,7 @@ jobs:
           # Use the runner's installed Chrome/AppArmor profile; keep Chromium sandboxing enabled.
           chrome="$(command -v google-chrome || command -v chromium)"
           export OMR_CHROME_PATH="$chrome"
-          node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/integration.test.ts tools/omr-dev/queue-recovery.test.ts tools/omr-dev/reliability-flow.test.ts
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/integration.test.ts tools/omr-dev/queue-recovery.test.ts tools/omr-dev/reliability-flow.test.ts tools/omr-dev/identity-capture.test.ts
           # The physical acceptance harness test requires the privately verified APK.
           # It runs locally; CI reports its missing-artifact skip explicitly.
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/device-acceptance.test.ts

@@ -44,3 +44,16 @@ export async function runRecognition(bytes:Buffer,page?:number) {
     if(path.dirname(path.resolve(directory))===temporary && path.basename(directory).startsWith('azm-omr-')) await fs.rm(directory,{recursive:true,force:true});
   }
 }
+
+export async function runIdentityDetail(bytes:Buffer) {
+  const type=fileType(bytes);if(type.extension==='pdf')throw omrError(415,'Use an original JPEG or PNG close-up');
+  const temporary=path.resolve(os.tmpdir()),directory=await fs.mkdtemp(path.join(temporary,'azm-omr-detail-'));
+  try{
+    await fs.chmod(directory,0o700);
+    const source=path.join(directory,`detail.${type.extension}`);await fs.writeFile(source,bytes,{flag:'wx',mode:0o600});
+    const output=await new Promise<string>((resolve,reject)=>execFile(process.env.OMR_PYTHON||'python3',[path.join(workerRoot(),'identity_detail.py'),source],{timeout:25000,maxBuffer:65536,windowsHide:true,env:recognitionEnvironment()},(error,stdout)=>{
+      if(error)return reject(omrError(422,'The close-up could not be read safely; use a sharper original image'));resolve(String(stdout));
+    }));
+    return z.object({qrDecoded:z.boolean(),qrPayload:z.unknown(),printedRollNumber:z.string().max(128).nullable(),rollStatus:z.string().max(64),width:z.number().int().positive().max(20000),height:z.number().int().positive().max(20000)}).parse(JSON.parse(output));
+  }finally{if(path.dirname(path.resolve(directory))===temporary&&path.basename(directory).startsWith('azm-omr-detail-'))await fs.rm(directory,{recursive:true,force:true});}
+}

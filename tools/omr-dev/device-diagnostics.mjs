@@ -58,7 +58,7 @@ export function joinDeviceEvidence(samples,events){
   const mapped=terminal.filter(s=>s.mapped);
   const labels=mapped.map(s=>s.independentAccuracy).filter(Boolean);
   const judged=labels.reduce((n,l)=>n+l.judged,0),correct=labels.reduce((n,l)=>n+l.correct,0),acceptedJudged=labels.reduce((n,l)=>n+l.acceptedJudged,0),falseAccepted=labels.reduce((n,l)=>n+l.falseAccepted,0);
-  return {deviceObserved:!!hardware,acceptedUploadEvents:accepted.length,uniqueMatchedScans:matched.length,terminalScans:terminal.length,mapped:mapped.length,scanSuccessRate:terminal.length?mapped.length/terminal.length:null,qrDecoded:mapped.filter(s=>s.qrDecoded).length,qrDenominator:mapped.length,independentlyLabeledSheets:labels.length,judgedQuestions:judged,questionAccuracy:judged?correct/judged:null,falseAcceptanceRate:acceptedJudged?falseAccepted/acceptedJudged:null,cameraCapturesObserved:hardware?events.filter(e=>e.type==='CAPTURE'&&['sensor-still','video-frame'].includes(e.captureSource)).length:0};
+  return {deviceObserved:!!hardware,acceptedUploadEvents:accepted.length,uniqueMatchedScans:matched.length,terminalScans:terminal.length,mapped:mapped.length,scanSuccessRate:terminal.length?mapped.length/terminal.length:null,qrDecoded:mapped.filter(s=>s.qrDecoded).length,qrDenominator:mapped.length,independentlyLabeledSheets:labels.length,judgedQuestions:judged,questionAccuracy:judged?correct/judged:null,falseAcceptanceRate:acceptedJudged?falseAccepted/acceptedJudged:null,cameraCapturesObserved:hardware?events.filter(e=>e.type==='CAPTURE'&&['sensor-still','video-frame'].includes(e.captureSource)&&e.capturePurpose!=='identity-detail').length:0};
 }
 
 export function captureObserverSource(apiOrigin,sessionNonce=null){
@@ -79,21 +79,24 @@ export function captureObserverSource(apiOrigin,sessionNonce=null){
       try{const stream=await gum(constraints);const settings=stream.getVideoTracks()[0]?.getSettings();emit('CAMERA_OPENED',{permission:'granted',width:settings?.width||null,height:settings?.height||null,facingMode:settings?.facingMode||null});return stream;}
       catch(error){emit('CAMERA_PERMISSION_OR_OPEN_FAILED',{errorName:error?.name||'Error'});throw error;}
     };
+    const purpose=()=>[...document.querySelectorAll('video')].find(v=>v.srcObject)?.dataset?.omrCapturePurpose||'page';
     const native=globalThis.ImageCapture?.prototype?.takePhoto;
-    if(native)globalThis.ImageCapture.prototype.takePhoto=async function(...args){const blob=await native.apply(this,args);void meta(blob).then(data=>emit('CAPTURE',{captureSource:'sensor-still',...data}),()=>emit('CAPTURE_DIAGNOSTICS_FAILED'));return blob;};
-    const videoCanvases=new WeakSet(),draw=CanvasRenderingContext2D.prototype.drawImage,toBlob=HTMLCanvasElement.prototype.toBlob;
-    CanvasRenderingContext2D.prototype.drawImage=function(image,...args){if(image instanceof HTMLVideoElement)videoCanvases.add(this.canvas);return draw.call(this,image,...args);};
-    HTMLCanvasElement.prototype.toBlob=function(callback,...args){const fromVideo=videoCanvases.has(this);return toBlob.call(this,blob=>{if(blob&&fromVideo)void meta(blob).then(data=>emit('CAPTURE',{captureSource:'video-frame',...data}),()=>emit('CAPTURE_DIAGNOSTICS_FAILED'));callback(blob);},...args);};
+    if(native)globalThis.ImageCapture.prototype.takePhoto=async function(...args){const capturePurpose=purpose(),blob=await native.apply(this,args);void meta(blob).then(data=>emit('CAPTURE',{captureSource:'sensor-still',capturePurpose,...data}),()=>emit('CAPTURE_DIAGNOSTICS_FAILED'));return blob;};
+    const videoCanvases=new WeakMap(),draw=CanvasRenderingContext2D.prototype.drawImage,toBlob=HTMLCanvasElement.prototype.toBlob;
+    CanvasRenderingContext2D.prototype.drawImage=function(image,...args){if(image instanceof HTMLVideoElement)videoCanvases.set(this.canvas,image.dataset?.omrCapturePurpose||'page');return draw.call(this,image,...args);};
+    HTMLCanvasElement.prototype.toBlob=function(callback,...args){const fromVideo=videoCanvases.has(this);return toBlob.call(this,blob=>{if(blob&&fromVideo)void meta(blob).then(data=>emit('CAPTURE',{captureSource:'video-frame',capturePurpose:videoCanvases.get(this),...data}),()=>emit('CAPTURE_DIAGNOSTICS_FAILED'));callback(blob);},...args);};
     const fetchOriginal=globalThis.fetch.bind(globalThis);
     globalThis.fetch=async(input,init)=>{
       const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
       if(![allowed,location.origin].includes(url.origin)){emit('EXTERNAL_API_BLOCKED');throw new Error('Device acceptance connects only to its disposable local API');}
       if(url.origin===allowed&&transportToken){const headers=new Headers(input instanceof Request?input.headers:undefined);new Headers(init?.headers).forEach((value,key)=>headers.set(key,value));headers.set('X-OMR-Device-Session',transportToken);init={...init,headers};}
       const upload=url.origin===allowed&&/\/api\/omr\/exams\/[^/]+\/batches$/.test(url.pathname)&&(init?.method||'GET').toUpperCase()==='POST';
-      let evidence=null;if(upload&&init?.body instanceof Blob)evidence=await meta(init.body);
+      const detailUpload=url.origin===allowed&&/\/api\/omr\/scans\/[^/]+\/identity-captures$/.test(url.pathname)&&(init?.method||'GET').toUpperCase()==='POST';
+      let evidence=null;if((upload||detailUpload)&&init?.body instanceof Blob)evidence=await meta(init.body);
       const started=performance.now();let response;
-      try{response=await fetchOriginal(input,init);}catch(error){if(upload)emit('UPLOAD_NETWORK_FAILED',{...evidence,durationMs:Math.round(performance.now()-started)});throw error;}
+      try{response=await fetchOriginal(input,init);}catch(error){if(upload||detailUpload)emit(detailUpload?'IDENTITY_DETAIL_NETWORK_FAILED':'UPLOAD_NETWORK_FAILED',{...evidence,durationMs:Math.round(performance.now()-started)});throw error;}
       if(upload){const body=await response.clone().json().catch(()=>null);emit(response.status===202?'UPLOAD_ACCEPTED':'UPLOAD_REJECTED',{...evidence,status:response.status,batchId:body?.data?.id||null,durationMs:Math.round(performance.now()-started)});}
+      if(detailUpload){const body=await response.clone().json().catch(()=>null);emit(response.status===201?'IDENTITY_DETAIL_ACCEPTED':'IDENTITY_DETAIL_REJECTED',{...evidence,status:response.status,scanId:url.pathname.split('/')[4],qrDecoded:body?.data?.qrDecoded===true,rosterMatched:body?.data?.rosterMatched===true,durationMs:Math.round(performance.now()-started)});}
       if(url.origin===allowed&&/\/api\/omr\/batches\/[^/]+$/.test(url.pathname)&&response.ok){const body=await response.clone().json().catch(()=>null);emit('PROCESSING_STATUS',{batchId:body?.data?.id,status:body?.data?.status,processed:body?.data?.progress?.processed,total:body?.data?.progress?.total,scanStates:body?.data?.items?.map(i=>({status:i.scan?.status||i.status,errorCode:i.scan?.errorCode||i.errorCode||null}))});}
       if(url.origin===allowed&&/\/api\/omr\/scans\/[^/]+$/.test(url.pathname)&&response.ok){const body=await response.clone().json().catch(()=>null);state.reviewId=body?.data?.id||null;emit('SCAN_REVIEW_LOADED',{scanId:state.reviewId,responseRows:body?.data?.responses?.length||0,identityVerified:body?.data?.identityVerified===true,paperVersion:body?.data?.paperVersion||null,draftCount:body?.data?.results?.filter(r=>r.status==='DRAFT').length||0});}
       return response;

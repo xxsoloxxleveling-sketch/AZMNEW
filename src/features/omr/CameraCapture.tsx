@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {captureStill,resolutionGuidance} from './capture-quality';
-interface Props {onCapture:(file:File)=>void;disabled?:boolean}
-export function CameraCapture({onCapture,disabled}:Props) {
+interface Props {onCapture:(file:File)=>void;disabled?:boolean;mode?:'page'|'identity-detail'}
+export function CameraCapture({onCapture,disabled,mode='page'}:Props) {
   const video=useRef<HTMLVideoElement>(null),stream=useRef<MediaStream|null>(null),generation=useRef(0);
   const [active,setActive]=useState(false),[error,setError]=useState(''),[warning,setWarning]=useState('');
   const [online,setOnline]=useState(navigator.onLine);
@@ -55,13 +55,13 @@ export function CameraCapture({onCapture,disabled}:Props) {
     }catch(reason){if(ticket===generation.current)setError(reason instanceof Error?reason.message:'Capture failed. Try again.');}
     finally{if(ticket===generation.current)setCapturing(false);}
   }
-  return <section className="omr-camera" aria-label="OMR camera capture">
+  return <section className="omr-camera" aria-label={mode==='identity-detail'?'Identity detail camera capture':'OMR camera capture'}>
     {!online&&<p role="status">Connect to the internet before capturing. Offline image storage is disabled.</p>}
     {error&&<p role="alert" className="text-red-700">{error}</p>}
     <div className={active?'relative overflow-hidden rounded-lg bg-slate-950':'hidden'}>
-      <video ref={video} autoPlay muted playsInline className="w-full max-h-[65vh] object-contain" aria-label="Live camera preview"/>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-y-[8%] left-[22%] right-[22%] border border-white/50 rounded-sm">{['top-0 left-0 border-t-4 border-l-4','top-0 right-0 border-t-4 border-r-4','bottom-0 left-0 border-b-4 border-l-4','bottom-0 right-0 border-b-4 border-r-4'].map(position=><span key={position} className={`absolute h-6 w-6 border-white ${position}`}/>)}</div>
+      <video ref={video} autoPlay muted playsInline className="w-full max-h-[65vh] object-contain" aria-label="Live camera preview" data-omr-capture-purpose={mode}/>
+      <div aria-hidden="true" className={`pointer-events-none absolute border border-white/50 rounded-sm ${mode==='page'?'inset-y-[8%] left-[22%] right-[22%]':'inset-y-[25%] left-[8%] right-[8%]'}`}>{['top-0 left-0 border-t-4 border-l-4','top-0 right-0 border-t-4 border-r-4','bottom-0 left-0 border-b-4 border-l-4','bottom-0 right-0 border-b-4 border-r-4'].map(position=><span key={position} className={`absolute h-6 w-6 border-white ${position}`}/>)}</div>
     </div>
-    {active?<><p className="text-sm my-2">Fit the whole page and all four black corner markers inside the guide, leaving a small margin. Flatten the sheet and keep the camera parallel to it. If opposite edges converge, adjust the camera angle.</p><p className="text-sm my-2">{resolution}</p><p role="status" className="text-sm text-amber-700 min-h-5">{warning}</p><div className="flex gap-2"><button type="button" className="omr-primary" onClick={capture} disabled={disabled||!online||capturing}>{capturing?'Capturing…':'Capture sheet'}</button><button type="button" className="omr-button" onClick={stop}>Close camera</button></div><p className="text-xs text-slate-500 mt-2">Use an original full-resolution photo. The camera uses a sensor still image where supported. These framing and quality hints do not confirm recognition; the server validates each submitted sheet.</p></>:<button type="button" className="omr-button" onClick={start} disabled={disabled||!online||capturing}>Open camera</button>}
+    {active?<><p className="text-sm my-2">{mode==='identity-detail'?'Frame the QR and complete printed roll together on the same sheet. Move closer without cutting off either region; keep the camera parallel and check focus.':'Fit the whole page and all four black corner markers inside the guide, leaving a small margin. Flatten the sheet and keep the camera parallel to it. If opposite edges converge, adjust the camera angle.'}</p><p className="text-sm my-2">{resolution}</p><p role="status" className="text-sm text-amber-700 min-h-5">{warning}</p><div className="flex gap-2"><button type="button" className="omr-primary" onClick={capture} disabled={disabled||!online||capturing}>{capturing?'Capturing…':mode==='identity-detail'?'Capture identity detail':'Capture sheet'}</button><button type="button" className="omr-button" onClick={stop}>Close camera</button></div><p className="text-xs text-slate-500 mt-2">Use an original full-resolution photo. The camera uses a sensor still image where supported. These framing and quality hints do not confirm recognition; the server validates each submitted sheet.</p></>:<button type="button" className="omr-button" onClick={start} disabled={disabled||!online||capturing}>Open camera</button>}
   </section>;
 }

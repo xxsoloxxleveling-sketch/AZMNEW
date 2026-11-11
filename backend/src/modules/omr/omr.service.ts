@@ -119,7 +119,7 @@ export class OmrService {
     const scan=await this.db.omrScan.findUnique({where:{id},include:{responses:{orderBy:{question:'asc'}},student:{select:{id:true,fullName:true,rollNumber:true,applicationNo:true}},corrections:{orderBy:{createdAt:'asc'}},results:{select:{id:true,status:true,score:true,maximumScore:true,answerKeyId:true}}}});
     if(!scan) throw omrError(404,'Scan not found'); await requireExam(this.db,actor,scan.examId);
     const {rawDetection,originalObjectKey,annotationObjectKey,fileHash,lockedBy,...safe}=scan;
-    return {...safe,results:actor.role==='TEACHER'?safe.results.map(result=>({id:result.id,status:result.status})):safe.results,printedRollNumber:typeof (rawDetection as Prisma.JsonObject|null)?.printedRollNumber==='string'?(rawDetection as Prisma.JsonObject).printedRollNumber:null,printedRollStatus:((rawDetection as Prisma.JsonObject|null)?.printedRollDiagnostics as Prisma.JsonObject|null)?.status||'NOT_READ',quality:(rawDetection as Prisma.JsonObject|null)?.quality||null,hasAnnotation:!!annotationObjectKey};
+    return {...safe,sourceSha256:fileHash,results:actor.role==='TEACHER'?safe.results.map(result=>({id:result.id,status:result.status})):safe.results,printedRollNumber:typeof (rawDetection as Prisma.JsonObject|null)?.printedRollNumber==='string'?(rawDetection as Prisma.JsonObject).printedRollNumber:null,printedRollStatus:((rawDetection as Prisma.JsonObject|null)?.printedRollDiagnostics as Prisma.JsonObject|null)?.status||'NOT_READ',quality:(rawDetection as Prisma.JsonObject|null)?.quality||null,hasAnnotation:!!annotationObjectKey};
   }
   async stats(actor:OmrActor,examId:string) {
     await requireExam(this.db,actor,examId);

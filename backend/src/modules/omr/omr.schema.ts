@@ -35,6 +35,6 @@ export const workerOutput = z.object({
   responses: z.array(z.object({ question: z.number().int().min(1).max(100), answer: response, darkness: z.array(z.number().min(0).max(1)).length(4), reviewRequired: z.boolean(),rawDarkness:z.array(z.number().min(0).max(1)).length(4).optional(),paperReference:z.array(z.number().min(0).max(255)).length(4).optional(),measurementMethod:z.literal('LOCAL_PAPER_P90_V1').optional(),outlineSupport:z.array(z.number().min(0).max(1)).length(4).optional(),reason:z.string().max(64).optional() })).length(100).optional(),
   examConfirmed:z.literal(true).optional(),
   printedRollNumber: z.string().max(128).nullable().optional(),
-  printedRollDiagnostics:z.object({status:z.string().max(64),attempts:z.number().int().min(0).max(8).optional()}).optional(),
+  printedRollDiagnostics:z.object({status:z.string().max(64),attempts:z.number().int().min(0).max(8).optional(),reader:z.enum(['BASE','ENGLISH_FALLBACK']).optional(),modelSha256:z.string().regex(/^[a-f0-9]{64}$/).optional()}).optional(),
   quality: z.object({ registration: z.number().min(0).max(1), focus: z.number().nonnegative() }).optional(),
 }).strip();

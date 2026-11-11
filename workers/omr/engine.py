@@ -19,13 +19,13 @@ class InvalidScan(ValueError):
         super().__init__(reason)
         self.diagnostics=diagnostics
 
-def load_image(path):
+def load_image(path, minimum_side=600):
     with open(path, 'rb') as stream:
         data = stream.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES or not (data.startswith(b'\x89PNG\r\n\x1a\n') or data.startswith(b'\xff\xd8\xff')):
         raise InvalidScan('unsupported_or_oversized_image')
     image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
-    if image is None or min(image.shape[:2]) < 600 or image.shape[0] * image.shape[1] > 20000000:
+    if image is None or min(image.shape[:2]) < minimum_side or image.shape[0] * image.shape[1] > 20000000:
         raise InvalidScan('invalid_dimensions')
     return image
 
