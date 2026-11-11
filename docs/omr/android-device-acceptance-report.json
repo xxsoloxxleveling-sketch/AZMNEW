@@ -22,7 +22,7 @@
   },
   "localAutomatedChecks": {
     "retainedFeatureTestsPassed": 48,
-    "deviceDiagnosticsAndBrowserSimulationPassed": 10,
+    "deviceDiagnosticsAndBrowserSimulationPassed": 11,
     "pythonHelpersPassed": 10,
     "apiRecoveryAndAcceptancePassed": 7,
     "physicalDeviceEvidence": false
@@ -116,5 +116,25 @@
     "reviewDisplayed": true,
     "postMitigationObservedSeconds": 300,
     "guardFailureObserved": false
+  },
+  "reviewRetryInvestigation": {
+    "date": "2026-11-11",
+    "backendStillAttestedAfterFiveHours": true,
+    "usbUnauthorizedObserved": true,
+    "guardedResumeObserved": true,
+    "unsavedReviewPreservedPrivately": true,
+    "identityRetryHttpStatus": 409,
+    "answersOnlyRetryHttpStatus": 200,
+    "correctionAudits": 70,
+    "identityVerified": false,
+    "privateDrafts": 0,
+    "rawUncertainUnchanged": 69,
+    "uncertainWithExactlyOneStrongMark": 69,
+    "multipleMarkRows": 1,
+    "independentLabels": 0,
+    "printedRollAvailable": false,
+    "tesseractOnWorkerPath": false,
+    "staleNetworkBannerClearedByReopeningSavedReview": true,
+    "staleBannerUiDefectUnfixedInInstalledApk": true
   }
 }

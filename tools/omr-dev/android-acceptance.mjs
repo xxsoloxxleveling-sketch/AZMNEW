@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {attestSession,captureObserverSource,signDeviceEvent,privateSessionDirectory,waitForOmrWebView} from './device-diagnostics.mjs';
+import {attestSession,captureObserverSource,signDeviceEvent,privateSessionDirectory,waitForOmrWebView,verifiedDeviceEvents,assertResumableDeviceContext} from './device-diagnostics.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const expected='0c92215362bd2966589036459f100e0679c5a66616b3ef2fbede948dbdae3095';
 const apk=path.join(root,'tmp/omr-dev/release/azm-omr-reliability-965c4ff.apk');
@@ -24,6 +24,8 @@ const serial=devices[0][0],device=async(...args)=>run('-s',serial,...args);
 const state=JSON.parse(await fs.readFile(path.join(output,'current-session.json'),'utf8'));
 privateSessionDirectory(state,output);
 const origin=await attestSession(state),port=new URL(origin).port;
+const resume=process.argv.includes('--resume');
+if(resume&&process.argv.includes('--install'))throw Error('Resume cannot reinstall or restart an app containing unsaved review');
 if(process.argv.includes('--install'))await device('install','-r',apk);
 const packagePath=(await device('shell','pm','path','--user','0','com.azmaio.omr')).split(/\r?\n/).find(x=>x.startsWith('package:'))?.slice(8);
 if(!packagePath||!/^\/data\/app\/[A-Za-z0-9_./=+~-]+\/base\.apk$/.test(packagePath))throw Error('OMR APK is not installed under Android user 0; use --connect --install');
@@ -31,8 +33,10 @@ if(!(await device('shell','sha256sum',packagePath)).startsWith(expected+' '))thr
 await device('reverse','tcp:'+port,'tcp:'+port);
 // The app stores credentials/API settings only in memory. Start a clean test
 // process so an earlier in-memory server choice cannot precede interception.
-await device('shell','am','force-stop','com.azmaio.omr');
-await device('shell','am','start','--user','0','-n','com.azmaio.omr/.MainActivity');
+if(!resume){
+ await device('shell','am','force-stop','com.azmaio.omr');
+ await device('shell','am','start','--user','0','-n','com.azmaio.omr/.MainActivity');
+}
 const model=await device('shell','getprop','ro.product.model'),android=await device('shell','getprop','ro.build.version.release');
 const pid=await device('shell','pidof','com.azmaio.omr');if(!/^\d+$/.test(pid))throw Error('Could not identify the OMR app process');
 await device('forward','tcp:9223','localabstract:webview_devtools_remote_'+pid);
@@ -60,17 +64,24 @@ const append=async event=>fs.appendFile(path.join(state.folder,'device-events.js
 const source=captureObserverSource(origin,state.nonce);
 try{
  await call('Page.enable');await call('Runtime.enable');
+ if(resume){
+  const events=verifiedDeviceEvents((await fs.readFile(path.join(state.folder,'device-events.jsonl'),'utf8')).split(/\r?\n/),state.nonce,state.id);
+  const context=await evaluate('globalThis.__azmDeviceAcceptance ? ({apiOrigin:globalThis.__azmDeviceAcceptance.apiOrigin,contextId:globalThis.__azmDeviceAcceptance.contextId}) : null');
+  assertResumableDeviceContext(context,origin,events);
+ }
  // Browser-level interception also covers XHR/navigation, not just app fetch.
  await call('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'}]});
  await call('Page.addScriptToEvaluateOnNewDocument',{source});await evaluate(source);
  // App session clients capture fetch at initialization. Reload after registering
  // the preload so the private transport wrapper exists before those clients.
+ if(!resume){
  await call('Page.reload',{ignoreCache:false});
  const readyDeadline=Date.now()+10000;let appReady=false;
  while(Date.now()<readyDeadline){try{appReady=await evaluate('!!globalThis.__azmDeviceAcceptance && !!document.querySelector("input[type=email]")');if(appReady)break;}catch{}await new Promise(resolve=>setTimeout(resolve,250));}
  if(!appReady)throw Error('The OMR sign-in screen did not initialize with acceptance transport enabled');
+ }
  await append({type:'DEVICE_ATTESTED',at:new Date().toISOString(),physicalAndroid:true,serialSha256:sha(serial),model,android,apkSha256:expected,backendAttested:true,networkRestrictedTo:origin});
- console.log('Verified Android app connected to disposable session. Model:',model,'Android:',android);console.log('App API server:',origin);console.log('Use admin@omr.test / Synthetic-Omr-Only-2026!; keep USB connected. Diagnostic observer is active; Ctrl+C stops it.');
+ console.log('Verified Android app connected to disposable session. Model:',model,'Android:',android);console.log('App API server:',origin);console.log('Use the disposable synthetic credentials supplied by the operator; keep USB connected. Diagnostic observer is active; Ctrl+C stops it.');
  let polling=false,lastReview='';const timer=setInterval(()=>{
   if(polling||closed)return;polling=true;
   void (async()=>{

@@ -47,6 +47,9 @@ export function verifiedDeviceEvents(lines,nonce,sessionId){
     return item.event;
   });
 }
+export function assertResumableDeviceContext(observed,origin,events){
+  if(!observed||observed.apiOrigin!==localAcceptanceOrigin(origin)||!observed.contextId||!events.some(e=>e.contextId===observed.contextId))throw Error('Cannot resume an unverified or different app context; keep unsaved review open and reconnect its original session');
+}
 export function joinDeviceEvidence(samples,events){
   const hardware=events.find(e=>e.type==='DEVICE_ATTESTED'&&e.physicalAndroid===true);
   const accepted=hardware?events.filter(e=>e.type==='UPLOAD_ACCEPTED'&&e.sessionId===hardware.sessionId&&e.status===202):[];

@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {localAcceptanceOrigin,attestSession,signDeviceEvent,verifiedDeviceEvents,joinDeviceEvidence,captureObserverSource,validateRetakeNote,privateSessionDirectory,waitForOmrWebView} from './device-diagnostics.mjs';
 import path from 'node:path';
+import {assertResumableDeviceContext} from './device-diagnostics.mjs';
+test('USB review resume requires an original signed context and matching local backend',()=>{
+ const origin='http://127.0.0.1:5055',context={apiOrigin:origin,contextId:'original-context'},events=[{contextId:'original-context'}];
+ assert.doesNotThrow(()=>assertResumableDeviceContext(context,origin,events));
+ for(const candidate of [null,{...context,contextId:'different'},{...context,apiOrigin:'https://example.test'}])assert.throws(()=>assertResumableDeviceContext(candidate,origin,events));
+ assert.throws(()=>assertResumableDeviceContext(context,origin,[]));
+});
 test('device diagnostics refuse production, LAN and credential-bearing API origins',()=>{
  assert.equal(localAcceptanceOrigin('http://127.0.0.1:5055'),'http://127.0.0.1:5055');
  for(const url of ['https://azmaio.com','http://192.168.1.1:5055','http://u:p@127.0.0.1:5055','http://127.0.0.1:5055/api','http://localhost:5055'])assert.throws(()=>localAcceptanceOrigin(url));
