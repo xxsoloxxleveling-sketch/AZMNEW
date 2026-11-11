@@ -40,6 +40,8 @@ jobs:
           npm ci --prefix tools/omr-dev --ignore-scripts --legacy-peer-deps
           npm ci --prefix apps/omr-mobile --ignore-scripts --legacy-peer-deps
           python -m pip install -r workers/omr/requirements.txt
+          python -m pip install --no-deps -r workers/omr/requirements-ocr.txt
+          python tools/omr-dev/setup-ocr.py
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends bubblewrap poppler-utils apparmor-profiles apparmor-utils
       - name: Verify PDF namespaces with Ubuntu's packaged bubblewrap profile
@@ -79,7 +81,7 @@ jobs:
           python -m unittest discover -s workers/omr -v
           python -m unittest discover -s tools/omr-dev -p 'test_*.py' -v
           node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-scoring.test.ts backend/tests/omr-database.test.ts backend/tests/omr-migration-recovery.test.ts backend/tests/omr-api.test.ts backend/tests/omr-security.test.ts backend/tests/omr-public-results.test.ts backend/tests/postgres-binaries.test.ts tools/omr-dev/mobile-session.test.ts tools/omr-dev/answer-key-import.test.ts tools/omr-dev/capture-quality.test.ts
-          node --test tools/omr-dev/device-diagnostics.test.mjs tools/omr-dev/device-observer.test.mjs
+          node --test tools/omr-dev/device-diagnostics.test.mjs tools/omr-dev/device-observer.test.mjs tools/omr-dev/mobile-review-browser.test.mjs
       - name: Native PostgreSQL 17 full history, grants and concurrent claims
         id: native
         run: |

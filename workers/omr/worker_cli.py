@@ -5,7 +5,7 @@ from pathlib import Path
 import cv2
 from engine import InvalidScan, load_image, recognize, annotate
 from pdf_input import inspect_pdf, render_pdf
-from printed_identity import printed_roll
+from printed_identity import read_printed_roll
 
 parser=argparse.ArgumentParser()
 parser.add_argument('source')
@@ -25,7 +25,9 @@ try:
         image=render_pdf(source,args.page) if is_pdf else source
         profile=json.loads(Path(__file__).with_name('template-v2.json').read_text())
         result,normalized=recognize(load_image(image),profile)
-        result['printedRollNumber']=printed_roll(normalized)
+        roll=read_printed_roll(normalized)
+        result['printedRollNumber']=roll.pop('value')
+        result['printedRollDiagnostics']=roll
         if args.annotation:
             ok,encoded=cv2.imencode('.png',annotate(normalized,result,profile))
             if not ok: raise InvalidScan('annotation_failed')

@@ -6,7 +6,7 @@ export interface Candidate {id:string;fullName:string;applicationNo:string;rollN
 export interface Scan {id:string;status:string;paperVersion:Option|null;templateVersion?:string|null;identityVerified:boolean;errorCode:string|null;createdAt:string;student:Candidate|null}
 export interface ResponseRow {question:number;detectedAnswer:Answer;reviewedAnswer:Answer|null;evidence:{darkness?:number[];reviewRequired?:boolean}}
 export interface Correction {id:string;question:number|null;reason:string;createdAt:string;previous:unknown;next:unknown}
-export interface ScanDetail extends Scan {responses:ResponseRow[];corrections:Correction[];hasAnnotation:boolean;quality:{focus:number;registration:number}|null;results:Array<{id:string;status:string;score?:string;maximumScore?:string}>}
+export interface ScanDetail extends Scan {printedRollNumber?:string|null;printedRollStatus?:string;responses:ResponseRow[];corrections:Correction[];hasAnnotation:boolean;quality:{focus:number;registration:number}|null;results:Array<{id:string;status:string;score?:string;maximumScore?:string}>}
 export interface Result {id:string;sourceScanId:string;status:string;score:string|number;maximumScore:string|number;student:{fullName:string;rollNumber:string|null;applicationNo:string};publications:Array<{id:string;action:string;reason:string;createdAt:string}>}
 export interface Page<T> {items:T[];total:number;page:number;pageSize:number}
 export interface Stats {scans:Array<{status:string;_count:number}>;results:Array<{status:string;_count:number}>;batches:number;officialRecognitionEnabled:boolean;offlineCaptureEnabled:boolean}

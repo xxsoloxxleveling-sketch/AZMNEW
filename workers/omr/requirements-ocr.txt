@@ -1,0 +1,14 @@
+# Install base requirements first, then: pip install --no-deps -r requirements-ocr.txt
+# Complete optional runtime closure; reuses the existing pinned headless OpenCV/Numpy.
+rapidocr-onnxruntime==1.4.4
+onnxruntime==1.31.1
+Pillow==13.0.0
+PyYAML==6.0.3
+pyclipper==1.4.0
+Shapely==2.2.0
+six==1.17.0
+tqdm==4.70.1
+flatbuffers==25.12.19
+packaging==26.3
+protobuf==7.36.2
+colorama==0.4.6; sys_platform == "win32"

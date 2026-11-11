@@ -26,7 +26,7 @@ test('mobile reports network failure and refresh rejection without retaining a u
     return String(input).endsWith('/login')?reply(loginData):reply(null,401);
   });
   await session.login('https://example.test','staff','password');offline=true;
-  await assert.rejects(session.client.exams(),/Network/);offline=false;
+  await assert.rejects(session.client.exams(),/Cannot reach the server/);offline=false;
   await assert.rejects(session.client.exams(),/expired/);assert.equal(expired,1);
 });
 test('logout prevents a late refresh from restoring credentials',async()=>{
@@ -43,4 +43,15 @@ test('logout prevents a late refresh from restoring credentials',async()=>{
   await waiting;session.logout();release();await rejection;
   await assert.rejects(session.client.exams(),/expired/);
   assert.ok(!observed.includes('Bearer zombie'));
+});
+
+test('USB connection failure explains how to preserve a pending review and permits a retry',async()=>{
+ let disconnected=false;
+ const session=createMemorySession(()=>assert.fail('Network interruption must not expire credentials'),async(input)=>{
+  if(disconnected)throw new TypeError('Failed to fetch');
+  return String(input).endsWith('/login')?reply(loginData):reply([]);
+ });
+ await session.login('http://127.0.0.1:5055','staff','password');disconnected=true;
+ await assert.rejects(session.client.exams(),/Keep USB connected/);disconnected=false;
+ assert.deepEqual(await session.client.exams(),[]);
 });

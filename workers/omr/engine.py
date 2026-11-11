@@ -85,6 +85,29 @@ def measurements(gray, centers, radius):
         values.append(float(np.mean((255.0 - patch[ring].astype(np.float32)) / 255.0)))
     return values
 
+
+def paper_relative_measurements(gray, centers, radius):
+    """Use nearby unprinted paper as white, never another answer as a reference.
+
+    A bright percentile resists nearby outlines without treating a dark erasure as
+    paper. This corrects photometry; the original blank/filled thresholds remain.
+    """
+    r = int(math.ceil(1.65*radius))
+    yy, xx = np.ogrid[-r:r+1, -r:r+1]
+    distance = xx*xx+yy*yy
+    paper_mask = (distance >= (1.20*radius)**2) & (distance <= (1.65*radius)**2)
+    ring = (distance >= (.48*radius)**2) & (distance <= (.76*radius)**2)
+    values, references = [], []
+    for x, y in centers:
+        x, y = round(x), round(y)
+        patch = gray[y-r:y+r+1, x-r:x+r+1]
+        if patch.shape != (2*r+1, 2*r+1):
+            raise InvalidScan('bubble_outside_page')
+        white = float(np.percentile(patch[paper_mask], 90))
+        references.append(white)
+        values.append(float(np.mean(np.clip((white-patch[ring].astype(np.float32))/max(white, 1), 0, 1))))
+    return values, references
+
 def registration_score(gray, profile):
     scores = []
     radius = profile['radius']
@@ -144,9 +167,16 @@ def observations(normalized,gray,measured_profile,profile,score,offsets,version_
         raise InvalidScan('image_too_blurry')
     responses = []
     for index, centers in enumerate(measured_profile['questions']):
-        item = classify(measurements(gray, centers, profile['radius']), profile['thresholds'])
+        original = measurements(gray, centers, profile['radius'])
+        physical = measured_profile['id'] == 'AZM_FRAMED_100_LEGACY_V1'
+        values, paper = paper_relative_measurements(gray, centers, profile['radius']) if physical else (original, None)
+        item = classify(values, profile['thresholds'])
+        if physical:
+            item.update({'rawDarkness': original, 'paperReference': paper, 'measurementMethod': 'LOCAL_PAPER_P90_V1'})
         item['outlineSupport']=outline_support(gray,centers,profile['radius'])
-        if min(item['outlineSupport'])<.2:
+        if paper is not None and min(paper) < 180:
+            item.update({'answer':'UNCERTAIN','reviewRequired':True,'reason':'LOCAL_PAPER_REFERENCE_UNRELIABLE'})
+        elif min(item['outlineSupport'])<.2:
             item.update({'answer':'UNCERTAIN','reviewRequired':True,'reason':'DAMAGED_PRINT_OR_GLARE'})
         elif item['answer']=='UNCERTAIN': item['reason']='AMBIGUOUS_INK'
         elif item['answer']=='MULTIPLE': item['reason']='MULTIPLE_MARKS'

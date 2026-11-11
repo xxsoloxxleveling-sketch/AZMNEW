@@ -7,6 +7,7 @@ import '../../../src/features/omr/omr.css';
 export function App() {
   const [user,setUser]=useState<Staff|null>(null),[base,setBase]=useState((import.meta as any).env?.VITE_OMR_API_URL||'http://127.0.0.1:5055'),[email,setEmail]=useState(''),[password,setPassword]=useState('');
   const session=useMemo(()=>createMemorySession(()=>{setUser(null);setExams([]);setExamId('');setBatch(null);setHistory([]);setScanId('');setPassword('');setError('Your session expired. Sign in again.');}),[]);
+  const [pollError,setPollError]=useState('');
   const [error,setError]=useState(''),[busy,setBusy]=useState(false),[online,setOnline]=useState(navigator.onLine);
   const [exams,setExams]=useState<Exam[]>([]),[examId,setExamId]=useState(''),[view,setView]=useState<'dashboard'|'capture'|'pending'|'history'|'settings'>('dashboard');
   const [batch,setBatch]=useState<Batch|null>(null),[history,setHistory]=useState<Scan[]>([]),[page,setPage]=useState(1),[total,setTotal]=useState(0),[scanId,setScanId]=useState('');
@@ -14,7 +15,7 @@ export function App() {
   const canScan=user?.role==='SUPER_ADMIN'||!!exam?.permissions?.[0]?.canScan;
   const canReview=user?.role==='SUPER_ADMIN'||!!exam?.permissions?.[0]?.canReview;
   useEffect(()=>{const change=()=>setOnline(navigator.onLine);window.addEventListener('online',change);window.addEventListener('offline',change);return()=>{window.removeEventListener('online',change);window.removeEventListener('offline',change);session.logout();};},[session]);
-  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
+  useEffect(()=>{if(error||pollError)errorRef.current?.focus();},[error,pollError]);
   useEffect(()=>{if(!user)return;let cancelled=false;session.client.exams().then(value=>{if(!cancelled){setExams(value);setExamId(value[0]?.id||'');}},problem=>{if(!cancelled)setError(problem.message);});return()=>{cancelled=true;};},[user,session]);
   useEffect(()=>{
     if(!user||!examId||view!=='history')return;let cancelled=false;
@@ -22,8 +23,8 @@ export function App() {
     return()=>{cancelled=true;};
   },[user,examId,view,page,session]);
   useEffect(()=>{
-    if(!user||!batch||view!=='pending')return;let cancelled=false;
-    const poll=()=>session.client.batch(batch.id).then(value=>{if(!cancelled)setBatch(value);},problem=>{if(!cancelled)setError(problem.message);});
+    setPollError('');if(!user||!batch||view!=='pending')return;let cancelled=false;
+    const poll=()=>session.client.batch(batch.id).then(value=>{if(!cancelled){setBatch(value);setPollError('');}},problem=>{if(!cancelled)setPollError(problem.message);});
     void poll();const timer=setInterval(poll,3000);return()=>{cancelled=true;clearInterval(timer);};
   },[user,batch?.id,view,session]);
   async function login(event:React.FormEvent) {
@@ -35,9 +36,9 @@ export function App() {
   function logout(){session.logout();setUser(null);setExams([]);setExamId('');setBatch(null);setHistory([]);setScanId('');setPassword('');}
   return <main className="omr-workspace mx-auto max-w-3xl px-4 py-5 pb-20 min-h-screen">
     <header className="flex justify-between gap-3 items-center border-b border-slate-300 pb-4 mb-4"><div><h1 className="text-lg font-semibold text-[#185b9d]">AZM.AIO OMR</h1><p className="text-xs text-slate-500">Private examination scanning</p></div>{user&&<button className="omr-button" onClick={logout}>Sign out</button>}</header>
-    {error&&<p ref={errorRef} tabIndex={-1} role="alert" className="omr-notice omr-error mb-4">{error}</p>}
+    {(error||pollError)&&<p ref={errorRef} tabIndex={-1} role="alert" className="omr-notice omr-error mb-4">{error||pollError}</p>}
     {!user?<form onSubmit={login} className="space-y-4 max-w-md mx-auto"><h2 className="omr-heading">Staff sign-in</h2><label className="omr-field">API server<input required type="url" value={base} onChange={event=>setBase(event.target.value)} autoCapitalize="none" spellCheck={false}/></label><label className="omr-field">Staff email<input required type="email" autoComplete="username" value={email} onChange={event=>setEmail(event.target.value)}/></label><label className="omr-field">Password<input required type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)}/></label><button className="omr-primary w-full" disabled={busy||!online}>{busy?'Signing in…':'Sign in'}</button><p className="text-xs text-slate-500">Sessions stay in memory. Offline capture and image storage are disabled.</p></form>:<>
-      <div className="flex flex-wrap justify-between gap-2 text-sm mb-3"><span>{user.name} · {user.role.replaceAll('_',' ')}</span><span role="status">{online?'Connected':'Offline · capture disabled'}</span></div>
+      <div className="flex flex-wrap justify-between gap-2 text-sm mb-3"><span>{user.name} · {user.role.replaceAll('_',' ')}</span><span role="status">{online?'Network available':'Offline · capture disabled'}</span></div>
       <nav className="omr-tabs mb-4" aria-label="Scanner screens">{(['dashboard','capture','history','settings'] as const).map(screen=><button key={screen} aria-current={view===screen?'page':undefined} onClick={()=>{setError('');setView(screen);setScanId('');}}>{screen==='dashboard'?'Home':screen==='capture'?'Scan sheet':screen==='history'?'History':'Settings'}</button>)}</nav>
       {view!=='settings'&&<label className="omr-field mb-4">Examination<select value={examId} onChange={event=>{setExamId(event.target.value);setPage(1);setBatch(null);setScanId('');setHistory([]);}}><option value="">Select assigned examination</option>{exams.map(item=><option key={item.id} value={item.id}>{item.title} · {item.candidateGroup}</option>)}</select></label>}
       {view==='dashboard'&&<section className="space-y-4"><h2 className="omr-heading">Ready to scan</h2><p className="text-sm">{exam?`${exam.title} · ${exam.candidateGroup}`:'Choose an assigned examination before capturing a sheet.'}</p><button className="omr-primary w-full" disabled={!examId||!online||!canScan} onClick={()=>setView('capture')}>Scan OMR sheet</button><p className="omr-notice">Marks are saved internally after identity and answer-key checks. Public release requires separate authorization.</p>{!exams.length&&<p className="text-sm">No examinations are assigned. Ask an administrator to grant scanning access.</p>}</section>}

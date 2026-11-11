@@ -15,6 +15,7 @@ export function createMemorySession(onExpired:()=>void,fetcher:typeof fetch=fetc
     if(!path.startsWith('/api/'))throw new Error('Invalid API resource');
     const controller=new AbortController();pending.add(controller);const timer=setTimeout(()=>controller.abort(),timeout);
     try {return await fetcher(origin+path,{...options,credentials:'omit',cache:'no-store',headers:{...(!(options.body instanceof Blob)?{'Content-Type':'application/json'}:{}),...(access?{Authorization:`Bearer ${access}`} :{}),...options.headers},signal:controller.signal});}
+    catch(problem){if(controller.signal.aborted)throw new Error('Request interrupted or timed out. Keep this screen open and retry.');if(problem instanceof TypeError)throw new Error(new URL(origin).hostname==='127.0.0.1'?'Cannot reach the local test server. Keep USB connected and restore the testing connection, then retry without closing this screen.':'Cannot reach the server. Check your connection and retry without closing this screen.');throw problem;}
     finally{clearTimeout(timer);pending.delete(controller);}
   }
   async function refreshOnce() {
