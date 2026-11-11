@@ -47,3 +47,39 @@ validation are untouched, and unsupported crops still return explicit errors.
 Synthetic tests cover 1599 × 2571 acceptance, 1535-pixel rejection, max-pixel
 rejection, image validity and 100-response/marking behavior. Full physical
 OMR accuracy and QR legibility remain independently unverified.
+
+
+## Guarded frame-grid recovery and clear alignment diagnostics (November 2026)
+
+The printed four registration squares are *not* enough to recognize a sheet. The
+framed-layout worker now:
+1. Uses a stronger Hough accumulator for bubble candidates, then counts only
+   circles inside each of the four independently verified MCQ column regions.
+   Extraneous circular artwork/lettering outside those regions cannot reject a
+   fully supported 100-bubble-row layout.
+2. Requires four column headers, 25 observed row clusters per column, strict
+   row pitch, printed bottom rules, frame support, a validated page quad,
+   calibrated black-header ink and four paper-version bubbles.
+3. Allows up to six unobserved circle candidates in an otherwise verified
+   25-row column and a maximum row vertical spread of 14px (previously 9).
+   At most eight affected rows per column may be provisional.
+4. **Always converts every recovered/unstable row into UNCERTAIN with reason
+   UNVERIFIED_PRINTED_BUBBLE_GEOMETRY**. No guessed/inferred bubble can become
+   a confident A/B/C/D answer or an official grade.
+5. Still requires full optical registration, focus, QR and paper-version review;
+   physicalValidationRequired remains true and officialScoringAllowed false.
+   Missing corner squares, missing columns, 24/26 rows, fake-only markers and
+   partially damaged timing-track templates remain rejected.
+
+This corrects an over-strict global Hough count: a privately retained scanner
+photo had 911 global proposals but showed four actual printed MCQ headers and
+the expected 25-row structures. In an isolated test run the recovery produced
+100 **provisional** question readings including unresolved/uncertain evidence.
+No real-world accuracy claim follows from this monitor-photograph test; use a
+physical printed sheet to validate the registration markers, QR and marks.
+
+The mobile error string for PAGE_ALIGNMENT_FAILED is now precise: it mentions
+the full printed column-and-bubble grid, rather than falsely claiming the four
+corners themselves failed. Regression tests include synthetic extra circles,
+missing bubbles forced UNCERTAIN, missing pairs still rejected, missing
+corner/column still rejected, and the existing engine/physical-layout suite.

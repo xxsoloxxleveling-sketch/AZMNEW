@@ -6,7 +6,7 @@ const choices=new Set<Answer>(['A','B','C','D']);
 const textValue=(v:unknown)=>v===undefined||v===null?'—':String(v);
 const explanations:Record<string,string>={
  PAGE_CROPPED:'The sheet edge or an OMR registration square is missing. Retake with all four black squares visible and inspect the native crop.',
- PAGE_ALIGNMENT_FAILED:'The four printed alignment squares did not align. Flatten the sheet and capture more of the page boundary.',
+ PAGE_ALIGNMENT_FAILED:'OMR registration is incomplete. Corner squares alone are not enough: all four MCQ column headers and the printed bubble rows must be readable. Retake a physical sheet with the complete page in view, avoiding screen glare and tight crops.',
  GRID_ALIGNMENT_FAILED:'The answer grid could not be mapped. Retake a sharp original of the whole paper.',
  PRINT_LAYOUT_MISMATCH:'This paper does not match the supported OMR template. Use a compatible printed sheet.',
  WORKER_FAILED:'The isolated recognition worker failed before returning answers. Keep the original and check backend diagnostics.',

@@ -152,9 +152,11 @@ def column_grid(light, circles, header):
         rows = []
         residuals = []
         missing = 0
+        provisional_rows = []
         used = set()
         frame_hits = []
         for number in range(25):
+            missing_before_row = missing
             expected_y = row_centers[number]
             for edge in (x, x+w-1):
                 patch = light[round(expected_y)-2:round(expected_y)+3, max(0, edge-10):edge+11]
@@ -182,13 +184,16 @@ def column_grid(light, circles, header):
             observed = [p for p in circles if x+.36*w < p[0] < x+.78*w and abs(p[1]-expected_y) < 8]
             if len(observed) < 3 or len(observed) > 4:
                 break
-            if max(p[1] for p in row)-min(p[1] for p in row) > 9:
+            row_spread = max(p[1] for p in row)-min(p[1] for p in row)
+            if row_spread > 14:
                 break
+            if row_spread > 9 or missing > missing_before_row:
+                provisional_rows.append(number)
             if any(not 32 < row[n+1][0]-row[n][0] < 55 for n in range(3)):
                 break
             rows.append(row)
-        if len(rows) == 25 and missing <= 2 and np.mean(frame_hits) >= .94 and max(residuals, default=99) < 8:
-            matches.append((rows, {'bottom': bottom, 'pitch': pitch, 'observedRowCount':len(row_centers),'minimumObservedPitch':float(min(gaps)),'maximumObservedPitch':float(max(gaps)),'missingCircleProposals': missing, 'maximumRowResidual': max(residuals), 'frameSupport': float(np.mean(frame_hits))}))
+        if len(rows) == 25 and missing <= 6 and len(provisional_rows) <= 8 and np.mean(frame_hits) >= .94 and max(residuals, default=99) < 8:
+            matches.append((rows, {'bottom': bottom, 'pitch': pitch, 'observedRowCount':len(row_centers),'minimumObservedPitch':float(min(gaps)),'maximumObservedPitch':float(max(gaps)),'missingCircleProposals': missing, 'provisionalRowIndices': provisional_rows, 'maximumRowResidual': max(residuals), 'frameSupport': float(np.mean(frame_hits))}))
     if len(matches) != 1:
         raise LayoutFailure('physical_row_ruler_mismatch', {'header': header, 'bottomRules': [[lo+a, lo+b] for a, b in bottom_rules], 'validMappings': len(matches)})
     return matches[0]
@@ -227,20 +232,32 @@ def layout_from_quad(image, points, chosen, base):
         raise LayoutFailure('physical_timing_layout_requires_its_own_profile', diagnostic)
     bars = headers(light)
     diagnostic['headers'] = bars
-    proposed = cv2.HoughCircles(light, cv2.HOUGH_GRADIENT, 1, 29, param1=70, param2=19, minRadius=14, maxRadius=23)
-    if proposed is None or not 390 <= len(proposed[0]) <= 460:
+    # Higher accumulator threshold reduces lettering/glare decoys. Check only
+    # the four known answer columns; extra circles elsewhere are not evidence.
+    proposed = cv2.HoughCircles(light, cv2.HOUGH_GRADIENT, 1, 29, param1=70, param2=23, minRadius=14, maxRadius=23)
+    if proposed is None:
         raise LayoutFailure('physical_circle_evidence_incomplete', diagnostic)
     circles = proposed[0]
+    grid_counts = []
+    for x, y, width, height in bars:
+        top = y+height-1
+        bottom = top+25*SPEC['rowPitch'][1]+20
+        grid_counts.append(int(sum(x+.36*width < circle[0] < x+.78*width and top+10 < circle[1] < bottom for circle in circles)))
+    diagnostic['gridCircleProposals'] = grid_counts
+    if any(not 90 <= count <= 105 for count in grid_counts):
+        raise LayoutFailure('physical_circle_evidence_incomplete', diagnostic)
     measured = copy.deepcopy(base)
     measured.update({'id': SPEC['id'], 'questions': [], 'radius': SPEC['radius'], 'qrZone': [1550, 170, 1940, 650]})
     adjusted = light.copy()
     column_evidence = []
-    for header in bars:
+    provisional_questions = []
+    for column_index, header in enumerate(bars):
         try:
             rows, evidence = column_grid(light, circles, header)
         except LayoutFailure as error:
             raise LayoutFailure(str(error), {**diagnostic, **error.diagnostics})
         measured['questions'].extend(rows)
+        provisional_questions.extend(column_index*25 + row + 1 for row in evidence['provisionalRowIndices'])
         x, y, width, height = header
         ink = float(np.percentile(light[y+4:y+height-4, x+8:x+width-8], 20))
         if not 0 <= ink <= 150:
@@ -250,6 +267,8 @@ def layout_from_quad(image, points, chosen, base):
         adjusted[:, x:x+width] = np.uint8(np.clip((patch-ink)*255/(255-ink), 0, 255))
         column_evidence.append({**evidence, 'printedInkReference': ink})
     diagnostic['columns'] = column_evidence
+    measured['provisionalGeometryQuestions'] = sorted(set(provisional_questions))
+    diagnostic['provisionalGeometryQuestions'] = measured['provisionalGeometryQuestions']
     refined_count=0
     for index,row in enumerate(measured['questions']):
         next_row=[]

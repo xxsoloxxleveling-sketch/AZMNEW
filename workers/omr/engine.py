@@ -166,6 +166,7 @@ def observations(normalized,gray,measured_profile,profile,score,offsets,version_
     if focus < profile['thresholds']['focus']:
         raise InvalidScan('image_too_blurry')
     responses = []
+    unverified_geometry = set(measured_profile.get('provisionalGeometryQuestions', []))
     for index, centers in enumerate(measured_profile['questions']):
         original = measurements(gray, centers, profile['radius'])
         physical = measured_profile['id'] == 'AZM_FRAMED_100_LEGACY_V1'
@@ -180,6 +181,10 @@ def observations(normalized,gray,measured_profile,profile,score,offsets,version_
             item.update({'answer':'UNCERTAIN','reviewRequired':True,'reason':'DAMAGED_PRINT_OR_GLARE'})
         elif item['answer']=='UNCERTAIN': item['reason']='AMBIGUOUS_INK'
         elif item['answer']=='MULTIPLE': item['reason']='MULTIPLE_MARKS'
+        if index+1 in unverified_geometry:
+            # Inferred centers or excessive within-row spread must never become
+            # confident multiple-choice answers, even if the ink looks dark.
+            item.update({'answer':'UNCERTAIN','reviewRequired':True,'reason':'UNVERIFIED_PRINTED_BUBBLE_GEOMETRY'})
         item['question'] = index+1
         responses.append(item)
     version = classify(measurements(gray, measured_profile['versions'], profile['radius']), profile['thresholds'])
