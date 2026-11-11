@@ -4,6 +4,7 @@ import {Exam,Batch} from '../../../src/features/omr/contracts';
 import {scannerIsNative,captureTesterScans,listTesterScans,removeTesterScan,previewScanUrl,readTesterScan,SavedScan} from './native-scanner';
 import {Icon} from './StitchIcon';
 import {ScanEvaluation} from './ScanEvaluation';
+import {nativeScanUploadProblem,nativeScanResolutionAdvisory} from './scanner-upload-quality';
 import '../../../src/features/omr/omr.css';
 import './scanner-tester.css';
 
@@ -93,7 +94,8 @@ export function ScannerTesterApp(){
     if(!chosen||!exam||!staff||transfer)return;
     setTransfer(true);setBatchError('');
     try{
-      if(Math.min(chosen.width,chosen.height)<1600)throw Error('This '+chosen.width+' × '+chosen.height+' scan is below the minimum OMR upload resolution.');
+      const imageProblem=nativeScanUploadProblem(chosen.width,chosen.height);
+      if(imageProblem)throw Error(imageProblem);
       const file=chosen.native?await readTesterScan(chosen.native):chosen.webFile;
       if(!file)throw Error('Saved image unavailable.');
       const next=await session.client.upload(exam.id,file,'mobile');
@@ -126,7 +128,7 @@ export function ScannerTesterApp(){
         <div role="status" className="st-message">{message}</div>
         {!pages.length?<div className="st-empty"><Icon name="file" size={34}/><strong>No scanned pages yet</strong><p>Tap Start automatic scanner to begin.</p></div>:
         <><div className="st-thumbnails">{pages.map((page,i)=><button type="button" key={page.id} className={'st-thumb'+(chosen?.id===page.id?' active':'')} onClick={()=>setSelected(page.id)} aria-label={'View captured page '+(i+1)}><img src={page.uri} alt="" loading="lazy"/><span>Page {pages.length-i}</span></button>)}</div>
-        {chosen&&<div className="st-preview"><div className="st-preview-bar"><strong>Saved scanner image</strong><span>{chosen.width} × {chosen.height} px</span></div><img src={chosen.uri} alt="Selected OMR scan" className="st-preview-image"/><div className="st-meta"><span>{mb(chosen.size)}</span><span>{when(chosen.createdAt)}</span></div><div className="st-preview-actions"><button type="button" disabled={!native||scanning||pages.length>=40} onClick={()=>void startScanner()}><Icon name="scan" size={18}/> Scan another</button><button type="button" className="st-read-mcqs" onClick={()=>{setServerPanel(true);document.getElementById('omr-test-results')?.scrollIntoView({behavior:'smooth',block:'start'});}}><Icon name="review" size={17}/> View MCQs &amp; marks</button><button type="button" className="st-delete" onClick={()=>void deletePage(chosen)}><Icon name="close" size={17}/> Delete image</button></div></div>}
+        {chosen&&<div className="st-preview"><div className="st-preview-bar"><strong>Saved scanner image</strong><span>{chosen.width} × {chosen.height} px</span></div><img src={chosen.uri} alt="Selected OMR scan" className="st-preview-image"/><div className="st-meta"><span>{mb(chosen.size)}</span><span>{when(chosen.createdAt)}</span></div>{nativeScanResolutionAdvisory(chosen.width,chosen.height)&&<p role="status" className="st-message st-image-quality-note">{nativeScanResolutionAdvisory(chosen.width,chosen.height)}</p>}<div className="st-preview-actions"><button type="button" disabled={!native||scanning||pages.length>=40} onClick={()=>void startScanner()}><Icon name="scan" size={18}/> Scan another</button><button type="button" className="st-read-mcqs" onClick={()=>{setServerPanel(true);document.getElementById('omr-test-results')?.scrollIntoView({behavior:'smooth',block:'start'});}}><Icon name="review" size={17}/> View MCQs &amp; marks</button><button type="button" className="st-delete" onClick={()=>void deletePage(chosen)}><Icon name="close" size={17}/> Delete image</button></div></div>}
         </>}
       </section>
       <section className="st-api-zone" id="omr-test-results">

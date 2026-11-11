@@ -27,3 +27,23 @@ After capturing a page, select **View MCQs & marks**, sign into the isolated tes
 Backend marks are only displayed if the authorized scan-detail response includes a score and maximumScore; server-side role restrictions still apply. Without verified identity and a matching approved key, no backend mark is fabricated. Administrators can optionally paste a 100-choice key to compute a **local practice subtotal** from the actual detected choices and exam marking policy. This key never leaves React component memory, is not saved or sent, and is labelled unofficial, especially when any bubble remains unresolved. Teachers cannot invoke the local test-mark preview.
 
 The native JPEG stays safely stored even if recognition fails. The app neither publishes a result nor changes exam keys, candidate verification, or scoring permissions. These are read-only scan-report additions and optional isolated uploads; official scoring remains locked pending physical verification.
+
+
+## Native ML Kit crop below 1600 pixels (November 11, 2026)
+The native document scanner sometimes produces a JPEG with a 1599-pixel
+short side after applying its crop. The scanner-only tester previously rejected
+all photographs shorter than 1600 pixels *before uploading*, despite the isolated
+OpenCV worker accepting image input down to 600 pixels and applying independent
+printed-marker, focus and template checks. A single missing pixel was not a
+meaningful image-quality failure.
+
+The scanner tester now accepts original native crops with a short side of at
+least 1536 pixels (4% tolerance from the preferred 1600), preserving the existing
+20-megapixel limit. A visible warning marks below-preference captures as
+**submitted for inspection, not verified**. Crops below 1536 remain blocked;
+neither upscaling nor auto-correction is performed. Backend QR and geometry
+validation are untouched, and unsupported crops still return explicit errors.
+
+Synthetic tests cover 1599 × 2571 acceptance, 1535-pixel rejection, max-pixel
+rejection, image validity and 100-response/marking behavior. Full physical
+OMR accuracy and QR legibility remain independently unverified.

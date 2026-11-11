@@ -84,7 +84,7 @@ jobs:
         run: |
           python -m unittest discover -s workers/omr -v
           python -m unittest discover -s tools/omr-dev -p 'test_*.py' -v
-          node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-scoring.test.ts backend/tests/omr-database.test.ts backend/tests/omr-migration-recovery.test.ts backend/tests/omr-api.test.ts backend/tests/omr-security.test.ts backend/tests/omr-public-results.test.ts backend/tests/postgres-binaries.test.ts tools/omr-dev/mobile-session.test.ts tools/omr-dev/answer-key-import.test.ts tools/omr-dev/capture-quality.test.ts tools/omr-dev/capture-compression.test.ts tools/omr-dev/auto-page-detection.test.ts tools/omr-dev/practice-score.test.ts
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-scoring.test.ts backend/tests/omr-database.test.ts backend/tests/omr-migration-recovery.test.ts backend/tests/omr-api.test.ts backend/tests/omr-security.test.ts backend/tests/omr-public-results.test.ts backend/tests/postgres-binaries.test.ts tools/omr-dev/mobile-session.test.ts tools/omr-dev/answer-key-import.test.ts tools/omr-dev/capture-quality.test.ts tools/omr-dev/capture-compression.test.ts tools/omr-dev/auto-page-detection.test.ts tools/omr-dev/practice-score.test.ts tools/omr-dev/scanner-upload-quality.test.ts
           node --test tools/omr-dev/device-diagnostics.test.mjs tools/omr-dev/device-observer.test.mjs tools/omr-dev/scanner-tester-browser.test.mjs
       - name: Native PostgreSQL 17 full history, grants and concurrent claims
         id: native

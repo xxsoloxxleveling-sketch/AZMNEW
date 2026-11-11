@@ -44,7 +44,7 @@ test('scanner-only app previews without login; optional authenticated testing ne
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].some(b=>b.textContent.includes('Start automatic scanner'))));
   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Start automatic scanner'))?.disabled),true,'Native capture unavailable in browser');
   await page.evaluate(async()=>{
-   const c=document.createElement('canvas');c.width=1800;c.height=2400;const ctx=c.getContext('2d');
+   const c=document.createElement('canvas');c.width=1599;c.height=2571;const ctx=c.getContext('2d');
    ctx.fillStyle='white';ctx.fillRect(0,0,1800,2400);const blob=await new Promise(resolve=>c.toBlob(resolve,'image/jpeg',.83));
    const file=new File([blob],'fixture.jpg',{type:'image/jpeg'});
    const dt=new DataTransfer();dt.items.add(file);
@@ -53,6 +53,7 @@ test('scanner-only app previews without login; optional authenticated testing ne
   await page.waitForFunction(()=>document.body.innerText.includes('Saved scanner image'));
   assert.ok(await page.evaluate(()=>document.querySelector('img[alt="Selected OMR scan"]')?.complete));
   assert.equal(accepted,0,'Preview never silently uploads an image');
+  assert.ok(await page.evaluate(()=>document.body.innerText.includes('Native crop is slightly below the recommended 1600-pixel short side')),'1599px scanner crops should be permitted with an honest advisory');
   assert.ok(await page.evaluate(()=>document.body.innerText.includes('View MCQs & marks')));
   await page.evaluate(()=>[...document.querySelectorAll('.st-preview-actions button')].find(b=>b.textContent.includes('View MCQs'))?.click());
   await page.waitForSelector('.st-api-panel input[type=email]');
