@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {optimizeCapture,CAMERA_UPLOAD_TARGET} from '../../src/features/omr/capture-quality';
+import {optimizeCapture,CAMERA_UPLOAD_TARGET,mobileImageQuality,inspectOmrImage} from '../../src/features/omr/capture-quality';
 
 const payload=(bytes:number,type='image/jpeg')=>new Blob([new Uint8Array(bytes)],{type});
 function mockCanvas(width:number,height:number,encode:(quality:number)=>number|null) {
@@ -72,4 +72,34 @@ test('ambiguous nonimage payloads are never converted',async()=>{
   const source=payload(10*1024*1024,'application/pdf');
   const result=await optimizeCapture(source);
   assert.equal(result.blob,source);assert.equal(result.changed,false);
+});
+
+test('mobile scan preflight rejects the actual 720x1280 upload but allows 12MP camera stills',()=>{
+  assert.match(mobileImageQuality(720,1280)!,/too small/);
+  assert.match(mobileImageQuality(1280,720)!,/too small/);
+  assert.equal(mobileImageQuality(1600,2000),null);
+  assert.equal(mobileImageQuality(2880,3840),null);
+  assert.match(mobileImageQuality(6000,4000)!,/over 20 MP/);
+  assert.match(mobileImageQuality(0,4000)!,/could not be verified/);
+});
+
+test('mobile image inspection checks decoded pixels even for tiny compressed files',async()=>{
+  const fixture=mockCanvas(720,1280,()=>1000);
+  try{
+    const quality=await inspectOmrImage(payload(147903));
+    assert.equal(quality.width,720);
+    assert.equal(quality.height,1280);
+    assert.match(quality.problem!,/too small/);
+    assert.equal(fixture.stats().closed,1);
+  }finally{fixture.restore();}
+});
+
+test('mobile image inspection keeps good high-resolution originals eligible',async()=>{
+  const fixture=mockCanvas(2880,3840,()=>1024);
+  try{
+    const quality=await inspectOmrImage(payload(3*1024*1024));
+    assert.equal(quality.problem,null);
+    assert.equal(quality.width*quality.height,11059200);
+    assert.equal(fixture.stats().closed,1);
+  }finally{fixture.restore();}
 });

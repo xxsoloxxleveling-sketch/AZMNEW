@@ -67,6 +67,25 @@ export async function optimizeCapture(blob:Blob):Promise<OptimizedCapture> {
 
 export const formatMegabytes=(bytes:number)=>(bytes/MIB).toFixed(1)+' MB';
 
+export const MOBILE_MIN_SHORT_SIDE=1600;
+export interface OmrImageInspection { width:number; height:number; problem:string|null }
+/** Inspect saved image dimensions, not the camera's requested preview resolution. */
+export function mobileImageQuality(width:number,height:number):string|null {
+  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0) return 'The photo dimensions could not be verified. Retake using the camera.';
+  if(Math.min(width,height)<MOBILE_MIN_SHORT_SIDE)
+    return `Photo is only ${width} × ${height} pixels. This is too small for dependable OMR/QR recognition. Open the camera and retake the FULL sheet, or choose the original full-resolution photo (not a screenshot or messaging-app copy).`;
+  if(width*height>20_000_000)
+    return `Photo is ${width} × ${height} pixels (over 20 MP). Use the camera or export an original photo at 12–20 MP without cropping the page.`;
+  return null;
+}
+export async function inspectOmrImage(blob:Blob):Promise<OmrImageInspection> {
+  if(!['image/jpeg','image/png'].includes(blob.type))throw Error('Only JPEG and PNG page photos can be inspected.');
+  if(typeof createImageBitmap!=='function')throw Error('Image quality inspection is unavailable on this device. Try the native camera.');
+  const bitmap=await createImageBitmap(blob);
+  try {const {width,height}=bitmap;return {width,height,problem:mobileImageQuality(width,height)};}
+  finally{bitmap.close();}
+}
+
 /** Prefer the sensor's still image over a potentially low-resolution video frame. */
 export async function captureStill(track:MediaStreamTrack,fallback:()=>Promise<Blob|null>,timeoutMs=12000):Promise<Blob|null> {
   const Constructor=(globalThis as unknown as {ImageCapture?:new(track:MediaStreamTrack)=>{takePhoto:()=>Promise<Blob>}}).ImageCapture;
