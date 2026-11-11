@@ -134,7 +134,7 @@ export function StitchApp(){
    </section>}
   {page==='camera'&&<section className="azm-camera-page">
     <div className="azm-camera-instructions"><Icon name="crop" size={17}/><span>Place the entire paper inside the guide. All four corner squares must remain visible.</span></div>
-    {!exam?<div className="azm-camera-unassigned"><Icon name="warning" size={28}/><h2>No examination selected</h2><button className="azm-primary" onClick={()=>nav('exams')}>Choose examination</button></div>:!canScan?<div className="azm-camera-unassigned">Your current staff role cannot scan this examination.<button className="azm-secondary" onClick={()=>nav('exams')}>Switch examination</button></div>:<UploadPanel key={exam.id} mobile client={session.client} examId={exam.id} onAccepted={value=>{setBatch(value);setPage('pending');setReload(x=>x+1);}}/>}
+    {!exam?<div className="azm-camera-unassigned"><Icon name="warning" size={28}/><h2>No examination selected</h2><button className="azm-primary" onClick={()=>nav('exams')}>Choose examination</button></div>:!canScan?<div className="azm-camera-unassigned">Your current staff role cannot scan this examination.<button className="azm-secondary" onClick={()=>nav('exams')}>Switch examination</button></div>:<UploadPanel key={exam.id} mobile client={session.client} examId={exam.id} onAccepted={(value,stayOnCamera)=>{setBatch(value);if(!stayOnCamera)setPage('pending');setReload(x=>x+1);}}/>}
     <div className="azm-camera-footnote"><Icon name="info" size={16}/> Camera reticle is framing guidance, not a real-time sheet verification result. The server checks actual geometry and response evidence.</div>
    </section>}
   {page==='pending'&&<section className="azm-pending-page">

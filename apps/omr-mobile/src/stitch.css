@@ -237,3 +237,25 @@
 @media(min-width:660px){.azm-page-content{padding:23px 29px 30px}.azm-app-header{padding-inline:29px}.azm-summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.azm-hero{padding:28px}.azm-exam-page{max-width:670px;margin:auto}.azm-tools-grid{gap:16px}.azm-camera-page .omr-camera video{max-height:62dvh}.azm-camera-page .azm-upload{max-width:760px;margin:auto}}
 @media(max-width:380px){.azm-app-header{padding:0 12px}.azm-page-content{padding:15px 12px}.azm-brand-copy strong{font-size:15px}.azm-online{font-size:9px}.azm-header-right{gap:5px}.azm-hero h2{font-size:19px}.azm-status{font-size:9px;padding:4px 5px}.azm-exam-card{padding:13px}.azm-login-screen{padding-inline:12px}}
 @media(prefers-reduced-motion:reduce){.azm-app *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+
+/* CamScanner-style preview geometry and deliberate automatic-capture controls. */
+.azm-camera-page .omr-camera .azm-auto-corners{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;filter:drop-shadow(0 0 7px #22d3ee80)}
+.azm-camera-page .omr-camera .azm-manual-frame{position:absolute;inset:9% 17%;pointer-events:none;border:1px dashed #22d3ee77;z-index:2}
+.azm-camera-page .omr-camera .azm-manual-frame span{position:absolute;width:25px;height:25px;border:4px solid #35e0f5}
+.azm-camera-page .azm-manual-frame span:nth-child(1){top:0;left:0;border-right:0;border-bottom:0}
+.azm-camera-page .azm-manual-frame span:nth-child(2){top:0;right:0;border-left:0;border-bottom:0}
+.azm-camera-page .azm-manual-frame span:nth-child(3){bottom:0;right:0;border-left:0;border-top:0}
+.azm-camera-page .azm-manual-frame span:nth-child(4){bottom:0;left:0;border-right:0;border-top:0}
+.azm-auto-status{position:absolute;bottom:11px;left:50%;transform:translateX(-50%);min-width:180px;max-width:92%;display:flex;align-items:center;justify-content:center;gap:8px;background:#081a2ce6;backdrop-filter:blur(8px);border:1px solid #ffffff33;border-radius:30px;padding:9px 12px;font-weight:700;font-size:11px;color:white;z-index:5;text-align:center;line-height:1.35;pointer-events:none}
+.azm-auto-dot{display:inline-block;width:8px;height:8px;flex:none;border-radius:100%;background:#f59e0b;box-shadow:0 0 0 3px #fbbf2430}
+.azm-auto-dot.is-found{background:#10b981;box-shadow:0 0 0 3px #10b98135}
+.azm-camera-page .azm-camera-controls{padding:10px 15px 14px;background:#0b132b}
+.azm-autoscan-toggle{display:grid;grid-template-columns:20px minmax(0,1fr);column-gap:9px;align-items:center;padding:10px 12px;border:1px solid #375171;background:#14243d;color:#e5f2ff;border-radius:11px;margin-bottom:10px}
+.azm-autoscan-toggle input{grid-row:span 2;width:19px;height:19px;accent-color:#22d3ee}
+.azm-autoscan-toggle span{font-size:12px;font-weight:800;line-height:1.5}
+.azm-autoscan-toggle small{font-size:10px;color:#a2b6ce;line-height:1.4}
+.azm-camera-page .omr-camera .azm-camera-buttons{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}
+.azm-camera-page .omr-camera .azm-camera-buttons button{min-width:90px;flex:1;padding:9px 8px;font-size:11px!important}
+.azm-camera-page .azm-auto-upload-toggle{margin:12px 15px;background:#142c42;border-color:#246382}
+.azm-camera-page .azm-auto-upload-toggle span{font-size:11px}

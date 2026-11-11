@@ -38,3 +38,45 @@ Existing review/history/settings remain functional, rather than becoming inert s
 - No production migrations, official-key approval, student-mark changes or result publication.
 
 Remaining: install and test the rebuilt Android APK on the Samsung tablet using the disposable backend, retake a new high-resolution physical OMR photo, verify worker recognition, and independently label answers before claiming 99% accuracy.
+
+
+
+## CamScanner-style automatic capture and continuous sheet mode
+
+The camera now uses a lightweight on-device preview analyzer in
+src/features/omr/page-detection.ts to identify a bright, approximately A4-shaped
+quadrilateral against a darker surface. The polygon overlay is *a preview
+estimate*, never a substitute for the worker's printed-marker validation.
+The detector rejects near-uniform backgrounds, images with clipped page
+extents, unsupported proportions and unstable corners; it requires four
+consecutive observations and a 1.25-second stable hold before triggering the
+full-resolution photo. The original still image is used (when supported),
+then conservatively JPEG-compressed without changing normal 12 MP dimensions.
+
+Staff can toggle automatic capture, automatic upload and continuous scanning.
+Continuous mode accepts one image at a time, keeping the camera running after
+the backend acknowledges an upload. The detector only rearms after the previous
+sheet has visibly left the preview for multiple observations. This prevents
+repeated uploads from the same unmoved page. Server duplicate protection
+remains independently required. Camera/connection/permission failures retain
+explicit manual shutter, retake, gallery selection and manual upload fallbacks.
+Uploads require a signed-in authorized staff account and an assigned exam.
+There is no background/offline storing of confidential images.
+
+A preview page polygon does not imply a decoded QR, verified roll number,
+correct answer, approved answer key, high measured accuracy, or a published
+grade. All those assertions continue to come from the authenticated backend
+and auditable human review. If the desk/background is too light or the sheet
+is curled, manual capture remains available.
+
+Validation added:
+- tools/omr-dev/auto-page-detection.test.ts tests page geometry, empty/cropped
+  cases, movement resetting stability, and frame/time capture gating.
+- tools/omr-dev/auto-camera-browser.test.mjs uses an isolated synthetic
+  browser camera and API to verify exactly one upload per stable sheet,
+  no duplicate while the same page remains in view, and a second automatic
+  upload only after removing and re-presenting a page.
+- Both suites are included in GitHub Smart OMR isolated checks.
+
+Physical Samsung camera acceptance is a separate gate; never infer 99% physical
+accuracy or real QR validation from these synthetic browser tests.

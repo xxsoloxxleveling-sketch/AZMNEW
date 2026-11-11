@@ -2,9 +2,10 @@ import React,{useEffect,useRef,useState} from 'react';
 import { CameraCapture } from './CameraCapture';
 import { optimizeCapture,formatMegabytes,OptimizedCapture,inspectOmrImage,OmrImageInspection } from './capture-quality';
 import { OmrClient,Batch } from './contracts';
-export function UploadPanel({client,examId,bulk=false,mobile=false,onAccepted}:{client:OmrClient;examId:string;bulk?:boolean;mobile?:boolean;onAccepted:(batch:Batch)=>void}) {
+export function UploadPanel({client,examId,bulk=false,mobile=false,onAccepted}:{client:OmrClient;examId:string;bulk?:boolean;mobile?:boolean;onAccepted:(batch:Batch,stayOnCamera?:boolean)=>void}) {
   const [files,setFiles]=useState<File[]>([]),[preview,setPreview]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[progress,setProgress]=useState('');
-  const [online,setOnline]=useState(navigator.onLine);const input=useRef<HTMLInputElement>(null),selection=useRef(0);
+  const [online,setOnline]=useState(navigator.onLine);const input=useRef<HTMLInputElement>(null),selection=useRef(0),uploadLock=useRef(false);
+  const [autoUpload,setAutoUpload]=useState(mobile&&!bulk),[continuous,setContinuous]=useState(mobile&&!bulk);
   const [compression,setCompression]=useState<OptimizedCapture|null>(null),[preparing,setPreparing]=useState(false);
   const [inspection,setInspection]=useState<OmrImageInspection|null>(null),[inspecting,setInspecting]=useState(false);
   useEffect(()=>{let url='';const file=files[0];if(file?.type.startsWith('image/')){url=URL.createObjectURL(file);setPreview(url);}else setPreview('');return()=>{if(url)URL.revokeObjectURL(url);};},[files]);
@@ -31,8 +32,23 @@ export function UploadPanel({client,examId,bulk=false,mobile=false,onAccepted}:{
     }catch(problem){if(ticket===selection.current){setFiles(chosen);setError('Could not optimize the image; the original is retained for upload.');setProgress('');}}
     finally{if(ticket===selection.current)setPreparing(false);}
   }
+  async function submitAutomatic(file:File) {
+    if(uploadLock.current||!navigator.onLine)return;
+    uploadLock.current=true;setBusy(true);setError('');setProgress('Automatically uploading checked camera image…');
+    try{
+      const inspection=await inspectOmrImage(file);
+      if(inspection.problem)throw Error(inspection.problem);
+      if(file.size>20*1024*1024)throw Error('Image must be 20 MB or smaller');
+      const batch=await client.upload(examId,file,'mobile');
+      setProgress('Upload accepted. Server is checking the sheet.');
+      if(continuous){setFiles([]);setCompression(null);setProgress('Sheet uploaded. Remove it from view to arm the next scan.');}
+      onAccepted(batch,continuous);
+    }catch(problem){setError(problem instanceof Error?problem.message:'Auto-upload failed; original image kept for manual retry.');setProgress('Automatic upload not completed. Retry without closing this screen.');}
+    finally{uploadLock.current=false;setBusy(false);}
+  }
   async function submit() {
-    if(!online||!files.length||preparing||busy)return;
+    if(!online||!files.length||preparing||busy||uploadLock.current)return;
+    uploadLock.current=true;
     setBusy(true);setError('');const failed:File[]=[];
     try {
       for(let index=0;index<files.length;index++) {
@@ -48,10 +64,11 @@ export function UploadPanel({client,examId,bulk=false,mobile=false,onAccepted}:{
         }catch(problem){failed.push(file);setError(problem instanceof Error?problem.message:'Upload failed. The image remains in memory for retry.');}
       }
       setFiles(failed);if(input.current)input.current.value='';setProgress(failed.length?`${files.length-failed.length} queued; ${failed.length} need retry`:`${files.length} upload${files.length===1?'':'s'} queued for processing`);
-    }finally{setBusy(false);}
+    }finally{uploadLock.current=false;setBusy(false);}
   }
   return <section aria-label={bulk?'Bulk OMR upload':'Single OMR upload'} className="space-y-4 azm-upload">
-    {!bulk&&<CameraCapture disabled={busy||preparing} onCapture={(file,details)=>{selection.current++;setFiles([file]);setCompression(details);setError('');setProgress('');}}/>}
+    {!bulk&&<CameraCapture disabled={preparing} blocked={busy} continuous={continuous&&autoUpload} onCapture={(file,details,automatic)=>{selection.current++;setFiles([file]);setCompression(details);setError('');setProgress('');if(automatic&&autoUpload&&mobile){void submitAutomatic(file);}}}/>}
+    {!bulk&&mobile&&<><label className="azm-autoscan-toggle azm-auto-upload-toggle"><input type="checkbox" checked={autoUpload} onChange={event=>setAutoUpload(event.target.checked)}/><span>Upload automatically after a stable auto-capture</span><small>Secure upload to the selected exam; review and scoring remain separate</small></label><label className="azm-autoscan-toggle azm-auto-upload-toggle"><input type="checkbox" checked={continuous} disabled={!autoUpload} onChange={event=>setContinuous(event.target.checked)}/><span>Continuous scanning — no shutter tapping between sheets</span><small>After uploading, remove the old sheet from the frame before presenting the next. No official grades are published.</small></label></>}
     <label className="omr-field">{bulk?'Select images or a multi-page PDF':'Choose a captured image or PDF'}<input ref={input} type="file" accept="image/jpeg,image/png,application/pdf" multiple={bulk} disabled={busy||preparing} onChange={event=>{void chooseFiles(Array.from(event.target.files||[]));}}/></label>
     <p className="azm-upload-help">JPEG, PNG or PDF. Up to 20 MB and 25 PDF pages per file. Mobile photos must have at least 1600 pixels on the shorter side; use the original camera image. Large photos are compressed without reducing normal 12 MP resolution. PDF processing requires the isolated renderer.</p>
     {preview&&<div className="azm-preview"><div className="azm-preview-top"><strong>Scan Inspection &amp; Audit</strong><span className="azm-status azm-status-warning">Pre-upload preview</span></div><img src={preview} alt="Captured OMR preview before upload" className="max-h-[55vh] max-w-full border border-slate-300 rounded-lg"/><button type="button" className="omr-button mt-2" disabled={busy} onClick={()=>{selection.current++;setFiles([]);setCompression(null);setPreparing(false);if(input.current)input.current.value='';}}>Retake or choose again</button></div>}
