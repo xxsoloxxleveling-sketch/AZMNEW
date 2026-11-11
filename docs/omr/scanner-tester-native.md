@@ -83,3 +83,59 @@ the full printed column-and-bubble grid, rather than falsely claiming the four
 corners themselves failed. Regression tests include synthetic extra circles,
 missing bubbles forced UNCERTAIN, missing pairs still rejected, missing
 corner/column still rejected, and the existing engine/physical-layout suite.
+
+
+## High-volume second-pass recognition pilot (2026-11-11)
+
+**Do not treat a lower review count as proof of accuracy.** The current
+physical screenshot/monitor photo started with 28/100 flagged: 20 weak
+companion readings, 7 uncertain circle positions, and 1 double-marked row.
+An isolated experimental worker now remeasures printed bubble ink using
+two independent optical regions and an unprinted-paper / texture test. It
+does not consult an answer key to choose a detected response.
+
+- Only *one* very strongly filled bubble with a large margin can qualify for
+  second-pass optical confirmation. Competing bubble cores and inner-annulus
+  darkness must stay low; at least 20% of the inner pixels must provide
+  optically white paper. A flat light-gray shaded second bubble remains
+  UNCERTAIN, even with one very dark first bubble.
+- Missing high-threshold circle proposals can be recovered with a localized
+  second Hough pass only if a unique circle appears close to the independently
+  measured row position AND the circumference itself supports printed ink.
+  Unverified geometry continues to become UNCERTAIN.
+- True double marks, erased circles, false layouts, missing corners, 24/26-row
+  sheets, invalid QR, uncertain paper version, and unverified candidate identity
+  never acquire official marks through this optimization.
+- The release-integrity hash now includes bubble_evidence.py so any future
+  signed physical-acceptance evidence also covers second-pass detection logic.
+
+**Observed isolated measurements, NOT physical acceptance:**
+28 flagged on the earlier monitor photo versus 4 flagged with guarded
+second-pass processing. The remaining flags are uncertain geometry for
+questions 89, 92 and 98, and two strong marks on question 100. Fully synthetic
+camera-like and full-size paper fixtures yielded 100/100 expected A–D readings
+with zero wrong or flagged answers; deliberate faint second fills still require
+review. These tests do not establish live exam accuracy.
+
+**Pilot gate before 4,000 papers:**
+1. Collect at least 200 *physical printed* OMR sheets with independent
+   human-verified answer/blank/multiple ground truth, across actual printers,
+   pencils/pens, paper versions, camera angles, glare, folds and lighting.
+2. Report **false confident classifications** separately from question flags,
+   sheet-level manual-review rate, QR/roll/version resolution, rescans, invalid
+   pages and processing latency. Aim for zero false-confident readings in the
+   pilot and a sheet-level review rate below 1%; neither is yet achieved or
+   guaranteed on physical evidence.
+3. Re-scan a whole low-quality page where possible, instead of asking staff to
+   inspect many individual MCQs. Only verified persistent evidence may enter
+   the authorized review/scoring workflow.
+4. Load-test a realistic 4,000-page queue and recovery after interruption
+   before using production. One observed screenshot took about 14 seconds
+   through a single Python worker, so multiple processing workers or a longer
+   processing window may be necessary.
+5. Verify printed paper-version bubbles, signed student QR and identity against
+   the *actual* exam template before calculating marks. The legacy framed
+   recognition profile remains provisional; production publication is blocked.
+
+No production change, official key modification, or student-grade publication
+is authorized by this development-only recognition adjustment.

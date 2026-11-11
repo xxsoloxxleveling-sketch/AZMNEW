@@ -9,6 +9,7 @@ import numpy as np
 
 cv2.setNumThreads(1)
 from responses import classify
+from bubble_evidence import optical_evidence, verify_dominant_fill
 from qr_decode import decode_qr,original_region
 from registration import timing_tracks,register,adjusted
 OPTIONS = 'ABCD'
@@ -175,6 +176,20 @@ def observations(normalized,gray,measured_profile,profile,score,offsets,version_
         if physical:
             item.update({'rawDarkness': original, 'paperReference': paper, 'measurementMethod': 'LOCAL_PAPER_P90_V1'})
         item['outlineSupport']=outline_support(gray,centers,profile['radius'])
+        if physical and item['answer']=='UNCERTAIN' and index+1 not in unverified_geometry:
+            # Separate true double marks from outline/glare leakage. The second
+            # pass examines a center disk AND an independent inner annulus.
+            core,inner,p20,texture,spread = optical_evidence(gray, centers, profile['radius'])
+            item['coreDarkness'] = core
+            item['innerDarkness'] = inner
+            item['innerPaperQuantile20'] = p20
+            item['innerTextureStd'] = texture
+            item['innerTextureSpan'] = spread
+            dominant=verify_dominant_fill(values,core,inner,p20,texture,spread,profile['thresholds'])
+            if dominant is not None:
+                item.update({'answer':dominant,'reviewRequired':False,
+                             'reason':'DOMINANT_FILL_OPTICALLY_CONFIRMED',
+                             'measurementMethod':'LOCAL_PAPER_DUAL_CHANNEL_V2'})
         if paper is not None and min(paper) < 180:
             item.update({'answer':'UNCERTAIN','reviewRequired':True,'reason':'LOCAL_PAPER_REFERENCE_UNRELIABLE'})
         elif min(item['outlineSupport'])<.2:

@@ -5,7 +5,7 @@ import { z } from 'zod';
 export const workerRoot=()=>path.resolve(process.env.OMR_WORKER_ROOT||path.join(__dirname,'../../../../workers/omr'));
 const digest=(bytes:Buffer|string)=>createHash('sha256').update(bytes).digest('hex');
 export function recognitionHashes(root=workerRoot()) {
-  return {profileSha256:digest(Buffer.concat(['template-v2.json','template-framed-legacy-v1.json'].map(name=>fs.readFileSync(path.join(root,name))))),engineSha256:digest(Buffer.concat(['engine.py','responses.py','pdf_input.py','worker_cli.py','printed_identity.py','identity_detail.py','registration.py','physical_layout.py','qr_decode.py','requirements.txt','requirements-ocr.txt'].map(name=>fs.readFileSync(path.join(root,name)))))};
+  return {profileSha256:digest(Buffer.concat(['template-v2.json','template-framed-legacy-v1.json'].map(name=>fs.readFileSync(path.join(root,name))))),engineSha256:digest(Buffer.concat(['engine.py','bubble_evidence.py','responses.py','pdf_input.py','worker_cli.py','printed_identity.py','identity_detail.py','registration.py','physical_layout.py','qr_decode.py','requirements.txt','requirements-ocr.txt'].map(name=>fs.readFileSync(path.join(root,name)))))};
 }
 /** Operator-signed release evidence, never HTTP-controlled. Absence or any mismatch fails closed. */
 export function officialActivation() {

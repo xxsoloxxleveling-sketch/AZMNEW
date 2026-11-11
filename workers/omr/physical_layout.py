@@ -125,6 +125,46 @@ def refine_printed_circle(gray, center):
     return (matches[0],True) if len(matches)==1 else (list(center),False)
 
 
+def independent_circle_outline(light, center, radius=18.6):
+    """Support around the PRINTED circumference, not the selected ink value."""
+    h,w=light.shape
+    x,y=center
+    observations=[]
+    for angle in np.linspace(0,2*np.pi,16,endpoint=False):
+        px=round(x+radius*np.cos(angle))
+        py=round(y+radius*np.sin(angle))
+        if px<2 or py<2 or px>=w-2 or py>=h-2:
+            return 0.0
+        observations.append(bool(np.any(light[py-1:py+2,px-1:px+2]<180)))
+    return float(np.mean(observations))
+
+
+def recover_printed_circle(light, expected):
+    """Low-threshold LOCAL confirmation of a previously missed Hough circle.
+
+    A lower accumulator threshold only proposes geometry; acceptance still
+    requires one circular object near the already measured row and independent
+    circumference support. No bubble can be inserted based on darkness alone.
+    """
+    x,y=map(round,expected)
+    margin=29
+    patch=light[y-margin:y+margin+1,x-margin:x+margin+1]
+    if patch.shape!=(2*margin+1,2*margin+1):
+        return None
+    proposed=cv2.HoughCircles(patch,cv2.HOUGH_GRADIENT,1,30,
+                             param1=70,param2=17,minRadius=14,maxRadius=23)
+    if proposed is None:
+        return None
+    candidates=[]
+    for cx,cy,radius in proposed[0]:
+        center=[float(x-margin+cx),float(y-margin+cy)]
+        if (np.linalg.norm(np.asarray(center)-np.asarray(expected))<=6.5
+            and 15.0<=float(radius)<=23.0
+            and independent_circle_outline(light,center)>=.72):
+            candidates.append(center)
+    return candidates[0] if len(candidates)==1 else None
+
+
 def column_grid(light, circles, header):
     x, y, w, h = header
     top = y+h-1
@@ -153,6 +193,7 @@ def column_grid(light, circles, header):
         residuals = []
         missing = 0
         provisional_rows = []
+        recovered_rows = []
         used = set()
         frame_hits = []
         for number in range(25):
@@ -177,8 +218,14 @@ def column_grid(light, circles, header):
                     row.append([float(p[0]), float(p[1])])
                     residuals.append(abs(float(p[1])-expected_y))
                 else:
-                    missing += 1
-                    row.append([float(expected_x), float(expected_y)])
+                    recovery=recover_printed_circle(light,[float(expected_x), float(expected_y)])
+                    if recovery is not None:
+                        row.append(recovery)
+                        recovered_rows.append(number)
+                        residuals.append(abs(float(recovery[1])-expected_y))
+                    else:
+                        missing += 1
+                        row.append([float(expected_x), float(expected_y)])
             if len(row) != 4:
                 break
             observed = [p for p in circles if x+.36*w < p[0] < x+.78*w and abs(p[1]-expected_y) < 8]
@@ -193,7 +240,7 @@ def column_grid(light, circles, header):
                 break
             rows.append(row)
         if len(rows) == 25 and missing <= 6 and len(provisional_rows) <= 8 and np.mean(frame_hits) >= .94 and max(residuals, default=99) < 8:
-            matches.append((rows, {'bottom': bottom, 'pitch': pitch, 'observedRowCount':len(row_centers),'minimumObservedPitch':float(min(gaps)),'maximumObservedPitch':float(max(gaps)),'missingCircleProposals': missing, 'provisionalRowIndices': provisional_rows, 'maximumRowResidual': max(residuals), 'frameSupport': float(np.mean(frame_hits))}))
+            matches.append((rows, {'bottom': bottom, 'pitch': pitch, 'observedRowCount':len(row_centers),'minimumObservedPitch':float(min(gaps)),'maximumObservedPitch':float(max(gaps)),'missingCircleProposals': missing, 'provisionalRowIndices': provisional_rows, 'recoveredRowIndices': sorted(set(recovered_rows)), 'maximumRowResidual': max(residuals), 'frameSupport': float(np.mean(frame_hits))}))
     if len(matches) != 1:
         raise LayoutFailure('physical_row_ruler_mismatch', {'header': header, 'bottomRules': [[lo+a, lo+b] for a, b in bottom_rules], 'validMappings': len(matches)})
     return matches[0]
