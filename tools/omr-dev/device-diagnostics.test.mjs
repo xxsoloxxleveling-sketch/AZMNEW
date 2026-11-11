@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {localAcceptanceOrigin,attestSession,signDeviceEvent,verifiedDeviceEvents,joinDeviceEvidence,captureObserverSource,validateRetakeNote,privateSessionDirectory,waitForOmrWebView} from './device-diagnostics.mjs';
+import {localAcceptanceOrigin,attestSession,signDeviceEvent,verifiedDeviceEvents,joinDeviceEvidence,captureObserverSource,validateRetakeNote,privateSessionDirectory,waitForOmrWebView,physicalCaptureMatchesUpload} from './device-diagnostics.mjs';
 import path from 'node:path';
 import {assertResumableDeviceContext} from './device-diagnostics.mjs';
 test('USB review resume requires an original signed context and matching local backend',()=>{
@@ -62,4 +62,18 @@ test('device connection waits through WebView startup without accepting a differ
 test('an identity-detail camera image does not count as full-sheet camera acceptance',()=>{
  const events=[{type:'DEVICE_ATTESTED',physicalAndroid:true,sessionId:'test'},{type:'CAPTURE',captureSource:'sensor-still',capturePurpose:'identity-detail'}];
  assert.equal(joinDeviceEvidence([],events).cameraCapturesObserved,0);
+});
+
+
+test('a compressed page upload is associated only with its own actual camera capture',()=>{
+ const original='a'.repeat(64),upload='b'.repeat(64),other='c'.repeat(64);
+ const events=[
+  {type:'CAPTURE',captureSource:'sensor-still',capturePurpose:'page',sha256:original,contextId:'original-context'},
+  {type:'CAPTURE_EXPORTED',capturePurpose:'page',originalSha256:original,uploadSha256:upload,changed:true,contextId:'original-context'},
+ ];
+ assert.equal(physicalCaptureMatchesUpload(upload,events),true);
+ assert.equal(physicalCaptureMatchesUpload(other,events),false);
+ assert.equal(physicalCaptureMatchesUpload(upload,[{...events[0],capturePurpose:'identity-detail'},events[1]]),false);
+ assert.equal(physicalCaptureMatchesUpload(upload,[events[0],{...events[1],contextId:'another-context'}]),false);
+ assert.equal(physicalCaptureMatchesUpload(original,[events[0]]),true);
 });

@@ -50,6 +50,12 @@ export function verifiedDeviceEvents(lines,nonce,sessionId){
 export function assertResumableDeviceContext(observed,origin,events){
   if(!observed||observed.apiOrigin!==localAcceptanceOrigin(origin)||!observed.contextId||!events.some(e=>e.contextId===observed.contextId))throw Error('Cannot resume an unverified or different app context; keep unsaved review open and reconnect its original session');
 }
+/** A capture remains attributable after conservative on-device JPEG optimization. */
+export function physicalCaptureMatchesUpload(uploadSha,events){
+  const captured=events.filter(event=>event.type==='CAPTURE'&&['sensor-still','video-frame'].includes(event.captureSource)&&event.capturePurpose==='page'&&/^[a-f0-9]{64}$/.test(event.sha256||''));
+  if(captured.some(event=>event.sha256===uploadSha))return true;
+  return events.some(event=>event.type==='CAPTURE_EXPORTED'&&event.capturePurpose==='page'&&event.uploadSha256===uploadSha&&/^[a-f0-9]{64}$/.test(event.originalSha256||'')&&captured.some(source=>source.sha256===event.originalSha256&&source.contextId===event.contextId));
+}
 export function joinDeviceEvidence(samples,events){
   const hardware=events.find(e=>e.type==='DEVICE_ATTESTED'&&e.physicalAndroid===true);
   const accepted=hardware?events.filter(e=>e.type==='UPLOAD_ACCEPTED'&&e.sessionId===hardware.sessionId&&e.status===202):[];
@@ -69,6 +75,11 @@ export function captureObserverSource(apiOrigin,sessionNonce=null){
     if(globalThis.__azmDeviceAcceptance)return;
   const state=globalThis.__azmDeviceAcceptance={events:[],installedAt:new Date().toISOString(),apiOrigin:allowed,contextId:crypto.randomUUID(),reviewId:null,droppedEvents:0};
     const emit=(type,data={})=>{state.events.push({type,...data,contextId:state.contextId,monotonicMs:Math.round(performance.now()),at:new Date().toISOString()});if(state.events.length>2000){state.events.shift();state.droppedEvents++;}};
+    addEventListener('azm-omr-capture-exported',event=>{
+      const value=event?.detail;
+      if(value&&['page','identity-detail'].includes(value.capturePurpose)&&/^[a-f0-9]{64}$/.test(value.originalSha256||'')&&/^[a-f0-9]{64}$/.test(value.uploadSha256||'')&&Number.isSafeInteger(value.originalBytes)&&Number.isSafeInteger(value.uploadBytes)&&value.originalBytes>0&&value.uploadBytes>0&&value.originalBytes<=20*1024*1024&&value.uploadBytes<=20*1024*1024)
+        emit('CAPTURE_EXPORTED',{capturePurpose:value.capturePurpose,originalSha256:value.originalSha256,uploadSha256:value.uploadSha256,originalBytes:value.originalBytes,uploadBytes:value.uploadBytes,changed:value.changed===true});
+    });
     const meta=async blob=>{
       const sha256=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('');
       let width=null,height=null;try{const image=await createImageBitmap(blob);width=image.width;height=image.height;image.close();}catch{}

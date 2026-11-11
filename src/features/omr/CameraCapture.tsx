@@ -1,11 +1,11 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {captureStill,resolutionGuidance} from './capture-quality';
-interface Props {onCapture:(file:File)=>void;disabled?:boolean;mode?:'page'|'identity-detail'}
+import {captureStill,resolutionGuidance,optimizeCapture,OptimizedCapture} from './capture-quality';
+interface Props {onCapture:(file:File,details:OptimizedCapture)=>void;disabled?:boolean;mode?:'page'|'identity-detail'}
 export function CameraCapture({onCapture,disabled,mode='page'}:Props) {
   const video=useRef<HTMLVideoElement>(null),stream=useRef<MediaStream|null>(null),generation=useRef(0);
   const [active,setActive]=useState(false),[error,setError]=useState(''),[warning,setWarning]=useState('');
   const [online,setOnline]=useState(navigator.onLine);
-  const [capturing,setCapturing]=useState(false),[resolution,setResolution]=useState('');
+  const [capturing,setCapturing]=useState(false),[optimizing,setOptimizing]=useState(false),[resolution,setResolution]=useState('');
   const stop=()=>{generation.current++;stream.current?.getTracks().forEach(track=>track.stop());stream.current=null;if(video.current){video.current.pause();video.current.srcObject=null;}setActive(false);setCapturing(false);};
   useEffect(()=>{
     const change=()=>setOnline(navigator.onLine);window.addEventListener('online',change);window.addEventListener('offline',change);
@@ -41,7 +41,7 @@ export function CameraCapture({onCapture,disabled,mode='page'}:Props) {
   }
   async function capture() {
     const element=video.current,track=stream.current?.getVideoTracks()[0];if(!element?.videoWidth||!online||!track||capturing)return;
-    setCapturing(true);setError('');
+    setCapturing(true);setError('');setOptimizing(false);
     const ticket=generation.current;
     try {
       const blob=await captureStill(track,()=>new Promise(resolve=>{
@@ -51,9 +51,23 @@ export function CameraCapture({onCapture,disabled,mode='page'}:Props) {
       }));
       if(ticket!==generation.current)return;
       if(!blob)throw new Error('No image was captured. Try again or choose the original camera photo.');
-      onCapture(new File([blob],blob.type==='image/png'?'omr-capture.png':'omr-capture.jpg',{type:blob.type}));stop();
+      setOptimizing(true);
+      const result=mode==='page'?await optimizeCapture(blob):{blob,inputBytes:blob.size,outputBytes:blob.size,inputWidth:null,inputHeight:null,outputWidth:null,outputHeight:null,changed:false,quality:null};
+      if(ticket!==generation.current)return;
+      const uploaded=result.blob;
+      // The disposable Android device observer tracks sensor-byte → upload-byte identity.
+      // Never emit image bytes, identifiers, keys, or credentials in diagnostics.
+      if((globalThis as typeof globalThis & {__azmDeviceAcceptance?:unknown}).__azmDeviceAcceptance&&crypto?.subtle){
+        try{
+          const sha=async(value:Blob)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await value.arrayBuffer()))).map(byte=>byte.toString(16).padStart(2,'0')).join('');
+          const originalSha256=await sha(blob),uploadSha256=uploaded===blob?originalSha256:await sha(uploaded);
+          if(ticket!==generation.current)return;
+          window.dispatchEvent(new CustomEvent('azm-omr-capture-exported',{detail:{capturePurpose:mode,originalSha256,uploadSha256,originalBytes:blob.size,uploadBytes:uploaded.size,changed:result.changed}}));
+        }catch{/* Diagnostic hashing must never prevent a legitimate camera capture. */}
+      }
+      onCapture(new File([uploaded],uploaded.type==='image/png'?'omr-capture.png':'omr-capture.jpg',{type:uploaded.type}),result);stop();
     }catch(reason){if(ticket===generation.current)setError(reason instanceof Error?reason.message:'Capture failed. Try again.');}
-    finally{if(ticket===generation.current)setCapturing(false);}
+    finally{if(ticket===generation.current){setCapturing(false);setOptimizing(false);}}
   }
   return <section className="omr-camera" aria-label={mode==='identity-detail'?'Identity detail camera capture':'OMR camera capture'}>
     {!online&&<p role="status">Connect to the internet before capturing. Offline image storage is disabled.</p>}
@@ -62,6 +76,6 @@ export function CameraCapture({onCapture,disabled,mode='page'}:Props) {
       <video ref={video} autoPlay muted playsInline className="w-full max-h-[65vh] object-contain" aria-label="Live camera preview" data-omr-capture-purpose={mode}/>
       <div aria-hidden="true" className={`pointer-events-none absolute border border-white/50 rounded-sm ${mode==='page'?'inset-y-[8%] left-[22%] right-[22%]':'inset-y-[25%] left-[8%] right-[8%]'}`}>{['top-0 left-0 border-t-4 border-l-4','top-0 right-0 border-t-4 border-r-4','bottom-0 left-0 border-b-4 border-l-4','bottom-0 right-0 border-b-4 border-r-4'].map(position=><span key={position} className={`absolute h-6 w-6 border-white ${position}`}/>)}</div>
     </div>
-    {active?<><p className="text-sm my-2">{mode==='identity-detail'?'Frame the QR and complete printed roll together on the same sheet. Move closer without cutting off either region; keep the camera parallel and check focus.':'Fit the whole page and all four black corner markers inside the guide, leaving a small margin. Flatten the sheet and keep the camera parallel to it. If opposite edges converge, adjust the camera angle.'}</p><p className="text-sm my-2">{resolution}</p><p role="status" className="text-sm text-amber-700 min-h-5">{warning}</p><div className="flex gap-2"><button type="button" className="omr-primary" onClick={capture} disabled={disabled||!online||capturing}>{capturing?'Capturing…':mode==='identity-detail'?'Capture identity detail':'Capture sheet'}</button><button type="button" className="omr-button" onClick={stop}>Close camera</button></div><p className="text-xs text-slate-500 mt-2">Use an original full-resolution photo. The camera uses a sensor still image where supported. These framing and quality hints do not confirm recognition; the server validates each submitted sheet.</p></>:<button type="button" className="omr-button" onClick={start} disabled={disabled||!online||capturing}>Open camera</button>}
+    {active?<><p className="text-sm my-2">{mode==='identity-detail'?'Frame the QR and complete printed roll together on the same sheet. Move closer without cutting off either region; keep the camera parallel and check focus.':'Fit the whole page and all four black corner markers inside the guide, leaving a small margin. Flatten the sheet and keep the camera parallel to it. If opposite edges converge, adjust the camera angle.'}</p><p className="text-sm my-2">{resolution}</p><p role="status" className="text-sm text-amber-700 min-h-5">{warning}</p><div className="flex gap-2"><button type="button" className="omr-primary" onClick={capture} disabled={disabled||!online||capturing}>{optimizing?'Optimizing photo…':capturing?'Capturing…':mode==='identity-detail'?'Capture identity detail':'Capture sheet'}</button><button type="button" className="omr-button" onClick={stop}>Close camera</button></div><p className="text-xs text-slate-500 mt-2">The camera prefers full-resolution sensor stills. Large page images are carefully JPEG-compressed before upload to save data while preserving small QR and bubble detail. If optimization fails, the original is retained. The server verifies every scan.</p></>:<button type="button" className="omr-button" onClick={start} disabled={disabled||!online||capturing}>Open camera</button>}
   </section>;
 }

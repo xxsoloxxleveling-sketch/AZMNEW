@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {startDevelopment} from './start';
-import {verifiedDeviceEvents,joinDeviceEvidence,validateRetakeNote} from './device-diagnostics.mjs';
+import {verifiedDeviceEvents,joinDeviceEvidence,validateRetakeNote,physicalCaptureMatchesUpload} from './device-diagnostics.mjs';
 const require=createRequire(import.meta.url),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 export const ACCEPTANCE_APK_SHA='639ddfddb9e65b3596745091b85054b1cac1a3f85f83a60c7a257ddfd62f2182';
 export const acceptanceRoot=path.join(root,'tmp/omr-reference/device-acceptance');
@@ -111,7 +111,7 @@ export async function startDeviceAcceptance(options:{apiPort?:number;workerEnabl
     for(const sample of evidence){
       const upload=device.deviceObserved&&deviceEvents.some((e:any)=>e.type==='UPLOAD_ACCEPTED'&&e.status===202&&e.sha256===sample.sourceSha256);
       (sample as any).physicalDeviceUploadObserved=upload;
-      sample.physicalDeviceCaptureObserved=!!upload&&deviceEvents.some((e:any)=>e.type==='CAPTURE'&&['sensor-still','video-frame'].includes(e.captureSource)&&e.capturePurpose!=='identity-detail'&&e.sha256===sample.sourceSha256);
+      sample.physicalDeviceCaptureObserved=!!upload&&physicalCaptureMatchesUpload(sample.sourceSha256,deviceEvents);
       (sample as any).reviewDisplayed=!!upload&&deviceEvents.some((e:any)=>e.type==='REVIEW_DISPLAYED'&&e.scanId===sample.scanId&&e.responseRows===100);
       const accepted=deviceEvents.find((e:any)=>e.type==='UPLOAD_ACCEPTED'&&e.sha256===sample.sourceSha256&&e.status===202);
       const terminal=accepted&&deviceEvents.find((e:any)=>e.type==='PROCESSING_STATUS'&&e.batchId===accepted.batchId&&['COMPLETE','FAILED'].includes(e.status)&&e.contextId===accepted.contextId&&e.monotonicMs>=accepted.monotonicMs);
