@@ -8,7 +8,8 @@ import {createServer} from 'node:http';
 const require=createRequire(new URL('../../backend/package.json',import.meta.url));
 const dist=path.resolve('apps/omr-mobile/dist');
 const chrome=[process.env.OMR_CHROME_PATH,'C:/Program Files/Google/Chrome/Application/chrome.exe','/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&fs.existsSync(p));
-const exam={id:'synthetic-exam',code:'OMR-DEMO',title:'Synthetic OMR Examination',session:'TEST',candidateGroup:'Synthetic staff',examDate:'2026-11-11',questionCount:100,allowedVersions:['A'],status:'ACTIVE',publicationStatus:'UNPUBLISHED',releaseAt:null,permissions:[{canScan:true,canReview:false,canManage:false}]};
+const exam={id:'synthetic-exam',code:'OMR-DEMO',title:'Synthetic OMR Examination',session:'TEST',candidateGroup:'Synthetic staff',examDate:'2026-11-11',questionCount:100,correctMarks:1,incorrectPenalty:0,allowedVersions:['A'],status:'ACTIVE',publicationStatus:'UNPUBLISHED',releaseAt:null,permissions:[{canScan:true,canReview:true,canManage:false}]};
+const recognition={id:'synthetic-scan',status:'REVIEW_REQUIRED',paperVersion:'A',templateVersion:'SYNTHETIC_OMR_100',identityVerified:true,errorCode:null,createdAt:'2026-11-11T12:00:00Z',student:null,responses:Array.from({length:100},(_,i)=>({question:i+1,detectedAnswer:i===0?'UNCERTAIN':i===1?'MULTIPLE':'A',reviewedAnswer:null,evidence:{reviewRequired:i<2}})),corrections:[],hasAnnotation:false,quality:{focus:41,registration:.98},results:[{id:'draft-synthetic',status:'DRAFT',score:'82',maximumScore:'100'}]};
 test('scanner-only app previews without login; optional authenticated testing never publishes scores',
  {skip:!chrome||!fs.existsSync(path.join(dist,'index.html'))?'Build mobile app and install Chrome to test':false,timeout:45000},async()=>{
  let accepted=0,unsafeRequest=false;
@@ -21,9 +22,10 @@ test('scanner-only app previews without login; optional authenticated testing ne
     accepted++;req.resume();req.on('end',()=>res.end(JSON.stringify({success:true,data:{id:'synthetic-batch',status:'QUEUED',progress:{processed:0,total:1,duplicates:0},items:[]}})));return;
    }
    let data={};
-   if(url.pathname==='/api/auth/login')data={accessToken:'synthetic-token',refreshToken:'synthetic-refresh',user:{id:'staff',name:'Test Examiner',email:'test@example.invalid',role:'TEACHER'}};
+   if(url.pathname==='/api/auth/login')data={accessToken:'synthetic-token',refreshToken:'synthetic-refresh',user:{id:'staff',name:'Test Examiner',email:'test@example.invalid',role:'ADMIN'}};
    else if(url.pathname==='/api/omr/exams')data=[exam];
-   else if(url.pathname==='/api/omr/batches/synthetic-batch')data={id:'synthetic-batch',status:'FAILED',errorCode:'WORKER_FAILED',progress:{processed:1,total:1,duplicates:0},items:[]};
+   else if(url.pathname==='/api/omr/batches/synthetic-batch')data={id:'synthetic-batch',status:'COMPLETE',progress:{processed:1,total:1,duplicates:0},items:[{id:'page-1',pageIndex:1,status:'COMPLETE',scan:{id:'synthetic-scan',status:'REVIEW_REQUIRED',errorCode:null}}]};
+   else if(url.pathname==='/api/omr/scans/synthetic-scan')data=recognition;
    res.end(JSON.stringify({success:true,data}));return;
   }
   const full=path.resolve(dist,'.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname));
@@ -51,15 +53,24 @@ test('scanner-only app previews without login; optional authenticated testing ne
   await page.waitForFunction(()=>document.body.innerText.includes('Saved scanner image'));
   assert.ok(await page.evaluate(()=>document.querySelector('img[alt="Selected OMR scan"]')?.complete));
   assert.equal(accepted,0,'Preview never silently uploads an image');
-  await page.click('.st-api-toggle');await page.waitForSelector('.st-api-panel input[type=email]');
+  assert.ok(await page.evaluate(()=>document.body.innerText.includes('View MCQs & marks')));
+  await page.evaluate(()=>[...document.querySelectorAll('.st-preview-actions button')].find(b=>b.textContent.includes('View MCQs'))?.click());
+  await page.waitForSelector('.st-api-panel input[type=email]');
   await page.click('.st-api-panel input[type=url]');await page.keyboard.down('Control');await page.keyboard.press('A');await page.keyboard.up('Control');await page.keyboard.press('Backspace');await page.type('.st-api-panel input[type=url]',origin);
   await page.type('.st-api-panel input[type=email]','test@example.invalid');await page.type('.st-api-panel input[type=password]','synthetic-only');
   await page.click('.st-api-panel button[type=submit]');
   await page.waitForFunction(()=>document.body.innerText.includes('Test Examiner')&&document.body.innerText.includes('OMR-DEMO'));
-  await page.evaluate(()=>[...document.querySelectorAll('.st-api-panel button')].find(b=>b.textContent.includes('Test selected image')).click());
-  await page.waitForFunction(()=>document.body.innerText.includes('WORKER_FAILED'));
+  await page.evaluate(()=>[...document.querySelectorAll('.st-api-panel button')].find(b=>b.textContent.includes('Recognize this page'))?.click());
+  await page.waitForFunction(()=>document.body.innerText.includes('Detected MCQs & marks')&&document.body.innerText.includes('Backend draft marks'),{timeout:12000});
   assert.equal(accepted,1);
   assert.equal(unsafeRequest,false);
-  assert.ok(await page.evaluate(()=>document.body.innerText.includes('Saved scanner image')),'Failed processing must not discard local photo');
+  assert.equal(await page.evaluate(()=>document.body.innerText.includes('82 / 100')),true,'Admin sees actual draft score from server');
+  assert.equal(await page.evaluate(()=>document.querySelectorAll('.st-answers-row[role=row]').length),101,'All 100 MCQs returned from server');
+  assert.ok(await page.evaluate(()=>document.body.innerText.includes('UNCERTAIN')&&document.body.innerText.includes('MULTIPLE')));
+  await page.evaluate(()=>[...document.querySelectorAll('.st-practice-toggle')].find(b=>b.textContent.includes('Optional local practice marks'))?.click());
+  await page.type('textarea[aria-label="100-question practice key"]','A'.repeat(100));
+  await page.waitForFunction(()=>document.body.innerText.includes('LOCAL PRACTICE ONLY'));
+  assert.ok(await page.evaluate(()=>document.body.innerText.includes('98.00 / 100.00')),'Manual practice key uses real detected answers');
+  assert.ok(await page.evaluate(()=>document.body.innerText.includes('Saved scanner image')),'Recognition does not discard saved photo');
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });

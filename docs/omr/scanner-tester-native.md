@@ -19,3 +19,11 @@ Expected acceptance: build/typecheck, synthetic scanner-only browser test, Andro
 
 ## Risk and preservation
 The scanner outputs are private app files, not gallery copies. **Uninstalling the APK destroys these files.** Future development signing-key changes must back them up first; installation must never silently uninstall a scanner with saved pages. A scanner emulator/browser preview is not proof of physical camera quality. Do not loosen backend alignment constraints to make a malformed scan pass.
+
+
+## Returning 100 MCQs and marks to the tester
+After capturing a page, select **View MCQs & marks**, sign into the isolated test backend, choose the authorized exam, then select **Recognize this page & view 100 MCQs**. The existing batch API is polled until a page scan is recorded, then the authenticated scan-detail endpoint supplies the actual responses: question 1–100, A/B/C/D, BLANK, MULTIPLE or UNCERTAIN, plus separate human-reviewed answers and evidence. Failed/invalid pages explicitly show errors; there is no invented answer data.
+
+Backend marks are only displayed if the authorized scan-detail response includes a score and maximumScore; server-side role restrictions still apply. Without verified identity and a matching approved key, no backend mark is fabricated. Administrators can optionally paste a 100-choice key to compute a **local practice subtotal** from the actual detected choices and exam marking policy. This key never leaves React component memory, is not saved or sent, and is labelled unofficial, especially when any bubble remains unresolved. Teachers cannot invoke the local test-mark preview.
+
+The native JPEG stays safely stored even if recognition fails. The app neither publishes a result nor changes exam keys, candidate verification, or scoring permissions. These are read-only scan-report additions and optional isolated uploads; official scoring remains locked pending physical verification.

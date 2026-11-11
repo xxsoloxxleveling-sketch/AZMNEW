@@ -80,3 +80,50 @@ body{margin:0}
 .st-foot svg{flex:none}
 @media(max-width:650px){.st-instructions{grid-template-columns:1fr;gap:8px}.st-step{align-items:center;padding:12px}.st-step small{font-size:11px}.st-hero{padding:24px 19px}.st-body{gap:14px}.st-preview-actions{flex-direction:column}}
 @media(prefers-reduced-motion:reduce){.st-app *{transition:none!important;animation:none!important}}
+
+
+/* Recognized MCQs and restricted test marking */
+.st-read-mcqs{background:#e1edff!important;color:#1851c9!important;border:1px solid #8aaefa!important;font-weight:850!important}
+.st-api-zone{scroll-margin-top:92px}
+.st-evaluation{display:grid;gap:12px;border-top:1px solid #dfe7f4;padding-top:18px;margin-top:8px;min-width:0}
+.st-evaluation .st-heading{margin-bottom:0}
+.st-eval-status{display:inline-flex;align-items:center;border-radius:100px;background:#eef3ff;color:#1e55da;padding:7px 9px;font-size:10px;font-weight:800;white-space:normal;text-align:center}
+.st-eval-status.st-bad{background:#fff1f2;color:#be123c}
+.st-answers{display:grid;gap:12px;min-width:0;background:#fafbff;border:1px solid #dee7f7;border-radius:13px;padding:14px 12px}
+.st-answers .st-heading{align-items:flex-start}
+.st-answers .st-heading h2{font-size:16px}
+.st-answers .st-heading p{line-height:1.5}
+.st-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.st-facts>div{display:flex;flex-direction:column;gap:4px;padding:10px 6px;border-radius:9px;background:#fff;border:1px solid #e4eaf5;text-align:center;min-width:0}
+.st-facts small{font-size:10px;color:#64748b;line-height:1.4}
+.st-facts strong{font-size:16px;color:#173a8c;font-weight:850}
+.st-identity{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;background:#eef5ff;padding:10px;border-radius:9px;font-size:11px}
+.st-identity strong{font-weight:850}
+.st-backend-marks,.st-no-marks{display:flex;flex-direction:column;gap:7px;background:#e9f8f5;border:1px solid #a7e2d1;padding:13px;border-radius:11px}
+.st-backend-marks>span{font-size:11px;font-weight:850;text-transform:uppercase;color:#0f766e}
+.st-backend-marks>strong{font-size:27px;font-weight:900;font-variant-numeric:tabular-nums;color:#065f46}
+.st-backend-marks small,.st-no-marks small{font-size:11px;line-height:1.5;color:#49687b}
+.st-no-marks{background:#fff9ef;border-color:#fde5bc}
+.st-no-marks strong{font-size:12px;color:#985c13}
+.st-answers-head{display:flex;justify-content:space-between;align-items:center;gap:9px;flex-wrap:wrap}
+.st-answers-head strong{font-size:12px}
+.st-answers-head label{font-size:11px;font-weight:700;color:#394b69;display:flex;align-items:center;gap:6px}
+.st-answers-head input{accent-color:#1d4ed8}
+.st-answers-grid{max-height:390px;overflow-y:auto;border:1px solid #dfe7f5;border-radius:9px;background:#fff;min-width:0}
+.st-answers-row{display:grid;grid-template-columns:.7fr 1fr 1fr 1.25fr;gap:5px;align-items:center;min-width:0;border-bottom:1px solid #edf1f9;padding:9px 8px;font-size:11px}
+.st-answers-row>span,.st-answers-row>strong{overflow-wrap:anywhere}
+.st-answers-row>strong{font-weight:850;color:#203f80}
+.st-answers-row>span:last-child{font-size:10px;color:#5b6a80}
+.st-answers-row.is-flagged{background:#fffbeb}
+.st-answers-row.is-flagged>strong,.st-answers-row.is-flagged>span:last-child{color:#9a520d}
+.st-answers-header{position:sticky;top:0;z-index:1;background:#eaf1ff;font-weight:850;color:#3156a0;font-size:10px}
+.st-refresh-eval{margin:5px 0;width:100%}
+.st-practice{display:grid;gap:11px;border-top:1px dashed #c5d7f0;padding-top:12px}
+.st-practice-toggle{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:850;color:#1d4ed8;padding:8px 0}
+.st-practice-toggle span{font-weight:650}
+.st-practice label{font-size:11px;font-weight:750;color:#334155;display:grid;gap:8px}
+.st-practice textarea{resize:vertical;min-height:75px;max-width:100%;padding:11px;border:1px solid #ccd9ee;border-radius:9px;font-size:12px;font-family:monospace;word-break:break-all}
+.st-practice-marks{background:#eff5ff;border-color:#c5dafb}
+.st-practice-marks>span{color:#1d4ed8}
+.st-practice-marks>strong{color:#1e40af}
+@media(max-width:460px){.st-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.st-answers-row{grid-template-columns:.65fr .9fr .9fr 1.2fr;font-size:10px}.st-preview-actions{flex-direction:column}.st-answers{padding:12px 9px}}

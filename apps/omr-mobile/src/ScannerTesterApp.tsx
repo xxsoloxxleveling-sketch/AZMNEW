@@ -3,6 +3,7 @@ import {createMemorySession,Staff} from './session';
 import {Exam,Batch} from '../../../src/features/omr/contracts';
 import {scannerIsNative,captureTesterScans,listTesterScans,removeTesterScan,previewScanUrl,readTesterScan,SavedScan} from './native-scanner';
 import {Icon} from './StitchIcon';
+import {ScanEvaluation} from './ScanEvaluation';
 import '../../../src/features/omr/omr.css';
 import './scanner-tester.css';
 
@@ -18,7 +19,7 @@ export function ScannerTesterApp(){
   const [scanning,setScanning]=useState(false),[message,setMessage]=useState('Ready to scan'),[error,setError]=useState('');
   const [serverPanel,setServerPanel]=useState(false),[api,setApi]=useState((import.meta as any).env?.VITE_OMR_API_URL||'http://127.0.0.1:5058');
   const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[staff,setStaff]=useState<Staff|null>(null),[exams,setExams]=useState<Exam[]>([]),[examId,setExamId]=useState('');
-  const [authBusy,setAuthBusy]=useState(false),[transfer,setTransfer]=useState(false),[batch,setBatch]=useState<Batch|null>(null),[batchError,setBatchError]=useState('');
+  const [authBusy,setAuthBusy]=useState(false),[transfer,setTransfer]=useState(false),[pageBatches,setPageBatches]=useState<Record<string,Batch>>({}),[batchError,setBatchError]=useState('');
   const session=useMemo(()=>createMemorySession(()=>{
     setStaff(null);setExams([]);setExamId('');
     setBatchError('Test-server session expired. Sign in again to upload. Saved images are unaffected.');
@@ -72,6 +73,7 @@ export function ScannerTesterApp(){
       if(item.native)await removeTesterScan(item.native);
       else URL.revokeObjectURL(item.uri);
       if(native)await reload();else setPages(old=>old.filter(p=>p.id!==item.id));
+      setPageBatches(old=>{const remaining={...old};delete remaining[item.id];return remaining;});
       if(selected===item.id)setSelected(null);
       setMessage('Scan deleted');setError('');
     }catch{setError('The selected scan could not be deleted.');}
@@ -89,24 +91,17 @@ export function ScannerTesterApp(){
   }
   async function upload(){
     if(!chosen||!exam||!staff||transfer)return;
-    setTransfer(true);setBatch(null);setBatchError('');
+    setTransfer(true);setBatchError('');
     try{
       if(Math.min(chosen.width,chosen.height)<1600)throw Error('This '+chosen.width+' × '+chosen.height+' scan is below the minimum OMR upload resolution.');
       const file=chosen.native?await readTesterScan(chosen.native):chosen.webFile;
       if(!file)throw Error('Saved image unavailable.');
       const next=await session.client.upload(exam.id,file,'mobile');
-      setBatch(next);
-      setMessage('Photo submitted to isolated processing. The private copy remains saved.');
+      setPageBatches(old=>({...old,[chosen.id]:next}));
+      setMessage('Recognition started. Tap the saved page to view detected answers and marks once available.');
     }catch(problem){setBatchError(problem instanceof Error?problem.message:'Upload failed; saved image remains intact.');}
     finally{setTransfer(false);}
   }
-  useEffect(()=>{
-    if(!staff||!batch?.id||['COMPLETE','FAILED','CANCELLED'].includes(batch.status))return;
-    let active=true;
-    const poll=()=>session.client.batch(batch.id).then(value=>{if(active)setBatch(value);},problem=>{if(active)setBatchError(problem instanceof Error?problem.message:'Cannot check processing status');});
-    void poll();const timer=setInterval(poll,3000);
-    return()=>{active=false;clearInterval(timer);};
-  },[staff,session,batch?.id,batch?.status]);
   useEffect(()=>()=>session.logout(),[session]);
 
   return <main className="st-app">
@@ -131,19 +126,19 @@ export function ScannerTesterApp(){
         <div role="status" className="st-message">{message}</div>
         {!pages.length?<div className="st-empty"><Icon name="file" size={34}/><strong>No scanned pages yet</strong><p>Tap Start automatic scanner to begin.</p></div>:
         <><div className="st-thumbnails">{pages.map((page,i)=><button type="button" key={page.id} className={'st-thumb'+(chosen?.id===page.id?' active':'')} onClick={()=>setSelected(page.id)} aria-label={'View captured page '+(i+1)}><img src={page.uri} alt="" loading="lazy"/><span>Page {pages.length-i}</span></button>)}</div>
-        {chosen&&<div className="st-preview"><div className="st-preview-bar"><strong>Saved scanner image</strong><span>{chosen.width} × {chosen.height} px</span></div><img src={chosen.uri} alt="Selected OMR scan" className="st-preview-image"/><div className="st-meta"><span>{mb(chosen.size)}</span><span>{when(chosen.createdAt)}</span></div><div className="st-preview-actions"><button type="button" disabled={!native||scanning||pages.length>=40} onClick={()=>void startScanner()}><Icon name="scan" size={18}/> Scan another</button><button type="button" className="st-delete" onClick={()=>void deletePage(chosen)}><Icon name="close" size={17}/> Delete image</button></div></div>}
+        {chosen&&<div className="st-preview"><div className="st-preview-bar"><strong>Saved scanner image</strong><span>{chosen.width} × {chosen.height} px</span></div><img src={chosen.uri} alt="Selected OMR scan" className="st-preview-image"/><div className="st-meta"><span>{mb(chosen.size)}</span><span>{when(chosen.createdAt)}</span></div><div className="st-preview-actions"><button type="button" disabled={!native||scanning||pages.length>=40} onClick={()=>void startScanner()}><Icon name="scan" size={18}/> Scan another</button><button type="button" className="st-read-mcqs" onClick={()=>{setServerPanel(true);document.getElementById('omr-test-results')?.scrollIntoView({behavior:'smooth',block:'start'});}}><Icon name="review" size={17}/> View MCQs &amp; marks</button><button type="button" className="st-delete" onClick={()=>void deletePage(chosen)}><Icon name="close" size={17}/> Delete image</button></div></div>}
         </>}
       </section>
-      <section className="st-api-zone">
-        <button type="button" className="st-api-toggle" aria-expanded={serverPanel} onClick={()=>setServerPanel(v=>!v)}><Icon name="wifi" size={18}/><span><strong>Optional backend recognition test</strong><small>Send a saved scan to the isolated development API</small></span><Icon name="chevron" size={17}/></button>
+      <section className="st-api-zone" id="omr-test-results">
+        <button type="button" className="st-api-toggle" aria-expanded={serverPanel} onClick={()=>setServerPanel(v=>!v)}><Icon name="wifi" size={18}/><span><strong>Read MCQs &amp; marks</strong><small>Recognize the selected saved photo using the isolated OMR backend</small></span><Icon name="chevron" size={17}/></button>
         {serverPanel&&<div className="st-api-panel">
           {!staff?<form onSubmit={login}><label>API origin<input type="url" required value={api} onChange={e=>setApi(e.target.value)}/></label><label>Staff email<input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Password<input type="password" required value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="st-secondary" type="submit" disabled={authBusy}>{authBusy?'Connecting…':'Connect authorized tester'}</button></form>:
-          <><div className="st-connected"><Icon name="check" size={18}/><strong>{staff.name}</strong><button type="button" onClick={()=>{session.logout();setStaff(null);setExams([]);setBatch(null);}}>Sign out</button></div>
+          <><div className="st-connected"><Icon name="check" size={18}/><strong>{staff.name}</strong><button type="button" onClick={()=>{session.logout();setStaff(null);setExams([]);setPageBatches({});}}>Sign out</button></div>
           <label>Examination<select value={examId} onChange={e=>setExamId(e.target.value)}>{assigned.map(x=><option key={x.id} value={x.id}>{x.code} — {x.title}</option>)}</select></label>
-          <button className="st-secondary" type="button" disabled={!chosen||!exam||transfer} onClick={()=>void upload()}>{transfer?'Uploading…':'Test selected image on backend'}</button>
-          {batch&&<div className="st-worker-report"><strong>Processing: {batch.status}</strong><small>{batch.progress?batch.progress.processed+' / '+batch.progress.total+' pages processed':'Waiting for worker'}</small>{batch.errorCode&&<p role="alert">Worker error: {batch.errorCode}. No answers or identities have been verified.</p>}</div>}</>}
+          <button className="st-secondary" type="button" disabled={!chosen||!exam||transfer} onClick={()=>void upload()}>{transfer?'Sending image…':'Recognize this page & view 100 MCQs'}</button>
+          {chosen&&pageBatches[chosen.id]&&exam&&<ScanEvaluation key={chosen.id+':'+pageBatches[chosen.id].id} client={session.client} initialBatch={pageBatches[chosen.id]} exam={exam} role={staff.role}/>}</>}
           {batchError&&<div role="alert" className="st-error">{batchError}</div>}
-          <p className="st-small-note">Uploading does not verify identity, answer accuracy, marks or results. Scans remain private until explicitly submitted.</p>
+          <p className="st-small-note">The scanner returns recognized A–D/blank/multiple/uncertain responses. Backend draft marks require a matching approved key and verified identity. Administrators may optionally enter a local test-only key. Nothing is published.</p>
         </div>}
       </section>
       <p className="st-foot"><Icon name="lock" size={16}/> Scanner-only development build. No production database changes or official score publication.</p>
