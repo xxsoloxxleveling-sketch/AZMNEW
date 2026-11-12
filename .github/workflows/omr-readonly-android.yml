@@ -1,0 +1,62 @@
+name: Read-only training Android APK
+on:
+  push:
+    branches: [codex/smart-omr-evaluation-mobile]
+    paths: ['tools/omr-readonly-android/**', '.github/workflows/omr-readonly-android.yml']
+permissions:
+  contents: read
+jobs:
+  readonly-android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/omr-gradle/gradle-8.14.3-bin.zip
+          key: omr-gradle-8.14.3-bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+      - name: Verify Gradle distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/omr-gradle/gradle-8.14.3-bin.zip"
+          mkdir -p "$(dirname "$archive")"
+          expected=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+          verify() { echo "$expected  $archive" | sha256sum --check --status; }
+          if ! test -f "$archive" || ! verify; then
+            for origin in https://downloads.gradle.org/distributions https://services.gradle.org/distributions; do
+              if curl --fail --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 240 "$origin/gradle-8.14.3-bin.zip" --output "$archive" && verify; then break; fi
+            done
+          fi
+          verify
+          unzip -q -o "$archive" -d "$RUNNER_TEMP/omr-gradle"
+          echo "OMR_VERIFIED_GRADLE=$RUNNER_TEMP/omr-gradle/gradle-8.14.3/bin/gradle" >> "$GITHUB_ENV"
+      - name: Build dedicated training package
+        env:
+          OMR_READONLY_ISOLATED_BUILD: 'true'
+        run: |
+          npm ci --prefix apps/omr-mobile --ignore-scripts --legacy-peer-deps
+          node --test tools/omr-readonly-android/prepare.test.mjs
+          node tools/omr-readonly-android/prepare.mjs
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0'
+          cd apps/omr-mobile
+          npx cap sync android
+          cd android
+          "$OMR_VERIFIED_GRADLE" assembleDebug --no-daemon
+          sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/app-debug.apk.sha256
+          printf '%s\n' "$GITHUB_SHA" > app/build/outputs/apk/debug/source-commit.txt
+          git rev-parse 'HEAD^{tree}' > app/build/outputs/apk/debug/source-tree.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: readonly-training-android-apk
+          path: |
+            apps/omr-mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/omr-mobile/android/app/build/outputs/apk/debug/app-debug.apk.sha256
+            apps/omr-mobile/android/app/build/outputs/apk/debug/source-commit.txt
+            apps/omr-mobile/android/app/build/outputs/apk/debug/source-tree.txt
+          retention-days: 7
