@@ -28,9 +28,14 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import org.json.JSONException;
@@ -40,6 +45,16 @@ import org.json.JSONObject;
 public class MainActivity extends BridgeActivity {
     private static final Pattern REQUEST_ID = Pattern.compile("[A-Za-z0-9_-]{16,96}");
     private static final int MAX_QR_BYTES = 7000;
+    private static final String RUNTIME_PATH = "/omr-training/api/device-runtime/";
+    private static final Set<String> RUNTIME_ASSETS = new HashSet<>(Arrays.asList(
+        "device-worker.js",
+        "pyodide.js", "pyodide.asm.js", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json",
+        "numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+        "opencv_python-4.10.0.84-cp312-cp312-pyodide_2024_0_wasm32.whl",
+        "engine/engine.py", "engine/bubble_evidence.py", "engine/responses.py", "engine/qr_decode.py",
+        "engine/registration.py", "engine/physical_layout.py", "engine/template-v2.json",
+        "engine/template-framed-legacy-v1.json"
+    ));
     private final Handler main = new Handler(Looper.getMainLooper());
     private long documentEpoch;
     private boolean resumed;
@@ -75,6 +90,33 @@ public class MainActivity extends BridgeActivity {
         if (encoded.contains("%2e") || encoded.contains("%2f") || encoded.contains("%5c") || encoded.contains("\\")) return false;
         for (String part : uri.getPath().split("/")) if (".".equals(part) || "..".equals(part)) return false;
         return true;
+    }
+
+    private WebResourceResponse bundledRuntime(WebResourceRequest request) {
+        Uri uri = request.getUrl();
+        if (!allowedOrigin(uri) || uri.getQuery() != null || uri.getFragment() != null || uri.getPath() == null) return null;
+        String name;
+        if ("/omr-training/api/device-worker.js".equals(uri.getPath())) name = "device-worker.js";
+        else if (uri.getPath().startsWith(RUNTIME_PATH)) name = uri.getPath().substring(RUNTIME_PATH.length());
+        else return null;
+        if (!RUNTIME_ASSETS.contains(name)) return blocked("Bundled scanner asset unavailable");
+        if (!"GET".equals(request.getMethod())) return blocked("Method not allowed");
+        String mime = name.endsWith(".js") ? "text/javascript" : name.endsWith(".wasm") ? "application/wasm"
+            : name.endsWith(".json") ? "application/json" : "application/octet-stream";
+        try {
+            InputStream stream = getAssets().open("device-runtime/" + name);
+            HashMap<String,String> headers = new HashMap<>();
+            headers.put("Cache-Control", "no-store");
+            headers.put("X-Content-Type-Options", "nosniff");
+            return new WebResourceResponse(mime, null, 200, "OK", headers, stream);
+        } catch (IOException missing) {
+            return blocked("Bundled scanner asset unavailable");
+        }
+    }
+
+    private WebResourceResponse blocked(String message) {
+        return new WebResourceResponse("text/plain", "UTF-8", 404, message,
+            new HashMap<String,String>(), new ByteArrayInputStream(new byte[0]));
     }
 
     private boolean currentPageAllowed() {
@@ -219,6 +261,8 @@ public class MainActivity extends BridgeActivity {
                 return !allowed(request.getUrl());
             }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                WebResourceResponse runtime = bundledRuntime(request);
+                if (runtime != null) return runtime;
                 if (allowed(request.getUrl())) return super.shouldInterceptRequest(view, request);
                 return new WebResourceResponse("text/plain", "UTF-8", 403, "Read-only training origin only",
                     new HashMap<String,String>(), new ByteArrayInputStream(new byte[0]));
@@ -287,3 +331,4 @@ public class MainActivity extends BridgeActivity {
         super.onDestroy();
     }
 }
+

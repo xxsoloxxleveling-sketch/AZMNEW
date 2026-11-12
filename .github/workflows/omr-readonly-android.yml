@@ -2,7 +2,7 @@ name: Read-only training Android APK
 on:
   push:
     branches: [codex/smart-omr-evaluation-mobile]
-    paths: ['tools/omr-readonly-android/**', '.github/workflows/omr-readonly-android.yml']
+    paths: ['tools/omr-readonly-android/**', 'tools/omr-readonly-training/device-worker.js', 'tools/omr-readonly-training/device-engine/**', '.github/workflows/omr-readonly-android.yml']
 permissions:
   contents: read
 jobs:
@@ -14,6 +14,26 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-node@v4
         with: {node-version: '24'}
+      - name: Stage checksum-verified on-device sheet reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$RUNNER_TEMP/omr-device-runtime"
+          mkdir -p "$runtime" "$RUNNER_TEMP/omr-pyodide-package"
+          archive_dir="$RUNNER_TEMP/omr-pyodide-package"
+          npm pack pyodide@0.27.7 --pack-destination "$archive_dir" >/dev/null
+          archive="$archive_dir/pyodide-0.27.7.tgz"
+          echo '89d5d952675eb08e11286e52c7238f1248ce71726e896db9703e73bef23dc343  '"$archive" | sha256sum --check --status
+          tar -xzf "$archive" -C "$runtime" --strip-components=1 \
+            package/pyodide.js package/pyodide.asm.js package/pyodide.asm.wasm \
+            package/python_stdlib.zip package/pyodide-lock.json
+          for wheel in \
+            numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl \
+            opencv_python-4.10.0.84-cp312-cp312-pyodide_2024_0_wasm32.whl; do
+            curl --fail --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 240 \
+              "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/$wheel" --output "$runtime/$wheel"
+          done
+          echo "OMR_DEVICE_RUNTIME_SOURCE=$runtime" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '21'}
       - uses: actions/cache@v4
@@ -60,3 +80,4 @@ jobs:
             apps/omr-mobile/android/app/build/outputs/apk/debug/source-commit.txt
             apps/omr-mobile/android/app/build/outputs/apk/debug/source-tree.txt
           retention-days: 7
+
