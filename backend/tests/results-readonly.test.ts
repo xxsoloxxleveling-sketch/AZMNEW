@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { adminResultsPageQuerySchema } from '../src/modules/results/results.schema';
 
@@ -12,8 +11,8 @@ process.env.JWT_REFRESH_SECRET = 'synthetic-results-test-refresh-secret';
 process.env.QR_SECRET = 'synthetic-results-test-qr-secret';
 
 test('admin result routes require authentication and the existing administrator roles', () => {
-  const routePath = fileURLToPath(new URL('../src/modules/results/results.routes.ts', import.meta.url));
-  const source = readFileSync(path.resolve(routePath), 'utf8');
+  const routePath = path.resolve(process.cwd(), 'src/modules/results/results.routes.ts');
+  const source = readFileSync(routePath, 'utf8');
   assert.match(source, /adminRouter\.use\(authenticate, authorizeRoles\(Role\.SUPER_ADMIN, Role\.ADMIN\)\)/);
   assert.match(source, /adminRouter\.get\('\/sessions/);
   assert.match(source, /adminRouter\.get\('\/sessions\/:sessionId\/results/);
