@@ -59,7 +59,7 @@ test('admin results expose only session-linked roster fields and retain unverifi
   assert.equal(calls.page.skip, 10);
   assert.equal(calls.page.take, 10);
   assert.equal(calls.page.where.resultSessionId, 'session-1');
-  assert.equal(calls.count.resultSessionId, 'session-1');
+  assert.equal(calls.count.where.resultSessionId, 'session-1');
 });
 
 test('unknown result sessions fail closed before student data is queried', async () => {
