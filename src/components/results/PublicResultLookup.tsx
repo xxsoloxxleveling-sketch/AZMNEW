@@ -51,7 +51,7 @@ function DemoPublicResultLookup() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 px-4 py-7 sm:px-6">
+    <div className="results-public-page mx-auto max-w-4xl space-y-5 px-4 py-7 sm:px-6">
       <div className="border-b border-slate-200 pb-4">
         <p className="text-xs font-semibold text-[#185b9d]">Public student service</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Examination Results</h1>
@@ -87,7 +87,7 @@ function DemoPublicResultLookup() {
       {state === 'unpublished' && <Message tone="notice" title="Result not published">A result matching those demo details is not published. Marks are not shown until publication.</Message>}
       {state === 'error' && <Message tone="error" title="Result service unavailable">The demo service could not complete this lookup. Please try again later.</Message>}
 
-      {state === 'success' && result && <article className="printable-result printable-document space-y-5 border border-slate-300 bg-white p-4 sm:p-6">
+      {state === 'success' && result && <article data-result-print-root="true" className="printable-result printable-document space-y-5 border border-slate-300 bg-white p-4 sm:p-6">
         <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
           <div><p className="text-[11px] font-bold uppercase tracking-wide text-amber-800">AZM.AIO · DEMO / NOT OFFICIAL</p><h2 className="mt-1 text-xl font-bold text-slate-900">Examination Result</h2><p className="mt-1 text-xs text-slate-600">Published demonstration result · Reference DEMO-{result.rollNumber.slice(-4)}</p></div>
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800"><CheckCircle2 size={15} /> Published (demo)</span>

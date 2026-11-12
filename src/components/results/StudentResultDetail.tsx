@@ -17,7 +17,7 @@ export function StudentResultDetail({ result, onClose, onStatusChange }: Student
 
   return (
     <div role="presentation" className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/45 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="demo-result-detail-title" className="my-3 w-full max-w-5xl rounded-lg border border-slate-200 bg-white shadow-xl printable-document printable-result">
+      <section data-result-print-root="true" role="dialog" aria-modal="true" aria-labelledby="demo-result-detail-title" className="my-3 w-full max-w-5xl rounded-lg border border-slate-200 bg-white shadow-xl printable-document printable-result">
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
           <div><p className="text-[11px] font-bold uppercase tracking-wide text-amber-800">Demonstration record · not official</p><h2 id="demo-result-detail-title" className="mt-1 text-lg font-bold text-slate-900">{result.studentName}</h2><p className="mt-1 font-mono text-xs text-slate-500">{result.rollNumber} · {result.className}</p></div>
           <button type="button" aria-label="Close result details" onClick={onClose} className="rounded p-2 text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 no-print"><X size={18} /></button>
