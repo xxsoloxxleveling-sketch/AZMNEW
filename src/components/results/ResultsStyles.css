@@ -1,0 +1,7 @@
+@media print {
+  body * { visibility: hidden !important; }
+  .printable-result, .printable-result * { visibility: visible !important; }
+  .printable-result { position: absolute; inset: 0; width: 100%; border: 0 !important; padding: 0 !important; color: #111827 !important; }
+  .no-print { display: none !important; }
+  @page { margin: 16mm; }
+}

@@ -1,8 +1,155 @@
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middleware/error.middleware';
-import { MeritListQuery } from './results.schema';
+import { AdminResultsPageQuery, MeritListQuery } from './results.schema';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 export class ResultsService {
+  constructor(private readonly db: PrismaClient = prisma) {}
+
+  async listAdminResultSessions() {
+    const assignments = await this.db.student.findMany({
+      where: { resultSessionId: { not: null } },
+      select: { resultSessionId: true },
+      distinct: ['resultSessionId'],
+    });
+    const sessionIds = assignments
+      .map((item) => item.resultSessionId)
+      .filter((id): id is string => Boolean(id));
+    if (!sessionIds.length) return [];
+
+    const [sessions, counts] = await Promise.all([
+      this.db.attendanceSession.findMany({
+        where: { id: { in: sessionIds } },
+        select: {
+          id: true,
+          businessDate: true,
+          examDateSnapshot: true,
+          hallNameSnapshot: true,
+          roomNumberSnapshot: true,
+          testCenterNameSnapshot: true,
+          status: true,
+          attemptNumber: true,
+          isCurrent: true,
+          _count: { select: { candidates: true } },
+        },
+        orderBy: [{ businessDate: 'desc' }, { id: 'asc' }],
+      }),
+      this.db.student.groupBy({
+        by: ['resultSessionId'],
+        where: { resultSessionId: { in: sessionIds } },
+        _count: { _all: true, testScore: true },
+      }),
+    ]);
+    const countBySession = new Map(counts.map((row) => [row.resultSessionId, row._count]));
+
+    return sessions.map(({ _count, ...session }) => {
+      const count = countBySession.get(session.id);
+      return {
+        id: session.id,
+        businessDate: session.businessDate.toISOString().slice(0, 10),
+        examDate: session.examDateSnapshot,
+        hallName: session.hallNameSnapshot,
+        roomNumber: session.roomNumberSnapshot,
+        testCenterName: session.testCenterNameSnapshot,
+        sessionStatus: session.status,
+        attemptNumber: session.attemptNumber,
+        isCurrent: session.isCurrent,
+        recordCount: count?._all ?? 0,
+        legacyScoreCount: count?.testScore ?? 0,
+        rosterCount: _count.candidates,
+      };
+    });
+  }
+
+  async listAdminSessionResults(sessionId: string, query: AdminResultsPageQuery) {
+    const session = await this.db.attendanceSession.findUnique({
+      where: { id: sessionId },
+      select: { id: true },
+    });
+    if (!session) {
+      const error: AppError = new Error('Examination session not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const search = query.search?.trim();
+    const where: Prisma.StudentWhereInput = {
+      resultSessionId: sessionId,
+      ...(query.className ? { currentClass: query.className } : {}),
+      ...(search ? {
+        OR: [
+          { rollNumber: { contains: search, mode: 'insensitive' as const } },
+          { fullName: { contains: search, mode: 'insensitive' as const } },
+        ],
+      } : {}),
+      ...(query.scoreAvailability === 'with-score' ? { testScore: { not: null } } : {}),
+      ...(query.scoreAvailability === 'without-score' ? { testScore: null } : {}),
+      ...((query.minimumScore !== undefined || query.maximumScore !== undefined) ? {
+        testScore: {
+          not: null,
+          ...(query.minimumScore !== undefined ? { gte: query.minimumScore } : {}),
+          ...(query.maximumScore !== undefined ? { lte: query.maximumScore } : {}),
+        },
+      } : {}),
+    };
+    const orderBy: Prisma.StudentOrderByWithRelationInput[] = query.sortBy === 'studentName'
+      ? [{ fullName: query.sortOrder }, { id: 'asc' }]
+      : query.sortBy === 'className'
+        ? [{ currentClass: query.sortOrder }, { id: 'asc' }]
+        : query.sortBy === 'legacyScore'
+          ? [{ testScore: { sort: query.sortOrder, nulls: 'last' } }, { id: 'asc' }]
+          : [{ rollNumber: { sort: query.sortOrder, nulls: 'last' } }, { id: 'asc' }];
+    const classOptions = await this.db.student.findMany({
+      where: { resultSessionId: sessionId },
+      select: { currentClass: true },
+      distinct: ['currentClass'],
+      orderBy: { currentClass: 'asc' },
+    });
+    const [students, total] = await Promise.all([
+      this.db.student.findMany({
+        where,
+        select: {
+          id: true,
+          rollNumber: true,
+          fullName: true,
+          currentClass: true,
+          testScore: true,
+          overallRank: true,
+        },
+        orderBy,
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      this.db.student.count({ where }),
+    ]);
+
+    return {
+      sessionId,
+      verificationStatus: 'UNVERIFIED' as const,
+      publicationEnabled: false as const,
+      classOptions: classOptions.map((row) => row.currentClass),
+      results: students.map((student) => ({
+        id: student.id,
+        rollNumber: student.rollNumber,
+        studentName: student.fullName,
+        className: student.currentClass,
+        legacyScore: student.testScore,
+        legacyRank: student.overallRank,
+        percentage: null,
+        maximumMarks: null,
+        questionCounts: null,
+        resultReference: null,
+        status: 'LEGACY_UNVERIFIED' as const,
+      })),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
+    };
+  }
+
   async searchCandidateResult(rawQuery: string) {
     const query = rawQuery.trim();
     const cleanDigits = query.replace(/\D/g, '');
