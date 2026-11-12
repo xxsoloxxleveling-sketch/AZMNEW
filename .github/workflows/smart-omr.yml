@@ -1,0 +1,174 @@
+name: Smart OMR isolated checks
+on:
+  push:
+    branches: [codex/smart-omr-evaluation-mobile]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  omr:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: synthetic_omr_only
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:synthetic_omr_only@127.0.0.1:5432/postgres
+      DIRECT_URL: postgresql://postgres:synthetic_omr_only@127.0.0.1:5432/postgres
+      ATTENDANCE_TEST_DATABASE_URL: postgresql://postgres:synthetic_omr_only@127.0.0.1:5432/postgres
+      REQUIRE_PG17: 'true'
+      JWT_ACCESS_SECRET: synthetic-ci-omr-access-secret-only
+      JWT_REFRESH_SECRET: synthetic-ci-omr-refresh-secret-only
+      QR_SECRET: synthetic-ci-omr-qr-secret-only
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24', cache: npm}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - uses: actions/cache@v4
+        with:
+          path: workers/omr/.models/en_PP-OCRv4_rec_mobile.onnx
+          key: omr-english-ocr-e8770c967605983d1570cdf5352041dfb68fa0c21664f49f47b155abd3e0e318
+      - name: Install isolated dependencies
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps
+          npm ci --prefix backend --ignore-scripts --legacy-peer-deps
+          npm ci --prefix tools/omr-dev --ignore-scripts --legacy-peer-deps
+          npm ci --prefix apps/omr-mobile --ignore-scripts --legacy-peer-deps
+          python -m pip install -r workers/omr/requirements.txt
+          python -m pip install --no-deps -r workers/omr/requirements-ocr.txt
+          python tools/omr-dev/setup-ocr.py --install-english
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bubblewrap poppler-utils apparmor-profiles apparmor-utils
+      - name: Verify PDF namespaces with Ubuntu's packaged bubblewrap profile
+        shell: bash
+        run: |
+          # Preserve Ubuntu's global user-namespace restrictions. Grant bwrap its
+          # packaged profile, which strips capabilities from sandboxed children.
+          profile=/etc/apparmor.d/bwrap-userns-restrict
+          if [ ! -f "$profile" ] && [ -f /usr/share/apparmor/extra-profiles/bwrap-userns-restrict ]; then
+            sudo install -m 0644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict "$profile"
+          fi
+          if [ -f "$profile" ]; then sudo apparmor_parser -r "$profile"; fi
+          bwrap --unshare-all --die-with-parent --new-session --ro-bind /usr /usr --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc --dev /dev /usr/bin/true
+      - name: Use PostgreSQL 17 client tools from the disposable service
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/pg17-tools"
+          container=$(docker ps --filter ancestor=postgres:17 --format '{{.ID}}' | head -1)
+          test -n "$container"
+          for tool in psql pg_dump pg_restore; do
+            printf '#!/usr/bin/env bash\nexec node "%s/tools/omr-dev/pg-client-proxy.mjs" "%s" "%s" "$@"\n' "$GITHUB_WORKSPACE" "$tool" "$container" > "$RUNNER_TEMP/pg17-tools/$tool"
+            chmod +x "$RUNNER_TEMP/pg17-tools/$tool"
+          done
+          echo "AZM_TEST_POSTGRES_BIN=$RUNNER_TEMP/pg17-tools" >> "$GITHUB_ENV"
+      - name: Validate schema and compile applications
+        run: |
+          cd backend
+          npx prisma generate
+          npx prisma validate
+          npx tsc
+          cd ..
+          npm run build
+          node node_modules/typescript/bin/tsc --noEmit --jsx react-jsx --esModuleInterop --moduleResolution bundler --module esnext --target ES2022 --lib ES2022,DOM --skipLibCheck src/components/admin/omr/OmrEvaluationCenter.tsx
+          npm run build --prefix apps/omr-mobile
+      - name: Scanner and synthetic API/security tests
+        run: |
+          python -m unittest discover -s workers/omr -v
+          python -m unittest discover -s tools/omr-dev -p 'test_*.py' -v
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-scoring.test.ts backend/tests/omr-database.test.ts backend/tests/omr-migration-recovery.test.ts backend/tests/omr-api.test.ts backend/tests/omr-security.test.ts backend/tests/omr-public-results.test.ts backend/tests/postgres-binaries.test.ts tools/omr-dev/mobile-session.test.ts tools/omr-dev/answer-key-import.test.ts tools/omr-dev/capture-quality.test.ts tools/omr-dev/capture-compression.test.ts tools/omr-dev/auto-page-detection.test.ts tools/omr-dev/practice-score.test.ts tools/omr-dev/scanner-upload-quality.test.ts
+          node --test tools/omr-dev/device-diagnostics.test.mjs tools/omr-dev/device-observer.test.mjs tools/omr-dev/scanner-tester-browser.test.mjs
+      - name: Native PostgreSQL 17 full history, grants and concurrent claims
+        id: native
+        run: |
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test backend/tests/omr-native.test.ts
+          node backend/node_modules/tsx/dist/cli.mjs backend/tests/hssc-runtime.test.ts
+      - name: Synthetic full application and recovery workflow
+        run: |
+          # Use the runner's installed Chrome/AppArmor profile; keep Chromium sandboxing enabled.
+          chrome="$(command -v google-chrome || command -v chromium)"
+          export OMR_CHROME_PATH="$chrome"
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/integration.test.ts tools/omr-dev/queue-recovery.test.ts tools/omr-dev/reliability-flow.test.ts tools/omr-dev/identity-capture.test.ts
+          # The physical acceptance harness test requires the privately verified APK.
+          # It runs locally; CI reports its missing-artifact skip explicitly.
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/device-acceptance.test.ts
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test tools/omr-dev/pdf-integration.test.ts
+
+      - name: Existing attendance upgrade and backup restore rehearsal
+        if: ${{ !cancelled() && steps.native.outcome == 'success' }}
+        run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/attendance-reset-migration-rehearsal.test.ts
+      - name: Retain fabricated sheet diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-omr-diagnostics
+          path: |
+            tmp/omr-dev/synthetic-*.png
+            tmp/omr-dev/recognition-diagnostic.json
+          if-no-files-found: ignore
+          retention-days: 3
+
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24', cache: npm}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/omr-gradle/gradle-8.14.3-bin.zip
+          key: omr-gradle-8.14.3-bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+      - name: Fetch or verify pinned Gradle distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/omr-gradle/gradle-8.14.3-bin.zip"
+          mkdir -p "$(dirname "$archive")"
+          expected=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+          verify() { echo "$expected  $archive" | sha256sum --check --status; }
+          if ! test -f "$archive" || ! verify; then
+            rm -f "$archive"
+            for origin in https://downloads.gradle.org/distributions https://services.gradle.org/distributions; do
+              if curl --fail --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 240 "$origin/gradle-8.14.3-bin.zip" --output "$archive" && verify; then break; fi
+              rm -f "$archive"
+            done
+          fi
+          verify
+          unzip -q -o "$archive" -d "$RUNNER_TEMP/omr-gradle"
+          echo "OMR_VERIFIED_GRADLE=$RUNNER_TEMP/omr-gradle/gradle-8.14.3/bin/gradle" >> "$GITHUB_ENV"
+      - name: Install Android SDK platform
+        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager 'platforms;android-36' 'build-tools;36.0.0'"
+      - name: Build development APK only
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps
+          npm ci --prefix apps/omr-mobile --ignore-scripts --legacy-peer-deps
+          cd apps/omr-mobile
+          npm run build
+          npx cap sync android
+          chmod +x android/gradlew
+          cd android
+          "$OMR_VERIFIED_GRADLE" assembleDebug --no-daemon
+          sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/app-debug.apk.sha256
+          printf '%s\n' "$GITHUB_SHA" > app/build/outputs/apk/debug/source-commit.txt
+          git rev-parse 'HEAD^{tree}' > app/build/outputs/apk/debug/source-tree.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-omr-development-apk
+          path: |
+            apps/omr-mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/omr-mobile/android/app/build/outputs/apk/debug/app-debug.apk.sha256
+            apps/omr-mobile/android/app/build/outputs/apk/debug/source-commit.txt
+            apps/omr-mobile/android/app/build/outputs/apk/debug/source-tree.txt
+          retention-days: 7

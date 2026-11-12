@@ -1,3 +1,4 @@
+import omrRoutes from './modules/omr/omr.routes';
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -175,6 +176,7 @@ app.use('/api/test-centers', testCentersRoutes);
 app.use('/api/exam-halls', examHallsRoutes);
 app.use('/api/grievances', grievancesRoutes);
 app.use('/api/results', resultsRoutes);
+app.use('/api/omr', omrRoutes);
 app.use('/api/announcements', announcementsRoutes);
 
 // Fallback 404 for unknown routes

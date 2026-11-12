@@ -18,3 +18,11 @@ uploads/
 .cache/
 **/.cache/
 *.zip
+
+# Private candidate reference and scan-rendering artifacts
+tmp/omr-reference/
+
+# Disposable synthetic OMR runtime artifacts
+tmp/omr-dev/
+tmp/dashboard-appearance-evidence/
+workers/omr/.models/

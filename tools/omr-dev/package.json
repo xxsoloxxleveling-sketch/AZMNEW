@@ -1,0 +1,12 @@
+{
+  "name": "azm-omr-isolated-development",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import ../../backend/node_modules/tsx/dist/loader.mjs start.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.15",
+    "@electric-sql/pglite-socket": "0.2.18"
+  }
+}

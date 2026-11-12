@@ -68,6 +68,17 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Use disposable PostgreSQL 17 client tools for native fixtures
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/pg17-tools"
+          container=$(docker ps --filter ancestor=postgres:17 --format '{{.ID}}' | head -1)
+          test -n "$container"
+          for tool in psql pg_dump pg_restore; do
+            printf '#!/usr/bin/env bash\nexec node "%s/tools/omr-dev/pg-client-proxy.mjs" "%s" "%s" "$@"\n' "$GITHUB_WORKSPACE" "$tool" "$container" > "$RUNNER_TEMP/pg17-tools/$tool"
+            chmod +x "$RUNNER_TEMP/pg17-tools/$tool"
+          done
+          echo "AZM_TEST_POSTGRES_BIN=$RUNNER_TEMP/pg17-tools" >> "$GITHUB_ENV"
       - name: Generate Prisma client and validate schema
         working-directory: backend
         run: |

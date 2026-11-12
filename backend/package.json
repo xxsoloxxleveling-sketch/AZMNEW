@@ -14,7 +14,9 @@
     "storage:backfill-thumbnails": "tsx scripts/backfill-student-thumbnails.ts",
     "test:egress": "tsx tests/egress-remediation.test.ts",
     "seed": "tsx prisma/seed.ts",
-    "bootstrap:admin": "tsx scripts/bootstrap-admin.ts"
+    "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
+    "omr:worker": "tsx src/modules/omr/worker.ts",
+    "omr:worker:production": "node dist/modules/omr/worker.js"
   },
   "engines": {
     "node": ">=18"

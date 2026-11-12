@@ -159,14 +159,14 @@ export interface ResultCard {
   fatherName: string;
   cnicBForm: string;
   classLevel: string;
-  testCenter: string;
+  testCenter: string | null;
   totalMarks: number;
   obtainedScore: number;
   percentage: number;
-  percentileRank: number;
-  overallRank: number;
+  percentileRank: number | null;
+  overallRank: number | null;
   category: string;
-  status: 'QUALIFIED FOR INTERVIEW' | 'PARTICIPATION CONFIRMED' | 'RECOMMENDED FOR AWARD';
+  status: 'RESULT PUBLISHED' | 'REVIEWED HISTORICAL RESULT' | 'QUALIFIED FOR INTERVIEW' | 'PARTICIPATION CONFIRMED' | 'RECOMMENDED FOR AWARD';
   interviewDate?: string;
   interviewVenue?: string;
   reportingSlot?: string;

@@ -107,7 +107,7 @@ export const ResultsDeskView: React.FC<ResultsDeskViewProps> = ({ onSelectTab })
           Results & Session V Merit Ledger
         </h1>
         <p className="text-sm text-slate-600">
-          Enter your Roll Number or CNIC to access your authenticated digital result card with subject breakdowns, percentile ranks, and interview call letters.
+          Enter your exact Roll Number or full CNIC to view marks that have been officially released. Additional details appear only when issued.
         </p>
       </div>
 
@@ -169,7 +169,7 @@ export const ResultsDeskView: React.FC<ResultsDeskViewProps> = ({ onSelectTab })
             Check Individual Candidate Result Card
           </h3>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
-            Candidates who appear in the 100 MCQs optical test can enter their Roll Number above to download their verified score certificate and interview call slot.
+            Candidates can enter their exact Roll Number above to view their officially released result. Publication and interview decisions are separate.
           </p>
         </div>
       )}
@@ -253,7 +253,7 @@ export const ResultsDeskView: React.FC<ResultsDeskViewProps> = ({ onSelectTab })
                 <span className="text-5xl font-extrabold text-amber-300 tabular-nums">
                   {currentResult.obtainedScore}
                 </span>
-                <span className="text-slate-400 text-lg font-bold">/ 100</span>
+                <span className="text-slate-400 text-lg font-bold">/ {currentResult.totalMarks}</span>
               </div>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/30">
                 {currentResult.percentage}% Score
@@ -270,10 +270,10 @@ export const ResultsDeskView: React.FC<ResultsDeskViewProps> = ({ onSelectTab })
               </div>
               <div>
                 <div className="text-3xl font-extrabold text-emerald-900 font-display tabular-nums">
-                  Rank #{currentResult.overallRank}
+                  {currentResult.overallRank == null ? 'Rank not issued' : `Rank #${currentResult.overallRank}`}
                 </div>
                 <div className="text-xs text-emerald-700 font-medium mt-1">
-                  Top {100 - currentResult.percentileRank}% Percentile Nationally
+                  {currentResult.percentileRank == null ? 'Percentile not issued' : `Percentile ${currentResult.percentileRank}`}
                 </div>
               </div>
               <span className="text-[11px] font-semibold text-slate-600">
@@ -294,7 +294,7 @@ export const ResultsDeskView: React.FC<ResultsDeskViewProps> = ({ onSelectTab })
                   {currentResult.status}
                 </span>
                 <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                  Candidate has passed the 60/100 threshold and is invited for the 6-member interview panel.
+                  This result has been released by an authorized administrator. Interview and award decisions are announced separately.
                 </p>
               </div>
             </div>
@@ -306,6 +306,7 @@ export const ResultsDeskView: React.FC<ResultsDeskViewProps> = ({ onSelectTab })
               Subject-wise Performance Breakdown:
             </h4>
             <div className="space-y-3">
+              {currentResult.subjectScores.length===0 && <p className="text-xs text-slate-600">A validated subject breakdown has not been issued.</p>}
               {currentResult.subjectScores.map((subj) => (
                 <div key={subj.subject} className="text-xs">
                   <div className="flex items-center justify-between mb-1 font-semibold text-slate-700">

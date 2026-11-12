@@ -1,0 +1,46 @@
+import React from 'react';
+
+const paths:Record<string,React.ReactNode>={
+  scan:<><path d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 7h10v10H7zM10 10h4v4h-4z"/></>,
+  home:<><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 21v-8h6v8"/></>,
+  review:<><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3.5h6M9 10h6M9 14h6M9 18h4"/></>,
+  history:<><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/><path d="M12 7v5l3 2"/></>,
+  settings:<><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M19.4 15a8 8 0 0 0 .1-6l2-1.1-2-3.4-2.2 1a8 8 0 0 0-5.2-2.5L11.5 1h-4l-.5 2.5A8 8 0 0 0 4.5 6L2.4 5 1 8.4l2 1.2a8 8 0 0 0 0 5L1 16l1.5 3.4 2.1-1a8 8 0 0 0 5.3 2.4l.5 2.2h3.5l.5-2.2a8 8 0 0 0 3.1-2l2 1 2-3.5z" transform="translate(1,-1) scale(.92)"/></>,
+  chevron:<path d="m9 18 6-6-6-6"/>,
+  back:<path d="m15 18-6-6 6-6"/>,
+  arrow:<><path d="M4 12h16m-7-7 7 7-7 7"/></>,
+  bell:<><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></>,
+  shield:<><path d="m12 2 8 4v5c0 5-3 9-8 11-5-2-8-6-8-11V6z"/><path d="m9 12 2 2 4-4"/></>,
+  lock:<><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></>,
+  search:<><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></>,
+  camera:<><rect x="2" y="6" width="20" height="15" rx="3"/><path d="m7 6 2-3h6l2 3"/><circle cx="12" cy="13.5" r="4"/></>,
+  file:<><path d="M6 2h8l5 5v15H6zM14 2v5h5M9 12h7M9 16h7"/></>,
+  check:<><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></>,
+  warning:<><path d="m12 3 10 18H2z"/><path d="M12 9v5M12 17h.01"/></>,
+  close:<path d="M5 5l14 14M19 5 5 19"/>,
+  user:<><circle cx="12" cy="8" r="4"/><path d="M4 21c0-5 3-7 8-7s8 2 8 7"/></>,
+  users:<><circle cx="9" cy="9" r="3"/><path d="M2 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 4 5v1"/></>,
+  clock:<><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></>,
+  layers:<><path d="m12 2 10 6-10 6L2 8zM2 12l10 6 10-6M2 16l10 6 10-6"/></>,
+  switch:<><path d="M3 7h17m-4-4 4 4-4 4M21 17H4m4-4-4 4 4 4"/></>,
+  wifi:<><path d="M2 9a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8 15a6 6 0 0 1 8 0"/><circle cx="12" cy="19" r="1" fill="currentColor"/></>,
+  refresh:<><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5M4 16a8 8 0 0 0 14 3l3-3m0 5v-5h-5"/></>,
+  calendar:<><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6M17 2v6M3 10h18M7 14h3M14 14h3"/></>,
+  id:<><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M5 16c.5-2 5.5-2 6 0M14 9h5M14 13h5"/></>,
+  spark:<><path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/></>,
+  flash:<><path d="m13 2-9 12h7l-1 8 10-13h-7z"/></>,
+  crop:<><path d="M6 2v16a2 2 0 0 0 2 2h14M2 6h16a2 2 0 0 1 2 2v14"/></>,
+  sun:<><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9 6.3 6.3m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></>,
+  upload:<><path d="M12 16V3m-5 5 5-5 5 5M4 16v4h16v-4"/></>,
+  eye:<><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></>,
+  qr:<><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM19 14h2v2h-2M19 19h2v2h-2M14 19h2v2h-2"/></>,
+  info:<><circle cx="12" cy="12" r="10"/><path d="M12 11v6M12 7v.01"/></>,
+  logout:<><path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5M14 16l4-4-4-4M8 12h10"/></>,
+  chart:<><path d="M4 20V10M10 20V5M16 20v-8M22 20V3M2 20h21"/></>,
+  menu:<path d="M4 6h16M4 12h16M4 18h16"/>,
+  filter:<><path d="M3 6h18M7 12h10M10 18h4"/></>,
+  dots:<><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></>
+};
+export function Icon({name,size=20,className='',strokeWidth=1.8}:{name:string;size?:number;className?:string;strokeWidth?:number}){
+ return <svg aria-hidden="true" className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">{paths[name]||paths.info}</svg>;
+}

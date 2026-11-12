@@ -30,6 +30,15 @@ enum StudentDocumentAuditAction {
 }
 
 model User {
+  omrLegacyReviews OmrLegacyPublication[] @relation("OmrLegacyActor")
+  omrExamsCreated OmrExam[] @relation("OmrExamCreator")
+  omrPermissions OmrExamPermission[]
+  omrKeysCreated OmrAnswerKeyRevision[] @relation("OmrKeyCreator")
+  omrKeysApproved OmrAnswerKeyRevision[] @relation("OmrKeyApprover")
+  omrUploads OmrScanBatch[] @relation("OmrUploader")
+  omrResultsApproved OmrExamResult[] @relation("OmrResultApprover")
+  omrCorrections OmrCorrectionAudit[] @relation("OmrCorrectionActor")
+  omrPublications OmrPublicationAudit[] @relation("OmrPublicationActor")
   staff        Staff?
   id           String   @id @default(cuid())
   name         String
@@ -61,6 +70,9 @@ enum ScholarshipCategory {
 }
 
 model Student {
+  omrLegacyReviews OmrLegacyPublication[]
+  omrScans OmrScan[]
+  omrExamResults OmrExamResult[]
   id                 String        @id @default(cuid())
   applicationNo      String        @unique
   studentId          String?       @unique
@@ -739,4 +751,223 @@ model SystemSetting {
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
+}
+
+// OMR examination evidence is independent of attendance lifecycle attempts.
+model OmrExam {
+  id String @id @default(cuid())
+  code String
+  title String
+  session String
+  candidateGroup String
+  examDate DateTime
+  questionCount Int @default(100)
+  correctMarks Decimal @default(1) @db.Decimal(12,4)
+  incorrectPenalty Decimal @default(0) @db.Decimal(12,4)
+  minimumScore Decimal? @db.Decimal(12,4)
+  allowedVersions String[] @default(["A", "B", "C", "D"])
+  status String @default("DRAFT")
+  publicationStatus String @default("WITHHELD")
+  releaseAt DateTime?
+  createdBy String
+  creator User @relation("OmrExamCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  keys OmrAnswerKeyRevision[]
+  batches OmrScanBatch[]
+  scans OmrScan[]
+  results OmrExamResult[]
+  permissions OmrExamPermission[]
+  @@unique([code, candidateGroup])
+  @@index([createdBy])
+  @@index([status, examDate])
+}
+
+model OmrExamPermission {
+  examId String
+  userId String
+  canScan Boolean @default(false)
+  canReview Boolean @default(false)
+  canManage Boolean @default(false)
+  exam OmrExam @relation(fields: [examId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@id([examId, userId])
+  @@index([userId])
+}
+
+model OmrAnswerKeyRevision {
+  id String @id @default(cuid())
+  examId String
+  candidateGroup String
+  paperVersion String
+  revision Int
+  answers Json
+  subjectMap Json?
+  status String @default("DRAFT")
+  isSynthetic Boolean @default(true)
+  createdBy String
+  approvedBy String?
+  approvedAt DateTime?
+  createdAt DateTime @default(now())
+  exam OmrExam @relation(fields: [examId], references: [id], onDelete: Restrict)
+  creator User @relation("OmrKeyCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  approver User? @relation("OmrKeyApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+  results OmrExamResult[]
+  @@unique([examId, candidateGroup, paperVersion, revision])
+  @@index([createdBy])
+  @@index([approvedBy])
+}
+
+model OmrScanBatch {
+  attempts Int @default(0)
+  lockedAt DateTime?
+  lockedBy String?
+  nextAttemptAt DateTime @default(now())
+  errorCode String?
+  id String @id @default(cuid())
+  examId String
+  uploadedBy String
+  source String
+  originalObjectKey String
+  fileHash String
+  status String @default("QUEUED")
+  createdAt DateTime @default(now())
+  exam OmrExam @relation(fields: [examId], references: [id], onDelete: Restrict)
+  uploader User @relation("OmrUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  items OmrScanBatchItem[]
+  @@index([examId, createdAt])
+  @@index([uploadedBy])
+  @@index([status, nextAttemptAt, createdAt], map: "OmrScanBatch_queue_idx")
+}
+
+model OmrScanBatchItem {
+  id String @id @default(cuid())
+  batchId String
+  pageIndex Int
+  scanId String?
+  status String @default("QUEUED")
+  errorCode String?
+  batch OmrScanBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  scan OmrScan? @relation(fields: [scanId], references: [id], onDelete: Restrict)
+  @@unique([batchId, pageIndex])
+  @@index([scanId])
+}
+
+model OmrScan {
+  id String @id @default(cuid())
+  examId String
+  studentId String?
+  fileHash String
+  pageIndex Int @default(1)
+  originalObjectKey String
+  annotationObjectKey String?
+  templateVersion String?
+  paperVersion String?
+  status String @default("QUEUED")
+  rawDetection Json?
+  identityVerified Boolean @default(false)
+  identityOverrideReason String?
+  errorCode String?
+  attempts Int @default(0)
+  lockedAt DateTime?
+  lockedBy String?
+  nextAttemptAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  processedAt DateTime?
+  exam OmrExam @relation(fields: [examId], references: [id], onDelete: Restrict)
+  student Student? @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  items OmrScanBatchItem[]
+  responses OmrDetectedResponse[]
+  results OmrExamResult[]
+  corrections OmrCorrectionAudit[]
+  @@unique([examId, fileHash, pageIndex])
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([studentId])
+}
+
+model OmrDetectedResponse {
+  scanId String
+  question Int
+  detectedAnswer String
+  reviewedAnswer String?
+  evidence Json
+  scan OmrScan @relation(fields: [scanId], references: [id], onDelete: Restrict)
+  @@id([scanId, question])
+}
+
+model OmrExamResult {
+  id String @id @default(cuid())
+  examId String
+  studentId String
+  sourceScanId String
+  answerKeyId String
+  grade Json
+  score Decimal @db.Decimal(12,4)
+  maximumScore Decimal @db.Decimal(12,4)
+  status String @default("DRAFT")
+  rank Int?
+  subjectScores Json?
+  approvedBy String?
+  approvedAt DateTime?
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  exam OmrExam @relation(fields: [examId], references: [id], onDelete: Restrict)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  scan OmrScan @relation(fields: [sourceScanId], references: [id], onDelete: Restrict)
+  key OmrAnswerKeyRevision @relation(fields: [answerKeyId], references: [id], onDelete: Restrict)
+  approver User? @relation("OmrResultApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+  publications OmrPublicationAudit[]
+  @@unique([examId, studentId])
+  @@index([studentId])
+  @@index([sourceScanId])
+  @@index([answerKeyId])
+  @@index([approvedBy])
+  @@index([examId, status])
+}
+
+model OmrCorrectionAudit {
+  id String @id @default(cuid())
+  scanId String
+  actorId String
+  question Int?
+  previous Json
+  next Json
+  reason String
+  createdAt DateTime @default(now())
+  scan OmrScan @relation(fields: [scanId], references: [id], onDelete: Restrict)
+  actor User @relation("OmrCorrectionActor", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([scanId, createdAt])
+  @@index([actorId])
+}
+
+model OmrPublicationAudit {
+  id String @id @default(cuid())
+  resultId String
+  actorId String
+  action String
+  snapshot Json
+  reason String
+  createdAt DateTime @default(now())
+  result OmrExamResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  actor User @relation("OmrPublicationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([resultId, createdAt])
+  @@index([actorId])
+}
+
+// Explicit historical release decisions; no automatic score backfill or student rewrites.
+model OmrLegacyPublication {
+  id String @id @default(cuid())
+  studentId String
+  actorId String
+  state String
+  isSynthetic Boolean @default(true)
+  snapshot Json
+  evidenceReference String
+  reason String
+  createdAt DateTime @default(now())
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  actor User @relation("OmrLegacyActor", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([studentId, createdAt])
+  @@index([actorId])
 }

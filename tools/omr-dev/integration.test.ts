@@ -1,0 +1,76 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+import { startDevelopment } from './start';
+import { generateSheet } from './generate-sheet';
+test('full synthetic application flow retains private drafts and idempotent official records', {timeout:180000},async()=>{
+  const image=await generateSheet();
+  const development=await startDevelopment({apiPort:0,workerEnabled:false});
+  console.log(`Disposable full-history engine: ${development.version}; migrations: ${development.appliedMigrations}. Native concurrency is a separate release check.`);
+  try {
+    const request=async(path:string,token:string,method='GET',body?:unknown,raw=false)=>{
+      const response=await fetch(development.url+path,{method,headers:{...(token?{Authorization:`Bearer ${token}`} :{}),...(body?{'Content-Type':raw?'image/png':'application/json'}:{})},body:body?raw?body as BodyInit:JSON.stringify(body):undefined});
+      const payload=await response.json();return {status:response.status,data:payload.data,error:payload.error};
+    };
+    const login=async(email:string)=>{
+      const response=await request('/api/auth/login','','POST',{email,password:'Synthetic-Omr-Only-2026!'});assert.equal(response.status,200);return response.data.accessToken as string;
+    };
+    const {prisma}=require('../../backend/src/lib/prisma.ts');
+    const teacher=await login('teacher@omr.test'),admin=await login('admin@omr.test'),superAdmin=await login('super@omr.test');
+    const exam='synthetic-omr-exam';
+    const examBody={code:'SYNTHETIC-API-CHECK',title:'Synthetic API examination',session:'SYNTHETIC-OTHER',candidateGroup:'CLASS 6TH',examDate:'2026-11-15T09:00:00Z',allowedVersions:['A']};
+    assert.equal((await request('/api/omr/exams',admin,'POST',examBody)).status,403);
+    const created=await request('/api/omr/exams',superAdmin,'POST',examBody);assert.equal(created.status,201);
+    const configured=created.data.id;
+    assert.equal((await request(`/api/omr/exams/${configured}`,superAdmin,'PUT',{...examBody,title:'Synthetic configured examination'})).status,200);
+    assert.equal((await request(`/api/omr/exams/${configured}/permissions`,superAdmin,'PUT',{userId:'synthetic-teacher',canScan:true,canReview:false,canManage:false})).status,200);
+    assert.equal((await request(`/api/omr/exams/${configured}/approve`,superAdmin,'POST')).status,200);
+    assert.equal((await request(`/api/omr/exams/${configured}`,superAdmin,'PUT',examBody)).status,409);
+    assert.equal((await request(`/api/omr/exams/${configured}/keys`,superAdmin,'POST',{paperVersion:'A',answers:Array(99).fill('A'),isSynthetic:true})).status,400);
+    const key=await request(`/api/omr/exams/${configured}/keys`,superAdmin,'POST',{paperVersion:'A',answers:Array(100).fill('A'),isSynthetic:true});assert.equal(key.status,201);
+    assert.equal((await request(`/api/omr/exams/${configured}/keys/${key.data.id}/approve`,superAdmin,'POST')).status,200);
+    assert.equal((await request(`/api/omr/exams/${configured}/keys/${key.data.id}/approve`,superAdmin,'POST')).status,409);
+    assert.equal((await request(`/api/omr/exams/${configured}/keys`,teacher)).status,403);
+    assert.equal((await request('/api/omr/legacy',teacher)).status,403);
+    assert.equal((await request('/api/omr/legacy',superAdmin)).status,200);
+    assert.equal((await request('/api/results/merit-list','')).status,200);
+
+    assert.equal((await request(`/api/omr/exams/${exam}/keys`,teacher)).status,403);
+    const bytes=await fs.readFile(image);
+    const uploaded=await request(`/api/omr/exams/${exam}/batches`,teacher,'POST',bytes,true);assert.equal(uploaded.status,202);
+    await development.tick();await development.tick();await development.tick();
+    const batch=await request(`/api/omr/batches/${uploaded.data.id}`,teacher);assert.equal(batch.status,200);
+    assert.equal(batch.data.items.length,1);const scan=batch.data.items[0].scan;
+    const internal=await prisma.omrScan.findUniqueOrThrow({where:{id:scan.id}});
+    const diagnostic={reason:internal.rawDetection?.reason,quality:internal.rawDetection?.quality,status:scan.status};
+    await fs.writeFile(new URL('../../tmp/omr-dev/recognition-diagnostic.json',import.meta.url),JSON.stringify(diagnostic,null,2));
+    assert.ok(['REVIEW_REQUIRED','RECOGNIZED'].includes(scan.status),`Unexpected recognition state: ${JSON.stringify(diagnostic)}`);
+    const evidence=await request(`/api/omr/scans/${scan.id}`,admin);assert.equal(evidence.data.responses.length,100);
+    assert.deepEqual(evidence.data.responses.map((row:{detectedAnswer:string})=>row.detectedAnswer),Array(100).fill('A'));
+    const originalCandidate=await prisma.student.findUniqueOrThrow({where:{id:'synthetic-omr-candidate'}});
+    const {id:oldId,createdAt,updatedAt,...candidateData}=originalCandidate;
+    await prisma.student.create({data:{...candidateData,id:'synthetic-other-candidate',fullName:'Synthetic Other Candidate',applicationNo:'SYNTHETIC-APP-0002',qrToken:'synthetic-qr-other',rollNumber:'SYNTHETIC-OMR-0002',cnicOrBForm:'SYNTHETIC-OTHER-IDENTITY'}});
+    const wrongIdentity=await request(`/api/omr/scans/${scan.id}/review`,admin,'PATCH',{reason:'Synthetic conflicting QR must reject override',identityLookup:'SYNTHETIC-APP-0002',printedRollNumber:'SYNTHETIC-OMR-0002',identityConfirmed:true,answers:[]});
+    assert.equal(wrongIdentity.status,409);assert.match(wrongIdentity.error.message,/Conflicting QR/);
+    assert.equal(await prisma.omrExamResult.count({where:{studentId:'synthetic-other-candidate'}}),0);
+    const reviewed=await request(`/api/omr/scans/${scan.id}/review`,admin,'PATCH',{reason:'Synthetic printed candidate identity checked',identityLookup:'SYNTHETIC-APP-0001',printedRollNumber:'SYNTHETIC-OMR-0001',identityConfirmed:true,paperVersion:'A',answers:[]});assert.equal(reviewed.status,200,JSON.stringify(reviewed.error));
+    const results=await request(`/api/omr/exams/${exam}/results`,admin);assert.equal(results.data.total,1);assert.equal(Number(results.data.items[0].score),100);assert.equal(results.data.items[0].status,'DRAFT');
+    const original=await fetch(development.url+`/api/omr/scans/${scan.id}/image`,{headers:{Authorization:`Bearer ${teacher}`}});assert.equal(original.status,200);assert.match(original.headers.get('cache-control')||'',/no-store/);
+    assert.equal((await request(`/api/omr/scans/${scan.id}/approve`,teacher,'POST',{reason:'Unauthorized synthetic attempt'})).status,403);
+    await prisma.student.update({where:{id:'synthetic-omr-candidate'},data:{currentClass:'Class 10th'}});
+    const changedGroup=await request(`/api/omr/scans/${scan.id}/approve`,admin,'POST',{reason:'Synthetic changed group must block approval'});
+    assert.equal(changedGroup.status,409);assert.match(changedGroup.error.message,/eligibility changed/);
+    await prisma.student.update({where:{id:'synthetic-omr-candidate'},data:{currentClass:'Class 6th'}});
+    const approved=await request(`/api/omr/scans/${scan.id}/approve`,admin,'POST',{reason:'Synthetic complete answer review approved'});assert.equal(approved.status,200,JSON.stringify(approved.error));
+    assert.equal((await request(`/api/omr/exams/${exam}/publish`,superAdmin,'POST',{reason:'Synthetic release must remain disabled',resultIds:[results.data.items[0].id]})).status,409);
+    assert.equal((await request(`/api/omr/exams/${exam}/publish`,superAdmin,'POST',{reason:'Repeated synthetic release remains disabled',resultIds:[results.data.items[0].id]})).status,409);
+    const duplicate=await request(`/api/omr/exams/${exam}/batches`,teacher,'POST',bytes,true);assert.equal(duplicate.status,202);await development.tick();await development.tick();
+    const duplicateBatch=await request(`/api/omr/batches/${duplicate.data.id}`,teacher);assert.equal(duplicateBatch.data.items[0].status,'DUPLICATE');
+    assert.equal((await request(`/api/omr/exams/${exam}/results`,admin)).data.total,1);
+    const teacherEvidence=await request(`/api/omr/scans/${scan.id}`,teacher);assert.equal(teacherEvidence.data.results[0].score,undefined);
+    const publicResult=await request('/api/results/search?query=SYNTHETIC-OMR-0001','');assert.notEqual(publicResult.data?.isEvaluated,true);
+    assert.equal((await request(`/api/omr/exams/${exam}/batches`,teacher,'POST',Buffer.from('fake PNG'),true)).status,415);
+  } finally {await development.stop();}
+});

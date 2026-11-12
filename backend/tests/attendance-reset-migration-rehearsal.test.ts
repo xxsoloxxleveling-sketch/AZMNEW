@@ -1,3 +1,4 @@
+import { postgresExecutable } from './postgres-binaries';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -30,7 +31,7 @@ async function run() {
     for (const name of names) await admin.query(`CREATE DATABASE "${name}"`);
     const prismaDir = path.join(fixture, 'prisma'); const oldMigrations = path.join(prismaDir, 'migrations'); fs.mkdirSync(oldMigrations, { recursive: true });
     for (const folder of fs.readdirSync(path.join(backend, 'prisma/migrations'))) {
-      if (folder === migration) continue;
+      if (folder >= migration) continue; // A genuine pre-reset fixture cannot include later dependent migrations.
       fs.cpSync(path.join(backend, 'prisma/migrations', folder), path.join(oldMigrations, folder), { recursive: true });
     }
     const oldSchema = path.join(prismaDir, 'schema.prisma');
@@ -103,13 +104,20 @@ async function run() {
     await check('forged standalone or incomplete audit insertion is rejected',()=>rollbackAttack(()=>upgrade.query(`INSERT INTO "AttendanceResetOperation" (id,"actorId","actorName","idempotencyKey","challengeNonce","requestHash",reason,mode,"businessDate","affectedCandidates",scope,result) VALUES ('forged','migration-super','Liar','not-a-uuid','not-a-nonce','fake','','FAKE','2026-10-11',-1,'{}','{}')`)));
     await check('CLOSED evidence and frozen candidate references reject direct modifications/deletion',async()=>{for(const statement of [`UPDATE "Attendance" SET status='LATE' WHERE "sessionId"='closed'`,`DELETE FROM "AttendanceSessionCandidate" WHERE "sessionId"='closed'`,`UPDATE "AttendanceSession" SET "closedAt"=now() WHERE id='closed'`,`DELETE FROM "Student" WHERE id='closed-qr'`])await assert.rejects(()=>upgrade.query(statement));});
     process.env.DATABASE_URL=urlFor(names[1]);process.env.DIRECT_URL=urlFor(names[1]);
-    const {PrismaClient}=await import('@prisma/client');db=new PrismaClient();const {AttendanceResetService}=await import('../src/modules/attendance/attendanceReset.service');const reset=new AttendanceResetService(db);
+    // Exercise the historical target schema with its own generated client; the current full-history client
+    // includes later PRE_OPEN/session fields which intentionally do not exist in this target-only rehearsal.
+    const legacyClient=path.join(fixture,'generated-client');
+    fs.writeFileSync(oldSchema,fs.readFileSync(oldSchema,'utf8').replace(/generator client\s*\{[^}]*\}/s,`generator client {\n provider = ${JSON.stringify('node '+JSON.stringify(path.join(backend,'node_modules/@prisma/client/generator-build/index.js').split(path.sep).join('/')))}\n output = ${JSON.stringify(legacyClient)}\n}`));
+    const legacyEnv={...process.env,NODE_ENV:'test',DATABASE_URL:urlFor(names[1]),DIRECT_URL:urlFor(names[1])};
+    execFileSync(process.execPath,[cli,'db','pull','--schema',oldSchema],{cwd:backend,env:legacyEnv,stdio:'pipe'});
+    execFileSync(process.execPath,[cli,'generate','--schema',oldSchema],{cwd:backend,env:legacyEnv,stdio:'pipe'});
+    const {PrismaClient}=require(legacyClient);db=new PrismaClient();const {AttendanceResetService}=await import('../src/modules/attendance/attendanceReset.service');const reset=new AttendanceResetService(db);
     await check('Prisma mixed OPEN/CLOSED archival validates deferred constraints and exact evidence preservation',async()=>{const preview=await reset.preview({mode:'SELECTED',businessDate:'2026-10-10',sessionIds:['open','closed']},'migration-super');const result:any=await reset.confirm({challenge:preview.challenge,reason:'Migration rehearsal reset',confirmationText:'RESET ATTENDANCE'},'migration-super',randomUUID());assert.equal(result.attempts.length,2);for(const attempt of result.attempts){const previous=await db.attendanceSession.findUnique({where:{id:attempt.previousSessionId}});assert.equal(previous.isCurrent,false);assert.equal(previous.status,attempt.previousSessionId==='closed'?'CLOSED':'OPEN');const next=await db.attendanceSession.findUnique({where:{id:attempt.newSessionId},include:{attendance:true,candidates:true}});assert.equal(next.status,'OPEN');assert.equal(next.attemptNumber,2);assert.equal(next.attendance.length,0);assert.equal(next.candidates.length,3);}for(const table of tables.filter(t=>!['AttendanceSession','AttendanceSessionCandidate'].includes(t)))assert.deepEqual((await rows())[table],before[table]);});
     await check('duplicate audit of an already reset old attempt is rejected even with fresh identifiers',async()=>{const operation=await db.attendanceResetOperation.findFirst();assert(operation,'valid rehearsal reset required');await rollbackAttack(()=>upgrade.query(`INSERT INTO "AttendanceResetOperation" (id,"actorId","actorName","idempotencyKey","challengeNonce","requestHash",reason,mode,"businessDate","affectedCandidates",scope,result,"completedAt") SELECT $1,"actorId","actorName",$2,$3,"requestHash",reason,mode,"businessDate","affectedCandidates",scope,jsonb_set(result,'{resetReference}',to_jsonb($1::text)),"completedAt" FROM "AttendanceResetOperation" WHERE id=$4`,[randomUUID(),randomUUID(),randomUUID(),operation.id]));});
     await check('archived attempts reject edits and repeated generations preserve the exact old CLOSED metadata',async()=>{for(const table of ['AttendanceSession','AttendanceSessionCandidate','Attendance'])await assert.rejects(()=>upgrade.query(`DELETE FROM "${table}" WHERE ${table==='AttendanceSession'?'id':'"sessionId"'}='closed'`));const previous=(await upgrade.query(`SELECT to_jsonb(t)-ARRAY['attemptNumber','isCurrent','archivedAt'] AS row FROM "AttendanceSession" t WHERE id='closed'`)).rows[0].row;assert.deepEqual(previous,(before.AttendanceSession as any[]).find(row=>row.id==='closed'));const currents=await db.attendanceSession.findMany({where:{isCurrent:true}});const preview=await reset.preview({mode:'CURRENT',businessDate:'2026-10-10',sessionIds:currents.map((row:any)=>row.id)},'migration-super');const result:any=await reset.confirm({challenge:preview.challenge,reason:'Repeated migration rehearsal reset',confirmationText:'RESET ATTENDANCE'},'migration-super',randomUUID());assert(result.attempts.every((row:any)=>row.attemptNumber===3));});
     await check('custom-format backup restores exact synthetic rows, FKs and immutable triggers into a fresh database', async () => {
-      const pgBin = process.env.ATTENDANCE_TEST_PG_BIN || 'C:/Program Files/PostgreSQL/18/bin';
-      const executable = (name: string) => path.join(pgBin, name + (process.platform === 'win32' ? '.exe' : ''));
+
+      const executable = postgresExecutable;
       assert(fs.existsSync(executable('pg_dump')) && fs.existsSync(executable('pg_restore')), 'Set ATTENDANCE_TEST_PG_BIN to local PostgreSQL backup tools');
       const credentials = { ...process.env, PGPASSWORD: decodeURIComponent(source.password), PGSSLMODE: 'disable' };
       const argumentsFor = (name: string) => ['--host', source.hostname, '--port', source.port || '5432', '--username', decodeURIComponent(source.username), '--dbname', name];
