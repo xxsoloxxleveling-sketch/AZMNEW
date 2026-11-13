@@ -26,6 +26,28 @@ function sendPublicResultsUnavailable(res: Response) {
 }
 
 export class ResultsController {
+  constructor() {
+    // Express invokes route handlers without a receiver; retain the controller
+    // instance for helpers such as actor(), noStore(), and sendPdf().
+    this.verifyOfficialDmc = this.verifyOfficialDmc.bind(this);
+    this.getOfficialExaminations = this.getOfficialExaminations.bind(this);
+    this.getOfficialResults = this.getOfficialResults.bind(this);
+    this.getStudentOfficialHistory = this.getStudentOfficialHistory.bind(this);
+    this.getOfficialResult = this.getOfficialResult.bind(this);
+    this.getOfficialCorrections = this.getOfficialCorrections.bind(this);
+    this.createOfficialExamination = this.createOfficialExamination.bind(this);
+    this.publishOfficialExamination = this.publishOfficialExamination.bind(this);
+    this.createOfficialDraftResult = this.createOfficialDraftResult.bind(this);
+    this.correctOfficialResult = this.correctOfficialResult.bind(this);
+    this.prepareOfficialDmc = this.prepareOfficialDmc.bind(this);
+    this.previewOfficialDmc = this.previewOfficialDmc.bind(this);
+    this.issueOfficialDmc = this.issueOfficialDmc.bind(this);
+    this.getOfficialDmcIssuances = this.getOfficialDmcIssuances.bind(this);
+    this.downloadOfficialDmc = this.downloadOfficialDmc.bind(this);
+    this.downloadElectronicDmc = this.downloadElectronicDmc.bind(this);
+    this.revokeOfficialDmc = this.revokeOfficialDmc.bind(this);
+  }
+
   private actor(req: Request) {
     if (!req.user) throw Object.assign(new Error('Authentication required.'), { statusCode: 401, code: 'AUTHENTICATION_REQUIRED' });
     return { id: req.user.id, name: req.user.name };
