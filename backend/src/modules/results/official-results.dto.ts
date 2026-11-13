@@ -34,6 +34,7 @@ export interface OfficialResultSummary {
   resultReference: string;
   studentId: string;
   examinationId: string;
+  attempt: { id: string; attemptNumber: number; businessDate: string; state: 'CURRENT' | 'HISTORICAL'; boundAt: string } | null;
   student: OfficialResultStudentSummary;
   examination: OfficialExaminationSummary;
   paperVersion: string | null;
@@ -57,7 +58,7 @@ export interface OfficialResultSummary {
   updatedAt: string;
   documents: {
     electronicAvailable: boolean;
-    latestOfficialIssuanceStatus: 'NONE' | 'ISSUED' | 'SUPERSEDED' | 'REVOKED';
+    latestOfficialIssuanceStatus: 'NONE' | 'ISSUED' | 'SUPERSEDED' | 'REVOKED' | 'ATTEMPT_UNVERIFIED';
     officialIssuanceCount: number;
   };
 }

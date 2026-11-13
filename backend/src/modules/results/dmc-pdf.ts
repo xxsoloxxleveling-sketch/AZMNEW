@@ -88,6 +88,7 @@ function loadLogoDataUri(): string | null {
 
 function assertFinalResult(data: OfficialDmcPdfData, expectedType: OfficialDmcPdfData['documentType']): void {
   const result = data.result;
+  if (!result.attempt?.id || !Number.isInteger(result.attempt.attemptNumber)) throw new Error('A verified examination attempt is required to generate a certificate.');
   if (data.documentType !== expectedType) throw new Error('The requested certificate type does not match the result snapshot.');
   if (!data.documentNumber.trim()) throw new Error('A document number is required to render a marks certificate.');
   if (data.resultRevision !== result.resultRevision) throw new Error('The certificate snapshot revision does not match the result revision.');
@@ -224,7 +225,7 @@ function electronicHtml(data: OfficialDmcPdfData): string {
     <main class="sheet" aria-labelledby="edmc-title">
       <header class="brandline">${logoMarkup()}<div class="brandcopy"><strong>AZM.AIO</strong><span>Scholarship examination results</span></div><div class="type-label">Electronic certificate</div></header>
       <h1 id="edmc-title">Electronic Detailed Marks Certificate</h1>
-      <p class="subtitle">${escapeHtml(result.examination.title)} · ${escapeHtml(result.examination.sessionReference)}</p>
+      <p class="subtitle">${escapeHtml(result.examination.title)} · ${escapeHtml(result.examination.sessionReference)} · Attempt ${escapeHtml(String(result.attempt?.attemptNumber ?? 'unverified'))} (${escapeHtml(result.attempt?.businessDate ?? 'date unavailable')})</p>
       <div class="refline"><span>Result reference&nbsp; <strong>${escapeHtml(result.resultReference)}</strong></span><span>Examination reference&nbsp; <strong>${escapeHtml(result.examination.reference)}</strong></span></div>
       <h2 class="section-title">Candidate and examination</h2>
       <div class="details">
@@ -262,7 +263,7 @@ function officialHtml(data: OfficialDmcPdfData): string {
     <main class="sheet" aria-labelledby="official-title">
       <header class="brandline">${logoMarkup()}<div class="brandcopy"><strong>AZM.AIO</strong><span>Scholarship examination results</span></div><div class="type-label">Official document</div></header>
       <h1 id="official-title">Official Detailed Marks Certificate</h1>
-      <p class="subtitle">${escapeHtml(result.examination.title)} · ${escapeHtml(result.examination.sessionReference)}</p>
+      <p class="subtitle">${escapeHtml(result.examination.title)} · ${escapeHtml(result.examination.sessionReference)} · Attempt ${escapeHtml(String(result.attempt?.attemptNumber ?? 'unverified'))} (${escapeHtml(result.attempt?.businessDate ?? 'date unavailable')})</p>
       <div class="refline"><span>Certificate number&nbsp; <strong>${escapeHtml(data.documentNumber)}</strong></span><span>Result revision&nbsp; <strong>${escapeHtml(data.resultRevision)}</strong></span></div>
       <h2 class="section-title">Candidate and examination particulars</h2>
       <div class="details">

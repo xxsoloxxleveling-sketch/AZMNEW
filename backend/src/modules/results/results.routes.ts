@@ -15,6 +15,7 @@ import {
   examinationPublicationSchema,
   officialExaminationsQuerySchema,
   officialResultsPageQuerySchema,
+  bindOfficialAttemptSchema,
 } from './results.schema';
 
 const router = Router();
@@ -43,6 +44,7 @@ adminRouter.get('/sessions/:sessionId/results', validateQuery(adminResultsPageQu
 adminRouter.get('/examinations', validateQuery(officialExaminationsQuerySchema), resultsController.getOfficialExaminations);
 adminRouter.get('/results', validateQuery(officialResultsPageQuerySchema), resultsController.getOfficialResults);
 adminRouter.get('/students/:studentId', resultsController.getStudentOfficialHistory);
+adminRouter.get('/students/:studentId/attempts', authorizeRoles(Role.SUPER_ADMIN), resultsController.getOfficialAttemptChoices);
 adminRouter.get('/:resultId/corrections', resultsController.getOfficialCorrections);
 adminRouter.get('/:resultId/dmc/official/issuances', resultsController.getOfficialDmcIssuances);
 adminRouter.get('/:resultId/dmc/official/preparations/:preparationId/preview', resultsController.previewOfficialDmc);
@@ -55,6 +57,7 @@ adminRouter.post('/examinations', authorizeRoles(Role.SUPER_ADMIN), validateBody
 adminRouter.post('/examinations/:examId/publication', authorizeRoles(Role.SUPER_ADMIN), validateBody(examinationPublicationSchema), resultsController.publishOfficialExamination);
 adminRouter.post('/examinations/:examId/results', authorizeRoles(Role.SUPER_ADMIN), validateBody(createDraftResultSchema), resultsController.createOfficialDraftResult);
 adminRouter.post('/:resultId/corrections', authorizeRoles(Role.SUPER_ADMIN), validateBody(correctResultSchema), resultsController.correctOfficialResult);
+adminRouter.post('/:resultId/attempt-binding', authorizeRoles(Role.SUPER_ADMIN), validateBody(bindOfficialAttemptSchema), resultsController.bindOfficialAttempt);
 adminRouter.post('/:resultId/dmc/official/prepare', authorizeRoles(Role.SUPER_ADMIN), validateBody(dmcPrepareSchema), resultsController.prepareOfficialDmc);
 adminRouter.post('/:resultId/dmc/official/issue', authorizeRoles(Role.SUPER_ADMIN), validateBody(dmcIssueSchema), resultsController.issueOfficialDmc);
 adminRouter.post('/:resultId/dmc/official/:issuanceId/revoke', authorizeRoles(Role.SUPER_ADMIN), validateBody(dmcRevokeSchema), resultsController.revokeOfficialDmc);

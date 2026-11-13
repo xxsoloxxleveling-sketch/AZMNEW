@@ -56,7 +56,7 @@ export type OfficialVerificationStatus = 'PENDING' | 'VERIFIED' | 'WITHHELD';
 export type OfficialPublicationStatus = 'UNPUBLISHED' | 'PUBLISHED' | 'WITHHELD';
 export type OfficialResponseClassification = 'CORRECT' | 'WRONG' | 'BLANK' | 'MULTIPLE' | 'UNCERTAIN';
 export type OfficialResponseSource = 'OMR_DETECTED' | 'HUMAN_REVIEW' | 'ADMIN_CORRECTION' | 'MANUAL_ENTRY';
-export type OfficialDocumentStatus = 'NONE' | 'ISSUED' | 'SUPERSEDED' | 'REVOKED';
+export type OfficialDocumentStatus = 'NONE' | 'ISSUED' | 'SUPERSEDED' | 'REVOKED' | 'ATTEMPT_UNVERIFIED';
 
 export interface OfficialExaminationSummary {
   id: string;
@@ -85,6 +85,7 @@ export interface OfficialResultSummary {
   resultReference: string;
   studentId: string;
   examinationId: string;
+  attempt: { id: string; attemptNumber: number; businessDate: string; state: 'CURRENT' | 'HISTORICAL'; boundAt: string } | null;
   student: OfficialResultStudentSummary;
   examination: OfficialExaminationSummary;
   paperVersion: string | null;
@@ -304,6 +305,14 @@ export function getStudentOfficialResults(studentId: string, requestOptions?: Re
 
 export function getOfficialResultDetail(resultId: string, requestOptions?: RequestInit) {
   return apiFetch<OfficialResultDetail>(`/api/results/admin/${encodeURIComponent(resultId)}`, requestOptions);
+}
+
+export type OfficialAttemptChoice = { id: string; attemptNumber: number; businessDate: string; state: 'CURRENT' | 'HISTORICAL'; status: string; hall: string; center: string | null };
+export function getOfficialAttemptChoices(studentId: string) {
+  return apiFetch<OfficialAttemptChoice[]>(`/api/results/admin/students/${encodeURIComponent(studentId)}/attempts`);
+}
+export function bindOfficialAttempt(resultId: string, sessionId: string, evidence: string) {
+  return apiFetch(`/api/results/admin/${encodeURIComponent(resultId)}/attempt-binding`,{method:'POST',body:JSON.stringify({sessionId,evidence,confirmed:true})});
 }
 
 export function getOfficialResultCorrections(resultId: string, requestOptions?: RequestInit) {

@@ -128,6 +128,7 @@ export const examinationPublicationSchema = z.object({
 }).strict();
 
 export const dmcPrepareSchema = z.object({ expectedRevision: z.number().int().min(1) }).strict();
+export const bindOfficialAttemptSchema = z.object({ sessionId: boundedId, evidence: z.string().trim().min(12).max(1000), confirmed: z.literal(true) }).strict();
 export const dmcIssueSchema = z.object({
   preparationId: boundedId,
   expectedRevision: z.number().int().min(1),

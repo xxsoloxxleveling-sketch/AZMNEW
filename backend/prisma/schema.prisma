@@ -469,6 +469,8 @@ model AttendanceSession {
   candidates               AttendanceSessionCandidate[]
   attendance               Attendance[]
   legacyExamResultHistory  ExamLegacyResultHistory[]
+  officialResults          ExaminationResult[]
+  officialResultBindings   OfficialResultAttemptBinding[]
 
   @@unique([examHallId, businessDate, attemptNumber])
   @@index([businessDate])
@@ -869,6 +871,7 @@ model ExaminationResult {
   resultReference                String                              @unique
   studentId                      String
   examinationId                  String
+  attendanceSessionId            String?
   sourceScanReference            String?                             @unique
   paperVersion                   String?
   obtainedMarks                  Decimal?                            @db.Decimal(8, 2)
@@ -895,6 +898,8 @@ model ExaminationResult {
   updatedAt                      DateTime                            @updatedAt
   student                        Student                             @relation(fields: [studentId], references: [id], onDelete: Restrict)
   examination                    Examination                         @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  attendanceSession              AttendanceSession?                  @relation(fields: [attendanceSessionId], references: [id], onDelete: Restrict)
+  attemptBinding                 OfficialResultAttemptBinding?
   createdBy                      User                                @relation("ResultCreator", fields: [createdById], references: [id], onDelete: Restrict)
   verifiedBy                     User?                               @relation("ResultVerifier", fields: [verifiedById], references: [id], onDelete: Restrict)
   publishedBy                    User?                               @relation("ResultPublisher", fields: [publishedById], references: [id], onDelete: Restrict)
@@ -903,10 +908,24 @@ model ExaminationResult {
   dmcPreparations                DmcIssuancePreparation[]
   dmcIssuances                   DmcIssuance[]
 
-  @@unique([studentId, examinationId])
+  @@unique([studentId, examinationId, attendanceSessionId])
   @@index([examinationId, publicationStatus, verificationStatus])
   @@index([studentId, createdAt])
   @@index([updatedAt])
+}
+
+// Explicit evidence links one result permanently to one frozen attendance roster.
+model OfficialResultAttemptBinding {
+  resultId      String @id
+  sessionId     String
+  studentId     String
+  actorId       String
+  actorName     String
+  evidence      String @db.Text
+  boundAt       DateTime @default(now())
+  result        ExaminationResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  session       AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  @@index([sessionId, studentId])
 }
 
 model ResultQuestionResponse {

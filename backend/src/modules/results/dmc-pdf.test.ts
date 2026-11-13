@@ -10,6 +10,7 @@ function fixture(overrides: Partial<OfficialDmcPdfData> = {}): OfficialDmcPdfDat
     resultReference: 'R-SYNTH-001',
     studentId: 'student-synthetic-01',
     examinationId: 'exam-synthetic-01',
+    attempt: {id:'attempt-synthetic-01',attemptNumber:1,businessDate:'2026-11-01',state:'CURRENT',boundAt:'2026-11-01T00:00:00.000Z'},
     student: {
       id: 'student-synthetic-01',
       fullName: 'Synthetic Candidate <script>alert(1)</script>',

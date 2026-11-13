@@ -51,6 +51,8 @@ const expectedTriggers = [
   'AttendanceSessionReopening_coherence',
   'StudentStudyGroupCorrection_immutable',
   'ExamLegacyResultHistory_immutable',
+  'OfficialResultAttemptBinding_immutable',
+  'ExaminationResult_attempt_guard',
 ] as const;
 
 function loginFromUrl(value: string): string {
@@ -197,6 +199,15 @@ export async function assertRestrictedRuntimeDatabase(
       AND pg_get_expr(polqual,polrelid)='azm_control_privileged()') AS guarded_policy
     FROM pg_proc p WHERE p.oid='public.azm_execute_exam_control(text,text)'::regprocedure`);
   if(!resultPresenceBoundary[0]?.candidate_read||resultPresenceBoundary[0].full_read||!resultPresenceBoundary[0].guarded_policy)blocked('official-result reset guard is unsafe');
+  const bindingBoundary=await db.$queryRawUnsafe<any[]>(`SELECT
+    has_table_privilege(current_user,'public."OfficialResultAttemptBinding"','SELECT') AS readable,
+    has_table_privilege(current_user,'public."OfficialResultAttemptBinding"','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER') AS writable,
+    has_function_privilege(current_user,'public.azm_bind_official_result_attempt(text,text)','EXECUTE') AS executable,
+    has_column_privilege(p.proowner,'public."ExaminationResult"','attendanceSessionId','UPDATE') AS binding_write,
+    has_column_privilege(p.proowner,'public."ExaminationResult"','obtainedMarks','UPDATE') AS marks_write,
+    p.prosecdef AND p.proowner=(SELECT proowner FROM pg_proc WHERE oid='public.azm_execute_exam_control(text,text)'::regprocedure) AS same_owner,
+    p.proconfig FROM pg_proc p WHERE p.oid='public.azm_bind_official_result_attempt(text,text)'::regprocedure`);
+  if(!bindingBoundary[0]?.readable||bindingBoundary[0].writable||!bindingBoundary[0].executable||!bindingBoundary[0].binding_write||bindingBoundary[0].marks_write||!bindingBoundary[0].same_owner||!bindingBoundary[0].proconfig?.includes('search_path=pg_catalog, public, azm_control_private, pg_temp'))blocked('official-result attempt binding boundary is unsafe');
   const enabled = new Map(results.triggers.map(x => [x.tgname,x.tgenabled]));
   if (expectedTriggers.some(name => !['O','A'].includes(enabled.get(name) || '')))
     blocked('required attendance/audit triggers are missing or disabled');

@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { resultsService } from './results.service';
 import { officialResultsService } from './official-results.service';
+import { examControlService } from '../attendance/examControl.service';
+import { verifyAccessToken } from '../../lib/jwt';
 import {
   adminResultsPageQuerySchema,
   correctResultSchema,
@@ -12,6 +14,7 @@ import {
   examinationPublicationSchema,
   officialExaminationsQuerySchema,
   officialResultsPageQuerySchema,
+  bindOfficialAttemptSchema,
 } from './results.schema';
 
 function sendPublicResultsUnavailable(res: Response) {
@@ -46,6 +49,8 @@ export class ResultsController {
     this.downloadOfficialDmc = this.downloadOfficialDmc.bind(this);
     this.downloadElectronicDmc = this.downloadElectronicDmc.bind(this);
     this.revokeOfficialDmc = this.revokeOfficialDmc.bind(this);
+    this.getOfficialAttemptChoices = this.getOfficialAttemptChoices.bind(this);
+    this.bindOfficialAttempt = this.bindOfficialAttempt.bind(this);
   }
 
   private actor(req: Request) {
@@ -137,6 +142,21 @@ export class ResultsController {
     } catch (error) {
       next(error);
     }
+  }
+
+  async getOfficialAttemptChoices(req: Request, res: Response, next: NextFunction) {
+    try { this.noStore(res); res.status(200).json({success:true,data:await officialResultsService.listStudentAttempts(req.params.studentId)}); }
+    catch(error){ next(error); }
+  }
+
+  async bindOfficialAttempt(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input=bindOfficialAttemptSchema.parse(req.body);
+      const actor=this.actor(req);
+      const tokenVersion=verifyAccessToken(req.get('Authorization')!.split(' ')[1]).tokenVersion;
+      const data=await examControlService.bindOfficialResult(req.params.resultId,input.sessionId,input.evidence,actor.id,tokenVersion);
+      this.noStore(res); res.status(200).json({success:true,data});
+    } catch(error){ next(error); }
   }
 
   async getOfficialResult(req: Request, res: Response, next: NextFunction) {

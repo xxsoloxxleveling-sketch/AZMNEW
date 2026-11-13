@@ -13,8 +13,10 @@ import {
   printElectronicDmc,
   printOfficialDmc,
   revokeOfficialDmc,
+  getOfficialAttemptChoices,
+  bindOfficialAttempt,
 } from './ResultsApi';
-import type { OfficialCorrectionAudit, OfficialDocumentIssuance, OfficialResultDetail } from './ResultsApi';
+import type { OfficialAttemptChoice, OfficialCorrectionAudit, OfficialDocumentIssuance, OfficialResultDetail } from './ResultsApi';
 import { OfficialResultCorrectionDialog } from './OfficialResultCorrectionDialog';
 
 interface Props {
@@ -38,6 +40,10 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
   const [preview, setPreview] = useState<{ url: string; title: string; preparationId?: string; idempotencyKey?: string } | null>(null);
   const [revokeId, setRevokeId] = useState('');
   const [revokeReason, setRevokeReason] = useState('');
+  const [attemptChoices,setAttemptChoices]=useState<OfficialAttemptChoice[]|null>(null);
+  const [attemptId,setAttemptId]=useState('');
+  const [attemptEvidence,setAttemptEvidence]=useState('');
+  const [attemptConfirmed,setAttemptConfirmed]=useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,6 +70,7 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
     setPreview(null);
     setRevokeId('');
     setRevokeReason('');
+    setAttemptChoices(null); setAttemptId(''); setAttemptEvidence(''); setAttemptConfirmed(false);
     void load();
   }, [load]);
   useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url); }, [preview?.url]);
@@ -74,6 +81,9 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
     onResultChanged?.(updated);
     void load();
   };
+
+  const loadAttempts=async()=>{if(!detail)return;setBusyAction('attempts');setError('');try{setAttemptChoices(await getOfficialAttemptChoices(detail.studentId));}catch(cause){setError(cause instanceof Error?cause.message:'Could not load roster attempts.');}finally{setBusyAction('');}};
+  const confirmAttempt=async()=>{if(!detail||!attemptId||!attemptConfirmed)return;setBusyAction('bind-attempt');setError('');try{await bindOfficialAttempt(detail.id,attemptId,attemptEvidence);setAttemptChoices(null);setAttemptId('');setAttemptEvidence('');setAttemptConfirmed(false);await load();}catch(cause){setError(cause instanceof Error?cause.message:'Could not verify the attempt.');}finally{setBusyAction('');}};
 
   const closePreview = () => {
     if (preview?.url) URL.revokeObjectURL(preview.url);
@@ -149,7 +159,7 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={profileAction} className={actionClass}><ArrowUpRight size={14} /> View student profile</button>
-          <button type="button" disabled={!canEdit} title={canEdit ? 'Correct this official result' : 'Only a Super Admin can correct official results'} onClick={() => setEditing(true)} className={actionClass}>Edit result</button>
+          <button type="button" disabled={!canEdit||!detail.attempt} title={!canEdit ? 'Only a Super Admin can correct official results' : !detail.attempt ? 'Verify the examination attempt first' : 'Correct this official result'} onClick={() => setEditing(true)} className={actionClass}>Edit result</button>
           <button type="button" onClick={() => void load()} disabled={loading || !!busyAction} className={actionClass}><RefreshCw size={14} /> Refresh</button>
         </div>
       </header>
@@ -168,6 +178,22 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
         <Fact label="Paper versions" value={detail.examination.paperVersions.join(', ') || 'Not configured'} />
         <Fact label="Document status" value={currentIssued ? `Official DMC · ${currentIssued.documentNumber}` : 'Official DMC not issued'} />
       </dl>
+
+      <section className="mt-3 rounded border border-slate-200 p-3 text-xs" aria-label="Examination attempt association">
+        <h3 className="font-semibold">Examination attempt</h3>
+        {detail.attempt ? <p>Attempt {detail.attempt.attemptNumber} · {detail.attempt.businessDate} · {detail.attempt.state === 'CURRENT' ? 'Current' : 'Historical'} · verified {formatDate(detail.attempt.boundAt)}</p> : <>
+          <p className="mt-1 text-amber-800">Not verified. Result verification, publication and DMC issuance require an explicitly verified roster attempt.</p>
+          {canEdit && !attemptChoices && <button type="button" className={actionClass+' mt-2'} disabled={!!busyAction} onClick={()=>void loadAttempts()}>Review roster attempts</button>}
+          {canEdit && attemptChoices && <div className="mt-2 space-y-2">
+            <p>Choose the attempt only after checking that its roster and the examination record refer to the same paper. This association cannot be changed.</p>
+            <label className="block">Roster attempt <select className="ml-2 rounded border p-1" value={attemptId} onChange={e=>setAttemptId(e.target.value)}><option value="">Select a verified attempt</option>{attemptChoices.map(choice=><option key={choice.id} value={choice.id}>{choice.businessDate} · {choice.center||'Center unavailable'} · {choice.hall} · attempt {choice.attemptNumber} · {choice.state}</option>)}</select></label>
+            {attemptChoices.length===0&&<p>No frozen roster attempt was found for this student.</p>}
+            <label className="block">Evidence reference <textarea className="mt-1 block w-full rounded border p-2" value={attemptEvidence} maxLength={1000} onChange={e=>setAttemptEvidence(e.target.value)} /></label>
+            <label className="flex gap-2"><input type="checkbox" checked={attemptConfirmed} onChange={e=>setAttemptConfirmed(e.target.checked)}/>I checked the examination record, candidate and original roster.</label>
+            <button type="button" className={actionClass} disabled={!!busyAction||!attemptId||attemptEvidence.trim().length<12||!attemptConfirmed} onClick={()=>void confirmAttempt()}>Confirm verified attempt</button>
+          </div>}
+        </>}
+      </section>
 
       {detail.administrativelyAdjusted && <p className="mt-3 border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950"><strong>Administratively adjusted score.</strong> Original question classifications remain unchanged. {detail.administrativeAdjustmentReason || ''}</p>}
 

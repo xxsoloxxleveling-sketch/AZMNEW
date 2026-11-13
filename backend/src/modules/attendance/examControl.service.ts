@@ -102,7 +102,7 @@ export class ExamControlService {
         if (input.action === 'RESET') {
             const hallIds = new Set(selected.map(session => session.examHallId));
             const candidateIds = [...new Set([...selected.flatMap(session => session.candidates.map(candidate => candidate.studentId)), ...state.allocations.filter(student => student.assignedHallId && hallIds.has(student.assignedHallId)).map(student => student.id)])];
-            if (candidateIds.length && await tx.examinationResult.count({where:{studentId:{in:candidateIds}}}))
+            if (candidateIds.length && await tx.examinationResult.count({where:{studentId:{in:candidateIds},attendanceSessionId:null}}))
                 controlError(409, 'A candidate has an official result whose attempt ownership requires review; reset is blocked.');
         }
         if (input.action === 'RESET' && selected.some(s => !s.isCurrent || s.status === 'CANCELLED'))
@@ -249,6 +249,17 @@ export class ExamControlService {
             return tx.$queryRaw<any[]>`SELECT h."sessionId",h."studentId",s."fullName",h."testScore",h."overallRank",h."resetOperationId",h."archivedAt"
               FROM "ExamLegacyResultHistory" h JOIN "Student" s ON s.id=h."studentId"
               WHERE h."sessionId"=${sessionId} ORDER BY h."studentId" LIMIT 25 OFFSET ${(page - 1) * 25}`;
+        });
+    }
+    async bindOfficialResult(resultId: string, sessionId: string, evidence: string, actorId: string, version: number) {
+        const normalized=evidence.trim();
+        if(normalized.length<12||normalized.length>1000) controlError(400,'Provide verified attempt evidence between 12 and 1000 characters.');
+        return this.transaction(async tx=>{
+            await this.actor(tx,actorId,version);
+            const payload=JSON.stringify({resultId,sessionId,evidence:normalized,actorId,tokenVersion:version,operationId:randomUUID(),expiresAt:new Date(Date.now()+5*60000).toISOString()});
+            const rows=await tx.$queryRaw<any[]>`SELECT public.azm_bind_official_result_attempt(${payload},${sign(payload)}) AS result`;
+            await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE');
+            return rows[0].result;
         });
     }
     async history(actorId: string, version: number, centerId: string, businessDate: string, page = 1) {

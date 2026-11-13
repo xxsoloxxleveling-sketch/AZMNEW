@@ -12,6 +12,7 @@ import {
   ResultResponseSource,
 } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { examLock } from '../attendance/examControl.service';
 import {
   OfficialDmcPdfData,
   OfficialResultDetail,
@@ -30,6 +31,8 @@ type Actor = { id: string; name: string };
 type PrismaLike = PrismaClient;
 
 const resultInclude = {
+  attendanceSession: { select: { id: true, attemptNumber: true, businessDate: true, isCurrent: true } },
+  attemptBinding: { select: { sessionId: true, studentId: true, boundAt: true } },
   student: {
     select: {
       id: true,
@@ -83,9 +86,9 @@ function normalizeGroup(value: string): string {
   return value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 }
 
-function latestIssuanceStatus(issuances: any[]): 'NONE' | 'ISSUED' | 'SUPERSEDED' | 'REVOKED' {
+function latestIssuanceStatus(issuances: any[], sessionId: string | null): 'NONE' | 'ISSUED' | 'SUPERSEDED' | 'REVOKED' | 'ATTEMPT_UNVERIFIED' {
   const event = issuances?.[0]?.events?.[0]?.eventType;
-  if (event === DmcIssuanceEventType.ISSUED) return 'ISSUED';
+  if (event === DmcIssuanceEventType.ISSUED) return sessionId && (issuances?.[0]?.snapshot as any)?.attemptAssociation?.sessionId===sessionId ? 'ISSUED' : 'ATTEMPT_UNVERIFIED';
   if (event === DmcIssuanceEventType.SUPERSEDED) return 'SUPERSEDED';
   if (event === DmcIssuanceEventType.REVOKED) return 'REVOKED';
   return 'NONE';
@@ -98,6 +101,11 @@ function toSummary(row: any): OfficialResultSummary {
     resultReference: row.resultReference,
     studentId: row.studentId,
     examinationId: row.examinationId,
+    attempt: row.attendanceSession && row.attemptBinding && row.attendanceSessionId===row.attemptBinding.sessionId && row.attemptBinding.studentId===row.studentId ? {
+      id: row.attendanceSession.id, attemptNumber: row.attendanceSession.attemptNumber,
+      businessDate: row.attendanceSession.businessDate.toISOString().slice(0,10),
+      state: row.attendanceSession.isCurrent ? 'CURRENT' : 'HISTORICAL', boundAt: row.attemptBinding.boundAt.toISOString(),
+    } : null,
     student: {
       id: row.student.id,
       fullName: row.student.fullName,
@@ -139,7 +147,7 @@ function toSummary(row: any): OfficialResultSummary {
     updatedAt: row.updatedAt.toISOString(),
     documents: {
       electronicAvailable: isDmcEligible(row),
-      latestOfficialIssuanceStatus: latestIssuanceStatus(row.dmcIssuances),
+      latestOfficialIssuanceStatus: latestIssuanceStatus(row.dmcIssuances,row.attendanceSessionId),
       officialIssuanceCount: row._count?.dmcIssuances ?? 0,
     },
   };
@@ -208,6 +216,7 @@ export function hasCompleteResponseEvidence(result: any): boolean {
 }
 
 export function isDmcEligible(result: any): boolean {
+  if (!result.attendanceSessionId || !result.attemptBinding || result.attemptBinding.sessionId !== result.attendanceSessionId || result.attemptBinding.studentId !== result.studentId) return false;
   if (result.examination?.publicationStatus !== ExaminationPublicationStatus.PUBLISHED) return false;
   if (result.publicationStatus !== ExaminationResultPublicationStatus.PUBLISHED) return false;
   if (result.verificationStatus !== ExaminationResultVerificationStatus.VERIFIED) return false;
@@ -254,7 +263,7 @@ function calculateCountsAndMarks(responses: any[], examination: any) {
 
 function assertDmcEligible(result: any) {
   if (!isDmcEligible(result)) {
-    throw serviceError(409, 'A DMC is unavailable until the published result has verified identity, an exact paper version, a verified score, and complete resolved response counts.', 'DMC_NOT_AVAILABLE');
+    throw serviceError(409, 'A DMC is unavailable until the result has a verified examination attempt, verified identity, an exact paper version, a verified score, and complete resolved response counts.', 'DMC_NOT_AVAILABLE');
   }
 }
 
@@ -280,6 +289,11 @@ function preparePdfData(snapshot: any): OfficialDmcPdfData {
 
 export class OfficialResultsService {
   constructor(private readonly db: PrismaLike = prisma) {}
+
+  async listStudentAttempts(studentId: string) {
+    const rows=await this.db.attendanceSessionCandidate.findMany({where:{studentId},take:100,orderBy:{createdAt:'desc'},select:{session:{select:{id:true,attemptNumber:true,businessDate:true,isCurrent:true,status:true,hallNameSnapshot:true,testCenterNameSnapshot:true}}}});
+    return rows.map(({session})=>({id:session.id,attemptNumber:session.attemptNumber,businessDate:session.businessDate.toISOString().slice(0,10),state:session.isCurrent?'CURRENT':'HISTORICAL',status:session.status,hall:session.hallNameSnapshot,center:session.testCenterNameSnapshot}));
+  }
 
   private async findResult(resultId: string, db: any = this.db) {
     const result = await db.examinationResult.findUnique({ where: { id: resultId }, include: resultInclude });
@@ -492,6 +506,9 @@ export class OfficialResultsService {
   async createDraftResult(examinationId: string, input: CreateDraftResultRequest, actor: Actor) {
     try {
       return await this.db.$transaction(async (tx) => {
+        // Serialize result creation with attempt resets so an unbound draft
+        // cannot appear between the reset's safety check and the reset itself.
+        await examLock(tx);
         const [exam, student] = await Promise.all([
           tx.examination.findUnique({ where: { id: examinationId }, include: { paperKeyRevisions: true } }),
           tx.student.findUnique({ where: { id: input.studentId }, select: {
@@ -546,6 +563,8 @@ export class OfficialResultsService {
       const current = await tx.examinationResult.findUnique({ where: { id: resultId }, include: resultInclude });
       if (!current) throw serviceError(404, 'Examination result not found.', 'RESULT_NOT_FOUND');
       if (current.resultRevision !== input.expectedRevision) throw serviceError(409, 'This result changed. Refresh it before submitting the correction.', 'STALE_RESULT_REVISION');
+      if (!current.attendanceSessionId || !current.attemptBinding || current.attemptBinding.sessionId!==current.attendanceSessionId || current.attemptBinding.studentId!==current.studentId)
+        throw serviceError(409, 'Verify the examination attempt and roster before changing this result.', 'ATTEMPT_BINDING_REQUIRED');
       const changes = input.changes;
       const oldValues: Record<string, unknown> = {};
       const newValues: Record<string, unknown> = {};
@@ -747,7 +766,7 @@ export class OfficialResultsService {
       pdfData.generatedAt = now.toISOString();
       pdfData.issuedByName = actor.name;
       pdfData.verificationReference = verificationReference;
-      const snapshot = { ...pdfData, issueNumber } as unknown as Prisma.InputJsonValue;
+      const snapshot = { ...pdfData, issueNumber, attemptAssociation: { sessionId: result.attendanceSessionId, boundAt: result.attemptBinding!.boundAt.toISOString() } } as unknown as Prisma.InputJsonValue;
       await tx.dmcIssuancePreparation.create({ data: {
         id: preparationId,
         resultId,
@@ -767,6 +786,7 @@ export class OfficialResultsService {
     const result = await this.findResult(resultId);
     if (result.resultRevision !== prep.resultRevision) throw serviceError(409, 'The result changed. Prepare a new document preview.', 'STALE_RESULT_REVISION');
     assertDmcEligible(result);
+    if ((prep.snapshot as any)?.attemptAssociation?.sessionId !== result.attendanceSessionId) throw serviceError(409, 'Prepare a new preview for the verified examination attempt.', 'DMC_ATTEMPT_MISMATCH');
     return { pdf: await renderOfficialDmcPdf(preparePdfData(prep.snapshot)), documentNumber: (prep.snapshot as any).documentNumber };
   }
 
@@ -783,6 +803,8 @@ export class OfficialResultsService {
       const result = await tx.examinationResult.findUnique({ where: { id: resultId }, include: resultInclude });
       if (!result || result.resultRevision !== input.expectedRevision) throw serviceError(409, 'The result changed. Prepare a new document preview.', 'STALE_RESULT_REVISION');
       assertDmcEligible(result);
+      if ((preparation.snapshot as any)?.attemptAssociation?.sessionId !== result.attendanceSessionId)
+        throw serviceError(409, 'The document preview does not verify this examination attempt. Prepare it again.', 'DMC_ATTEMPT_MISMATCH');
       const data = preparePdfData(preparation.snapshot);
       const certificate = await tx.dmcIssuance.create({ data: {
         id: randomUUID(),
@@ -816,9 +838,9 @@ export class OfficialResultsService {
   async renderOfficialDmc(resultId: string, issuanceId: string) {
     const issuance = await this.db.dmcIssuance.findFirst({
       where: { id: issuanceId, resultId, documentType: DmcDocumentType.OFFICIAL },
-      include: { events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] }, result: { select: { resultRevision: true, publicationStatus: true, verificationStatus: true, examination: { select: { publicationStatus: true } } } } },
+      include: { events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] }, result: { select: { resultRevision: true, attendanceSessionId: true, publicationStatus: true, verificationStatus: true, examination: { select: { publicationStatus: true } } } } },
     });
-    if (!issuance || latestEvent(issuance.events)?.eventType !== DmcIssuanceEventType.ISSUED || issuance.resultRevision !== issuance.result.resultRevision || issuance.result.publicationStatus !== 'PUBLISHED' || issuance.result.verificationStatus !== 'VERIFIED' || issuance.result.examination.publicationStatus !== 'PUBLISHED') {
+    if (!issuance || !issuance.result.attendanceSessionId || (issuance.snapshot as any)?.attemptAssociation?.sessionId !== issuance.result.attendanceSessionId || latestEvent(issuance.events)?.eventType !== DmcIssuanceEventType.ISSUED || issuance.resultRevision !== issuance.result.resultRevision || issuance.result.publicationStatus !== 'PUBLISHED' || issuance.result.verificationStatus !== 'VERIFIED' || issuance.result.examination.publicationStatus !== 'PUBLISHED') {
       throw serviceError(404, 'The requested Official DMC is not current and available.', 'DMC_NOT_AVAILABLE');
     }
     const data = preparePdfData(issuance.snapshot);
@@ -826,7 +848,7 @@ export class OfficialResultsService {
   }
 
   async listOfficialDmcIssuances(resultId: string) {
-    await this.findResult(resultId);
+    const result=await this.findResult(resultId);
     const issuances = await this.db.dmcIssuance.findMany({
       where: { resultId, documentType: DmcDocumentType.OFFICIAL },
       include: { events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 } },
@@ -837,7 +859,7 @@ export class OfficialResultsService {
       id: issuance.id,
       documentNumber: issuance.certificateNumber,
       resultRevision: issuance.resultRevision,
-      status: latestIssuanceStatusFromEvents(issuance.events),
+      status: latestIssuanceStatusFromEvents(issuance.events)==='ISSUED' && (!result.attendanceSessionId || (issuance.snapshot as any)?.attemptAssociation?.sessionId!==result.attendanceSessionId) ? 'ATTEMPT_UNVERIFIED' : latestIssuanceStatusFromEvents(issuance.events),
       issuedAt: issuance.issuedAt.toISOString(),
       issuer: issuance.issuedByName,
       verificationReference: issuance.verificationReference,
@@ -859,11 +881,14 @@ export class OfficialResultsService {
   async verifyDmc(reference: string) {
     const issuance = await this.db.dmcIssuance.findUnique({
       where: { verificationReference: reference },
-      include: { events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 }, result: { select: { resultRevision: true, publicationStatus: true, verificationStatus: true, examination: { select: { title: true, examDate: true, publicationStatus: true } } } } },
+      include: { events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 }, result: { select: { resultRevision: true, attendanceSessionId: true, publicationStatus: true, verificationStatus: true, examination: { select: { title: true, examDate: true, publicationStatus: true } } } } },
     });
     if (!issuance) return { valid: false, status: 'INVALID' as const, examinationTitle: null, examinationDate: null };
+    if (!issuance.result.attendanceSessionId || (issuance.snapshot as any)?.attemptAssociation?.sessionId !== issuance.result.attendanceSessionId)
+      return { valid: false, status: 'INVALID' as const, examinationTitle: null, examinationDate: null };
     let status = latestIssuanceStatusFromEvents(issuance.events);
-    const current = issuance.resultRevision === issuance.result.resultRevision
+    const current = !!issuance.result.attendanceSessionId && (issuance.snapshot as any)?.attemptAssociation?.sessionId === issuance.result.attendanceSessionId
+      && issuance.resultRevision === issuance.result.resultRevision
       && issuance.result.publicationStatus === 'PUBLISHED'
       && issuance.result.verificationStatus === 'VERIFIED'
       && issuance.result.examination.publicationStatus === 'PUBLISHED';

@@ -16,6 +16,8 @@ const responseFixture = (questionNumber: number, classification: string) => ({
 test('DMC eligibility requires complete, internally consistent question and count evidence', async () => {
   const { hasCompleteResponseEvidence, isDmcEligible } = await import('../src/modules/results/official-results.service');
   const result: any = {
+    studentId: 'synthetic-student', attendanceSessionId: 'synthetic-attempt',
+    attemptBinding: {sessionId:'synthetic-attempt',studentId:'synthetic-student'},
     examination: {
       questionCount: 4,
       publicationStatus: 'PUBLISHED',
@@ -40,6 +42,7 @@ test('DMC eligibility requires complete, internally consistent question and coun
 
   assert.equal(hasCompleteResponseEvidence(result), true);
   assert.equal(isDmcEligible(result), true);
+  assert.equal(isDmcEligible({...result,attemptBinding:null}),false,'unbound result cannot issue a DMC');
 
   assert.equal(isDmcEligible({ ...result, blankCount: null }), false, 'missing count evidence blocks DMC');
   assert.equal(isDmcEligible({ ...result, wrongCount: 0 }), false, 'counts must agree with per-question records');

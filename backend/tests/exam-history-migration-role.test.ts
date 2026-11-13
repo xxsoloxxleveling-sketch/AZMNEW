@@ -34,7 +34,10 @@ async function run() {
     await db.query("SELECT set_config('azm.control_owner_role',$1,false)",[cap]);
     // Current capability provisioning predates the new archive table.
     const ops=fs.readFileSync(path.resolve(__dirname,'../ops/postgres/exam-control-capability.sql'),'utf8')
-      .replace(/ EXECUTE format\('GRANT SELECT,INSERT ON public\."ExamLegacyResultHistory" TO %I',owner_role\);\r?\n/,'');
+      .replace(/ EXECUTE format\('GRANT SELECT,INSERT ON public\."ExamLegacyResultHistory" TO %I',owner_role\);\r?\n/,'')
+      .replace(/ EXECUTE format\('GRANT SELECT \(id,"studentId","attendanceSessionId"\), UPDATE \("attendanceSessionId"\) ON public\."ExaminationResult" TO %I',owner_role\);\r?\n/,'')
+      .replace(/ EXECUTE format\('GRANT SELECT,INSERT ON public\."OfficialResultAttemptBinding" TO %I',owner_role\);\r?\n/,'')
+      .replace("'public.azm_bind_official_result_attempt(text,text)',",'');
     await db.query(ops);
     await db.query(`INSERT INTO "TestCenter"(id,name,code,address,district,"updatedAt") VALUES('fixture-center','Synthetic','FIXTURE','Synthetic','Synthetic',CURRENT_TIMESTAMP);
       INSERT INTO "ExamHall"(id,name,"roomNumber","targetClass","testCenterId","updatedAt") VALUES('fixture-hall','Synthetic','Synthetic','Class 9th','fixture-center',CURRENT_TIMESTAMP);
@@ -44,6 +47,22 @@ async function run() {
       ALTER TABLE "Student" DISABLE TRIGGER USER;
       INSERT INTO "Student"(id,"applicationNo","qrToken","fullName","fatherName",gender,"dateOfBirth","cnicOrBForm",address,district,province,"parentMobile","currentClass","schoolName","boardOrUniversity","scholarshipCategory","emergencyContact","emergencyRelation","testScore","resultSessionId","updatedAt") VALUES('fixture-student','FIXTURE','FIXTURE','Synthetic','Synthetic','MALE','2008-01-01','FIXTURE','Synthetic','Synthetic','Synthetic','0','Class 9th','Synthetic','Synthetic','GENERAL_MERIT','0','Synthetic',77,'fixture-old',CURRENT_TIMESTAMP);
       ALTER TABLE "Student" ENABLE TRIGGER USER;`);
+    // Populate real pre-upgrade tables, then compare the complete synthetic
+    // records after both history migrations rather than only checking counts.
+    await db.query(`
+      ALTER TABLE "AttendanceSessionCandidate" DISABLE TRIGGER USER;
+      INSERT INTO "AttendanceSessionCandidate"(id,"sessionId","studentId","fullNameSnapshot","applicationNoSnapshot","currentClassSnapshot") VALUES('fixture-roster','fixture-old','fixture-student','Synthetic','FIXTURE','Class 9th');
+      ALTER TABLE "AttendanceSessionCandidate" ENABLE TRIGGER USER;
+      ALTER TABLE "Attendance" DISABLE TRIGGER USER;
+      INSERT INTO "Attendance"(id,"sessionId","studentId",status,"markedByUserId",method) VALUES('fixture-attendance','fixture-old','fixture-student','PRESENT','fixture-actor','MANUAL');
+      ALTER TABLE "Attendance" ENABLE TRIGGER USER;
+      ALTER TABLE "ExamControlOperation" DISABLE TRIGGER USER;
+      INSERT INTO "ExamControlOperation"(id,"actorId","actorName","idempotencyKey","requestHash",nonce,action,reason,scope,result) VALUES('fixture-audit','fixture-actor','Synthetic','fixture-key','fixture-hash','fixture-nonce','RESET','Synthetic evidence','{}','{}');
+      ALTER TABLE "ExamControlOperation" ENABLE TRIGGER USER;
+      INSERT INTO "Transaction"(id,type,amount,description) VALUES('fixture-finance','OTHER_INCOME',123.45,'Synthetic financial record');`);
+    const preservedTables=['AttendanceSession','AttendanceSessionCandidate','Attendance','ExamControlOperation','Transaction'];
+    const snapshot=async()=>Promise.all(preservedTables.map(async table=>JSON.stringify((await db!.query(`SELECT to_jsonb(t) AS value FROM "${table}" t ORDER BY id`)).rows)));
+    const beforeUpgrade=await snapshot();
     const sql=fs.readFileSync(path.join(migrations,'20261114010000_preserve_exam_history','migration.sql'),'utf8');
     await db.query(`ALTER TABLE "Student" DISABLE TRIGGER USER; UPDATE "Student" SET "resultSessionId"='fixture-missing' WHERE id='fixture-student'; ALTER TABLE "Student" ENABLE TRIGGER USER`);
     await assert.rejects(()=>db!.query(sql),/references a missing attempt/);
@@ -58,7 +77,7 @@ async function run() {
     const originalResultsOwner=(await db.query(`SELECT pg_get_userbyid(relowner) AS owner FROM pg_class WHERE oid='public."ExaminationResult"'::regclass`)).rows[0].owner;
     assert.equal(originalControl,cap);
     await root.query(`CREATE ROLE "${role}" LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
-    await db.query(`GRANT CONNECT ON DATABASE "${dbname}" TO "${role}"; GRANT USAGE,CREATE ON SCHEMA public TO "${role}"; GRANT SELECT ON "Student","AttendanceSession" TO "${role}"; GRANT UPDATE ("testScore","overallRank","resultSessionId") ON "Student" TO "${role}"; GRANT REFERENCES ON "Student","AttendanceSession","ExamControlOperation" TO "${role}"; GRANT SELECT,INSERT,UPDATE ON "_prisma_migrations" TO "${role}";`);
+    await db.query(`GRANT CONNECT ON DATABASE "${dbname}" TO "${role}"; GRANT USAGE,CREATE ON SCHEMA public TO "${role}"; GRANT SELECT ON "Student","AttendanceSession" TO "${role}"; GRANT UPDATE ("testScore","overallRank","resultSessionId") ON "Student" TO "${role}"; GRANT REFERENCES ON "Student","AttendanceSession","ExamControlOperation","User" TO "${role}"; GRANT SELECT,INSERT,UPDATE ON "_prisma_migrations" TO "${role}";`);
     const roleUrl=new URL(url);roleUrl.username=role;roleUrl.password=password;
     migrator=new Client({connectionString:roleUrl.toString()});await migrator.connect();
     await assert.rejects(()=>migrator!.query(sql),/must be owner of table ExaminationResult/i);
@@ -71,10 +90,12 @@ async function run() {
     console.log('PASS restricted migrator cannot alter existing table policy or functions; no partial table');
     await db.query(`ALTER FUNCTION public.azm_execute_exam_control(text,text) OWNER TO "${role}"; ALTER FUNCTION public.require_closed_attendance_reset() OWNER TO "${role}"`);
     execFileSync(process.execPath,[path.resolve(__dirname,'../node_modules/prisma/build/index.js'),'migrate','deploy','--schema',path.resolve(__dirname,'../prisma/schema.prisma')],{env:{...process.env,DATABASE_URL:roleUrl.toString(),DIRECT_URL:roleUrl.toString()},stdio:'pipe'});
-    assert.equal((await db.query('SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE migration_name=$1 AND finished_at IS NOT NULL',['20261114010000_preserve_exam_history'])).rows[0].n,1);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE migration_name=ANY($1) AND finished_at IS NOT NULL',[['20261114010000_preserve_exam_history','20261114020000_official_result_attempt_binding']])).rows[0].n,2);
     const moved=(await db.query(`SELECT h."testScore",h."sessionId",s."testScore" AS current_score FROM "ExamLegacyResultHistory" h JOIN "Student" s ON s.id=h."studentId" WHERE h."studentId"='fixture-student'`)).rows;
     assert.equal(moved.length,1); assert.equal(moved[0].testScore,77); assert.equal(moved[0].sessionId,'fixture-old'); assert.equal(moved[0].current_score,null);
-    await db.query(`GRANT CREATE ON SCHEMA public TO "${originalControl}"; ALTER FUNCTION public.azm_execute_exam_control(text,text) OWNER TO "${originalControl}"; REVOKE CREATE ON SCHEMA public FROM "${originalControl}"; ALTER FUNCTION public.require_closed_attendance_reset() OWNER TO "${originalValidator}"; ALTER TABLE public."ExaminationResult" OWNER TO "${originalResultsOwner}"; GRANT SELECT,INSERT ON public."ExamLegacyResultHistory" TO "${originalControl}"; REVOKE CREATE ON SCHEMA public FROM "${role}"; REVOKE UPDATE ("testScore","overallRank","resultSessionId") ON "Student" FROM "${role}"; REVOKE REFERENCES ON "Student","AttendanceSession","ExamControlOperation" FROM "${role}"; REVOKE SELECT,INSERT,UPDATE ON "_prisma_migrations" FROM "${role}"`);
+    assert.deepEqual(await snapshot(),beforeUpgrade,'Attendance, roster, session, audit and financial records must survive unchanged');
+    console.log('PASS pre-upgrade attendance, roster, session, audit and financial records remain unchanged');
+    await db.query(`GRANT CREATE ON SCHEMA public TO "${originalControl}"; ALTER FUNCTION public.azm_execute_exam_control(text,text) OWNER TO "${originalControl}"; ALTER FUNCTION public.azm_bind_official_result_attempt(text,text) OWNER TO "${originalControl}"; REVOKE CREATE ON SCHEMA public FROM "${originalControl}"; ALTER FUNCTION public.require_closed_attendance_reset() OWNER TO "${originalValidator}"; ALTER TABLE public."ExaminationResult" OWNER TO "${originalResultsOwner}"; GRANT SELECT,INSERT ON public."ExamLegacyResultHistory",public."OfficialResultAttemptBinding" TO "${originalControl}"; GRANT SELECT (id,"studentId","attendanceSessionId"), UPDATE ("attendanceSessionId") ON public."ExaminationResult" TO "${originalControl}"; REVOKE CREATE ON SCHEMA public FROM "${role}"; REVOKE UPDATE ("testScore","overallRank","resultSessionId") ON "Student" FROM "${role}"; REVOKE REFERENCES ON "Student","AttendanceSession","ExamControlOperation","User" FROM "${role}"; REVOKE SELECT,INSERT,UPDATE ON "_prisma_migrations" FROM "${role}"`);
     await root.query(`ALTER ROLE "${role}" NOLOGIN`);
     const after=(await db.query(`SELECT p.proname,pg_get_userbyid(p.proowner) AS owner FROM pg_proc p WHERE p.oid IN ('public.azm_execute_exam_control(text,text)'::regprocedure,'public.require_closed_attendance_reset()'::regprocedure)`)).rows;
     assert.equal(after.find(r=>r.proname==='azm_execute_exam_control')!.owner,originalControl);

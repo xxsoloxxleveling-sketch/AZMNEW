@@ -58,7 +58,7 @@ async function run() {
         await admin.query('INSERT INTO azm_control_private.signing_key(secret) VALUES($1)', [signingKey]);
         const runtimePassword = randomUUID().replaceAll('-', '');
         await owner.query(`CREATE ROLE "${role}" LOGIN PASSWORD '${runtimePassword}'`);
-        await admin.query(`REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO "${role}"; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO "${role}"; REVOKE ALL ON SCHEMA azm_control_private FROM "${role}"; REVOKE DELETE,TRUNCATE ON "Attendance","AttendanceSession","AttendanceSessionCandidate" FROM "${role}"; REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON "ExamControlOperation","ExamPlacementControl","ExamAttemptSequence","ExamLifecycleEvent","ExamLegacyResultHistory" FROM "${role}"; REVOKE UPDATE,DELETE,TRUNCATE ON "AttendanceResetOperation","AttendanceSessionCancellation","AttendanceSessionReopening" FROM "${role}"; GRANT EXECUTE ON FUNCTION azm_execute_exam_control(TEXT,TEXT),azm_exam_capability_probe(TEXT,TEXT) TO "${role}";`);
+        await admin.query(`REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO "${role}"; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO "${role}"; REVOKE ALL ON SCHEMA azm_control_private FROM "${role}"; REVOKE DELETE,TRUNCATE ON "Attendance","AttendanceSession","AttendanceSessionCandidate" FROM "${role}"; REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON "ExamControlOperation","ExamPlacementControl","ExamAttemptSequence","ExamLifecycleEvent","ExamLegacyResultHistory","OfficialResultAttemptBinding" FROM "${role}"; REVOKE UPDATE,DELETE,TRUNCATE ON "AttendanceResetOperation","AttendanceSessionCancellation","AttendanceSessionReopening" FROM "${role}"; GRANT EXECUTE ON FUNCTION azm_execute_exam_control(TEXT,TEXT),azm_bind_official_result_attempt(TEXT,TEXT),azm_exam_capability_probe(TEXT,TEXT) TO "${role}";`);
         url.username = role;
         url.password = runtimePassword;
         process.env.DATABASE_URL = url.toString();
@@ -258,6 +258,26 @@ async function run() {
             const signature=createHmac('sha256',signingKey).update(payload).digest('hex');
             await rejects(()=>db.$queryRawUnsafe('SELECT public.azm_execute_exam_control($1,$2)',payload,signature));
             assert.equal((await db.attendanceSession.findUnique({where:{id:session.id}})).isCurrent,true);
+            await rejects(()=>control.bindOfficialResult('fixture-official-result',session.id,'Synthetic verified paper and roster','ADMIN',0),403);
+            await rejects(()=>control.bindOfficialResult('fixture-official-result',other.id,'Synthetic verified paper and roster','SUPER_ADMIN',0),409);
+            await rejects(()=>db.$queryRawUnsafe('SELECT public.azm_bind_official_result_attempt($1,$2)','{}','forged'));
+            await control.bindOfficialResult('fixture-official-result',session.id,'Synthetic verified paper and roster','SUPER_ADMIN',0);
+            const binding=await db.officialResultAttemptBinding.findUnique({where:{resultId:'fixture-official-result'}});
+            assert.equal(binding.sessionId,session.id); assert.equal(binding.studentId,'official-ambiguity-student');
+            await rejects(()=>control.bindOfficialResult('fixture-official-result',other.id,'Different synthetic evidence reference','SUPER_ADMIN',0),409);
+            await assert.rejects(()=>admin!.query('UPDATE "OfficialResultAttemptBinding" SET evidence=$1',['tampered']),/immutable/);
+            await assert.rejects(()=>admin!.query('DELETE FROM "OfficialResultAttemptBinding"'),/immutable/);
+            await assert.rejects(()=>admin!.query('TRUNCATE "OfficialResultAttemptBinding"'),/immutable/);
+            const reset=await act('RESET',[session.id],{testCenterId:f.center,businessDate:f.date});
+            assert.equal(reset.replacements[0].status,'PRE_OPEN');
+            assert.equal((await db.examinationResult.findUnique({where:{id:'fixture-official-result'}})).attendanceSessionId,session.id);
+            assert.equal((await db.attendanceSession.findUnique({where:{id:session.id}})).isCurrent,false);
+            const next=(await openHall(f.source)).session;
+            await admin!.query(`INSERT INTO "ExaminationResult"(id,"resultReference","studentId","examinationId","maximumMarks","createdById","updatedAt") VALUES('fixture-official-result-next','fixture-official-result-next','official-ambiguity-student','fixture-official-exam',100,'SUPER_ADMIN',CURRENT_TIMESTAMP)`);
+            await control.bindOfficialResult('fixture-official-result-next',next.id,'Synthetic verified replacement roster','SUPER_ADMIN',0);
+            assert.equal((await db.examinationResult.findUnique({where:{id:'fixture-official-result-next'}})).attendanceSessionId,next.id);
+            await admin!.query(`INSERT INTO "ExaminationResult"(id,"resultReference","studentId","examinationId","maximumMarks","createdById","updatedAt") VALUES('fixture-official-result-duplicate','fixture-official-result-duplicate','official-ambiguity-student','fixture-official-exam',100,'SUPER_ADMIN',CURRENT_TIMESTAMP)`);
+            await rejects(()=>control.bindOfficialResult('fixture-official-result-duplicate',next.id,'Synthetic duplicate attempt evidence','SUPER_ADMIN',0),409);
         });
         await check('supported English date aliases cannot bypass a center freeze', async () => {
             const f = await reviewFixture('review-dates', '2026-11-15');
