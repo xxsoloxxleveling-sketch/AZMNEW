@@ -15,6 +15,69 @@ enum Role {
   ACCOUNTANT
 }
 
+enum ExaminationPublicationStatus {
+  DRAFT
+  PUBLISHED
+  WITHHELD
+}
+
+enum ExaminationResultIdentityStatus {
+  PENDING
+  VERIFIED
+  MISMATCH
+}
+
+enum ExaminationResultScoringStatus {
+  PROVISIONAL
+  VERIFIED
+}
+
+enum ExaminationResultVerificationStatus {
+  PENDING
+  VERIFIED
+  WITHHELD
+}
+
+enum ExaminationResultPublicationStatus {
+  UNPUBLISHED
+  PUBLISHED
+  WITHHELD
+}
+
+enum ResultResponseClassification {
+  CORRECT
+  WRONG
+  BLANK
+  MULTIPLE
+  UNCERTAIN
+}
+
+enum ResultResponseSource {
+  OMR_DETECTED
+  HUMAN_REVIEW
+  ADMIN_CORRECTION
+  MANUAL_ENTRY
+}
+
+enum ResultChangeSource {
+  STUDENT_PROFILE
+  RESULTS_DASHBOARD
+  MANUAL_ENTRY
+  EXAM_CONFIGURATION
+  DMC_ISSUANCE
+}
+
+enum DmcDocumentType {
+  ELECTRONIC
+  OFFICIAL
+}
+
+enum DmcIssuanceEventType {
+  ISSUED
+  SUPERSEDED
+  REVOKED
+}
+
 enum DocumentReviewStatus {
   PENDING_REVIEW
   VERIFIED
@@ -40,6 +103,18 @@ model User {
   tokenVersion Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @default(now()) @updatedAt
+  createdExaminations Examination[] @relation("ExaminationCreator")
+  publishedExaminations Examination[] @relation("ExaminationPublisher")
+  examinationPublicationAudits ExaminationPublicationAudit[] @relation("ExaminationPublicationActor")
+  createdPaperKeyRevisions ExaminationPaperKeyRevision[] @relation("PaperKeyRevisionCreator")
+  examinationAudits ExaminationAudit[] @relation("ExaminationAuditActor")
+  createdExaminationResults ExaminationResult[] @relation("ResultCreator")
+  verifiedExaminationResults ExaminationResult[] @relation("ResultVerifier")
+  publishedExaminationResults ExaminationResult[] @relation("ResultPublisher")
+  resultCorrectionAudits ResultCorrectionAudit[] @relation("ResultCorrectionActor")
+  dmcPreparations DmcIssuancePreparation[] @relation("DmcPreparationActor")
+  issuedDmcDocuments DmcIssuance[] @relation("DmcIssuer")
+  dmcIssuanceEvents DmcIssuanceEvent[] @relation("DmcEventActor")
 }
 
 enum StudentStatus {
@@ -134,6 +209,7 @@ model Student {
   feeRecords       FeeRecord[]
   studentDocuments StudentDocument[]
   studyGroupCorrections StudentStudyGroupCorrection[]
+  examinationResults ExaminationResult[]
 }
 
 // Dedicated append-only correction evidence; no attendance/document audit reuse.
@@ -739,4 +815,220 @@ model SystemSetting {
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
+}
+
+// Exam-specific official results are deliberately separate from legacy Student.testScore.
+model Examination {
+  id                 String                       @id @default(cuid())
+  reference          String                       @unique
+  title              String
+  sessionReference   String
+  examDate           DateTime?                    @db.Date
+  classGroup         String
+  maximumMarks       Decimal                      @db.Decimal(8, 2)
+  questionCount      Int
+  scoringPolicy      Json
+  publicationStatus  ExaminationPublicationStatus @default(DRAFT)
+  publishedAt        DateTime?
+  publishedById      String?
+  revision           Int                          @default(1)
+  createdById        String
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  createdBy          User                         @relation("ExaminationCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  publishedBy        User?                        @relation("ExaminationPublisher", fields: [publishedById], references: [id], onDelete: Restrict)
+  results            ExaminationResult[]
+  audits             ExaminationAudit[]
+  publicationAudits  ExaminationPublicationAudit[]
+  paperKeyRevisions  ExaminationPaperKeyRevision[]
+
+  @@index([publicationStatus, examDate])
+  @@index([classGroup, sessionReference])
+}
+
+model ExaminationResult {
+  id                             String                              @id @default(cuid())
+  resultReference                String                              @unique
+  studentId                      String
+  examinationId                  String
+  sourceScanReference            String?                             @unique
+  paperVersion                   String?
+  obtainedMarks                  Decimal?                            @db.Decimal(8, 2)
+  maximumMarks                   Decimal                             @db.Decimal(8, 2)
+  correctCount                   Int?
+  wrongCount                     Int?
+  blankCount                     Int?
+  multipleCount                  Int?
+  uncertainCount                 Int?
+  identityStatus                 ExaminationResultIdentityStatus    @default(PENDING)
+  scoringStatus                  ExaminationResultScoringStatus     @default(PROVISIONAL)
+  verificationStatus             ExaminationResultVerificationStatus @default(PENDING)
+  publicationStatus              ExaminationResultPublicationStatus @default(UNPUBLISHED)
+  resultRevision                 Int                                 @default(1)
+  administrativelyAdjusted       Boolean                             @default(false)
+  administrativeAdjustmentReason String?                             @db.Text
+  administrativeRemarks          String?                             @db.Text
+  verifiedAt                     DateTime?
+  verifiedById                   String?
+  publishedAt                    DateTime?
+  publishedById                  String?
+  createdById                    String
+  createdAt                      DateTime                            @default(now())
+  updatedAt                      DateTime                            @updatedAt
+  student                        Student                             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  examination                    Examination                         @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  createdBy                      User                                @relation("ResultCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  verifiedBy                     User?                               @relation("ResultVerifier", fields: [verifiedById], references: [id], onDelete: Restrict)
+  publishedBy                    User?                               @relation("ResultPublisher", fields: [publishedById], references: [id], onDelete: Restrict)
+  responses                      ResultQuestionResponse[]
+  corrections                    ResultCorrectionAudit[]
+  dmcPreparations                DmcIssuancePreparation[]
+  dmcIssuances                   DmcIssuance[]
+
+  @@unique([studentId, examinationId])
+  @@index([examinationId, publicationStatus, verificationStatus])
+  @@index([studentId, createdAt])
+  @@index([updatedAt])
+}
+
+model ResultQuestionResponse {
+  id               String                       @id @default(cuid())
+  resultId         String
+  questionNumber   Int
+  detectedAnswer   String?
+  reviewedAnswer   String?
+  classification   ResultResponseClassification
+  marksAwarded     Decimal?                     @db.Decimal(8, 2)
+  responseSource   ResultResponseSource
+  reviewMetadata   Json?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  result           ExaminationResult            @relation(fields: [resultId], references: [id], onDelete: Restrict)
+
+  @@unique([resultId, questionNumber])
+  @@index([resultId, classification])
+}
+
+// Insert-only audit evidence. The migration installs triggers that reject UPDATE/DELETE.
+model ResultCorrectionAudit {
+  id                String            @id @default(cuid())
+  resultId          String
+  studentId         String
+  examinationId     String
+  previousRevision  Int
+  newRevision       Int
+  oldValues         Json
+  newValues         Json
+  reason            String            @db.Text
+  actorId           String
+  actorName         String
+  source            ResultChangeSource
+  publicationImpact String
+  occurredAt        DateTime          @default(now())
+  result            ExaminationResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  actor             User              @relation("ResultCorrectionActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([resultId, occurredAt])
+  @@index([studentId, examinationId, occurredAt])
+}
+
+model ExaminationAudit {
+  id                String            @id @default(cuid())
+  examinationId     String
+  previousValues    Json
+  newValues         Json
+  reason            String            @db.Text
+  actorId           String
+  actorName         String
+  source            ResultChangeSource
+  occurredAt        DateTime          @default(now())
+  examination       Examination       @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  actor             User              @relation("ExaminationAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([examinationId, occurredAt])
+}
+
+model ExaminationPublicationAudit {
+  id               String                       @id @default(cuid())
+  examinationId    String
+  previousStatus   ExaminationPublicationStatus
+  newStatus        ExaminationPublicationStatus
+  previousRevision Int
+  newRevision      Int
+  reason           String                       @db.Text
+  actorId          String
+  actorName        String
+  occurredAt       DateTime                     @default(now())
+  examination      Examination                  @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  actor            User                         @relation("ExaminationPublicationActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([examinationId, occurredAt])
+}
+
+// Stores only non-secret key revision identifiers; answer-key contents stay outside this model.
+model ExaminationPaperKeyRevision {
+  id                String      @id @default(cuid())
+  examinationId     String
+  paperVersion      String
+  answerKeyRevision String
+  createdById       String
+  createdAt         DateTime    @default(now())
+  examination       Examination @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  createdBy         User        @relation("PaperKeyRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([examinationId, paperVersion])
+  @@index([examinationId, createdAt])
+}
+
+model DmcIssuancePreparation {
+  id                String            @id
+  resultId          String
+  resultRevision    Int
+  snapshot          Json
+  actorId           String
+  actorName         String
+  expiresAt         DateTime
+  createdAt         DateTime          @default(now())
+  result            ExaminationResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  actor             User              @relation("DmcPreparationActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([resultId, expiresAt])
+  @@index([actorId, expiresAt])
+}
+
+// Issued document snapshots never change; transitions are separate append-only events.
+model DmcIssuance {
+  id                    String            @id
+  resultId              String
+  documentType          DmcDocumentType
+  resultRevision        Int
+  issueNumber           Int
+  certificateNumber     String            @unique
+  verificationReference String            @unique
+  snapshot              Json
+  idempotencyKey        String
+  issuedById            String
+  issuedByName          String
+  issuedAt              DateTime          @default(now())
+  result                ExaminationResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  issuedBy              User              @relation("DmcIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+  events                DmcIssuanceEvent[]
+
+  @@unique([resultId, documentType, issueNumber])
+  @@unique([issuedById, idempotencyKey])
+  @@index([resultId, issuedAt])
+}
+
+model DmcIssuanceEvent {
+  id          String                @id @default(cuid())
+  issuanceId  String
+  eventType   DmcIssuanceEventType
+  reason      String?               @db.Text
+  actorId     String
+  actorName   String
+  occurredAt  DateTime              @default(now())
+  issuance    DmcIssuance           @relation(fields: [issuanceId], references: [id], onDelete: Restrict)
+  actor       User                  @relation("DmcEventActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([issuanceId, occurredAt])
 }

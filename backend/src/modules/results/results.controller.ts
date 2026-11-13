@@ -1,9 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 import { resultsService } from './results.service';
-import { adminResultsPageQuerySchema } from './results.schema';
+import { officialResultsService } from './official-results.service';
+import {
+  adminResultsPageQuerySchema,
+  correctResultSchema,
+  createDraftResultSchema,
+  createExaminationSchema,
+  dmcIssueSchema,
+  dmcPrepareSchema,
+  dmcRevokeSchema,
+  examinationPublicationSchema,
+  officialExaminationsQuerySchema,
+  officialResultsPageQuerySchema,
+} from './results.schema';
 
 function sendPublicResultsUnavailable(res: Response) {
-  res.set('Cache-Control', 'no-store');
+  res.set('Cache-Control', 'private, no-store, max-age=0');
   return res.status(404).json({
     success: false,
     error: {
@@ -14,6 +26,25 @@ function sendPublicResultsUnavailable(res: Response) {
 }
 
 export class ResultsController {
+  private actor(req: Request) {
+    if (!req.user) throw Object.assign(new Error('Authentication required.'), { statusCode: 401, code: 'AUTHENTICATION_REQUIRED' });
+    return { id: req.user.id, name: req.user.name };
+  }
+
+  private noStore(res: Response) {
+    res.set('Cache-Control', 'private, no-store, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('X-Content-Type-Options', 'nosniff');
+  }
+
+  private sendPdf(res: Response, pdf: Buffer, filename: string, disposition: 'inline' | 'attachment' = 'inline') {
+    this.noStore(res);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `${disposition}; filename="${filename}"`);
+    res.set('Content-Length', String(pdf.length));
+    return res.status(200).send(pdf);
+  }
+
   publicResultsUnavailable(_req: Request, res: Response) {
     return sendPublicResultsUnavailable(res);
   }
@@ -39,6 +70,186 @@ export class ResultsController {
       const query = adminResultsPageQuerySchema.parse(req.query);
       const results = await resultsService.listAdminSessionResults(req.params.sessionId, query);
       res.status(200).json({ success: true, data: results });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyOfficialDmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      this.noStore(res);
+      const data = await officialResultsService.verifyDmc(req.params.reference);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getOfficialExaminations(req: Request, res: Response, next: NextFunction) {
+    try {
+      const query = officialExaminationsQuerySchema.parse(req.query);
+      const data = await officialResultsService.listExaminations({ search: query.search, limit: query.limit ?? 100 });
+      this.noStore(res);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getOfficialResults(req: Request, res: Response, next: NextFunction) {
+    try {
+      const query = officialResultsPageQuerySchema.parse(req.query);
+      const data = await officialResultsService.listOfficialResults(query);
+      this.noStore(res);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getStudentOfficialHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await officialResultsService.listStudentResults(req.params.studentId);
+      this.noStore(res);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getOfficialResult(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await officialResultsService.getResult(req.params.resultId);
+      this.noStore(res);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getOfficialCorrections(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await officialResultsService.listCorrectionHistory(req.params.resultId);
+      this.noStore(res);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createOfficialExamination(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = createExaminationSchema.parse(req.body);
+      const data = await officialResultsService.createExamination(input, this.actor(req));
+      this.noStore(res);
+      res.status(201).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async publishOfficialExamination(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = examinationPublicationSchema.parse(req.body);
+      const data = await officialResultsService.publishExamination(req.params.examId, input, this.actor(req));
+      this.noStore(res);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createOfficialDraftResult(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = createDraftResultSchema.parse(req.body);
+      const data = await officialResultsService.createDraftResult(req.params.examId, input, this.actor(req));
+      this.noStore(res);
+      res.status(201).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async correctOfficialResult(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = correctResultSchema.parse(req.body);
+      const data = await officialResultsService.correctResult(req.params.resultId, input, this.actor(req));
+      this.noStore(res);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async prepareOfficialDmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = dmcPrepareSchema.parse(req.body);
+      const data = await officialResultsService.prepareOfficialDmc(req.params.resultId, input.expectedRevision, this.actor(req));
+      this.noStore(res);
+      res.status(201).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async previewOfficialDmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { pdf, documentNumber } = await officialResultsService.renderOfficialPreparationPreview(req.params.resultId, req.params.preparationId, this.actor(req));
+      return this.sendPdf(res, pdf, `${documentNumber}.pdf`);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async issueOfficialDmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = dmcIssueSchema.parse(req.body);
+      const data = await officialResultsService.issueOfficialDmc(req.params.resultId, {
+        preparationId: input.preparationId!,
+        expectedRevision: input.expectedRevision!,
+        idempotencyKey: input.idempotencyKey!,
+      }, this.actor(req));
+      this.noStore(res);
+      res.status(201).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getOfficialDmcIssuances(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await officialResultsService.listOfficialDmcIssuances(req.params.resultId);
+      this.noStore(res);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async downloadOfficialDmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { pdf, filename } = await officialResultsService.renderOfficialDmc(req.params.resultId, req.params.issuanceId);
+      return this.sendPdf(res, pdf, filename);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async downloadElectronicDmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { pdf, filename } = await officialResultsService.renderElectronicDmc(req.params.resultId);
+      return this.sendPdf(res, pdf, filename);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async revokeOfficialDmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = dmcRevokeSchema.parse(req.body);
+      const data = await officialResultsService.revokeOfficialDmc(req.params.resultId, req.params.issuanceId, input.reason, this.actor(req));
+      this.noStore(res);
+      res.status(200).json({ success: true, data });
     } catch (error) {
       next(error);
     }

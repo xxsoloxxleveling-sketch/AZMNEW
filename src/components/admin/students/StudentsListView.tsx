@@ -35,7 +35,16 @@ import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/
 const DEFAULT_STUDENTS_PER_PAGE = 10;
 const STUDENT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 250] as const;
 
-export const StudentsListView: React.FC = () => {
+interface StudentsListViewProps {
+  initialStudentResultsProfile?: { studentId: string; requestId: string } | null;
+  initialSectionStudentId?: string | null;
+  initialResultContext?: { studentId: string; resultId: string; examinationId: string } | null;
+  onStudentResultsProfileHandled?: (requestId: string) => void;
+  onReturnToResultsDashboard?: (context?: { studentId: string; resultId: string; examinationId: string }) => void;
+  onStudentProfileClosed?: () => void;
+}
+
+export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStudentResultsProfile, initialSectionStudentId, initialResultContext, onStudentResultsProfileHandled, onReturnToResultsDashboard, onStudentProfileClosed }) => {
   const { role, isLoading: authLoading } = useAuth();
   const [students, setStudents] = useState<MockStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -213,6 +222,24 @@ export const StudentsListView: React.FC = () => {
     return () => window.removeEventListener('students-updated', refresh);
   }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize, studyGroupReview]);
 
+  useEffect(() => {
+    const request = initialStudentResultsProfile;
+    if (!request?.studentId || !request.requestId || authLoading) return;
+    let cancelled = false;
+    setErrorMessage(null);
+    void mockApi.getStudentById(request.studentId)
+      .then((student) => {
+        if (!cancelled && student?.id === request.studentId) setSelectedStudent(student);
+      })
+      .catch((error: any) => {
+        if (!cancelled) setErrorMessage(error?.message || 'Could not open this student profile.');
+      })
+      .finally(() => {
+        if (!cancelled) onStudentResultsProfileHandled?.(request.requestId);
+      });
+    return () => { cancelled = true; };
+  }, [initialStudentResultsProfile?.requestId, initialStudentResultsProfile?.studentId, authLoading, onStudentResultsProfileHandled]);
+
   // Batch actions intentionally apply only to the visible result set.
   // Reset selection whenever paging or filters change so hidden candidates are never approved accidentally.
   useEffect(() => {
@@ -320,8 +347,12 @@ export const StudentsListView: React.FC = () => {
     return (
       <StudentDetailView
         student={selectedStudent}
+        initialSection={initialSectionStudentId === selectedStudent.id ? 'results' : undefined}
+        initialResultContext={initialResultContext?.studentId === selectedStudent.id ? initialResultContext : null}
+        onReturnToResultsDashboard={onReturnToResultsDashboard}
         onBack={() => {
           setSelectedStudent(null);
+          onStudentProfileClosed?.();
           fetchStudents();
         }}
       />

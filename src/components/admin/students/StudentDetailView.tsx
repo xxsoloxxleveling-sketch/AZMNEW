@@ -44,10 +44,14 @@ import { AdminWalkInModal } from './AdminWalkInModal';
 import { useAuth } from '../../../lib/authContext';
 import { apiFetchProtectedObjectUrl, API_BASE_URL } from '../../../lib/apiClient';
 import { getStudentWhatsAppContact, openWhatsAppInNewTab } from '../../../utils/whatsapp';
+import { OfficialResultsProfileSection } from '../../results/OfficialResultsProfileSection';
 
 interface StudentDetailViewProps {
   student: MockStudent;
   onBack: () => void;
+  initialSection?: 'results' | null;
+  initialResultContext?: { studentId: string; resultId: string; examinationId: string } | null;
+  onReturnToResultsDashboard?: (context: { studentId: string; resultId: string; examinationId: string }) => void;
 }
 
 function formatHumanDate(dateStr?: string | null): string {
@@ -224,7 +228,7 @@ function extractStudentDocuments(s: any): MockStudentDocument[] {
   return Array.from(docMap.values());
 }
 
-export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: initialStudent, onBack }) => {
+export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: initialStudent, onBack, initialSection, initialResultContext, onReturnToResultsDashboard }) => {
   const { role } = useAuth();
   const [student, setStudent] = useState<MockStudent>(initialStudent);
   const [correctGroup, setCorrectGroup] = useState(false);
@@ -260,6 +264,16 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
     loadFullStudent();
     loadCenters();
   }, [initialStudent.id, initialStudent.applicationNo]);
+
+  useEffect(() => {
+    if (initialSection !== 'results') return;
+    const frame = window.requestAnimationFrame(() => {
+      const section = document.getElementById('student-examination-results');
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      section?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialSection, student.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -556,6 +570,17 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
             <span>OMR Sheet</span>
           </button>
 
+          {/* Direct access to the exam-specific result history */}
+          <button
+            type="button"
+            onClick={() => document.getElementById('student-examination-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            title="View this student's official examination result history"
+            className="px-3 py-2 text-xs font-bold bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#185b9d] rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+          >
+            <IconAward size={16} />
+            <span>View Results</span>
+          </button>
+
           {/* Secondary Action: Download PDF */}
           <button
             onClick={handleDownloadPdf}
@@ -745,6 +770,15 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student: i
               )}
             </div>
           </div>
+          <OfficialResultsProfileSection
+            studentId={student.id}
+            studentName={student.fullName}
+            rollNumber={student.rollNumber || null}
+            applicationNo={student.applicationNo}
+            classGroup={student.currentClass}
+            initialResultId={initialResultContext?.studentId === student.id ? initialResultContext.resultId : undefined}
+            onReturnToResultsDashboard={onReturnToResultsDashboard}
+          />
         </div>
 
         {/* Right Column: Scholarship, Documents, & Inspection */}

@@ -5,12 +5,12 @@ import { ResultsFilters } from './ResultsFilters';
 import { ResultsTable } from './ResultsTable';
 import { StudentResultDetail } from './StudentResultDetail';
 import { downloadResultsCsv, downloadResultsXlsx } from './ResultsExport';
-import { BackendResultsView } from './BackendResultsView';
+import { BackendResultsView, type InitialOfficialResultContext } from './BackendResultsView';
 import type { DemoStudentResult, ExportScope, ResultFilters as FiltersState, ResultStatus } from './ResultsTypes';
 
 interface AuditEntry { id: string; action: string; count: number; time: string; }
 
-export function AdminResultsView() {
+export function AdminResultsView({ initialResultContext }: { initialResultContext?: InitialOfficialResultContext | null } = {}) {
   const [source, setSource] = useState<'backend' | 'demo'>('backend');
   return (
     <div className="space-y-3">
@@ -21,7 +21,7 @@ export function AdminResultsView() {
           <button type="button" aria-pressed={source === 'demo'} onClick={() => setSource('demo')} className={`rounded px-3 py-1.5 text-xs font-semibold ${source === 'demo' ? 'bg-[#185b9d] text-white' : 'text-slate-700 hover:bg-slate-50'}`}>Demo data</button>
         </div>
       </div>
-      {source === 'backend' ? <BackendResultsView /> : <DemoResultsView />}
+      {source === 'backend' ? <BackendResultsView initialResultContext={initialResultContext} /> : <DemoResultsView />}
     </div>
   );
 }

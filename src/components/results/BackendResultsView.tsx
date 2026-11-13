@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, RefreshCw } from 'lucide-react';
+import { OfficialResultsDashboard } from './OfficialResultsDashboard';
 import { getResultsSessions, getSessionResults } from './ResultsApi';
 import type { BackendResultsPage, BackendStudentResult, ResultsSessionOption } from './ResultsApi';
 import { downloadResultsTableCsv, downloadResultsTableXlsx } from './ResultsExport';
@@ -14,7 +15,29 @@ const EXPORT_HEADERS = [
 type ScoreAvailability = 'all' | 'with-score' | 'without-score';
 type SortBy = 'rollNumber' | 'studentName' | 'className' | 'legacyScore';
 
-export function BackendResultsView() {
+export interface InitialOfficialResultContext {
+  studentId: string;
+  resultId: string;
+  examinationId: string;
+}
+
+export function BackendResultsView({ initialResultContext }: { initialResultContext?: InitialOfficialResultContext | null } = {}) {
+  const [recordView, setRecordView] = useState<'official' | 'legacy'>('official');
+  return (
+    <section className="space-y-3" aria-label="Connected results records">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div><h2 className="text-sm font-bold text-slate-900">Connected result records</h2><p className="mt-1 text-xs text-slate-600">Official exam results and historic aggregates are kept in separate views.</p></div>
+        <div className="inline-flex rounded-md border border-slate-300 bg-slate-50 p-1" role="group" aria-label="Choose result record type">
+          <button type="button" aria-pressed={recordView === 'official'} onClick={() => setRecordView('official')} className={`rounded px-3 py-2 text-xs font-semibold ${recordView === 'official' ? 'bg-white text-[#185b9d] shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Official exam results</button>
+          <button type="button" aria-pressed={recordView === 'legacy'} onClick={() => setRecordView('legacy')} className={`rounded px-3 py-2 text-xs font-semibold ${recordView === 'legacy' ? 'bg-white text-amber-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Legacy unverified values</button>
+        </div>
+      </div>
+      {recordView === 'official' ? <OfficialResultsDashboard initialResultContext={initialResultContext} /> : <LegacyResultsView />}
+    </section>
+  );
+}
+
+function LegacyResultsView() {
   const [sessions, setSessions] = useState<ResultsSessionOption[]>([]);
   const [sessionId, setSessionId] = useState('');
   const [pageData, setPageData] = useState<BackendResultsPage | null>(null);

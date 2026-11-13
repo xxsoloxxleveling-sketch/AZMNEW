@@ -29,7 +29,7 @@ test('public result APIs stay closed until exam-specific verified publication ex
   };
   new ResultsController().publicResultsUnavailable({} as any, response as any);
   assert.equal(status, 404);
-  assert.equal(cacheControl, 'no-store');
+  assert.match(cacheControl, /no-store/);
   assert.equal(payload.error.code, 'RESULTS_NOT_PUBLISHED');
   assert.match(payload.error.message, /No examination results are currently published/);
 });
@@ -37,7 +37,7 @@ test('public result APIs stay closed until exam-specific verified publication ex
 test('admin result routes require authentication and the existing administrator roles', () => {
   const routePath = path.resolve(process.cwd(), 'src/modules/results/results.routes.ts');
   const source = readFileSync(routePath, 'utf8');
-  assert.match(source, /adminRouter\.use\(authenticate, authorizeRoles\(Role\.SUPER_ADMIN, Role\.ADMIN\)\)/);
+  assert.match(source, /adminRouter\.use\(\s*authenticate,\s*authorizeRoles\(Role\.SUPER_ADMIN, Role\.ADMIN\),/);
   assert.match(source, /adminRouter\.get\('\/sessions/);
   assert.match(source, /adminRouter\.get\('\/sessions\/:sessionId\/results/);
 });
