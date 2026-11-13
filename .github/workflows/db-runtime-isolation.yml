@@ -89,6 +89,8 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: ''
+      - name: Build AZM Study Notes without publishing
+        run: npm run build:notes
       - name: Verify Results portal data and safe exports
         run: node backend/node_modules/tsx/dist/cli.mjs --test src/components/results/ResultsExport.test.ts src/components/results/ResultsDemoData.test.ts src/components/results/FutureOmrContract.test.ts
       - name: Select runner Chrome for synthetic document UI checks
