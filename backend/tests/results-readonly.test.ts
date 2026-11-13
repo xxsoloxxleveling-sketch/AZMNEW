@@ -32,7 +32,9 @@ test('public result routes return an unpublished response without reading marks,
     const adminResponse = await fetch(`${base}/admin/sessions`);
     assert.equal(adminResponse.status, 401);
   } finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    if (server.listening) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   }
 });
 test('admin result routes require authentication and the existing administrator roles', () => {
