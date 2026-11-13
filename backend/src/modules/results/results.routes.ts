@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { resultsController } from './results.controller';
 import { validateQuery } from '../../middleware/validate.middleware';
-import { resultSearchQuerySchema, meritListQuerySchema, adminResultsPageQuerySchema } from './results.schema';
+import { adminResultsPageQuerySchema } from './results.schema';
 import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
 import { Role } from '@prisma/client';
@@ -9,8 +9,8 @@ import { Role } from '@prisma/client';
 const router = Router();
 
 // Public Results & Merit endpoints
-router.get('/search', validateQuery(resultSearchQuerySchema), resultsController.search);
-router.get('/merit-list', validateQuery(meritListQuerySchema), resultsController.getMeritList);
+router.get('/search', resultsController.publicResultsUnavailable);
+router.get('/merit-list', resultsController.publicResultsUnavailable);
 
 // Staff-only, read-only access to legacy aggregate scores linked to an exam sitting.
 // These values are deliberately returned as unverified and cannot be published here.
