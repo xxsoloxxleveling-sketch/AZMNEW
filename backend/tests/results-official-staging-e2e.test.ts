@@ -59,7 +59,7 @@ async function run() {
       const kind = response.headers.get('content-type') || '';
       return { status: response.status, headers: response.headers, data: kind.includes('application/json') ? await response.json() as any : Buffer.from(await response.arrayBuffer()) };
     }
-    const examInput = { reference: 'SYNTH-EXAM', title: 'Synthetic examination', sessionReference: 'SYNTH-SESSION', classGroup: 'Class 9', maximumMarks: '4', questionCount: 4, paperKeyRevisions: [{ paperVersion: 'A', answerKeyRevision: 'synthetic-key-revision' }], scoringPolicy: { correctMarks: '1', wrongMarks: '0', blankMarks: '0', multipleMarks: '0', revision: 'synthetic-policy' } };
+    const examInput = { reference: 'SYNTH-EXAM', title: 'Synthetic examination', sessionReference: 'SYNTH-SESSION', classGroup: 'Class 9', maximumMarks: '100', questionCount: 100, paperKeyRevisions: [{ paperVersion: 'A', answerKeyRevision: 'synthetic-key-revision' }], scoringPolicy: { correctMarks: '1', wrongMarks: '0', blankMarks: '0', multipleMarks: '0', revision: 'synthetic-policy' } };
     assert.equal((await call('POST', '/admin/examinations', 'ADMIN', examInput)).status, 403);
     assert.equal((await call('GET', '/admin/examinations', 'TEACHER')).status, 403);
     assert.equal((await call('GET', '/admin/examinations')).status, 401);
@@ -70,10 +70,10 @@ async function run() {
     assert.equal(draftResponse.status, 201); const draft = draftResponse.data.data; assert.equal(draft.publicationStatus, 'UNPUBLISHED');
     assert.notEqual((await call('GET', `/admin/${draft.id}/dmc/electronic`, 'ADMIN')).status, 200);
     const pubExam = await call('POST', `/admin/examinations/${exam.id}/publication`, 'SUPER_ADMIN', { expectedRevision: exam.revision, action: 'PUBLISH', reason: 'Synthetic staging verification' }); assert.equal(pubExam.status, 200);
-    const changes = { identityStatus: 'VERIFIED', scoringStatus: 'VERIFIED', verificationStatus: 'VERIFIED', publicationStatus: 'PUBLISHED', responses: [1,2,3,4].map(questionNumber => ({ questionNumber, reviewedAnswer: 'A', classification: 'CORRECT' })) };
+    const changes = { identityStatus: 'VERIFIED', scoringStatus: 'VERIFIED', verificationStatus: 'VERIFIED', publicationStatus: 'PUBLISHED', responses: Array.from({ length: 100 }, (_, index) => ({ questionNumber: index + 1, reviewedAnswer: 'A', classification: 'CORRECT' })) };
     assert.equal((await call('POST', `/admin/${draft.id}/corrections`, 'ADMIN', { expectedRevision: draft.resultRevision, source: 'STUDENT_PROFILE', reason: 'Synthetic unauthorized correction', changes })).status, 403);
     const corrected = await call('POST', `/admin/${draft.id}/corrections`, 'SUPER_ADMIN', { expectedRevision: draft.resultRevision, source: 'STUDENT_PROFILE', reason: 'Synthetic verified correction', changes });
-    assert.equal(corrected.status, 200); const result = corrected.data.data; assert.equal(result.publicationStatus, 'PUBLISHED'); assert.equal(result.obtainedMarks, '4');
+    assert.equal(corrected.status, 200); const result = corrected.data.data; assert.equal(result.publicationStatus, 'PUBLISHED'); assert.equal(result.obtainedMarks, '100');
     assert.equal((await call('POST', `/admin/${draft.id}/corrections`, 'SUPER_ADMIN', { expectedRevision: draft.resultRevision, source: 'STUDENT_PROFILE', reason: 'Synthetic stale correction', changes: { administrativeRemarks: 'stale' } })).status, 409);
     const history = await call('GET', `/admin/students/synthetic-student`, 'ADMIN'); assert.equal(history.status, 200); assert.match(history.headers.get('cache-control') || '', /no-store/); assert(!JSON.stringify(history.data).includes('synthetic-key-revision'));
     const electronic = await call('GET', `/admin/${draft.id}/dmc/electronic`, 'ADMIN'); assert.equal(electronic.status, 200); assert.equal((electronic.data as Buffer).subarray(0, 4).toString(), '%PDF');
