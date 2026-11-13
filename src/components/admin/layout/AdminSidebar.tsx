@@ -17,6 +17,7 @@ import {
   LogOut as IconLogOut,
   Shield as IconShield,
   QrCode as IconScanner,
+  ClipboardList as IconResults,
 } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { Role } from '../../../lib/mockApi';
@@ -33,7 +34,8 @@ export type AdminTab =
   | 'payroll'
   | 'transactions'
   | 'settings'
-  | 'scan';
+  | 'scan'
+  | 'results';
 
 interface AdminSidebarProps {
   currentTab: AdminTab;
@@ -88,6 +90,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       label: 'Examination Attendance',
       icon: IconAttendance,
       roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'],
+    },
+    {
+      id: 'results' as AdminTab,
+      label: 'Results',
+      icon: IconResults,
+      roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
       id: 'scan' as AdminTab,

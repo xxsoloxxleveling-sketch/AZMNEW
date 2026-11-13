@@ -86,6 +86,9 @@ const DocumentVaultView = lazy(() =>
 const AdminPartnersListView = lazy(() =>
   import('./components/admin/partners/AdminPartnersListView').then((m) => ({ default: m.AdminPartnersListView }))
 );
+const AdminResultsView = lazy(() =>
+  import('./components/results/AdminResultsView').then((m) => ({ default: m.AdminResultsView }))
+);
 const AdminWalkInModal = lazy(() =>
   import('./components/admin/students/AdminWalkInModal').then((m) => ({ default: m.AdminWalkInModal }))
 );
@@ -335,20 +338,21 @@ function AppContent() {
         setAdminTab(role === 'TEACHER' ? 'attendance' : 'partners');
         if (role === 'TEACHER') window.location.hash = 'attendance';
       } else if (
-        ['dashboard', 'students', 'partners', 'staff', 'transactions', 'settings', 'halls', 'attendance', 'storage'].includes(
-          hash
-        )
+        ['dashboard', 'students', 'partners', 'staff', 'transactions', 'settings', 'halls', 'attendance', 'storage', 'admin-results'].includes(hash) ||
+        (hash === 'results' && window.location.pathname.startsWith('/admin'))
       ) {
         setCurrentRoute('admin');
         const canManageHalls = role === 'SUPER_ADMIN' || role === 'ADMIN';
         const canUseAttendance = canManageHalls || role === 'TEACHER';
-        const targetTab: AdminTab = role === 'TEACHER' && hash !== 'settings'
+        const canManageResults = canManageHalls;
+        const requestedTab = hash === 'admin-results' || hash === 'results' ? 'results' : hash as AdminTab;
+        const targetTab: AdminTab = role === 'TEACHER' && requestedTab !== 'settings'
           ? 'attendance'
-          : ((hash === 'halls' || hash === 'storage') && !canManageHalls) || (hash === 'attendance' && !canUseAttendance)
+          : ((requestedTab === 'halls' || requestedTab === 'storage') && !canManageHalls) || (requestedTab === 'attendance' && !canUseAttendance) || (requestedTab === 'results' && !canManageResults)
             ? 'dashboard'
-            : hash as AdminTab;
+            : requestedTab;
         setAdminTab(targetTab);
-        if (targetTab !== hash) window.location.hash = targetTab;
+        if (targetTab !== requestedTab) window.location.hash = targetTab;
       } else if (
         hash === 'apply-test' ||
         hash === 'test-apply' ||
@@ -400,7 +404,7 @@ function AppContent() {
     if (targetRoute === 'admin' && role === 'TEACHER' && targetTab !== 'settings') targetTab = 'attendance';
     setCurrentRoute(targetRoute);
     if (targetTab) setAdminTab(targetTab);
-    window.location.hash = targetRoute === 'admin' ? targetTab || 'dashboard' : targetRoute === 'public' ? activeTab : targetRoute;
+    window.location.hash = targetRoute === 'admin' ? targetTab === 'results' ? 'admin-results' : targetTab || 'dashboard' : targetRoute === 'public' ? activeTab : targetRoute;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -583,6 +587,8 @@ function AppContent() {
           return { title: 'Candidate Document Storage Vault', subtitle: 'Digital repository of photos, CNIC/B-Forms, DMCs, and payment receipts' };
         case 'attendance':
           return { title: 'Examination Attendance Hub', subtitle: 'Hall-scoped examination sessions and frozen rosters' };
+        case 'results':
+          return { title: 'Examination Results', subtitle: 'Review demo result processing, verification and publication states' };
         case 'fees':
           return { title: 'Fee Challans & Collections', subtitle: 'Automated billing, receipt generation, and income ledger' };
         case 'staff':
@@ -607,12 +613,12 @@ function AppContent() {
           onSelectTab={(tab) => {
             if (tab === 'scan') {
               navigateTo('scan');
-            } else if (['fees', 'payroll'].includes(tab) || ((tab === 'halls' || tab === 'storage') && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
+            } else if (['fees', 'payroll'].includes(tab) || ((tab === 'halls' || tab === 'storage' || tab === 'results') && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
               setAdminTab('dashboard');
               window.location.hash = 'dashboard';
             } else {
               setAdminTab(tab);
-              window.location.hash = tab;
+              window.location.hash = tab === 'results' ? 'admin-results' : tab;
             }
           }}
           title={meta.title}
@@ -629,12 +635,12 @@ function AppContent() {
               onNavigate={(tab) => {
                 if (tab === 'scan') {
                   navigateTo('scan');
-                } else if (['fees', 'payroll'].includes(tab) || ((tab === 'halls' || tab === 'storage') && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
+                } else if (['fees', 'payroll'].includes(tab) || ((tab === 'halls' || tab === 'storage' || tab === 'results') && role !== 'SUPER_ADMIN' && role !== 'ADMIN') || (tab === 'attendance' && role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
                   setAdminTab('dashboard');
                   window.location.hash = 'dashboard';
                 } else {
                   setAdminTab(tab);
-                  window.location.hash = tab;
+                  window.location.hash = tab === 'results' ? 'admin-results' : tab;
                 }
               }}
               onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
@@ -648,6 +654,7 @@ function AppContent() {
           {adminTab === 'halls' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <ExamHallsView />}
           {adminTab === 'storage' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <DocumentVaultView />}
           {adminTab === 'attendance' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <AttendanceHubView />}
+          {adminTab === 'results' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <AdminResultsView />}
           {['fees', 'payroll'].includes(adminTab) && (
             <DashboardView
               onNavigate={(tab) => {
