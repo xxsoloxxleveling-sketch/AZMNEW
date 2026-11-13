@@ -13,10 +13,10 @@ process.env.QR_SECRET = 'synthetic-results-test-qr-secret';
 test('public result APIs stay closed until exam-specific verified publication exists', async () => {
   const routePath = path.resolve(process.cwd(), 'src/modules/results/results.routes.ts');
   const source = readFileSync(routePath, 'utf8');
-  assert.match(source, /router\\.get\\('\\/search', resultsController\\.publicResultsUnavailable\\)/);
-  assert.match(source, /router\\.get\\('\\/merit-list', resultsController\\.publicResultsUnavailable\\)/);
-  assert.doesNotMatch(source, /router\\.get\\('\\/search'.*resultsController\\.search/);
-  assert.doesNotMatch(source, /router\\.get\\('\\/merit-list'.*resultsController\\.getMeritList/);
+  assert.ok(source.includes("router.get('/search', resultsController.publicResultsUnavailable);"));
+  assert.ok(source.includes("router.get('/merit-list', resultsController.publicResultsUnavailable);"));
+  assert.ok(!source.includes("router.get('/search', validateQuery"));
+  assert.ok(!source.includes("router.get('/merit-list', validateQuery"));
 
   const { ResultsController } = await import('../src/modules/results/results.controller');
   let status = 0;
