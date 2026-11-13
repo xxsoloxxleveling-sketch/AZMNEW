@@ -18,11 +18,11 @@ function PublicResultsUnavailable() {
       <div className="border-b border-slate-200 pb-4">
         <p className="text-xs font-semibold text-[#185b9d]">Public student service</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Examination Results</h1>
-        <p className="mt-2 text-sm text-slate-600">Secure online result verification is not available yet.</p>
+        <p className="mt-2 text-sm text-slate-600">Results are coming soon.</p>
       </div>
       <div role="status" className="border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        <h2 className="font-semibold">Identity verification is required</h2>
-        <p className="mt-1 text-xs leading-5">The current public results service cannot verify student identity and official publication status. This page will not search student records or display legacy, provisional, or unpublished marks.</p>
+        <h2 className="font-semibold">Results coming soon</h2>
+        <p className="mt-1 text-xs leading-5">Examination results have not been published yet. Once evaluation and verification are complete, you can check your result here.</p>
       </div>
     </main>
   );
