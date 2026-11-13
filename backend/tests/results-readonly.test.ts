@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import express from 'express';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { adminResultsPageQuerySchema } from '../src/modules/results/results.schema';
@@ -10,30 +11,30 @@ process.env.JWT_ACCESS_SECRET = 'synthetic-results-test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'synthetic-results-test-refresh-secret';
 process.env.QR_SECRET = 'synthetic-results-test-qr-secret';
 
-test('public result APIs stay closed until exam-specific verified publication exists', async () => {
-  const routePath = path.resolve(process.cwd(), 'src/modules/results/results.routes.ts');
-  const source = readFileSync(routePath, 'utf8');
-  assert.ok(source.includes("router.get('/search', resultsController.publicResultsUnavailable);"));
-  assert.ok(source.includes("router.get('/merit-list', resultsController.publicResultsUnavailable);"));
-  assert.ok(!source.includes("router.get('/search', validateQuery"));
-  assert.ok(!source.includes("router.get('/merit-list', validateQuery"));
-
-  const { ResultsController } = await import('../src/modules/results/results.controller');
-  let status = 0;
-  let cacheControl = '';
-  let payload: any;
-  const response = {
-    set: (name: string, value: string) => { if (name === 'Cache-Control') cacheControl = value; return response; },
-    status: (value: number) => { status = value; return response; },
-    json: (value: any) => { payload = value; return response; },
-  };
-  new ResultsController().publicResultsUnavailable({} as any, response as any);
-  assert.equal(status, 404);
-  assert.equal(cacheControl, 'no-store');
-  assert.equal(payload.error.code, 'RESULTS_NOT_PUBLISHED');
-  assert.match(payload.error.message, /No examination results are currently published/);
+test('public result routes return an unpublished response without reading marks, while admin remains authenticated', async () => {
+  const { default: resultsRoutes } = await import('../src/modules/results/results.routes');
+  const app = express();
+  app.use('/api/results', resultsRoutes);
+  const server = app.listen(0, '127.0.0.1');
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== 'string');
+    const base = `http://127.0.0.1:${address.port}/api/results`;
+    for (const route of ['/search?query=SYNTHETIC-NO-RECORD', '/merit-list']) {
+      const response = await fetch(`${base}${route}`);
+      assert.equal(response.status, 404);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      const body = await response.json() as any;
+      assert.equal(body.error.code, 'RESULTS_NOT_PUBLISHED');
+      assert.equal(body.error.message, 'No examination results are currently published.');
+      assert.equal(JSON.stringify(body).includes('marks'), false);
+    }
+    const adminResponse = await fetch(`${base}/admin/sessions`);
+    assert.equal(adminResponse.status, 401);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
 });
-
 test('admin result routes require authentication and the existing administrator roles', () => {
   const routePath = path.resolve(process.cwd(), 'src/modules/results/results.routes.ts');
   const source = readFileSync(routePath, 'utf8');
