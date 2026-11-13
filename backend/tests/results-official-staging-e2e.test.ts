@@ -13,17 +13,34 @@ async function run() {
   assert.equal(source.port, '55432');
   assert.equal(source.pathname, '/postgres');
   const database = 'azm_results_e2e_' + randomUUID().replaceAll('-', '');
+  const runtimeRole = 'azm_results_runtime_' + randomUUID().replaceAll('-', '');
+  const runtimePassword = randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
   assert.match(database, /^azm_results_e2e_[a-f0-9]{32}$/);
   const admin = new Client({ connectionString: source.toString() });
-  let db: any; let shared: any; let server: any; let created = false;
+  let db: any; let shared: any; let server: any; let created = false; let roleCreated = false; let groupCreated = false; let target: Client | undefined; let runtime: Client | undefined;
   try {
     await admin.connect();
+    if (!(await admin.query("SELECT 1 FROM pg_roles WHERE rolname='azm_app_dml'")).rowCount) {
+      await admin.query('CREATE ROLE azm_app_dml NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS'); groupCreated = true;
+    }
     await admin.query(`CREATE DATABASE "${database}"`); created = true;
     source.pathname = '/' + database;
-    process.env.DATABASE_URL = source.toString(); process.env.DIRECT_URL = source.toString();
+    const ownerUrl = source.toString();
+    process.env.DATABASE_URL = ownerUrl; process.env.DIRECT_URL = ownerUrl;
     execFileSync(process.execPath, [path.resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy', '--schema', path.resolve('prisma/schema.prisma')], { env: process.env, stdio: 'pipe' });
+    await admin.query(`CREATE ROLE "${runtimeRole}" LOGIN PASSWORD '${runtimePassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`); roleCreated = true;
+    await admin.query(`GRANT azm_app_dml TO "${runtimeRole}"`);
+    target = new Client({ connectionString: ownerUrl }); await target.connect();
+    await target.query(`GRANT CONNECT ON DATABASE "${database}" TO "${runtimeRole}"`);
+    await target.query(`GRANT USAGE ON SCHEMA public TO "${runtimeRole}"`);
+    await target.query(`GRANT SELECT ON "User", "Student", "ExamHall" TO "${runtimeRole}"`);
+    const runtimeUrl = new URL(ownerUrl); runtimeUrl.username = runtimeRole; runtimeUrl.password = runtimePassword;
+    runtime = new Client({ connectionString: runtimeUrl.toString() }); await runtime.connect();
+    const privileges = await runtime.query("SELECT current_user, has_schema_privilege(current_user,'public','CREATE') AS can_create, has_table_privilege(current_user,'public.\"_prisma_migrations\"','INSERT') AS can_write_ledger");
+    assert.equal(privileges.rows[0].current_user, runtimeRole); assert.equal(privileges.rows[0].can_create, false); assert.equal(privileges.rows[0].can_write_ledger, false);
+    process.env.DATABASE_URL = runtimeUrl.toString(); process.env.DIRECT_URL = runtimeUrl.toString();
     const { PrismaClient } = await import('@prisma/client');
-    db = new PrismaClient();
+    db = new PrismaClient({ datasources: { db: { url: ownerUrl } } });
     const express = (await import('express')).default;
     const { signAccessToken } = await import('../src/lib/jwt');
     const { prisma } = await import('../src/lib/prisma'); shared = prisma;
@@ -65,11 +82,14 @@ async function run() {
     assert.equal((await call('POST', `/admin/${draft.id}/dmc/official/${issuance.data.data.id}/revoke`, 'SUPER_ADMIN', { reason: 'Synthetic revocation test' })).status, 200);
     assert.equal((await call('GET', `/admin/${draft.id}/dmc/official/${issuance.data.data.id}`, 'ADMIN')).status, 404);
     await assert.rejects(db.$executeRawUnsafe('UPDATE "ResultCorrectionAudit" SET reason = $1', 'synthetic alteration'));
-    console.log('PASS synthetic Results API authorization, draft, publication, revision, audit and DMC lifecycle');
+    await assert.rejects(runtime.query('UPDATE "ResultCorrectionAudit" SET reason = $1', ['synthetic alteration']));
+    console.log('PASS restricted-runtime synthetic Results API authorization, draft, publication, revision, audit and DMC lifecycle');
   } finally {
     if (server) await new Promise<void>(resolve => server.close(() => resolve()));
-    await shared?.$disconnect(); await db?.$disconnect();
+    await shared?.$disconnect(); await db?.$disconnect(); await runtime?.end(); await target?.end();
     if (created) await admin.query(`DROP DATABASE "${database}"`);
+    if (roleCreated) await admin.query(`DROP ROLE "${runtimeRole}"`);
+    if (groupCreated) await admin.query('DROP ROLE azm_app_dml');
     await admin.end();
   }
 }
