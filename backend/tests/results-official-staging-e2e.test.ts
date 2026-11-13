@@ -36,8 +36,9 @@ async function run() {
     await target.query(`GRANT SELECT ON "User", "Student", "ExamHall" TO "${runtimeRole}"`);
     const runtimeUrl = new URL(ownerUrl); runtimeUrl.username = runtimeRole; runtimeUrl.password = runtimePassword;
     runtime = new Client({ connectionString: runtimeUrl.toString() }); await runtime.connect();
-    const privileges = await runtime.query("SELECT current_user, has_schema_privilege(current_user,'public','CREATE') AS can_create, has_table_privilege(current_user,'public.\"_prisma_migrations\"','INSERT') AS can_write_ledger");
-    assert.equal(privileges.rows[0].current_user, runtimeRole); assert.equal(privileges.rows[0].can_create, false); assert.equal(privileges.rows[0].can_write_ledger, false);
+    const privileges = await runtime.query("SELECT current_user, rolsuper, rolbypassrls, has_schema_privilege(current_user,'public','CREATE') AS can_create, has_table_privilege(current_user,'public.\"_prisma_migrations\"','INSERT') AS can_write_ledger, has_table_privilege(current_user,'public.\"ResultCorrectionAudit\"','UPDATE') AS can_update_audit, has_table_privilege(current_user,'public.\"ResultCorrectionAudit\"','DELETE') AS can_delete_audit, has_table_privilege(current_user,'public.\"ResultCorrectionAudit\"','TRUNCATE') AS can_truncate_audit FROM pg_roles WHERE rolname=current_user");
+    assert.equal(privileges.rows[0].current_user, runtimeRole);
+    for (const key of ['rolsuper', 'rolbypassrls', 'can_create', 'can_write_ledger', 'can_update_audit', 'can_delete_audit', 'can_truncate_audit']) assert.equal(privileges.rows[0][key], false, key);
     process.env.DATABASE_URL = runtimeUrl.toString(); process.env.DIRECT_URL = runtimeUrl.toString();
     const { PrismaClient } = await import('@prisma/client');
     db = new PrismaClient({ datasources: { db: { url: ownerUrl } } });
