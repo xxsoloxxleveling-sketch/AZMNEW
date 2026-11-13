@@ -10,6 +10,30 @@ process.env.JWT_ACCESS_SECRET = 'synthetic-results-test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'synthetic-results-test-refresh-secret';
 process.env.QR_SECRET = 'synthetic-results-test-qr-secret';
 
+test('public result APIs stay closed until exam-specific verified publication exists', async () => {
+  const routePath = path.resolve(process.cwd(), 'src/modules/results/results.routes.ts');
+  const source = readFileSync(routePath, 'utf8');
+  assert.match(source, /router\\.get\\('\\/search', resultsController\\.publicResultsUnavailable\\)/);
+  assert.match(source, /router\\.get\\('\\/merit-list', resultsController\\.publicResultsUnavailable\\)/);
+  assert.doesNotMatch(source, /router\\.get\\('\\/search'.*resultsController\\.search/);
+  assert.doesNotMatch(source, /router\\.get\\('\\/merit-list'.*resultsController\\.getMeritList/);
+
+  const { ResultsController } = await import('../src/modules/results/results.controller');
+  let status = 0;
+  let cacheControl = '';
+  let payload: any;
+  const response = {
+    set: (name: string, value: string) => { if (name === 'Cache-Control') cacheControl = value; return response; },
+    status: (value: number) => { status = value; return response; },
+    json: (value: any) => { payload = value; return response; },
+  };
+  new ResultsController().publicResultsUnavailable({} as any, response as any);
+  assert.equal(status, 404);
+  assert.equal(cacheControl, 'no-store');
+  assert.equal(payload.error.code, 'RESULTS_NOT_PUBLISHED');
+  assert.match(payload.error.message, /No examination results are currently published/);
+});
+
 test('admin result routes require authentication and the existing administrator roles', () => {
   const routePath = path.resolve(process.cwd(), 'src/modules/results/results.routes.ts');
   const source = readFileSync(routePath, 'utf8');
