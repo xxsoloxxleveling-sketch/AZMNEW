@@ -76,6 +76,19 @@ export async function verifyExamControlUI() {
         }
         assert(await page.evaluate(() => document.body.textContent?.includes('PRE_OPEN')));
         checks++;
+        const archivedScores = await prisma.$queryRaw<{sessionId:string}[]>`SELECT "sessionId" FROM "ExamLegacyResultHistory" WHERE "studentId"='legacy' LIMIT 1`;
+        assert.equal(archivedScores.length, 1);
+        assert.equal((await request(`/api/attendance/control/history/${archivedScores[0].sessionId}/results`, 'ADMIN')).status, 403);
+        await page.evaluate((id:string) => {
+            const row=Array.from(document.querySelectorAll<HTMLTableRowElement>('tr[data-session-id]')).find(element=>element.dataset.sessionId===id);
+            const button=Array.from(row?.querySelectorAll<HTMLButtonElement>('button')??[]).find(element=>element.textContent?.includes('View historical scores'));
+            if(!button) throw new Error('Historical scores button unavailable');
+            button.click();
+        }, archivedScores[0].sessionId);
+        await page.waitForFunction(() => document.querySelector('[aria-label="Historical examination scores"]')?.textContent?.includes('77'));
+        assert(await page.$eval('[aria-label="Historical examination scores"]', element=>element.textContent?.includes('not current results')));
+        await click('Close');
+        checks++;
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
         checks++;
         await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
@@ -152,9 +165,9 @@ export async function verifyExamControlUI() {
         await page.screenshot({ path: path.join(output, 'mobile.png'), fullPage: true });
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
         checks++;
-        const checkboxes = await page.$$('table input[type="checkbox"]');
-        assert(checkboxes.length > 0);
-        await checkboxes[0].click();
+        const currentCheckbox = await page.evaluateHandle(() => Array.from(document.querySelectorAll<HTMLTableRowElement>('tr[data-session-id]')).find(row => row.textContent?.includes('· current'))?.querySelector('input[type="checkbox"]'));
+        assert(await currentCheckbox.asElement(), 'A current attempt is selectable');
+        await currentCheckbox.asElement()!.click();
         await click('Reset to pre-open');
         await click('Review impact');
         await page.waitForSelector('[role="dialog"] textarea');
@@ -233,7 +246,7 @@ export async function verifyExamControlUI() {
         assert((await state()).halls.find((h: any) => h.id === hall.id).canPrepare);
         await clickRow(hall.id, null, 'Prepare session');
         await page.waitForFunction((id: string) => Array.from(document.querySelectorAll<HTMLTableRowElement>('tr[data-hall-id]')).some(row =>
-            row.dataset.hallId === id && row.dataset.sessionId && row.textContent?.includes('PRE_OPEN')), {}, hall.id);
+            row.dataset.hallId === id && row.dataset.sessionId && row.textContent?.includes('PRE_OPEN') && row.textContent?.includes('· current')), {}, hall.id);
         checks++; // Existing history must not hide Prepare when no current attempt exists.
 
         let current = (await state()).halls.find((h: any) => h.id === hall.id).current;
@@ -246,10 +259,10 @@ export async function verifyExamControlUI() {
         await selectOnly(current.id);
         await click('Reset to pre-open');
         await clickDialog('Review impact');
-        await fillConfirmation('Synthetic real destructive reset with unresolved response');
+        await fillConfirmation('Synthetic history-preserving reset with unresolved response');
         const priorConfirmations = confirmations.length;
         abortNextConfirmation = true;
-        await clickDialog('Delete progress and reset to pre-open');
+        await clickDialog('Archive attempt and reset to pre-open');
         await page.waitForFunction(() => {
             const region = document.querySelector('[aria-label="Unresolved operation"]');
             return region && Array.from(region.querySelectorAll<HTMLButtonElement>('button')).some(b => b.textContent === 'Check operation status' && !b.disabled);
@@ -270,51 +283,53 @@ export async function verifyExamControlUI() {
         assert.notEqual(current.id, resetOldId);
         assert.equal(current.status, 'PRE_OPEN');
         assert.equal(current.marked, 0);
-        assert.equal((await request(`/api/attendance/sessions/${resetOldId}`, 'SUPER_ADMIN')).status, 404);
+        const preserved = await data(`/api/attendance/sessions/${resetOldId}`);
+        assert.equal(preserved.stats.markedCount, 1);
+        assert.equal(preserved.session.isCurrent, false);
         detail = await data(`/api/attendance/sessions/${current.id}`);
         assert.equal(detail.roster.length, 0);
         assert.equal(detail.stats.markedCount, 0);
         assert(detail.stats.expectedCount > 0, 'Reset retained current allocations');
-        checks++; // A browser-confirmed reset actually deletes progress and creates PRE_OPEN.
+        checks++; // Browser-confirmed reset preserves the prior attempt and creates PRE_OPEN.
         assert.equal((await request('/api/attendance/sessions', 'SUPER_ADMIN', { examHallId: hall.id, sessionId: resetOldId, revision: resetOldRevision })).status, 409);
         assert.equal((await state()).halls.find((h: any) => h.id === hall.id).current.status, 'PRE_OPEN');
         checks++; // Stale Open must not open the replacement the operator has not selected.
 
         await selectOnly(current.id);
-        await click('Delete session…');
-        await page.$eval('[role="dialog"]', (dialog: Element) => {
-            const label = Array.from(dialog.querySelectorAll('label')).find(e => e.textContent?.includes('Include entire logical Hall/exam session'));
-            (label?.querySelector('input') as HTMLInputElement).click();
-        });
+        assert(await page.evaluate(() => document.body.textContent?.includes('Deleting examination history is disabled')));
+        assert.equal(await page.evaluate(() => Array.from(document.querySelectorAll('button')).some(b => b.textContent?.includes('Delete session'))), false);
+        const deniedDelete = await request('/api/attendance/control/preview', 'SUPER_ADMIN', { action:'DELETE', testCenterId:'A', businessDate:'2026-11-15', sessionIds:[current.id] });
+        assert.equal(deniedDelete.status, 409);
+        await click('Reset to pre-open');
         const previewWait = new Promise<any>(resolve => { capturePreview = resolve; });
         await clickDialog('Review impact');
         const held = await previewWait;
         await page.waitForFunction(() => Array.from(document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[role="dialog"] input,[role="dialog"] select,[role="dialog"] textarea')).every(input => input.disabled));
         const draft = await page.$eval('[role="dialog"]', (dialog: Element) => {
             const inputs = Array.from(dialog.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input,select,textarea'));
-            const replace = Array.from(dialog.querySelectorAll('label')).find(e => e.textContent?.includes('Create fresh PRE_OPEN replacement'))?.querySelector('input') as HTMLInputElement;
-            const before = replace.checked;
-            replace.click(); // A user click while Review is pending must have no effect.
-            return { allDisabled: inputs.every(input => input.disabled), before, after: replace.checked };
+            const clear = Array.from(dialog.querySelectorAll('label')).find(e => e.textContent?.includes('Clear reviewed current Hall'))?.querySelector('input') as HTMLInputElement;
+            const before = clear.checked;
+            clear.click(); // A user click while Review is pending must have no effect.
+            return { allDisabled: inputs.every(input => input.disabled), before, after: clear.checked };
         });
-        assert.deepEqual(draft, { allDisabled: true, before: true, after: true });
+        assert.deepEqual(draft, { allDisabled: true, before: false, after: false });
         await held.continue();
         await page.waitForSelector('[role="dialog"] textarea');
-        assert(await page.$eval('[role="dialog"]', (dialog: Element) => Array.from(dialog.querySelectorAll('button')).some(b => b.textContent?.trim() === 'Delete session and create fresh')));
+        assert(await page.$eval('[role="dialog"]', (dialog: Element) => Array.from(dialog.querySelectorAll('button')).some(b => b.textContent?.trim() === 'Archive attempt and reset to pre-open')));
         assert(await page.$eval('[role="dialog"]', (dialog: Element) => Array.from(dialog.querySelectorAll('dl > div')).some(e => e.querySelector('dt')?.textContent === 'Replacement state' && e.querySelector('dd')?.textContent === 'PRE_OPEN')));
         checks++; // Delayed preview cannot change the reviewed replacement choice.
-        const deletedIds = [historicalId, current.id];
-        await fillConfirmation('Synthetic browser full lineage deletion confirmation');
-        await clickDialog('Delete session and create fresh');
+        const retainedIds = [historicalId, current.id];
+        await fillConfirmation('Synthetic browser history preservation confirmation');
+        await clickDialog('Archive attempt and reset to pre-open');
         await page.waitForFunction(() => !document.querySelector('[aria-label="Unresolved operation"]') && !document.querySelector('[role="dialog"]') && !document.body.textContent?.includes('Loading current examination state'));
         const freshHall = (await state()).halls.find((h: any) => h.id === hall.id);
-        assert.equal(freshHall.attempts.length, 1);
+        assert(freshHall.attempts.length >= 3);
         assert.equal(freshHall.current.status, 'PRE_OPEN');
         assert.equal(freshHall.current.marked, 0);
-        assert.equal(freshHall.assignedCount, 0);
-        for (const id of deletedIds) assert.equal((await request(`/api/attendance/sessions/${id}`, 'SUPER_ADMIN')).status, 404);
+        assert(freshHall.assignedCount > 0);
+        for (const id of retainedIds) assert.equal((await request(`/api/attendance/sessions/${id}`, 'SUPER_ADMIN')).status, 200);
         assert.equal(await page.evaluate(() => sessionStorage.getItem('azm.exam-control.pending.v2:SUPER_ADMIN')), null);
-        checks++; // Full-lineage deletion is real and clears only reviewed allocations.
+        checks++; // The reset preserves previous attempts and their allocations.
         assert.deepEqual(errors, []);
         checks++;
         console.log(`PASS ${checks} authenticated HTTP/browser checks; synthetic screenshots: ${output}`);

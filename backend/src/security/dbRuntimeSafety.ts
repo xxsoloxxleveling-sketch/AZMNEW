@@ -50,6 +50,7 @@ const expectedTriggers = [
   'AttendanceSessionReopening_insert_validation',
   'AttendanceSessionReopening_coherence',
   'StudentStudyGroupCorrection_immutable',
+  'ExamLegacyResultHistory_immutable',
 ] as const;
 
 function loginFromUrl(value: string): string {
@@ -174,6 +175,11 @@ export async function assertRestrictedRuntimeDatabase(
     has_function_privilege(current_user,'public.azm_execute_exam_control(text,text)','EXECUTE') AS "execute"
   `);
   if(!controlGrants[0]?.execute||controlGrants[0].sessionDelete||controlGrants[0].rosterDelete||controlGrants[0].lifecycleWrite||controlGrants[0].auditWrite||controlGrants[0].freezeWrite||controlGrants[0].sequenceWrite)blocked('Exam control grants are unsafe');
+  const historyGrants=await db.$queryRawUnsafe<any[]>(`SELECT
+    has_table_privilege(current_user,'public."ExamLegacyResultHistory"','SELECT') AS readable,
+    has_table_privilege(current_user,'public."ExamLegacyResultHistory"','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER') AS writable,
+    c.relrowsecurity FROM pg_class c WHERE c.oid='public."ExamLegacyResultHistory"'::regclass`);
+  if(!historyGrants[0]?.readable||historyGrants[0].writable||!historyGrants[0].relrowsecurity)blocked('historical examination result grants are unsafe');
   const statementGuards=await db.$queryRawUnsafe<any[]>(`SELECT count(*)::int AS count FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND t.tgname='ExamControl_statement_lock' AND t.tgenabled IN ('O','A') AND c.relname IN ('Student','OfficeUseRecord','ExamHall','TestCenter','AttendanceSession','AttendanceSessionCandidate','Attendance','ExamPlacementControl')`);
   if(statementGuards[0]?.count!==8)blocked('examination writer serialization guards missing');
   const signingBoundary=await db.$queryRawUnsafe<any[]>(`SELECT p.prosecdef, p.proconfig, pg_has_role(current_user,p.proowner,'MEMBER') AS owner_member,
@@ -183,6 +189,14 @@ export async function assertRestrictedRuntimeDatabase(
     EXISTS(SELECT 1 FROM pg_class c WHERE c.relowner=r.oid AND c.relkind IN ('r','p')) AS owns_tables
     FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid='public.azm_execute_exam_control(text,text)'::regprocedure`);
   if(!signingBoundary[0]?.prosecdef||signingBoundary[0].owner_member||signingBoundary[0].elevated||signingBoundary[0].owner_create||signingBoundary[0].memberships||signingBoundary[0].owns_tables||!signingBoundary[0].proconfig?.includes('search_path=pg_catalog, public, azm_control_private, pg_temp'))blocked('signed deletion function owner/search path unsafe');
+  const resultPresenceBoundary=await db.$queryRawUnsafe<any[]>(`SELECT
+    has_column_privilege(p.proowner,'public."ExaminationResult"','studentId','SELECT') AS candidate_read,
+    has_table_privilege(p.proowner,'public."ExaminationResult"','SELECT') AS full_read,
+    EXISTS(SELECT 1 FROM pg_policy WHERE polrelid='public."ExaminationResult"'::regclass
+      AND polname='ExamControl_official_result_presence' AND polcmd='r'
+      AND pg_get_expr(polqual,polrelid)='azm_control_privileged()') AS guarded_policy
+    FROM pg_proc p WHERE p.oid='public.azm_execute_exam_control(text,text)'::regprocedure`);
+  if(!resultPresenceBoundary[0]?.candidate_read||resultPresenceBoundary[0].full_read||!resultPresenceBoundary[0].guarded_policy)blocked('official-result reset guard is unsafe');
   const enabled = new Map(results.triggers.map(x => [x.tgname,x.tgenabled]));
   if (expectedTriggers.some(name => !['O','A'].includes(enabled.get(name) || '')))
     blocked('required attendance/audit triggers are missing or disabled');
