@@ -53,6 +53,7 @@ const expectedTriggers = [
   'ExamLegacyResultHistory_immutable',
   'OfficialResultAttemptBinding_immutable',
   'ExaminationResult_attempt_guard',
+  'ResultQuestionResponse_history_guard',
 ] as const;
 
 function loginFromUrl(value: string): string {

@@ -560,11 +560,14 @@ export class OfficialResultsService {
   async correctResult(resultId: string, input: CorrectResultRequest, actor: Actor): Promise<OfficialResultDetail> {
     const reason = normalizeReason(input.reason);
     return this.db.$transaction(async (tx) => {
+      await examLock(tx);
       const current = await tx.examinationResult.findUnique({ where: { id: resultId }, include: resultInclude });
       if (!current) throw serviceError(404, 'Examination result not found.', 'RESULT_NOT_FOUND');
       if (current.resultRevision !== input.expectedRevision) throw serviceError(409, 'This result changed. Refresh it before submitting the correction.', 'STALE_RESULT_REVISION');
       if (!current.attendanceSessionId || !current.attemptBinding || current.attemptBinding.sessionId!==current.attendanceSessionId || current.attemptBinding.studentId!==current.studentId)
         throw serviceError(409, 'Verify the examination attempt and roster before changing this result.', 'ATTEMPT_BINDING_REQUIRED');
+      if (!current.attendanceSession?.isCurrent)
+        throw serviceError(409, 'Historical examination results cannot be changed.', 'HISTORICAL_RESULT_IMMUTABLE');
       const changes = input.changes;
       const oldValues: Record<string, unknown> = {};
       const newValues: Record<string, unknown> = {};

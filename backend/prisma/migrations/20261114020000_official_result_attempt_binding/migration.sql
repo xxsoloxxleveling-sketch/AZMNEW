@@ -30,6 +30,13 @@ CREATE POLICY "ExamControl_result_attempt_update" ON public."ExaminationResult" 
 
 CREATE FUNCTION public.azm_guard_official_result_attempt() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
 BEGIN
+ IF TG_OP IN ('UPDATE','DELETE') AND OLD."attendanceSessionId" IS NOT NULL THEN
+  PERFORM public.azm_exam_lock();
+  IF EXISTS(SELECT 1 FROM public."AttendanceSession" s WHERE s.id=OLD."attendanceSessionId" AND NOT s."isCurrent") THEN
+   RAISE EXCEPTION 'Historical official results are immutable';
+  END IF;
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
  IF TG_OP='INSERT' AND NEW."attendanceSessionId" IS NOT NULL THEN RAISE EXCEPTION 'Use verified attempt binding'; END IF;
  IF TG_OP='UPDATE' AND ROW(NEW."studentId",NEW."examinationId") IS DISTINCT FROM ROW(OLD."studentId",OLD."examinationId") THEN
   RAISE EXCEPTION 'Official result student and examination identity are immutable';
@@ -45,7 +52,23 @@ BEGIN
  END IF;
  RETURN NEW;
 END $$;
-CREATE TRIGGER "ExaminationResult_attempt_guard" BEFORE INSERT OR UPDATE ON public."ExaminationResult" FOR EACH ROW EXECUTE FUNCTION public.azm_guard_official_result_attempt();
+CREATE TRIGGER "ExaminationResult_attempt_guard" BEFORE INSERT OR UPDATE OR DELETE ON public."ExaminationResult" FOR EACH ROW EXECUTE FUNCTION public.azm_guard_official_result_attempt();
+
+CREATE FUNCTION public.azm_guard_historical_result_response() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
+DECLARE result_id TEXT;
+BEGIN
+ PERFORM public.azm_exam_lock();
+ result_id := CASE WHEN TG_OP='INSERT' THEN NEW."resultId" ELSE OLD."resultId" END;
+ IF EXISTS(SELECT 1 FROM public."ExaminationResult" r JOIN public."AttendanceSession" s ON s.id=r."attendanceSessionId" WHERE r.id=result_id AND NOT s."isCurrent") THEN
+  RAISE EXCEPTION 'Historical official responses are immutable';
+ END IF;
+ IF TG_OP='UPDATE' AND NEW."resultId" IS DISTINCT FROM OLD."resultId" THEN
+  RAISE EXCEPTION 'Result response ownership is immutable';
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER "ResultQuestionResponse_history_guard" BEFORE INSERT OR UPDATE OR DELETE ON public."ResultQuestionResponse" FOR EACH ROW EXECUTE FUNCTION public.azm_guard_historical_result_response();
 
 CREATE FUNCTION public.azm_bind_official_result_attempt(payload TEXT, signature TEXT) RETURNS JSONB
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,azm_control_private,pg_temp AS $$

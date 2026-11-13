@@ -106,6 +106,9 @@ async function run() {
     const review=await control.preview(resetScope,'SUPER_ADMIN',0);
     await control.confirm({challenge:review.challenge,reason:'Synthetic preserve official result history',confirmationText:review.phrase},'SUPER_ADMIN',0,randomUUID());
     const historical=await call('GET',`/admin/${draft.id}`,'ADMIN'); assert.equal(historical.data.data.attempt.state,'HISTORICAL');
+    assert.equal((await call('POST', `/admin/${draft.id}/corrections`, 'SUPER_ADMIN', { expectedRevision: result.resultRevision, source: 'STUDENT_PROFILE', reason: 'Synthetic historical edit denied', changes: { administrativeRemarks: 'must not be saved' } })).status, 409);
+    await assert.rejects(runtime.query('UPDATE "ExaminationResult" SET "administrativeRemarks"=$1 WHERE id=$2',['must not be saved',draft.id]), /Historical official results are immutable/);
+    await assert.rejects(runtime.query('UPDATE "ResultQuestionResponse" SET "reviewedAnswer"=$1 WHERE "resultId"=$2',['B',draft.id]), /Historical official responses are immutable/);
     assert.equal((await call('GET', `/admin/${draft.id}/dmc/official/${issuance.data.data.id}`, 'ADMIN')).status, 200);
     assert.equal((await call('POST', `/admin/${draft.id}/dmc/official/${issuance.data.data.id}/revoke`, 'SUPER_ADMIN', { reason: 'Synthetic revocation test' })).status, 200);
     assert.equal((await call('GET', `/admin/${draft.id}/dmc/official/${issuance.data.data.id}`, 'ADMIN')).status, 404);

@@ -159,7 +159,7 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={profileAction} className={actionClass}><ArrowUpRight size={14} /> View student profile</button>
-          <button type="button" disabled={!canEdit||!detail.attempt} title={!canEdit ? 'Only a Super Admin can correct official results' : !detail.attempt ? 'Verify the examination attempt first' : 'Correct this official result'} onClick={() => setEditing(true)} className={actionClass}>Edit result</button>
+          <button type="button" disabled={!canEdit||!detail.attempt||detail.attempt.state==='HISTORICAL'} title={!canEdit ? 'Only a Super Admin can correct official results' : !detail.attempt ? 'Verify the examination attempt first' : detail.attempt.state==='HISTORICAL' ? 'Historical results cannot be changed' : 'Correct this official result'} onClick={() => setEditing(true)} className={actionClass}>Edit result</button>
           <button type="button" onClick={() => void load()} disabled={loading || !!busyAction} className={actionClass}><RefreshCw size={14} /> Refresh</button>
         </div>
       </header>
