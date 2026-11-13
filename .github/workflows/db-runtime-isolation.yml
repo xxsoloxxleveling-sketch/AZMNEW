@@ -76,6 +76,9 @@ jobs:
       - name: Backend TypeScript
         working-directory: backend
         run: ./node_modules/.bin/tsc --noEmit --pretty false
+      - name: Verify read-only Results API and unpublished public routes
+        working-directory: backend
+        run: ./node_modules/.bin/tsx tests/results-readonly.test.ts
       - name: Validate PRE_OPEN lifecycle, deletion capability, ownership and restricted runtime
         env:
           REQUIRE_PG17: "true"
@@ -86,6 +89,8 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: ''
+      - name: Verify Results portal data and safe exports
+        run: node backend/node_modules/tsx/dist/cli.mjs --test src/components/results/ResultsExport.test.ts src/components/results/ResultsDemoData.test.ts src/components/results/FutureOmrContract.test.ts
       - name: Select runner Chrome for synthetic document UI checks
         shell: bash
         run: |
