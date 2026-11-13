@@ -113,12 +113,15 @@ test('public result lookup is closed and public DMC verification is identity- an
   assert.match(routeSource, /router\.get\('\/verification\/:reference', resultsController\.verifyOfficialDmc\)/);
 
   const { OfficialResultsService } = await import('../src/modules/results/official-results.service');
+  let hasAttemptSnapshot = true;
   const service = new OfficialResultsService({
     dmcIssuance: {
       findUnique: async () => ({
         resultRevision: 3,
+        snapshot: hasAttemptSnapshot ? { attemptAssociation: { sessionId: 'synthetic-attempt' } } : {},
         result: {
           resultRevision: 3,
+          attendanceSessionId: 'synthetic-attempt',
           publicationStatus: 'PUBLISHED',
           verificationStatus: 'VERIFIED',
           student: { id: 'synthetic-student', fullName: 'Synthetic Candidate', rollNumber: 'SYN-01' },
@@ -137,4 +140,8 @@ test('public result lookup is closed and public DMC verification is identity- an
     examinationDate: '2026-11-13',
   });
   assert.doesNotMatch(JSON.stringify(publicVerification), /Synthetic Candidate|SYN-01|obtainedMarks|studentId/i);
+  hasAttemptSnapshot = false;
+  assert.deepEqual(await service.verifyDmc('synthetic-reference'), {
+    valid: false, status: 'INVALID', examinationTitle: null, examinationDate: null,
+  });
 });
