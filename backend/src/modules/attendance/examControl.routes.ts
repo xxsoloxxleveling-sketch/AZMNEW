@@ -29,3 +29,7 @@ examControlRouter.post('/operations/:key/status', superAdmin, respond(req => {
     return examControlService.operation(...credentials(req), z.string().uuid().parse(req.params.key), body.challenge);
 }));
 examControlRouter.get('/history', superAdmin, respond(req => examControlService.history(...credentials(req), z.string().min(1).parse(req.query.testCenterId), z.string().parse(req.query.businessDate), z.coerce.number().int().min(1).parse(req.query.page ?? 1))));
+examControlRouter.get('/history/:sessionId/results', superAdmin, (req, res, next) => {
+    res.set('Cache-Control', 'private, no-store');
+    return respond(request => examControlService.historicalResults(...credentials(request), z.string().min(1).max(200).parse(request.params.sessionId), z.coerce.number().int().min(1).parse(request.query.page ?? 1)))(req, res, next);
+});

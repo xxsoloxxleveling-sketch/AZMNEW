@@ -210,6 +210,7 @@ model Student {
   studentDocuments StudentDocument[]
   studyGroupCorrections StudentStudyGroupCorrection[]
   examinationResults ExaminationResult[]
+  legacyExamResultHistory ExamLegacyResultHistory[]
 }
 
 // Dedicated append-only correction evidence; no attendance/document audit reuse.
@@ -467,10 +468,26 @@ model AttendanceSession {
   updatedAt                DateTime @default(now()) @updatedAt
   candidates               AttendanceSessionCandidate[]
   attendance               Attendance[]
+  legacyExamResultHistory  ExamLegacyResultHistory[]
 
   @@unique([examHallId, businessDate, attemptNumber])
   @@index([businessDate])
   @@index([status])
+}
+
+model ExamLegacyResultHistory {
+  sessionId       String
+  studentId       String
+  testScore       Int?
+  overallRank     Int?
+  resetOperationId String?
+  source          String @default("CONTROL")
+  archivedAt      DateTime @default(now())
+  session         AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  student         Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  operation       ExamControlOperation? @relation(fields: [resetOperationId], references: [id], onDelete: Restrict)
+
+  @@id([sessionId, studentId])
 }
 
 model AttendanceResetOperation {
@@ -521,6 +538,7 @@ model ExamControlOperation {
   scope Json
   result Json
   completedAt DateTime @default(now())
+  legacyExamResultHistory ExamLegacyResultHistory[]
   @@unique([actorId,idempotencyKey])
 }
 model ExamLifecycleEvent {

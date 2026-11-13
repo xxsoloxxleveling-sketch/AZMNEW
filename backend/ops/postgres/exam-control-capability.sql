@@ -19,6 +19,8 @@ BEGIN
  EXECUTE format('GRANT UPDATE ("tokenVersion") ON public."User" TO %I',owner_role);
  EXECUTE format('GRANT INSERT,UPDATE ON public."OfficeUseRecord",public."ExamPlacementControl",public."ExamAttemptSequence" TO %I',owner_role);
  EXECUTE format('GRANT INSERT ON public."ExamControlOperation",public."ExamLifecycleEvent" TO %I',owner_role);
+ EXECUTE format('GRANT SELECT,INSERT ON public."ExamLegacyResultHistory" TO %I',owner_role);
+ EXECUTE format('GRANT SELECT ("studentId") ON public."ExaminationResult" TO %I',owner_role);
  EXECUTE format('GRANT EXECUTE ON FUNCTION azm_control_private.hmac256(TEXT,TEXT) TO %I',owner_role);
  -- PostgreSQL requires CREATE temporarily for function ownership transfer; revoke before commit.
  EXECUTE format('GRANT CREATE ON SCHEMA public TO %I',owner_role);

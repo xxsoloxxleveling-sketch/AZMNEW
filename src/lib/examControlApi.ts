@@ -93,6 +93,9 @@ export interface ControlResult {
     status: 'COMPLETED';
     deletedMarks: number;
     deletedRosterEntries: number;
+    archivedMarks?: number;
+    archivedRosterEntries?: number;
+    archivedResults?: number;
     clearedAllocations: number;
     replacements: {
         examHallId: string;
@@ -135,6 +138,7 @@ function validatedResult(result: any): ControlResult {
     return result;
 }
 export const examControlApi = {
+    historicalResults: (sessionId: string, page: number) => apiFetch<{ sessionId: string; studentId: string; fullName: string; testScore: number | null; overallRank: number | null; archivedAt: string }[]>(`/api/attendance/control/history/${encodeURIComponent(sessionId)}/results?${new URLSearchParams({ page: String(page) })}`),
     currentHall: (hallId: string) => apiFetch<{
         session: import('./mockApi').AttendanceSession | null;
         canPrepare: boolean;

@@ -120,7 +120,7 @@ GRANT USAGE ON SCHEMA public TO :"grant_role";
 -- supplies a forged cancellation-audit context. Other application tables
 -- retain their existing DML surface. Database triggers remain mandatory.
 SELECT format('GRANT %s ON TABLE %I.%I TO %I',
-  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent') THEN 'SELECT' WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','StudentStudyGroupCorrection')
+  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent','ExamLegacyResultHistory') THEN 'SELECT' WHEN c.relname IN ('AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','StudentStudyGroupCorrection')
     THEN 'SELECT, INSERT'
     WHEN c.relname IN ('Attendance','AttendanceSession','AttendanceSessionCandidate') THEN 'SELECT, INSERT, UPDATE'
     ELSE 'SELECT, INSERT, UPDATE, DELETE'
@@ -179,6 +179,11 @@ SELECT (
     AND polcmd='*' AND pg_get_expr(polqual,polrelid)='true' AND pg_get_expr(polwithcheck,polrelid)='true')
   AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='public."StudentStudyGroupCorrection"'::regclass
     AND tgname='StudentStudyGroupCorrection_immutable' AND tgenabled IN ('O','A') AND tgtype=58)
+  AND has_table_privilege(:'login_role','public."ExamLegacyResultHistory"','SELECT')
+  AND NOT has_table_privilege(:'login_role','public."ExamLegacyResultHistory"','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
+  AND EXISTS (SELECT 1 FROM pg_class WHERE oid='public."ExamLegacyResultHistory"'::regclass AND relrowsecurity)
+  AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='public."ExamLegacyResultHistory"'::regclass
+    AND tgname='ExamLegacyResultHistory_immutable' AND tgenabled IN ('O','A'))
   AND NOT EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND c.relname='_prisma_migrations'

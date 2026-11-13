@@ -27,10 +27,27 @@ async function run() {
             const file = path.resolve(__dirname, '../prisma/migrations', folder, 'migration.sql');
             if (fs.existsSync(file)) {
                 if (folder === '20261019000100_pre_open_enum') {
-                    for (const legacyId of ['legacy', 'legacy-archived', 'legacy-newer-exam'])
+                    for (const legacyId of ['legacy', 'legacy-archived', 'legacy-newer-exam', 'legacy-backfill'])
                         await admin.query(`INSERT INTO "Student"(id,"applicationNo","qrToken","fullName","fatherName",gender,"dateOfBirth","cnicOrBForm",address,district,province,"parentMobile","currentClass","schoolName","boardOrUniversity","scholarshipCategory","emergencyContact","emergencyRelation","testScore","updatedAt") VALUES($1,'APP-' || $1,'synthetic-' || $1 || '-qr','Legacy fixture','Fixture','MALE','2008-01-01',$1 || '-fixture','Fixture','Fixture','Fixture','fixture','Class 9th','Fixture','Fixture','GENERAL_MERIT','fixture','Fixture',77,CURRENT_TIMESTAMP)`, [legacyId]);
                 }
+                if (folder === '20261114010000_preserve_exam_history') {
+                    // Model a pre-existing, already reviewed historical result; all rows are synthetic.
+                    await admin.query(`INSERT INTO "TestCenter"(id,name,code,address,district,"createdAt","updatedAt") VALUES('backfill-center','Synthetic','BACKFILL','Synthetic','Synthetic','2099-01-01',CURRENT_TIMESTAMP);
+                      INSERT INTO "ExamHall"(id,name,"roomNumber","targetClass","testCenterId","updatedAt") VALUES('backfill-hall','Synthetic','Synthetic','Class 9th','backfill-center',CURRENT_TIMESTAMP);
+                      ALTER TABLE "AttendanceSession" DISABLE TRIGGER USER;
+                      INSERT INTO "AttendanceSession"(id,"examHallId","businessDate","attemptNumber","isCurrent","archivedAt",status,"hallNameSnapshot","roomNumberSnapshot","examDateSnapshot","reportingTimeSnapshot","updatedAt") VALUES('backfill-attempt','backfill-hall','2026-11-14',1,false,CURRENT_TIMESTAMP,'PRE_OPEN','Synthetic','Synthetic','2026-11-14','09:00',CURRENT_TIMESTAMP);
+                      ALTER TABLE "AttendanceSession" ENABLE TRIGGER USER;
+                      ALTER TABLE "Student" DISABLE TRIGGER USER;
+                      UPDATE "Student" SET "resultSessionId"='backfill-attempt' WHERE id='legacy-backfill';
+                      ALTER TABLE "Student" ENABLE TRIGGER USER;`);
+                }
                 await admin.query(fs.readFileSync(file, 'utf8'));
+                if (folder === '20261114010000_preserve_exam_history') {
+                    const migrated = await admin.query(`SELECT h."testScore",h."sessionId",s."testScore" AS current_score FROM "ExamLegacyResultHistory" h JOIN "Student" s ON s.id=h."studentId" WHERE h."studentId"='legacy-backfill'`);
+                    assert.equal(migrated.rows.length, 1); assert.equal(migrated.rows[0].testScore, 77); assert.equal(migrated.rows[0].sessionId, 'backfill-attempt'); assert.equal(migrated.rows[0].current_score, null);
+                    assert.equal((await admin.query(`SELECT "testScore" FROM "Student" WHERE id='legacy'`)).rows[0].testScore, 77);
+                    console.log('PASS synthetic historical result backfill; unowned result unchanged');
+                }
             }
         }
         console.log('PASS full migration chain');
@@ -41,13 +58,14 @@ async function run() {
         await admin.query('INSERT INTO azm_control_private.signing_key(secret) VALUES($1)', [signingKey]);
         const runtimePassword = randomUUID().replaceAll('-', '');
         await owner.query(`CREATE ROLE "${role}" LOGIN PASSWORD '${runtimePassword}'`);
-        await admin.query(`REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO "${role}"; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO "${role}"; REVOKE ALL ON SCHEMA azm_control_private FROM "${role}"; REVOKE DELETE,TRUNCATE ON "Attendance","AttendanceSession","AttendanceSessionCandidate" FROM "${role}"; REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON "ExamControlOperation","ExamPlacementControl","ExamAttemptSequence","ExamLifecycleEvent" FROM "${role}"; REVOKE UPDATE,DELETE,TRUNCATE ON "AttendanceResetOperation","AttendanceSessionCancellation","AttendanceSessionReopening" FROM "${role}"; GRANT EXECUTE ON FUNCTION azm_execute_exam_control(TEXT,TEXT),azm_exam_capability_probe(TEXT,TEXT) TO "${role}";`);
+        await admin.query(`REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO "${role}"; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO "${role}"; REVOKE ALL ON SCHEMA azm_control_private FROM "${role}"; REVOKE DELETE,TRUNCATE ON "Attendance","AttendanceSession","AttendanceSessionCandidate" FROM "${role}"; REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON "ExamControlOperation","ExamPlacementControl","ExamAttemptSequence","ExamLifecycleEvent","ExamLegacyResultHistory" FROM "${role}"; REVOKE UPDATE,DELETE,TRUNCATE ON "AttendanceResetOperation","AttendanceSessionCancellation","AttendanceSessionReopening" FROM "${role}"; GRANT EXECUTE ON FUNCTION azm_execute_exam_control(TEXT,TEXT),azm_exam_capability_probe(TEXT,TEXT) TO "${role}";`);
         url.username = role;
         url.password = runtimePassword;
         process.env.DATABASE_URL = url.toString();
         process.env.DIRECT_URL = url.toString();
         process.env.NODE_ENV = 'test';
         await admin.query(`CREATE POLICY azm_backend_private_documents ON public."StudentDocument" FOR ALL TO "${role}" USING (true) WITH CHECK (true)`);
+        await admin.query(`CREATE POLICY synthetic_exam_results_read ON public."ExaminationResult" FOR SELECT TO "${role}" USING (true)`);
         await admin.query(`REVOKE UPDATE,DELETE,TRUNCATE ON "StudentStudyGroupCorrection" FROM "${role}"; DROP POLICY IF EXISTS azm_backend_study_group_audit ON "StudentStudyGroupCorrection"; CREATE POLICY azm_backend_study_group_audit ON "StudentStudyGroupCorrection" FOR ALL TO "${role}" USING (true) WITH CHECK (true)`);
         const { PrismaClient } = await import('@prisma/client');
         db = new PrismaClient();
@@ -88,8 +106,8 @@ async function run() {
         const identityBefore = await db.student.findUnique({ where: { id: 'a1' } }), otherBefore = await attendance.getSession(other.id);
         let reset: any, preview: any, idem = randomUUID();
         await check('preview is read-only and returns actual exact-scope impact', async () => { const count = await db.examControlOperation.count(); preview = await control.preview(scope('RESET', [a.id]), 'SUPER_ADMIN', 0); assert.equal(preview.totals.marks, 2); assert.equal(preview.totals.rosterEntries, 2); assert.equal(await db.examControlOperation.count(), count); });
-        await check('reset deletes OPEN progress/session, creates fresh PRE_OPEN, retains identity and audits', async () => { reset = await confirm(preview, idem); assert.equal(reset.deletedMarks, 2); assert.equal(reset.replacements.length, 1); assert.equal(await db.attendanceSession.findUnique({ where: { id: a.id } }), null); assert.equal(await db.attendance.count({ where: { sessionId: a.id } }), 0); assert.equal(await db.attendanceSessionReopening.count({ where: { sessionId: a.id } }), 1); const fresh = await attendance.getSession(reset.replacements[0].newSessionId); assert.equal(fresh.session.status, 'PRE_OPEN'); assert.equal(fresh.session.attemptNumber, 2); assert.equal(fresh.stats.markedCount, 0); assert.equal(fresh.stats.expectedCount, 2); assert.equal(fresh.roster.length, 0); assert.deepEqual(await db.student.findUnique({ where: { id: 'a1' } }), identityBefore); });
-        await check('same request replays after deletion; different request with same key rejects', async () => { assert.deepEqual(await confirm(preview, idem), reset); await rejects(() => confirm(preview, idem, 'A different synthetic reason'), 409); assert.equal((await control.operation('SUPER_ADMIN', 0, idem) as any).operationId, reset.operationId); });
+        await check('reset preserves OPEN history and starts a fresh PRE_OPEN attempt', async () => { reset = await confirm(preview, idem); assert.equal(reset.deletedMarks, 0); assert.equal(reset.archivedMarks, 2); assert.equal(reset.replacements.length, 1); const old = await db.attendanceSession.findUnique({ where: { id: a.id } }); assert.equal(old.isCurrent, false); assert.equal(await db.attendance.count({ where: { sessionId: a.id } }), 2); assert.equal(await db.attendanceSessionCandidate.count({ where: { sessionId: a.id } }), 2); assert.equal(await db.attendanceSessionReopening.count({ where: { sessionId: a.id } }), 1); const fresh = await attendance.getSession(reset.replacements[0].newSessionId); assert.equal(fresh.session.status, 'PRE_OPEN'); assert.equal(fresh.session.attemptNumber, 2); assert.equal(fresh.stats.markedCount, 0); assert.equal(fresh.stats.expectedCount, 2); assert.equal(fresh.roster.length, 0); assert.deepEqual(await db.student.findUnique({ where: { id: 'a1' } }), identityBefore); });
+        await check('same reset request replays; different request with same key rejects', async () => { assert.deepEqual(await confirm(preview, idem), reset); await rejects(() => confirm(preview, idem, 'A different synthetic reason'), 409); assert.equal((await control.operation('SUPER_ADMIN', 0, idem) as any).operationId, reset.operationId); });
         await check('old attempt IDs and stale revisions cannot scan replacement', async () => { await rejects(() => attendance.mark(a.id, { studentId: 'a1', status: 'PRESENT', revision: 2 }, 'TEACHER'), 409); const fresh = reset.replacements[0]; await openHall(fresh.examHallId); await rejects(() => attendance.mark(fresh.newSessionId, { studentId: 'a1', status: 'PRESENT', revision: 1 }, 'TEACHER'), 409); a = (await attendance.getSession(fresh.newSessionId)).session; });
         await check('explicit center freeze blocks source/destination/reseat/import and schedule writers, allows scans', async () => { await act('FREEZE'); assert.equal((await control.current('A', '2026-11-15')).placement.frozen, true); await rejects(() => halls.updateStudentAllocation('a1', { seatNo: 'Seat #09' })); await rejects(() => halls.updateStudentAllocation('o1', { assignedHallId: 'a' })); await rejects(() => db.student.update({ where: { id: 'a1' }, data: { seatNo: 'Seat #10' } })); await rejects(() => db.examHall.update({ where: { id: 'a' }, data: { roomNumber: 'changed' } })); await rejects(() => db.testCenter.update({ where: { id: 'A' }, data: { reportingTime: '11:00' } })); await mark(a, 'a1'); assert.equal((await control.current('B', '2026-11-15')).placement.frozen, false); assert.equal((await control.current('A', '2026-11-16')).placement.frozen, false); });
         await check('frozen allocation clearing requires explicit center-wide unfreeze and commits atomically', async () => { await rejects(() => control.preview(scope('RESET', [a.id], { clearAllocations: true }), 'SUPER_ADMIN', 0), 409); const p = await control.preview(scope('RESET', [a.id], { clearAllocations: true, unfreeze: true }), 'SUPER_ADMIN', 0); assert.equal(p.unfreezeScope.hallCount, 2); const result: any = await confirm(p); assert.equal(result.clearedAllocations, 2); assert.equal((await control.current('A', '2026-11-15')).placement.frozen, false); assert.equal((await db.student.findUnique({ where: { id: 'a1' } })).assignedHallId, null); a = (await attendance.getSession(result.replacements[0].newSessionId)).session; });
@@ -97,12 +115,12 @@ async function run() {
         await check('unmarked OPEN moves update source/destination snapshots and revisions atomically', async () => { const old = b.revision; await halls.updateStudentAllocation('a2', { assignedHallId: 'b' }); assert.equal((await attendance.getSession(a.id)).roster.length, 0); const detail = await attendance.getSession(b.id); assert.equal(detail.roster.length, 2); assert(detail.session.revision > old); await rejects(() => attendance.mark(b.id, { studentId: 'a2', status: 'PRESENT', revision: old }, 'TEACHER'), 409); });
         await check('marked movement requires explicit reviewed reset rather than transferring marks', async () => { await mark(b, 'a2'); await rejects(() => halls.updateStudentAllocation('a2', { assignedHallId: 'a' })); assert.equal((await db.student.findUnique({ where: { id: 'a2' } })).assignedHallId, 'b'); });
         await check('stale previews reject after a scan, preserving all work', async () => { const p = await control.preview(scope('RESET', [b.id]), 'SUPER_ADMIN', 0); await mark(b, 'b1'); await rejects(() => confirm(p), 409); assert.equal(await db.attendance.count({ where: { sessionId: b.id } }), 2); });
-        await check('CLOSED reset deletes closure marks and returns PRE_OPEN without auto-freezing', async () => { await attendance.closeSession(b.id, true, 'ADMIN'); const result: any = await act('RESET', [b.id]); b = (await attendance.getSession(result.replacements[0].newSessionId)).session; assert.equal(b.status, 'PRE_OPEN'); assert.equal((await control.current('A', '2026-11-15')).placement.frozen, false); });
+        await check('CLOSED reset retains closure marks and returns PRE_OPEN without auto-freezing', async () => { await attendance.closeSession(b.id, true, 'ADMIN'); const priorId=b.id; const prior=await db.attendance.findMany({where:{sessionId:priorId},orderBy:{id:'asc'}}); const result: any = await act('RESET', [priorId]); b = (await attendance.getSession(result.replacements[0].newSessionId)).session; assert.equal(b.status, 'PRE_OPEN'); assert.deepEqual(await db.attendance.findMany({where:{sessionId:priorId},orderBy:{id:'asc'}}),prior); assert.equal((await attendance.getSession(b.id)).stats.markedCount,0); assert.equal((await control.current('A', '2026-11-15')).placement.frozen, false); });
         await check('all non-Super-Admin roles, stale tokens and inactive accounts rejected', async () => { for (const roleName of ['ADMIN', 'TEACHER', 'ACCOUNTANT'])
             await rejects(() => control.preview(scope('RESET', [b.id]), roleName, 0), 403); await rejects(() => control.preview(scope('RESET', [b.id]), 'SUPER_ADMIN', 2), 401); await db.user.update({ where: { id: 'SUPER_ADMIN' }, data: { status: 'INACTIVE' } }); await rejects(() => control.preview(scope('RESET', [b.id]), 'SUPER_ADMIN', 0), 403); await db.user.update({ where: { id: 'SUPER_ADMIN' }, data: { status: 'ACTIVE' } }); });
         await check('restricted runtime cannot delete directly, forge GUC, read signing secret or forge signature', async () => { await rejects(() => db.$executeRawUnsafe('DELETE FROM "AttendanceSession" WHERE id=$1', b.id)); await rejects(() => db.$executeRawUnsafe('DELETE FROM "Attendance" WHERE "sessionId"=$1', other.id)); await rejects(() => db.$queryRawUnsafe('SELECT secret FROM azm_control_private.signing_key')); await rejects(() => db.$transaction(async (tx: any) => { await tx.$queryRawUnsafe("SELECT set_config('azm.exam_control_operation','forged',true)"); await tx.$executeRawUnsafe('UPDATE "ExamPlacementControl" SET frozen=true'); })); await rejects(() => db.$queryRawUnsafe('SELECT azm_execute_exam_control($1,$2)', '{}', 'forged')); });
-        await check('legacy unscoped marks and unrelated centers survive full-lineage delete/recreate', async () => { await db.attendance.create({ data: { studentId: 'a1', status: 'PRESENT', method: 'MANUAL', markedByUserId: 'ADMIN' } }); const result: any = await act('DELETE', [a.id], { entireLineage: true, clearAllocations: true }); assert.equal(await db.attendance.count({ where: { sessionId: null, studentId: 'a1' } }), 1); assert.equal(result.replacements[0].status, 'PRE_OPEN'); assert.deepEqual(await attendance.getSession(other.id), otherBefore); assert.equal((await db.student.findUnique({ where: { id: 'a1' } })).qrToken, identityBefore.qrToken); a = (await attendance.getSession(result.replacements[0].newSessionId)).session; });
-        await check('durable generation never reuses a deleted generation', async () => { assert(a.attemptNumber >= 4); const prior = a.attemptNumber; const result: any = await act('DELETE', [a.id], { entireLineage: true }); a = (await attendance.getSession(result.replacements[0].newSessionId)).session; assert.equal(a.attemptNumber, prior + 1); });
+        await check('unscoped marks and unrelated centers survive reset; history deletion is rejected', async () => { await db.attendance.create({ data: { studentId: 'a1', status: 'PRESENT', method: 'MANUAL', markedByUserId: 'ADMIN' } }); await rejects(() => control.preview(scope('DELETE', [a.id], { entireLineage: true }), 'SUPER_ADMIN', 0), 409); const result: any = await act('RESET', [a.id], { clearAllocations: true }); assert.equal(await db.attendance.count({ where: { sessionId: null, studentId: 'a1' } }), 1); assert.equal(result.replacements[0].status, 'PRE_OPEN'); assert.deepEqual(await attendance.getSession(other.id), otherBefore); assert.equal((await db.student.findUnique({ where: { id: 'a1' } })).qrToken, identityBefore.qrToken); a = (await attendance.getSession(result.replacements[0].newSessionId)).session; });
+        await check('durable generation never reuses an archived generation', async () => { assert(a.attemptNumber >= 4); const prior = a.attemptNumber; const result: any = await act('RESET', [a.id]); a = (await attendance.getSession(result.replacements[0].newSessionId)).session; assert.equal(a.attemptNumber, prior + 1); });
         await check('legacy ambiguous results block reset, evidence mapping establishes ownership, new unowned writes reject', async () => {
             await db.student.update({ where: { id: 'legacy' }, data: { assignedHallId: 'a', seatNo: 'Seat #99' } });
             await rejects(() => control.preview(scope('RESET', [a.id]), 'SUPER_ADMIN', 0), 409);
@@ -114,8 +132,16 @@ async function run() {
             const p = await control.preview(scope('RESET', [a.id]), 'SUPER_ADMIN', 0);
             assert.equal(p.totals.linkedResults, 1);
             const result: any = await confirm(p);
-            assert.equal(result.deletedResults, 1);
+            assert.equal(result.deletedResults, 0);
+            assert.equal(result.archivedResults, 1);
             assert.equal((await db.student.findUnique({ where: { id: 'legacy' } })).testScore, null);
+            const history = await control.historicalResults('SUPER_ADMIN', 0, a.id);
+            assert.equal(history.length, 1); assert.equal(history[0].testScore, 77); assert.equal(history[0].sessionId, a.id); assert.equal(history[0].resetOperationId, result.operationId);
+            await rejects(() => control.historicalResults('ADMIN', 0, a.id), 403);
+            await assert.rejects(() => admin!.query('UPDATE "ExamLegacyResultHistory" SET "testScore"=0'), /immutable/);
+            await assert.rejects(() => admin!.query('DELETE FROM "ExamLegacyResultHistory"'), /immutable/);
+            await assert.rejects(() => admin!.query('TRUNCATE "ExamLegacyResultHistory"'), /immutable/);
+            await rejects(() => db.$executeRawUnsafe('INSERT INTO "ExamLegacyResultHistory" ("sessionId","studentId","testScore","resetOperationId") VALUES ($1,$2,1,$3)', a.id, 'a1', 'forged'));
             a = (await attendance.getSession(result.replacements[0].newSessionId)).session;
         });
         await check('reset affected sessions and move is atomic and leaves replacement and destination PRE_OPEN', async () => {
@@ -177,34 +203,29 @@ async function run() {
             assert.deepEqual(await db.studentDocument.findUnique({ where: { id: document.id } }), document);
             assert.equal((await db.student.findUnique({ where: { id: 'o1' } })).testScore, 88);
         });
-        await check('historical-only deletion preserves retained current attempt and allocation', async () => {
+        await check('historical deletion is rejected and current attempt and allocation remain', async () => {
             const p = await cancellation.preview(other.id, { purgeAttendance: false }, 'SUPER_ADMIN', 0);
             await cancellation.confirm(other.id, { challenge: p.challenge, reason: 'Synthetic historical cancellation', confirmationText: 'CANCEL SESSION' }, 'SUPER_ADMIN', randomUUID(), 0);
             const current = await control.prepare('other', 'SUPER_ADMIN', 0);
             const before = await db.student.findUnique({ where: { id: 'o1' } });
             await rejects(() => control.preview(scope('DELETE', [other.id], { testCenterId: 'B' }), 'SUPER_ADMIN', 0), 409);
-            const deletion = await control.preview(scope('DELETE', [other.id], { testCenterId: 'B', replace: false }), 'SUPER_ADMIN', 0);
-            const result: any = await confirm(deletion);
-            assert.equal(result.replacements.length, 0);
+            await rejects(() => control.preview(scope('DELETE', [other.id], { testCenterId: 'B', replace: false }), 'SUPER_ADMIN', 0), 409);
+            assert(await db.attendanceSession.findUnique({ where: { id: other.id } }));
             assert(await db.attendanceSession.findUnique({ where: { id: current.id } }));
             assert.equal((await db.student.findUnique({ where: { id: 'o1' } })).assignedHallId, before.assignedHallId);
             assert.equal(await db.attendanceSessionCancellation.count({ where: { sessionId: other.id } }), 1);
             other = current;
         });
-        await check('entire lineage lists CANCELLED and current attempts then removes both and keeps audit identifiers', async () => {
+        await check('lineage deletion is rejected and both attempts and audit remain', async () => {
             await openHall('other');
             const old = other.id;
             const p = await cancellation.preview(old, { purgeAttendance: false }, 'SUPER_ADMIN', 0);
             await cancellation.confirm(old, { challenge: p.challenge, reason: 'Synthetic lineage cancellation', confirmationText: 'CANCEL SESSION' }, 'SUPER_ADMIN', randomUUID(), 0);
             const current = await control.prepare('other', 'SUPER_ADMIN', 0);
-            const review = await control.preview(scope('DELETE', [old], { testCenterId: 'B', entireLineage: true, clearAllocations: true }), 'SUPER_ADMIN', 0);
-            assert.equal(review.attempts.length, 2);
-            assert(review.attempts.some((s: any) => s.status === 'CANCELLED'));
-            const result: any = await confirm(review);
-            assert.equal(result.replacements.length, 1);
-            assert.equal(await db.attendanceSession.count({ where: { id: { in: [old, current.id] } } }), 0);
+            await rejects(() => control.preview(scope('DELETE', [old], { testCenterId: 'B', entireLineage: true, clearAllocations: true }), 'SUPER_ADMIN', 0), 409);
+            assert.equal(await db.attendanceSession.count({ where: { id: { in: [old, current.id] } } }), 2);
             assert.equal(await db.attendanceSessionCancellation.count({ where: { sessionId: old } }), 1);
-            assert.equal((await db.student.findUnique({ where: { id: 'o1' } })).assignedHallId, null);
+            assert.equal((await db.student.findUnique({ where: { id: 'o1' } })).assignedHallId, 'other');
         });
         await check('database rejects an expired signed capability under a non-UTC database timezone', async () => {
             const payload = JSON.stringify({ actorId: 'SUPER_ADMIN', tokenVersion: 0, idempotencyKey: randomUUID(), requestHash: 'a'.repeat(64), expiresAt: new Date(Date.now() - 60000).toISOString(), reason: 'Expired synthetic capability', action: 'FREEZE', testCenterId: 'A', businessDate: '2026-11-15', sessionIds: [], operationId: randomUUID(), nonce: randomUUID(), scope: {} });
@@ -222,6 +243,22 @@ async function run() {
                 await db.examHall.create({ data: { id: id + '-' + suffix, name: id + ' ' + suffix, roomNumber: suffix, targetClass: 'Class 9th', examDate: date, reportingTime: '09:00 AM', testCenterId: id, capacity } });
             return { center: id, source: id + '-source', destination: id + '-destination', date };
         };
+        await check('official results with unverified attempt ownership block reset at API and database layers', async () => {
+            const f = await reviewFixture('review-official-ambiguity', '2026-11-19');
+            await db.student.create({data:candidate('official-ambiguity-student',f.source,'Seat #01')});
+            await control.prepare(f.source,'ADMIN',0);
+            const session=(await openHall(f.source)).session;
+            const resetScope=scope('RESET',[session.id],{testCenterId:f.center,businessDate:f.date});
+            const before=await control.preview(resetScope,'SUPER_ADMIN',0);
+            await admin!.query(`INSERT INTO "Examination"(id,reference,title,"sessionReference","classGroup","maximumMarks","questionCount","scoringPolicy","createdById","updatedAt") VALUES('fixture-official-exam','fixture-official-exam','Synthetic','Synthetic','Class 9',100,100,'{}','SUPER_ADMIN',CURRENT_TIMESTAMP);
+              INSERT INTO "ExaminationResult"(id,"resultReference","studentId","examinationId","maximumMarks","createdById","updatedAt") VALUES('fixture-official-result','fixture-official-result','official-ambiguity-student','fixture-official-exam',100,'SUPER_ADMIN',CURRENT_TIMESTAMP)`);
+            await rejects(()=>control.preview(resetScope,'SUPER_ADMIN',0),409);
+            await rejects(()=>confirm(before),409);
+            const payload=JSON.stringify({...resetScope,scope:resetScope,actorId:'SUPER_ADMIN',tokenVersion:0,idempotencyKey:randomUUID(),requestHash:'a'.repeat(64),reason:'Synthetic direct-capability check',nonce:randomUUID(),expiresAt:new Date(Date.now()+60000).toISOString(),operationId:randomUUID()});
+            const signature=createHmac('sha256',signingKey).update(payload).digest('hex');
+            await rejects(()=>db.$queryRawUnsafe('SELECT public.azm_execute_exam_control($1,$2)',payload,signature));
+            assert.equal((await db.attendanceSession.findUnique({where:{id:session.id}})).isCurrent,true);
+        });
         await check('supported English date aliases cannot bypass a center freeze', async () => {
             const f = await reviewFixture('review-dates', '2026-11-15');
             for (const text of ['2026-11-15', '15 November 2026', '15 Nov 2026', 'Sunday, 15 NOV 2026']) {
@@ -253,18 +290,15 @@ async function run() {
             await db.student.update({ where: { id: 'legacy-newer-exam' }, data: { assignedHallId: f.source, seatNo: 'Seat #01' } });
             for (const action of ['RESET', 'DELETE'])
                 await rejects(() => control.preview(scope(action, [old.id], { testCenterId: f.center, businessDate: f.date }), 'SUPER_ADMIN', 0), 409);
-            const p = await control.preview(scope('DELETE', [old.id], { testCenterId: f.center, businessDate: f.date, replace: false, clearAllocations: true }), 'SUPER_ADMIN', 0);
-            assert.equal(p.totals.linkedResults, 1);
-            const result: any = await confirm(p);
-            assert.equal(result.deletedResults, 1);
-            assert.equal(result.replacements.length, 0);
+            await rejects(() => control.preview(scope('DELETE', [old.id], { testCenterId: f.center, businessDate: f.date, replace: false, clearAllocations: true }), 'SUPER_ADMIN', 0), 409);
+            assert.equal((await db.student.findUnique({ where: { id: 'history-student' } })).testScore, 91);
             assert.equal((await db.student.findUnique({ where: { id: 'history-student' } })).assignedHallId, f.destination);
             const unrelated = await db.student.findUnique({ where: { id: 'legacy-newer-exam' } });
             assert.equal(unrelated.testScore, 77);
             assert.equal(unrelated.resultSessionId, null);
             assert.equal(unrelated.assignedHallId, f.source);
         });
-        await check('historical Hall attempts retain their center scope until explicitly deleted', async () => {
+        await check('historical Hall attempts retain their center scope and cannot be deleted', async () => {
             const f = await reviewFixture('review-center', '2026-11-22');
             await db.student.create({ data: candidate('center-student', f.source, 'Seat #01') });
             await control.prepare(f.source, 'ADMIN', 0);
@@ -272,13 +306,13 @@ async function run() {
             await attendance.closeSession(session.id, false, 'ADMIN');
             await rejects(() => db.examHall.update({ where: { id: f.source }, data: { testCenterId: 'B' } }));
             const historyBefore = await control.history('SUPER_ADMIN', 0, f.center, f.date);
-            await act('DELETE', [session.id], { testCenterId: f.center, businessDate: f.date, entireLineage: true, replace: false });
-            await db.examHall.update({ where: { id: f.source }, data: { testCenterId: 'B' } });
+            await rejects(() => control.preview(scope('DELETE', [session.id], { testCenterId: f.center, businessDate: f.date, entireLineage: true, replace: false }), 'SUPER_ADMIN', 0), 409);
+            await rejects(() => db.examHall.update({ where: { id: f.source }, data: { testCenterId: 'B' } }));
             const historyAfter = await control.history('SUPER_ADMIN', 0, f.center, f.date);
             for (const event of historyBefore)
                 assert.deepEqual(historyAfter.find((row: any) => row.id === event.id), event);
         });
-        await check('expanded full-lineage preview counts results from every selected generation', async () => {
+        await check('full-lineage deletion is rejected and linked results remain', async () => {
             const f = await reviewFixture('review-lineage', '2026-11-23');
             await db.student.create({ data: candidate('lineage-student', f.source, 'Seat #01') });
             await control.prepare(f.source, 'ADMIN', 0);
@@ -288,12 +322,8 @@ async function run() {
             await control.prepare(f.source, 'ADMIN', 0);
             const current = (await openHall(f.source)).session;
             await db.student.update({ where: { id: 'lineage-student' }, data: { testScore: 92, resultSessionId: current.id } });
-            const p = await control.preview(scope('DELETE', [old.id], { testCenterId: f.center, businessDate: f.date, entireLineage: true }), 'SUPER_ADMIN', 0);
-            assert.equal(p.attempts.length, 2);
-            assert.equal(p.totals.linkedResults, 1);
-            const result: any = await confirm(p);
-            assert.equal(result.deletedResults, p.totals.linkedResults);
-            assert.equal((await db.student.findUnique({ where: { id: 'lineage-student' } })).testScore, null);
+            await rejects(() => control.preview(scope('DELETE', [old.id], { testCenterId: f.center, businessDate: f.date, entireLineage: true }), 'SUPER_ADMIN', 0), 409);
+            assert.equal((await db.student.findUnique({ where: { id: 'lineage-student' } })).testScore, 92);
         });
         await check('owned results count as progress before moving an unmarked OPEN student', async () => {
             const f = await reviewFixture('review-score', '2026-11-24');
@@ -307,7 +337,9 @@ async function run() {
             await act('FREEZE', [], { testCenterId: f.center, businessDate: f.date });
             await rejects(() => control.preview(scope('RESET', [session.id], { testCenterId: f.center, businessDate: f.date, moveStudentId: 'score-student', destinationHallId: target.source }), 'SUPER_ADMIN', 0), 409);
             const result: any = await act('RESET', [session.id], { testCenterId: f.center, businessDate: f.date, moveStudentId: 'score-student', destinationHallId: target.source, unfreeze: true });
-            assert.equal(result.deletedResults, 1);
+            assert.equal(result.deletedResults, 0);
+            assert.equal(result.archivedResults, 1);
+            assert.equal((await control.historicalResults('SUPER_ADMIN', 0, session.id))[0].testScore, 93);
             assert.equal((await db.student.findUnique({ where: { id: 'score-student' } })).assignedHallId, target.source);
         });
         await check('reset-and-move allocates Seat #100 when the first 99 seats are occupied', async () => {
@@ -333,11 +365,12 @@ async function run() {
             const view = await control.current(f.center, f.date);
             assert(view.legacyResults.find((student: any) => student.id === 'legacy-archived')?.sessionIds.includes(old.id));
             await act('MAP_RESULTS', [old.id], { testCenterId: f.center, businessDate: f.date, resultStudentIds: ['legacy-archived'], ownershipEvidence: 'Synthetic archived score sheet identifies this exact attempt' });
-            assert.equal((await db.student.findUnique({ where: { id: 'legacy-archived' } })).testScore, 77);
-            assert.equal((await db.student.findUnique({ where: { id: 'legacy-archived' } })).resultSessionId, old.id);
+            assert.equal((await db.student.findUnique({ where: { id: 'legacy-archived' } })).testScore, null);
+            assert.equal((await db.student.findUnique({ where: { id: 'legacy-archived' } })).resultSessionId, null);
+            assert.equal((await control.historicalResults('SUPER_ADMIN', 0, old.id))[0].testScore, 77);
             await rejects(() => db.student.update({ where: { id: 'legacy-archived' }, data: { testScore: 78 } }));
-            const deleted: any = await act('DELETE', [old.id], { testCenterId: f.center, businessDate: f.date, replace: false });
-            assert.equal(deleted.deletedResults, 1);
+            await rejects(() => control.preview(scope('DELETE', [old.id], { testCenterId: f.center, businessDate: f.date, replace: false }), 'SUPER_ADMIN', 0), 409);
+            assert.equal((await control.historicalResults('SUPER_ADMIN', 0, old.id))[0].testScore, 77);
             assert(await db.attendanceSession.findUnique({ where: { id: current.id } }));
         });
         await check('a stale Open request cannot open the replacement PRE_OPEN attempt', async () => {
