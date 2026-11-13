@@ -1,0 +1,1 @@
+@media print{body:has([data-result-print-root]) *{visibility:hidden!important}[data-result-print-root],[data-result-print-root] *{visibility:visible!important}[data-result-print-root]{position:absolute;inset:0;width:100%;border:0!important;padding:0!important;color:#111827!important}body:has([data-result-print-root]) .no-print{display:none!important}@page{margin:16mm}}
