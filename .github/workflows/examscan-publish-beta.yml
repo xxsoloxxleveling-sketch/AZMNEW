@@ -1,0 +1,47 @@
+name: Publish ExamScan Android beta QA APK
+on:
+  push:
+    branches:
+      - feature/examscan-android-download-site-20261114
+    paths:
+      - '.github/workflows/examscan-publish-beta.yml'
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish-verified-beta:
+    if: github.repository == 'xxsoloxxleveling-sketch/AZMNEW'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Retrieve APK from successful, immutable QA workflow run
+        uses: actions/download-artifact@v4
+        with:
+          name: azm-examscan-android-qa-apk
+          run-id: 43562120826
+          repository: xxsoloxxleveling-sketch/AZMNEW
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ./apk
+      - name: Verify exact approved QA binary
+        run: |
+          test -s apk/app-debug.apk
+          cp apk/app-debug.apk apk/ExamScan-Android-Beta-v1.1.apk
+          echo '5c74ecf1dbfb8f41cbac790fa6130863ad9b1f8b37ceca015cc980a5b697cc13  apk/ExamScan-Android-Beta-v1.1.apk' | sha256sum --check
+          (cd apk && sha256sum ExamScan-Android-Beta-v1.1.apk > ExamScan-Android-Beta-v1.1.apk.sha256)
+          ls -lh apk/ExamScan-Android-Beta-v1.1.apk
+      - name: Create immutable, clearly labeled GitHub prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view examscan-v1.1-beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Refusing to replace an existing release asset; inspect manually'
+            exit 1
+          fi
+          gh release create examscan-v1.1-beta \
+            apk/ExamScan-Android-Beta-v1.1.apk \
+            apk/ExamScan-Android-Beta-v1.1.apk.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target 1c5995008dfa54570f435ceff49ccf660d8a1d0c \
+            --prerelease \
+            --title 'ExamScan Android v1.1 — Staff QA Beta' \
+            --notes 'QA/debug build for authorized AZM.AIO staff testing only. Google Code Scanner on Android through Google Play Services. This APK is NOT production signed, is not verified on a physical device, and must not be represented as an official production release. Authenticate with a real authorized staff account only on the official backend. SHA256: 5c74ecf1dbfb8f41cbac790fa6130863ad9b1f8b37ceca015cc980a5b697cc13.'

@@ -90,6 +90,7 @@ function renderLogin() {
     </section>
     <div class="login-proof"><div>${ic('scan',19)}<span><b>OPTICAL READY</b><small>Signed QR verification</small></span></div><div>${ic('shield',19)}<span><b>SERVER VERIFIED</b><small>No unconfirmed marks</small></span></div></div>
     <div class="integrity-block"><div>${ic('shield',17)}<b>AUDIT &amp; INTEGRITY PROTOCOL</b></div><p>Hall-specific check-in. Your staff identity and the current examination attempt are validated by AZM.AIO. A scan is recorded only after server confirmation.</p></div>
+    ${!isNativeApp()?'<p class="login-download-beta"><a href="./install.html">Download Android app (beta)</a><span>Native Google QR scanner · Staff QA build</span></p>':''}
     <p class="copyright">EXAMSCAN · SECURE EXAMINATION OPERATIONS</p></div>
   </main>`;
 }
