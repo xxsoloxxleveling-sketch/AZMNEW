@@ -1,0 +1,10 @@
+import {existsSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {spawnSync} from 'node:child_process';
+const root=resolve(import.meta.dirname,'..');
+const gradle=resolve(root,'android',process.platform==='win32'?'gradlew.bat':'gradlew');
+if(!existsSync(gradle))throw new Error('Android project missing. Run npm run android:prepare.');
+if(!process.env.ANDROID_HOME&&!process.env.ANDROID_SDK_ROOT&&!existsSync(resolve(root,'android/local.properties')))throw new Error('Android SDK not configured. Install Android Studio SDK and set ANDROID_HOME or android/local.properties.');
+const result=spawnSync(gradle,[':app:assembleDebug','--no-daemon'],{cwd:resolve(root,'android'),stdio:'inherit',shell:process.platform==='win32'});
+if(result.status!==0)process.exit(result.status||1);
+console.log('Debug APK: android/app/build/outputs/apk/debug/app-debug.apk (NOT production signed)');

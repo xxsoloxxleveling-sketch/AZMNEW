@@ -1,0 +1,8 @@
+{
+  "appId": "dev.azmaio.examscan",
+  "appName": "ExamScan",
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}
