@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { PageTab } from './types';
 import { Header } from './components/common/Header';
 import { HeroSection } from './components/home/HeroSection';
@@ -265,6 +265,20 @@ function AppContent() {
   const { user, role, isAuthenticated, logout } = useAuth();
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('public');
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
+  const [studentProfileNavigation, setStudentProfileNavigation] = useState<{ studentId: string; requestId: string } | null>(null);
+  const [studentProfileResultsFocusId, setStudentProfileResultsFocusId] = useState<string | null>(null);
+  const [resultsReturnContext, setResultsReturnContext] = useState<{ studentId: string; resultId: string; examinationId: string } | null>(null);
+  const handleStudentResultsProfileHandled = useCallback((requestId: string) => {
+    setStudentProfileNavigation((current) => current?.requestId === requestId ? null : current);
+  }, []);
+  const handleReturnToResultsDashboard = useCallback((context?: { studentId: string; resultId: string; examinationId: string }) => {
+    if (context) setResultsReturnContext(context);
+    setStudentProfileResultsFocusId(null);
+    setCurrentRoute('admin');
+    setAdminTab('results');
+    window.location.hash = 'admin-results';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
 
   // Public tab states
@@ -283,6 +297,31 @@ function AppContent() {
   useEffect(() => {
     wakeUpBackend();
   }, []);
+
+  useEffect(() => {
+    const openStudentResultsProfile = (event: Event) => {
+      const detail = (event as CustomEvent<{ studentId?: unknown; resultId?: unknown; examinationId?: unknown }>).detail;
+      const studentId = typeof detail?.studentId === 'string' ? detail.studentId.trim() : '';
+      if (!studentId || studentId.length > 128 || !isAuthenticated || (role !== 'SUPER_ADMIN' && role !== 'ADMIN')) return;
+
+      const resultId = typeof detail.resultId === 'string' ? detail.resultId.trim() : '';
+      const examinationId = typeof detail.examinationId === 'string' ? detail.examinationId.trim() : '';
+      setResultsReturnContext(resultId && examinationId ? { studentId, resultId, examinationId } : null);
+      setStudentProfileResultsFocusId(studentId);
+
+      const requestId = typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      setStudentProfileNavigation({ studentId, requestId });
+      setCurrentRoute('admin');
+      setAdminTab('students');
+      window.location.hash = 'students';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.addEventListener('azm:open-student-results-profile', openStudentResultsProfile);
+    return () => window.removeEventListener('azm:open-student-results-profile', openStudentResultsProfile);
+  }, [isAuthenticated, role]);
 
   // Published pinned/urgent notices appear automatically once per browser session
   // on the public homepage. The user can always reopen them using the bell or
@@ -646,7 +685,16 @@ function AppContent() {
               onOpenAddStudent={() => setIsGlobalAddStudentOpen(true)}
             />
           )}
-          {adminTab === 'students' && <StudentsListView />}
+          {adminTab === 'students' && (
+            <StudentsListView
+              initialStudentResultsProfile={studentProfileNavigation}
+              initialSectionStudentId={studentProfileResultsFocusId}
+              initialResultContext={resultsReturnContext}
+              onStudentResultsProfileHandled={handleStudentResultsProfileHandled}
+              onReturnToResultsDashboard={handleReturnToResultsDashboard}
+              onStudentProfileClosed={() => setStudentProfileResultsFocusId(null)}
+            />
+          )}
           {adminTab === 'partners' && <AdminPartnersListView />}
           {adminTab === 'staff' && <StaffListView />}
           {adminTab === 'transactions' && <TransactionsListView />}
@@ -654,7 +702,7 @@ function AppContent() {
           {adminTab === 'halls' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <ExamHallsView />}
           {adminTab === 'storage' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <DocumentVaultView />}
           {adminTab === 'attendance' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <AttendanceHubView />}
-          {adminTab === 'results' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <AdminResultsView />}
+          {adminTab === 'results' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <AdminResultsView initialResultContext={resultsReturnContext} />}
           {['fees', 'payroll'].includes(adminTab) && (
             <DashboardView
               onNavigate={(tab) => {

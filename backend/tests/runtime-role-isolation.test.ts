@@ -7,6 +7,7 @@ import pg from 'pg';
 import { PrismaClient } from '@prisma/client';
 import { AttendanceService } from '../src/modules/attendance/attendance.service';
 import { AttendanceCancellationService } from '../src/modules/attendance/attendanceCancellation.service';
+import { ExamControlService } from '../src/modules/attendance/examControl.service';
 import { qrService } from '../src/modules/attendance/qr.service';
 import { assertRestrictedRuntimeDatabase } from '../src/security/dbRuntimeSafety';
 
@@ -35,7 +36,9 @@ async function run() {
   const database = 'azm_role_fixture_' + tag;
   const login = 'azm_fixture_login_' + tag;
   const group = 'azm_fixture_dml_' + tag;
+  const capabilityOwner = 'azm_fixture_cap_' + tag;
   const pass = randomBytes(32).toString('hex');
+  const signingKey = randomBytes(48).toString('hex');
   const dbUrl = new URL(root.toString());
   dbUrl.pathname = '/' + database;
   const runtimeUrl = new URL(dbUrl.toString());
@@ -63,6 +66,10 @@ async function run() {
       const file=path.join(migrations,folder,'migration.sql');
       if (fs.existsSync(file)) await fixture.query(fs.readFileSync(file,'utf8'));
     }
+    await fixture.query("SELECT set_config('azm.control_owner_role',$1,false)",[capabilityOwner]);
+    await fixture.query(fs.readFileSync(path.resolve(__dirname,'../ops/postgres/exam-control-capability.sql'),'utf8'));
+    await fixture.query('INSERT INTO azm_control_private.signing_key(secret) VALUES($1)',[signingKey]);
+    process.env.EXAM_CONTROL_SIGNING_KEY=signingKey;
     // Prisma's raw migration SQL fixtures intentionally don't create the ledger.
     // Add it explicitly to test that runtime role cannot alter migration history.
     await fixture.query('CREATE TABLE "_prisma_migrations" (id TEXT PRIMARY KEY)');
@@ -102,7 +109,7 @@ async function run() {
     console.log('Isolated least-privilege grants applied in disposable PostgreSQL 17.');
 
     await check('grant operator rejects inherited TRUNCATE on immutable evidence and migration history',async()=>{
-      for (const table of ['"AttendanceResetOperation"','"AttendanceSessionCancellation"','"AttendanceSessionReopening"','"_prisma_migrations"']) {
+      for (const table of ['"AttendanceResetOperation"','"AttendanceSessionCancellation"','"AttendanceSessionReopening"','"ExamLegacyResultHistory"','"_prisma_migrations"']) {
         // PUBLIC grants represent effective privileges bypassing direct role REVOKEs.
         // Only the isolated synthetic fixture is ever modified.
         await fixture!.query('GRANT TRUNCATE ON TABLE '+table+' TO PUBLIC');
@@ -133,6 +140,40 @@ async function run() {
       await assertRestrictedRuntimeDatabase(app!, {
         databaseUrl:runtimeUrl.toString(), directUrl:runtimeUrl.toString(),
       });
+    });
+    await check('pre-listen guard rejects effective DMC replacement mutation grants',async()=>{
+      await fixture!.query('GRANT UPDATE ON public."DmcReplacement" TO PUBLIC');
+      try {
+        await assert.rejects(
+          ()=>assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()}),
+          /DMC replacement audit access\/protection is missing or unsafe/,
+        );
+      } finally {
+        await fixture!.query('REVOKE UPDATE ON public."DmcReplacement" FROM PUBLIC');
+      }
+      await assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()});
+    });
+    await check('pre-listen guard rejects disabled DMC replacement validation trigger',async()=>{
+      await fixture!.query('ALTER TABLE public."DmcReplacement" DISABLE TRIGGER "DmcReplacement_validate"');
+      try {
+        await assert.rejects(
+          ()=>assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()}),
+          /DMC replacement audit access\/protection is missing or unsafe/,
+        );
+      } finally {
+        await fixture!.query('ALTER TABLE public."DmcReplacement" ENABLE TRIGGER "DmcReplacement_validate"');
+      }
+      await assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()});
+    });
+    await check('pre-listen guard rejects unsafe official-result reset capability',async()=>{
+      await fixture!.query('GRANT SELECT ON "ExaminationResult" TO '+escapeName(capabilityOwner));
+      try {
+        await assert.rejects(()=>assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()}),/official-result reset guard is unsafe/);
+      } finally {
+        await fixture!.query('REVOKE SELECT ON "ExaminationResult" FROM '+escapeName(capabilityOwner));
+        await fixture!.query('GRANT SELECT ("studentId") ON "ExaminationResult" TO '+escapeName(capabilityOwner));
+      }
+      await assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()});
     });
     await check('pre-listen guard rejects effective Attendance TRUNCATE capability',async()=>{
       // Simulate an unsafe effective-permission observation without granting
@@ -265,6 +306,7 @@ async function run() {
     const id='sa_'+tag;
     const teacher='teacher_'+tag;
     const hall='hall_'+tag;
+    const center='center_'+tag;
     const student='student_'+tag;
     await app.user.create({data:{
       id,name:'Synthetic Super Admin',email:id+'@test.invalid',passwordHash:'synthetic',role:'SUPER_ADMIN',
@@ -272,9 +314,10 @@ async function run() {
     await app.user.create({data:{
       id:teacher,name:'Synthetic Teacher',email:teacher+'@test.invalid',passwordHash:'synthetic',role:'TEACHER',
     }});
+    await app.testCenter.create({data:{id:center,name:'Synthetic Center',code:'SYN'+tag,address:'Synthetic',district:'Synthetic',testDate:'2026-10-10'}});
     await app.examHall.create({data:{
       id:hall,name:'Synthetic Hall',roomNumber:'1',targetClass:'Class 9th',
-      examDate:'2026-10-10',reportingTime:'08:00',
+      examDate:'2026-10-10',reportingTime:'08:00',testCenterId:center,
     }});
     const qrToken=qrService.generateSignedQrToken(student);
     await app.student.create({data:{
@@ -283,12 +326,13 @@ async function run() {
       cnicOrBForm:'SYNTHETIC-'+tag,address:'Test',district:'Test',province:'Test',
       parentMobile:'0',currentClass:'Class 9th',schoolName:'Test',
       boardOrUniversity:'Test',scholarshipCategory:'GENERAL_MERIT',
-      emergencyContact:'0',emergencyRelation:'Test',assignedHallId:hall,
+      emergencyContact:'0',emergencyRelation:'Test',assignedHallId:hall,seatNo:'Seat #01',
     }});
     const service=new AttendanceService(app);
     const cancellation=new AttendanceCancellationService(app);
-    const session=(await service.openSession(hall,id)).session;
-    await service.mark(session.id,{qrToken,status:'PRESENT'},teacher);
+    const prepared=await new ExamControlService(app).prepare(hall,id,0);
+    const session=(await service.openSession(hall,id,{sessionId:prepared.id,revision:prepared.revision})).session;
+    await service.mark(session.id,{qrToken,status:'PRESENT',revision:session.revision},teacher);
 
     await check('restricted runtime can open Hall, mark QR and read frozen roster',async()=>{
       assert.equal((await service.getSession(session.id)).stats.markedCount,1);
@@ -306,7 +350,7 @@ async function run() {
       );
       await reject(()=>runtime!.query(
         'UPDATE "AttendanceSession" SET status=$1,"closedAt"=NULL,"closedByUserId"=NULL WHERE id=$2',
-        ['OPEN',session.id]),'23514');
+        ['OPEN',session.id]),'P0001');
       await assert.rejects(
         () => service.reopenSession(session.id,'tiny',id,0),
         (error:any) => error.statusCode===400,
@@ -391,6 +435,7 @@ async function run() {
       await admin.query('DROP ROLE IF EXISTS '+escapeName(login));
       await admin.query('DROP ROLE IF EXISTS '+escapeName(group));
     }
+    await admin.query('DROP ROLE IF EXISTS '+escapeName(capabilityOwner));
     await admin.end();
   }
 }

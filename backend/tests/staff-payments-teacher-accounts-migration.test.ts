@@ -1,8 +1,33 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path'; import net from 'node:net';
 import { execFileSync, spawn } from 'node:child_process'; import { Client } from 'pg';
+import { randomUUID } from 'node:crypto';
 export async function disposableStaffDatabase() {
   if(process.env.NODE_ENV==='production') throw new Error('Production testing prohibited.');
+  if (process.env.STAFF_TEST_DATABASE_URL) {
+    const source = new URL(process.env.STAFF_TEST_DATABASE_URL);
+    assert.equal(source.hostname, '127.0.0.1');
+    assert.equal(source.port, '55432');
+    assert.equal(source.pathname, '/postgres');
+    const name = 'azm_staff_test_' + randomUUID().replaceAll('-', '');
+    assert.match(name, /^azm_staff_test_[a-f0-9]{32}$/);
+    const admin = new Client({ connectionString: source.toString() });
+    let sql: Client | undefined; let created = false;
+    try {
+      await admin.connect(); await admin.query(`CREATE DATABASE "${name}"`); created = true;
+      source.pathname = '/' + name;
+      sql = new Client({ connectionString: source.toString() }); await sql.connect();
+      for (const folder of fs.readdirSync(path.resolve(__dirname, '../prisma/migrations')).sort()) {
+        const file = path.resolve(__dirname, '../prisma/migrations', folder, 'migration.sql');
+        if (folder !== '20261008120000_staff_payments_teacher_accounts' && fs.existsSync(file)) await sql.query(fs.readFileSync(file, 'utf8'));
+      }
+      return { url: source.toString(), sql, dir: '', close: async () => { await sql!.end(); await admin.query(`DROP DATABASE "${name}"`); await admin.end(); } };
+    } catch (error) {
+      await sql?.end().catch(() => {});
+      if (created) await admin.query(`DROP DATABASE "${name}"`);
+      await admin.end(); throw error;
+    }
+  }
   const root=path.resolve(__dirname,'../..'), backend=path.join(root,'backend'), dir=fs.mkdtempSync(path.join(os.tmpdir(),'azm-staff-disposable-'));
   const bin=process.env.STAFF_TEST_POSTGRES_BIN || 'C:/Program Files/PostgreSQL/18/bin';
   execFileSync(path.join(bin,'initdb.exe'),['-D',path.join(dir,'data'),'-U','postgres','-A','trust','--encoding=UTF8','--no-locale'],{windowsHide:true,stdio:'pipe'});

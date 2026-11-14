@@ -19,10 +19,14 @@ BEGIN
  EXECUTE format('GRANT UPDATE ("tokenVersion") ON public."User" TO %I',owner_role);
  EXECUTE format('GRANT INSERT,UPDATE ON public."OfficeUseRecord",public."ExamPlacementControl",public."ExamAttemptSequence" TO %I',owner_role);
  EXECUTE format('GRANT INSERT ON public."ExamControlOperation",public."ExamLifecycleEvent" TO %I',owner_role);
+ EXECUTE format('GRANT SELECT,INSERT ON public."ExamLegacyResultHistory" TO %I',owner_role);
+ EXECUTE format('GRANT SELECT ("studentId") ON public."ExaminationResult" TO %I',owner_role);
+ EXECUTE format('GRANT SELECT (id,"studentId","attendanceSessionId"), UPDATE ("attendanceSessionId") ON public."ExaminationResult" TO %I',owner_role);
+ EXECUTE format('GRANT SELECT,INSERT ON public."OfficialResultAttemptBinding" TO %I',owner_role);
  EXECUTE format('GRANT EXECUTE ON FUNCTION azm_control_private.hmac256(TEXT,TEXT) TO %I',owner_role);
  -- PostgreSQL requires CREATE temporarily for function ownership transfer; revoke before commit.
  EXECUTE format('GRANT CREATE ON SCHEMA public TO %I',owner_role);
- FOREACH fn IN ARRAY ARRAY['public.azm_execute_exam_control(text,text)','public.azm_exam_capability_probe(text,text)','public.azm_sync_live_membership()','public.protect_attendance_generation()','public.azm_record_lifecycle()'] LOOP
+ FOREACH fn IN ARRAY ARRAY['public.azm_execute_exam_control(text,text)','public.azm_bind_official_result_attempt(text,text)','public.azm_exam_capability_probe(text,text)','public.azm_sync_live_membership()','public.protect_attendance_generation()','public.azm_record_lifecycle()'] LOOP
   EXECUTE format('ALTER FUNCTION %s OWNER TO %I',fn,owner_role);
  END LOOP;
  EXECUTE format('REVOKE CREATE ON SCHEMA public FROM %I',owner_role);

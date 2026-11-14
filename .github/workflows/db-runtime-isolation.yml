@@ -38,6 +38,7 @@ jobs:
           POSTGRES_PASSWORD: synthetic_only_not_prod
         ports:
           - 5432:5432
+          - 55432:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d postgres"
           --health-interval 5s
@@ -76,6 +77,9 @@ jobs:
       - name: Backend TypeScript
         working-directory: backend
         run: ./node_modules/.bin/tsc --noEmit --pretty false
+      - name: Verify DMC replacement pre-listen audit guard
+        working-directory: backend
+        run: node node_modules/tsx/dist/cli.mjs --test tests/dmc-replacement-runtime-guard.test.ts
       - name: Verify read-only Results API and unpublished public routes
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/results-readonly.test.ts
@@ -91,8 +95,8 @@ jobs:
           VITE_API_URL: ''
       - name: Build AZM Study Notes without publishing
         run: npm run build:notes
-      - name: Verify Results portal data and safe exports
-        run: node backend/node_modules/tsx/dist/cli.mjs --test src/components/results/ResultsExport.test.ts src/components/results/ResultsDemoData.test.ts src/components/results/FutureOmrContract.test.ts
+      - name: Verify Results portal, exports and reviewed legacy DMC interface
+        run: node backend/node_modules/tsx/dist/cli.mjs --test src/components/results/ResultsExport.test.ts src/components/results/ResultsDemoData.test.ts src/components/results/FutureOmrContract.test.ts src/components/results/OfficialDmcReplacementReview.test.tsx
       - name: Select runner Chrome for synthetic document UI checks
         shell: bash
         run: |
@@ -104,6 +108,18 @@ jobs:
           sudo apt-get install -y poppler-utils postgresql-client
       - name: Verify dashboard theme and isolation in real browser
         run: node backend/node_modules/tsx/dist/cli.mjs backend/tests/dashboard-theme-ui.test.ts
+      - name: Verify synthetic Results and DMC API lifecycle
+        working-directory: backend
+        env:
+          ATTENDANCE_TEST_DATABASE_URL: postgresql://postgres:synthetic_only_not_prod@127.0.0.1:55432/postgres
+        run: node node_modules/tsx/dist/cli.mjs tests/results-official-staging-e2e.test.ts
+      - name: Verify synthetic staff and payment database workflows
+        working-directory: backend
+        env:
+          STAFF_TEST_DATABASE_URL: postgresql://postgres:synthetic_only_not_prod@127.0.0.1:55432/postgres
+        run: |
+          node node_modules/tsx/dist/cli.mjs tests/staff-payments-teacher-accounts-migration.test.ts
+          node node_modules/tsx/dist/cli.mjs tests/staff-payments-teacher-accounts.test.ts
       - name: Upload dashboard theme synthetic screenshots
         if: always()
         uses: actions/upload-artifact@v4

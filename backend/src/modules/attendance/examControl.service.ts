@@ -89,18 +89,22 @@ export class ExamControlService {
         return { id: s.id, examHallId: s.examHallId, attemptNumber: s.attemptNumber, isCurrent: s.isCurrent, status: s.status, revision: s.revision, openedAt: s.openedAt, closedAt: s.closedAt, expected: s.candidates.length, marked: s.attendance.length, ...counts };
     }
     private async impact(tx: Prisma.TransactionClient, input: ControlScope) {
+        if (input.action === 'DELETE')
+            controlError(409, 'Deleting examination history is disabled. Reset preserves past attempts, attendance, rosters and results.');
         const state = await this.state(tx, input.testCenterId, input.businessDate);
         let selected = state.sessions.filter(s => input.sessionIds.includes(s.id));
         if (new Set(input.sessionIds).size !== input.sessionIds.length || selected.length !== input.sessionIds.length)
             controlError(409, 'Selected attempts do not match this center/exam.');
-        if (input.entireLineage) {
-            if (input.action !== 'DELETE')
-                controlError(400, 'Entire lineage is available for deletion only.');
-            const halls = new Set(selected.map(s => s.examHallId));
-            selected = state.sessions.filter(s => halls.has(s.examHallId));
-        }
+        if (input.entireLineage)
+            controlError(400, 'Entire-lineage deletion is unavailable while examination history is protected.');
         if (['RESET', 'DELETE'].includes(input.action) && (!selected.length || selected.length > 50))
             controlError(400, 'Select between 1 and 50 attempts.');
+        if (input.action === 'RESET') {
+            const hallIds = new Set(selected.map(session => session.examHallId));
+            const candidateIds = [...new Set([...selected.flatMap(session => session.candidates.map(candidate => candidate.studentId)), ...state.allocations.filter(student => student.assignedHallId && hallIds.has(student.assignedHallId)).map(student => student.id)])];
+            if (candidateIds.length && await tx.examinationResult.count({where:{studentId:{in:candidateIds},attendanceSessionId:null}}))
+                controlError(409, 'A candidate has an official result whose attempt ownership requires review; reset is blocked.');
+        }
         if (input.action === 'RESET' && selected.some(s => !s.isCurrent || s.status === 'CANCELLED'))
             controlError(409, 'Reset requires a current PRE_OPEN, OPEN or CLOSED attempt.');
         if (['FREEZE', 'UNFREEZE'].includes(input.action) && (input.sessionIds.length || input.entireLineage || input.clearAllocations || input.unfreeze))
@@ -208,6 +212,8 @@ export class ExamControlService {
                 controlError(409, 'Examination data changed. Review the updated impact before confirming.');
             const payload = JSON.stringify({ ...impact.scope, scope: { ...impact.scope, attempts: impact.attempts, totals: impact.totals, placementAfter: impact.placementAfter, move: impact.move }, actorId, tokenVersion: version, idempotencyKey, requestHash, reason: input.reason, nonce: p.nonce, expiresAt: p.expiresAt, operationId: randomUUID() });
             const rows = await tx.$queryRaw<any[]> `SELECT public.azm_execute_exam_control(${payload},${sign(payload)}) AS result`;
+            // Surface deferred audit/archival violations before returning a receipt.
+            await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE');
             return rows[0].result;
         });
     }
@@ -236,6 +242,25 @@ export class ExamControlService {
             // may not have reached the database yet. Retain and retry its key.
             return { status: 'NOT_FOUND', terminal: false };
         }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000, maxWait: 5000 });
+    }
+    async historicalResults(actorId: string, version: number, sessionId: string, page = 1) {
+        return this.transaction(async (tx) => {
+            await this.actor(tx, actorId, version);
+            return tx.$queryRaw<any[]>`SELECT h."sessionId",h."studentId",s."fullName",h."testScore",h."overallRank",h."resetOperationId",h."archivedAt"
+              FROM "ExamLegacyResultHistory" h JOIN "Student" s ON s.id=h."studentId"
+              WHERE h."sessionId"=${sessionId} ORDER BY h."studentId" LIMIT 25 OFFSET ${(page - 1) * 25}`;
+        });
+    }
+    async bindOfficialResult(resultId: string, sessionId: string, evidence: string, actorId: string, version: number) {
+        const normalized=evidence.trim();
+        if(normalized.length<12||normalized.length>1000) controlError(400,'Provide verified attempt evidence between 12 and 1000 characters.');
+        return this.transaction(async tx=>{
+            await this.actor(tx,actorId,version);
+            const payload=JSON.stringify({resultId,sessionId,evidence:normalized,actorId,tokenVersion:version,operationId:randomUUID(),expiresAt:new Date(Date.now()+5*60000).toISOString()});
+            const rows=await tx.$queryRaw<any[]>`SELECT public.azm_bind_official_result_attempt(${payload},${sign(payload)}) AS result`;
+            await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE');
+            return rows[0].result;
+        });
     }
     async history(actorId: string, version: number, centerId: string, businessDate: string, page = 1) {
         return this.transaction(async (tx) => {
