@@ -18,6 +18,7 @@ import {
 } from './ResultsApi';
 import type { OfficialAttemptChoice, OfficialCorrectionAudit, OfficialDocumentIssuance, OfficialResultDetail } from './ResultsApi';
 import { OfficialResultCorrectionDialog } from './OfficialResultCorrectionDialog';
+import { OfficialDmcReplacementReview } from './OfficialDmcReplacementReview';
 
 interface Props {
   resultId: string;
@@ -39,6 +40,7 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
   const [busyAction, setBusyAction] = useState('');
   const [preview, setPreview] = useState<{ url: string; title: string; preparationId?: string; idempotencyKey?: string } | null>(null);
   const [revokeId, setRevokeId] = useState('');
+  const [legacyReviewId, setLegacyReviewId] = useState('');
   const [revokeReason, setRevokeReason] = useState('');
   const [attemptChoices,setAttemptChoices]=useState<OfficialAttemptChoice[]|null>(null);
   const [attemptId,setAttemptId]=useState('');
@@ -69,6 +71,7 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
     setEditing(false);
     setPreview(null);
     setRevokeId('');
+    setLegacyReviewId('');
     setRevokeReason('');
     setAttemptChoices(null); setAttemptId(''); setAttemptEvidence(''); setAttemptConfirmed(false);
     void load();
@@ -144,6 +147,8 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
 
   const electronicReady = detail.documents.electronicAvailable;
   const currentIssued = issuances.find((item) => item.status === 'ISSUED' && item.resultRevision === detail.resultRevision);
+  const activeLegacyDocument = issuances.find((item) => item.status === 'ATTEMPT_UNVERIFIED' && !item.replacementIssuanceId);
+  const selectedLegacyDocument = issuances.find((item) => item.id === legacyReviewId && item.status === 'ATTEMPT_UNVERIFIED') ?? null;
   const profileAction = () => {
     onOpenProfile?.(detail.studentId);
     if (!onOpenProfile) window.dispatchEvent(new CustomEvent('azm:open-student-results-profile', { detail: { studentId: detail.studentId, resultId: detail.id, examinationId: detail.examinationId, section: 'results' } }));
@@ -221,21 +226,25 @@ export function OfficialResultDetailPanel({ resultId, source, canEdit, onOpenPro
           <p className="mt-2 text-[11px] text-slate-500">{electronicReady ? 'This result is eligible for the E-DMC.' : 'E-DMC will be available after official result publication, verification, and resolution of uncertain answers.'}</p>
           <div className="mt-4 border-t border-slate-200 pt-3">
             <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-xs font-semibold text-slate-800">Official DMC</h4>
-              <button type="button" disabled={!canEdit || !electronicReady || !!busyAction} title={!canEdit ? 'Only a Super Admin may issue an Official DMC' : !electronicReady ? 'A verified published result is required' : 'Prepare exact Official DMC preview'} onClick={() => void prepareOfficialPreview()} className={actionClass}><FileCheck2 size={14} /> Preview / issue</button>
+              <button type="button" disabled={!canEdit || !electronicReady || !!busyAction || !!activeLegacyDocument} title={!canEdit ? 'Only a Super Admin may issue an Official DMC' : !electronicReady ? 'A verified published result is required' : activeLegacyDocument ? 'Review and replace the active legacy DMC first' : 'Prepare exact Official DMC preview'} onClick={() => void prepareOfficialPreview()} className={actionClass}><FileCheck2 size={14} /> Preview / issue</button>
             </div>
+            {activeLegacyDocument && <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950">A legacy Official DMC lacks a verified examination-attempt association. Normal issuance is blocked. {canEdit ? 'Select Review replacement on its original record after checking independent examination evidence.' : 'A Super Admin must review its original record and supporting evidence.'}</p>}
             <div className="mt-2 space-y-2 text-xs">
               {issuances.length ? issuances.map((issuance) => <div key={issuance.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 px-2.5 py-2">
-                <div><p className="font-semibold text-slate-800">{issuance.documentNumber} · {issuance.status}</p><p className="mt-0.5 text-[11px] text-slate-500">Revision {issuance.resultRevision} · {formatDate(issuance.issuedAt)} · {issuance.issuer}</p>{issuance.reason && <p className="mt-0.5 text-[11px] text-slate-500">Latest event: {issuance.reason}</p>}</div>
+                <div><p className="font-semibold text-slate-800">{issuance.documentNumber} · {issuance.status}</p><p className="mt-0.5 text-[11px] text-slate-500">Revision {issuance.resultRevision} · {formatDate(issuance.issuedAt)} · {issuance.issuer}</p>{issuance.reason && <p className="mt-0.5 text-[11px] text-slate-500">Latest event: {issuance.reason}</p>}{issuance.replacementIssuanceId && <p className="mt-0.5 text-[11px] font-medium text-slate-600">Superseded by {issuances.find((item) => item.id === issuance.replacementIssuanceId)?.documentNumber ?? issuance.replacementIssuanceId}</p>}{issuance.replacesLegacyIssuanceId && <p className="mt-0.5 text-[11px] font-medium text-slate-600">Replaces {issuances.find((item) => item.id === issuance.replacesLegacyIssuanceId)?.documentNumber ?? issuance.replacesLegacyIssuanceId}</p>}</div>
                 <div className="flex gap-1.5">
                   <button type="button" disabled={issuance.status !== 'ISSUED' || !!busyAction} title={issuance.status !== 'ISSUED' ? 'Only a current issued certificate is downloadable' : 'Download current Official DMC'} onClick={() => void downloadOfficialDmc(detail.id, issuance.id, safeFilename('AZM_Official_DMC', detail.examination.reference, detail.student.rollNumber || detail.student.applicationNo))} className="rounded border border-slate-300 px-2 py-1 font-semibold disabled:opacity-40">Download</button>
                   <button type="button" disabled={issuance.status !== 'ISSUED' || !!busyAction} title={issuance.status !== 'ISSUED' ? 'Only a current issued certificate can be printed' : 'Print Official DMC'} onClick={() => void printOfficialDmc(detail.id, issuance.id)} className="rounded border border-slate-300 px-2 py-1 font-semibold disabled:opacity-40">Print</button>
                   {canEdit && issuance.status === 'ISSUED' && <button type="button" disabled={!!busyAction} onClick={() => { setRevokeId(issuance.id); setRevokeReason(''); }} className="rounded border border-red-300 px-2 py-1 font-semibold text-red-800 disabled:opacity-40">Revoke</button>}
+                  {canEdit && issuance.status === 'ATTEMPT_UNVERIFIED' && !issuance.replacementIssuanceId && <button type="button" disabled={!!busyAction || !!selectedLegacyDocument} onClick={() => { setLegacyReviewId(issuance.id); setRevokeId(''); }} className="rounded border border-amber-500 bg-amber-50 px-2 py-1 font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-40">Review replacement</button>}
                 </div>
               </div>) : <p className="rounded bg-slate-50 px-3 py-3 text-slate-600">No Official DMC has been issued for this result revision.</p>}
             </div>
           </div>
         </section>
       </div>
+
+      {canEdit && selectedLegacyDocument && <OfficialDmcReplacementReview result={detail} original={selectedLegacyDocument} onCancel={() => setLegacyReviewId('')} onCompleted={async () => { setLegacyReviewId(''); await load(); onResultChanged?.(detail); }} />}
 
       {revokeId && <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3" role="group" aria-label="Revoke official DMC">
         <label className="block text-xs font-semibold text-red-950">Reason for revoking this Official DMC<textarea className="mt-1 w-full rounded border border-red-300 bg-white px-3 py-2 text-sm" rows={2} maxLength={1000} value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} /></label>

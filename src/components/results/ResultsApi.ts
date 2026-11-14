@@ -174,6 +174,8 @@ export interface OfficialDocumentIssuance {
   issuer: string;
   verificationReference: string;
   reason: string | null;
+  replacementIssuanceId: string | null;
+  replacesLegacyIssuanceId: string | null;
 }
 
 export interface OfficialDmcIssueResult {
@@ -182,6 +184,20 @@ export interface OfficialDmcIssueResult {
   resultRevision: number;
   issuedAt: string;
   status: 'ISSUED' | 'SUPERSEDED' | 'REVOKED';
+}
+
+export interface OfficialDmcReplacementInput {
+  preparationId: string;
+  expectedRevision: number;
+  idempotencyKey: string;
+  attemptSessionId: string;
+  evidence: string;
+  reason: string;
+  confirmed: true;
+}
+
+export interface OfficialDmcReplacementResult extends OfficialDmcIssueResult {
+  originalIssuanceId: string;
 }
 
 export interface OfficialResultsQuery {
@@ -351,6 +367,13 @@ export async function previewPreparedOfficialDmc(resultId: string, preparationId
 
 export function issuePreparedOfficialDmc(resultId: string, payload: { preparationId: string; expectedRevision: number; idempotencyKey: string }) {
   return apiFetch<OfficialDocumentIssuance>(`/api/results/admin/${encodeURIComponent(resultId)}/dmc/official/issue`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function replaceLegacyOfficialDmc(resultId: string, originalIssuanceId: string, payload: OfficialDmcReplacementInput) {
+  return apiFetch<OfficialDmcReplacementResult>(`/api/results/admin/${encodeURIComponent(resultId)}/dmc/official/${encodeURIComponent(originalIssuanceId)}/replace`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
