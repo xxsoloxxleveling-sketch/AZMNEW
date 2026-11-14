@@ -92,8 +92,8 @@ jobs:
           VITE_API_URL: ''
       - name: Build AZM Study Notes without publishing
         run: npm run build:notes
-      - name: Verify Results portal data and safe exports
-        run: node backend/node_modules/tsx/dist/cli.mjs --test src/components/results/ResultsExport.test.ts src/components/results/ResultsDemoData.test.ts src/components/results/FutureOmrContract.test.ts
+      - name: Verify Results portal, exports and reviewed legacy DMC interface
+        run: node backend/node_modules/tsx/dist/cli.mjs --test src/components/results/ResultsExport.test.ts src/components/results/ResultsDemoData.test.ts src/components/results/FutureOmrContract.test.ts src/components/results/OfficialDmcReplacementReview.test.tsx
       - name: Select runner Chrome for synthetic document UI checks
         shell: bash
         run: |
