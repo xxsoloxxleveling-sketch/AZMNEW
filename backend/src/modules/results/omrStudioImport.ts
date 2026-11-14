@@ -79,7 +79,10 @@ export class OmrStudioImportService {
     } catch (error: any) {
       if ((error?.code === 'P2034' || (error?.code === 'P2010' && ['40001', '40P01'].includes(error.meta?.code))) && attempt < 3) continue;
       if (error?.code === 'P2002') return fail('OMR_RESULT_CONFLICT', 'A result already exists for this student and examination attempt.');
-      throw error;
+      if (typeof error?.statusCode === 'number' && error.statusCode < 500) throw error;
+      // Prisma errors may embed query values. Do not send scan answers or
+      // candidate identifiers to the global error logger on unexpected faults.
+      throw Object.assign(new Error('The OMR import could not be completed.'), { statusCode: 500, code: 'OMR_IMPORT_FAILED' });
     }
   }
 }
