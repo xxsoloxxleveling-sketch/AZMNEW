@@ -1,9 +1,9 @@
 // The UI can be opened offline, but attendance can NEVER be marked offline.
 // Auth tokens, API responses, student data, PDF and QR images are not cached.
-const VERSION = 'azm-examscan-ui-v2';
+const VERSION = 'azm-examscan-ui-v3';
 const STATIC = [
   './', './index.html', './app.js', './api.js', './camera.js',
-  './ui.js', './styles.css', './manifest.webmanifest', './assets/mark.svg',
+  './ui.js', './styles.css', './manifest.webmanifest', './manifest.json', './assets/mark.svg',
   './assets/icon-192.png', './assets/icon-512.png',
 ];
 const STATIC_URLS = new Set(STATIC.map(path => new URL(path, self.registration.scope).href));
