@@ -163,6 +163,7 @@ export async function assertRestrictedRuntimeDatabase(
     blocked('runtime DML or immutable-audit privilege requirements not met');
   }
   await assertStudyGroupAuditRuntime(db);
+  await assertDmcReplacementRuntime(db);
   const signingKey=process.env.EXAM_CONTROL_SIGNING_KEY;
   if(!signingKey||signingKey.length<64)blocked('Exam Session Control signing key is missing');
   const probe=randomUUID();
@@ -232,4 +233,33 @@ export async function assertStudyGroupAuditRuntime(db: PrismaClient) {
   const access = rows[0];
   if (!access?.readable || !access.insertable || access.mutable || !access.rls || !access.policy || !access.immutable || !access.restrictive)
     blocked('study group correction audit access/protection is missing or unsafe');
+}
+
+/** Fail before listening if the replacement audit loses its restricted grants or triggers. */
+export async function assertDmcReplacementRuntime(db: PrismaClient) {
+  const rows = await db.$queryRawUnsafe<any[]>(`SELECT
+    has_table_privilege(current_user,'public."DmcReplacement"','SELECT') AS readable,
+    has_table_privilege(current_user,'public."DmcReplacement"','INSERT') AS insertable,
+    has_table_privilege(current_user,'public."DmcReplacement"','UPDATE,DELETE,TRUNCATE,TRIGGER') AS mutable,
+    c.relrowsecurity AS rls,
+    EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid
+      AND t.tgname='DmcReplacement_append_only' AND t.tgenabled IN ('O','A')
+      AND t.tgtype=58) AS immutable,
+    EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid
+      AND t.tgname='DmcReplacement_validate' AND t.tgenabled IN ('O','A')
+      AND t.tgtype=7) AS validated,
+    EXISTS (SELECT 1 FROM pg_policy p JOIN pg_roles r ON r.oid=ANY(p.polroles)
+      WHERE p.polrelid=c.oid AND p.polname='azm_backend_dmc_replacement_read'
+        AND p.polcmd='r' AND pg_has_role(current_user,r.oid,'USAGE')
+        AND pg_get_expr(p.polqual,p.polrelid)='true') AS read_policy,
+    EXISTS (SELECT 1 FROM pg_policy p JOIN pg_roles r ON r.oid=ANY(p.polroles)
+      WHERE p.polrelid=c.oid AND p.polname='azm_backend_dmc_replacement_insert'
+        AND p.polcmd='a' AND pg_has_role(current_user,r.oid,'USAGE')
+        AND pg_get_expr(p.polwithcheck,p.polrelid)='true') AS insert_policy
+    FROM pg_class c WHERE c.oid='public."DmcReplacement"'::regclass`);
+  const access = rows[0];
+  if (!access?.readable || !access.insertable || access.mutable ||
+      !access.rls || !access.immutable || !access.validated ||
+      !access.read_policy || !access.insert_policy)
+    blocked('DMC replacement audit access/protection is missing or unsafe');
 }

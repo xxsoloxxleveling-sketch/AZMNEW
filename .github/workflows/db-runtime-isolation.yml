@@ -77,6 +77,9 @@ jobs:
       - name: Backend TypeScript
         working-directory: backend
         run: ./node_modules/.bin/tsc --noEmit --pretty false
+      - name: Verify DMC replacement pre-listen audit guard
+        working-directory: backend
+        run: node node_modules/tsx/dist/cli.mjs --test tests/dmc-replacement-runtime-guard.test.ts
       - name: Verify read-only Results API and unpublished public routes
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/results-readonly.test.ts

@@ -20,12 +20,17 @@ The API and UI changes remain gated by staff authentication and server-side role
 
 ## Deployment order and checks
 
-1. Deploy the reviewed backend artifact in compatibility mode while all new exams/results remain unpublished; verify health and existing student, attendance, finance, OMR-print, and legacy Results read-only flows.
-2. Apply the additive migration using the approved migration identity, not the general application login. Do not run schema push or an ad hoc SQL edit.
-3. Verify migration history, expected table/constraint/trigger presence, and application health without querying or changing real marks.
-4. Deploy the reviewed frontend artifact. Keep candidate-facing result/document routes disabled and keep public result lookup fail-closed.
-5. Run read-only smoke checks, then create only explicitly approved exam metadata and synthetic/staging result records. Production result entry, verification, and publication require separate authorized operator actions.
-6. Confirm E-DMC eligibility requires the exact current verified/published result revision, and Official DMC issue requires the reviewed preparation snapshot and explicit Super Admin action.
+The new backend cannot start against the old schema: its pre-listen database safety guard queries the official attempt binding and immutable DMC replacement structures. The runtime grant script also references `DmcReplacement`. **Do not activate the new backend before the four reviewed additive migrations and matching grants are present.**
+
+1. Before the maintenance window, build and stage the exact reviewed backend and frontend artifacts **without activating or publishing them**. Verify source SHAs and release compatibility, preserve the current running backend and frontend rollback artifacts, and check the approved recovery checkpoint.
+2. At an explicitly authorized cutover, ensure no examination, QR, attendance, or result writers will be interrupted. Fence writes or pause the old backend only if the release owner has verified a safe method; do not infer that all changes are backward compatible.
+3. Apply, in order, `20261113070000_official_examination_results_and_dmc`, `20261114010000_preserve_exam_history`, `20261114020000_official_result_attempt_binding`, and `20261114030000_dmc_replacement` through the approved migration owner. Recheck the actual production migration ledger and stop for unexpected history or migration failures; do not run `prisma db push` or ad hoc live SQL.
+4. Reconcile runtime grants and RLS policies using the reviewed operator-approved `runtime-grants.sql` process, **after** the new tables exist. Confirm the restricted login can SELECT/INSERT replacement audits, cannot UPDATE/DELETE/TRUNCATE them, and has both active DMC replacement triggers and the expected RLS policies.
+5. Activate the staged backend only after migration and runtime-grant checks. Require the pre-listen startup safety guard to pass. Confirm API health, authorized staff result reads, public lookup fail-closed behavior, and regression checks for student, attendance, finance, registration, and QR flows before continuing.
+6. Publish the matching frontend artifact only when the backend is healthy and the reviewed API contract is available. Recheck automatic `main` → `deploy` publication effects before merging the PR.
+7. Run authorized read-only smoke checks; keep new official results unpublished and candidate-facing document routes disabled. Creating production examination metadata, entering marks, issuing documents, or publishing verified results requires separate explicit authorization.
+
+**Rollback:** If the new backend fails after the additive migration, first restore the prior compatible application artifact while retaining the new, unused schema. Do not drop audit tables or reverse migration history automatically. If the schema change is not backward compatible or the old backend cannot safely run, halt and use the independently approved recovery procedure rather than improvising a database rollback.
 
 ## Rollback
 

@@ -141,6 +141,30 @@ async function run() {
         databaseUrl:runtimeUrl.toString(), directUrl:runtimeUrl.toString(),
       });
     });
+    await check('pre-listen guard rejects effective DMC replacement mutation grants',async()=>{
+      await fixture!.query('GRANT UPDATE ON public."DmcReplacement" TO PUBLIC');
+      try {
+        await assert.rejects(
+          ()=>assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()}),
+          /DMC replacement audit access\/protection is missing or unsafe/,
+        );
+      } finally {
+        await fixture!.query('REVOKE UPDATE ON public."DmcReplacement" FROM PUBLIC');
+      }
+      await assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()});
+    });
+    await check('pre-listen guard rejects disabled DMC replacement validation trigger',async()=>{
+      await fixture!.query('ALTER TABLE public."DmcReplacement" DISABLE TRIGGER "DmcReplacement_validate"');
+      try {
+        await assert.rejects(
+          ()=>assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()}),
+          /DMC replacement audit access\/protection is missing or unsafe/,
+        );
+      } finally {
+        await fixture!.query('ALTER TABLE public."DmcReplacement" ENABLE TRIGGER "DmcReplacement_validate"');
+      }
+      await assertRestrictedRuntimeDatabase(app!,{databaseUrl:runtimeUrl.toString(),directUrl:runtimeUrl.toString()});
+    });
     await check('pre-listen guard rejects unsafe official-result reset capability',async()=>{
       await fixture!.query('GRANT SELECT ON "ExaminationResult" TO '+escapeName(capabilityOwner));
       try {
