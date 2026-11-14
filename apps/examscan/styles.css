@@ -84,3 +84,8 @@ h1,h2,h3,p{margin-top:0}h1,h2,h3{letter-spacing:-.034em}h1{font-size:clamp(1.45r
 .login-download-beta a:hover{background:#d9eaff;text-decoration:underline}
 .login-download-beta a:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
 .login-download-beta span{display:block;margin-top:7px;font-size:.69rem;color:#77869b}
+
+.install-card .install-alternative{font-size:.77rem;margin:12px 0 18px;color:#52667f;text-align:center}
+.install-alternative a{color:#155ac1;font-weight:750;text-decoration:underline;text-underline-offset:2px}
+.install-alternative a:hover{color:#0b367d}
+.install-alternative a:focus-visible{outline:3px solid #93c5fd;outline-offset:3px;border-radius:3px}
