@@ -41,6 +41,18 @@ const paperVersion = z.string().trim().min(1).max(16).regex(/^[A-Za-z0-9_-]+$/);
 const detectedAnswerText = z.string().trim().max(16).nullable();
 const reviewedAnswerText = z.enum(['A', 'B', 'C', 'D']).nullable();
 
+export const omrStudioImportSchema = z.object({
+  examinationId: boundedId,
+  attendanceSessionId: boundedId,
+  studentId: boundedId,
+  applicationNo: plainText(100),
+  rollNumber: plainText(100),
+  scanSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  paperVersion: z.enum(['A', 'B', 'C', 'D']),
+  answers: z.array(z.enum(['A', 'B', 'C', 'D', 'BLANK', 'MULTIPLE', 'UNCERTAIN'])).length(100),
+}).strict();
+export type OmrStudioImportRequest = z.infer<typeof omrStudioImportSchema>;
+
 export const officialResultsPageQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),

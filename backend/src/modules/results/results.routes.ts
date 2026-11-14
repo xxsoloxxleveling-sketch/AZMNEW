@@ -17,6 +17,7 @@ import {
   officialExaminationsQuerySchema,
   officialResultsPageQuerySchema,
   bindOfficialAttemptSchema,
+  omrStudioImportSchema,
 } from './results.schema';
 
 const router = Router();
@@ -55,6 +56,7 @@ adminRouter.get('/:resultId', resultsController.getOfficialResult);
 
 // Only SUPER_ADMIN can mutate official results or issue/revoke documents.
 adminRouter.post('/examinations', authorizeRoles(Role.SUPER_ADMIN), validateBody(createExaminationSchema), resultsController.createOfficialExamination);
+adminRouter.post('/omr-studio/import', authorizeRoles(Role.SUPER_ADMIN), validateBody(omrStudioImportSchema), resultsController.importOmrStudioResult);
 adminRouter.post('/examinations/:examId/publication', authorizeRoles(Role.SUPER_ADMIN), validateBody(examinationPublicationSchema), resultsController.publishOfficialExamination);
 adminRouter.post('/examinations/:examId/results', authorizeRoles(Role.SUPER_ADMIN), validateBody(createDraftResultSchema), resultsController.createOfficialDraftResult);
 adminRouter.post('/:resultId/corrections', authorizeRoles(Role.SUPER_ADMIN), validateBody(correctResultSchema), resultsController.correctOfficialResult);
