@@ -19,6 +19,13 @@ function key() { const value = process.env.EXAM_CONTROL_SIGNING_KEY; if (!value 
     controlError(503, 'Exam Session Control signing capability has not been provisioned.'); return value; }
 function sign(value: string) { return createHmac('sha256', key()).update(value).digest('hex'); }
 export async function examLock(tx: Prisma.TransactionClient) { await tx.$queryRaw `SELECT 1 FROM pg_advisory_xact_lock(73921,19)`; }
+export async function bindOfficialResultInTransaction(tx: Prisma.TransactionClient, resultId: string, sessionId: string, evidence: string, actorId: string, version: number) {
+    const normalized = evidence.trim();
+    if (normalized.length < 12 || normalized.length > 1000) controlError(400, 'Provide verified attempt evidence between 12 and 1000 characters.');
+    const payload = JSON.stringify({ resultId, sessionId, evidence: normalized, actorId, tokenVersion: version, operationId: randomUUID(), expiresAt: new Date(Date.now() + 5 * 60000).toISOString() });
+    const rows = await tx.$queryRaw<any[]>`SELECT public.azm_bind_official_result_attempt(${payload},${sign(payload)}) AS result`;
+    return rows[0].result;
+}
 export class ExamControlService {
     constructor(private db: PrismaClient = prisma) { }
     async transaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
@@ -256,10 +263,9 @@ export class ExamControlService {
         if(normalized.length<12||normalized.length>1000) controlError(400,'Provide verified attempt evidence between 12 and 1000 characters.');
         return this.transaction(async tx=>{
             await this.actor(tx,actorId,version);
-            const payload=JSON.stringify({resultId,sessionId,evidence:normalized,actorId,tokenVersion:version,operationId:randomUUID(),expiresAt:new Date(Date.now()+5*60000).toISOString()});
-            const rows=await tx.$queryRaw<any[]>`SELECT public.azm_bind_official_result_attempt(${payload},${sign(payload)}) AS result`;
+            const result=await bindOfficialResultInTransaction(tx,resultId,sessionId,normalized,actorId,version);
             await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE');
-            return rows[0].result;
+            return result;
         });
     }
     async history(actorId: string, version: number, centerId: string, businessDate: string, page = 1) {
