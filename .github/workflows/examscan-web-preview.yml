@@ -31,12 +31,23 @@ jobs:
         run: npm run build:notes
       - name: Build installable staff ExamScan web app
         run: node apps/examscan/scripts/build.mjs
+      - name: Download and verify immutable Android beta APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p examscan-android-release
+          gh release download examscan-v1.1-beta --repo "$GITHUB_REPOSITORY" --pattern 'ExamScan-Android-Beta-v1.1.apk' --dir examscan-android-release
+          echo '5c74ecf1dbfb8f41cbac790fa6130863ad9b1f8b37ceca015cc980a5b697cc13  examscan-android-release/ExamScan-Android-Beta-v1.1.apk' | sha256sum --check
       - name: Rehearse exact deploy-output merge without publishing
         run: |
-          mkdir -p deploy-output/notes deploy-output/examscan
+          mkdir -p deploy-output/notes deploy-output/examscan deploy-output/downloads
           cp -R dist/. deploy-output/
           cp -R dist-notes/. deploy-output/notes/
           cp -R apps/examscan/dist/. deploy-output/examscan/
+          cp examscan-android-release/ExamScan-Android-Beta-v1.1.apk deploy-output/downloads/
+          test -s deploy-output/downloads/ExamScan-Android-Beta-v1.1.apk
+          test -s deploy-output/examscan/install.html
+          grep -q '/downloads/ExamScan-Android-Beta-v1.1.apk' deploy-output/examscan/install.html
           test -s deploy-output/index.html
           test -s deploy-output/examscan/index.html
           test -s deploy-output/examscan/manifest.webmanifest
@@ -44,5 +55,6 @@ jobs:
           test -s deploy-output/examscan/api.js
           test -s deploy-output/examscan/assets/icon-512.png
           grep -R -q 'hero-examscan-install-link' deploy-output/assets
+          grep -R -q 'hero-examscan-android-download' deploy-output/assets
           ! grep -R -q 'apiOrigin.*http:' deploy-output/examscan/config.js
           echo 'PASS: root site and /examscan/ PWA staged without touching deploy or production'
