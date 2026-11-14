@@ -147,6 +147,16 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(({
             <span>Access Free Notes</span>
             <ArrowRight className="w-4 h-4" />
           </a>
+
+          <a
+            id="hero-examscan-install-link"
+            href="/examscan/"
+            aria-label="Open and install ExamScan, the staff-only attendance app"
+            className="px-6 py-3.5 text-sm font-semibold text-sky-100 bg-sky-900/80 hover:bg-sky-800/90 rounded-xl border border-sky-400/50 shadow-md transition-all flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-sky-300"
+          >
+            <span>ExamScan — Staff App</span>
+            <ArrowRight className="w-4 h-4" />
+          </a>
         </div>
 
         {/* Fast Candidate Lookup Input */}

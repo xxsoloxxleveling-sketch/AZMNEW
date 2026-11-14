@@ -1,0 +1,26 @@
+{
+  "name": "azm-examscan-attendance",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module",
+  "description": "AZM.AIO native Google Code Scanner + PWA attendance; real API, no offline writes.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "dev": "node scripts/dev-server.mjs",
+    "build": "node scripts/build.mjs",
+    "check": "npm test && npm run build",
+    "native:bundle": "node native/build-native.mjs",
+    "android:prepare": "npm run native:bundle && npm run build && node native/prepare-android.mjs",
+    "android:apk": "node native/build-apk.mjs"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@capacitor/core": "8.6.2",
+    "@capacitor/android": "8.6.2",
+    "@capacitor-mlkit/barcode-scanning": "8.2.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2",
+    "esbuild": "0.28.2"
+  }
+}

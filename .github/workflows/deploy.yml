@@ -38,11 +38,15 @@ jobs:
       - name: Build AZM Study Notes
         run: npm run build:notes
 
+      - name: Build staff-only ExamScan PWA
+        run: node apps/examscan/scripts/build.mjs
+
       - name: Combine sites for Oracle
         run: |
-          mkdir -p deploy-output/notes
+          mkdir -p deploy-output/notes deploy-output/examscan
           cp -R dist/. deploy-output/
           cp -R dist-notes/. deploy-output/notes/
+          cp -R apps/examscan/dist/. deploy-output/examscan/
           printf '%s\n' "$GITHUB_SHA" > deploy-output/deployment-version.txt
 
       - name: Publish built files to deploy branch
