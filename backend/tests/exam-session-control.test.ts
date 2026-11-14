@@ -59,6 +59,8 @@ async function run() {
         const runtimePassword = randomUUID().replaceAll('-', '');
         await owner.query(`CREATE ROLE "${role}" LOGIN PASSWORD '${runtimePassword}'`);
         await admin.query(`REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO "${role}"; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO "${role}"; REVOKE ALL ON SCHEMA azm_control_private FROM "${role}"; REVOKE DELETE,TRUNCATE ON "Attendance","AttendanceSession","AttendanceSessionCandidate" FROM "${role}"; REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON "ExamControlOperation","ExamPlacementControl","ExamAttemptSequence","ExamLifecycleEvent","ExamLegacyResultHistory","OfficialResultAttemptBinding" FROM "${role}"; REVOKE UPDATE,DELETE,TRUNCATE ON "AttendanceResetOperation","AttendanceSessionCancellation","AttendanceSessionReopening" FROM "${role}"; GRANT EXECUTE ON FUNCTION azm_execute_exam_control(TEXT,TEXT),azm_bind_official_result_attempt(TEXT,TEXT),azm_exam_capability_probe(TEXT,TEXT) TO "${role}";`);
+        // Match the production DMC audit boundary in this disposable fixture.
+        await admin.query(`REVOKE UPDATE,DELETE,TRUNCATE,TRIGGER ON "DmcReplacement" FROM "${role}"; CREATE POLICY azm_backend_dmc_replacement_read ON "DmcReplacement" FOR SELECT TO "${role}" USING (true); CREATE POLICY azm_backend_dmc_replacement_insert ON "DmcReplacement" FOR INSERT TO "${role}" WITH CHECK (true)`);
         url.username = role;
         url.password = runtimePassword;
         process.env.DATABASE_URL = url.toString();
