@@ -78,3 +78,9 @@ h1,h2,h3,p{margin-top:0}h1,h2,h3{letter-spacing:-.034em}h1{font-size:clamp(1.45r
 .install-web:hover{background:#e3edfc}
 .install-footer{font-size:.75rem;color:#77869c;text-align:center;line-height:1.6;margin-top:22px}
 @media(max-width:500px){.install-wrap{padding:24px 15px 32px}.install-card{padding:23px 18px}.install-brand{gap:12px}.install-brand h1{font-size:1.7rem}}
+
+.login-download-beta{text-align:center;margin:18px 0 9px;font-size:.8rem;color:#5d708b}
+.login-download-beta a{display:inline-flex;align-items:center;justify-content:center;padding:9px 15px;border:1px solid #b9cff3;color:#1651ae;text-decoration:none;border-radius:9px;background:#eaf2ff;font-weight:750}
+.login-download-beta a:hover{background:#d9eaff;text-decoration:underline}
+.login-download-beta a:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+.login-download-beta span{display:block;margin-top:7px;font-size:.69rem;color:#77869b}
