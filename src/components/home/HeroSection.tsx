@@ -161,13 +161,12 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(({
 
           <a
             id="hero-examscan-android-download"
-            href="/downloads/ExamScan-Android-Beta-v1.1.apk"
-            download="ExamScan-Android-Beta-v1.1.apk"
-            aria-label="Download the ExamScan Android beta APK for authorized staff testing"
+            href="https://github.com/xxsoloxxleveling-sketch/AZMNEW/releases/download/examscan-v1.1-beta/ExamScan-Android-Beta-v1.1.apk"
+            aria-label="Download the ExamScan Android beta APK via GitHub Releases for authorized staff testing"
             className="px-6 py-3.5 text-sm font-semibold text-slate-950 bg-sky-300 hover:bg-sky-200 rounded-xl border border-sky-200/80 shadow-[0_0_22px_rgba(125,211,252,0.22)] transition-all flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-white"
           >
             <Download className="w-4 h-4" />
-            <span>Download ExamScan for Android (Beta)</span>
+            <span>Download ExamScan for Android (GitHub · Beta)</span>
           </a>
         </div>
 
