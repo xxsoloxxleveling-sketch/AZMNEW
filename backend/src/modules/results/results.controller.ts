@@ -9,6 +9,7 @@ import {
   createDraftResultSchema,
   createExaminationSchema,
   dmcIssueSchema,
+  dmcLegacyReplaceSchema,
   dmcPrepareSchema,
   dmcRevokeSchema,
   examinationPublicationSchema,
@@ -45,6 +46,7 @@ export class ResultsController {
     this.prepareOfficialDmc = this.prepareOfficialDmc.bind(this);
     this.previewOfficialDmc = this.previewOfficialDmc.bind(this);
     this.issueOfficialDmc = this.issueOfficialDmc.bind(this);
+    this.replaceLegacyOfficialDmc = this.replaceLegacyOfficialDmc.bind(this);
     this.getOfficialDmcIssuances = this.getOfficialDmcIssuances.bind(this);
     this.downloadOfficialDmc = this.downloadOfficialDmc.bind(this);
     this.downloadElectronicDmc = this.downloadElectronicDmc.bind(this);
@@ -251,6 +253,19 @@ export class ResultsController {
         expectedRevision: input.expectedRevision!,
         idempotencyKey: input.idempotencyKey!,
       }, this.actor(req));
+      this.noStore(res);
+      res.status(201).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async replaceLegacyOfficialDmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = dmcLegacyReplaceSchema.parse(req.body);
+      const data = await officialResultsService.replaceLegacyOfficialDmc(
+        req.params.resultId, req.params.issuanceId, input, this.actor(req),
+      );
       this.noStore(res);
       res.status(201).json({ success: true, data });
     } catch (error) {

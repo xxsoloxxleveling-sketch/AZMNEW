@@ -10,6 +10,7 @@ import {
   createDraftResultSchema,
   createExaminationSchema,
   dmcIssueSchema,
+  dmcLegacyReplaceSchema,
   dmcPrepareSchema,
   dmcRevokeSchema,
   examinationPublicationSchema,
@@ -60,6 +61,7 @@ adminRouter.post('/:resultId/corrections', authorizeRoles(Role.SUPER_ADMIN), val
 adminRouter.post('/:resultId/attempt-binding', authorizeRoles(Role.SUPER_ADMIN), validateBody(bindOfficialAttemptSchema), resultsController.bindOfficialAttempt);
 adminRouter.post('/:resultId/dmc/official/prepare', authorizeRoles(Role.SUPER_ADMIN), validateBody(dmcPrepareSchema), resultsController.prepareOfficialDmc);
 adminRouter.post('/:resultId/dmc/official/issue', authorizeRoles(Role.SUPER_ADMIN), validateBody(dmcIssueSchema), resultsController.issueOfficialDmc);
+adminRouter.post('/:resultId/dmc/official/:issuanceId/replace', authorizeRoles(Role.SUPER_ADMIN), validateBody(dmcLegacyReplaceSchema), resultsController.replaceLegacyOfficialDmc);
 adminRouter.post('/:resultId/dmc/official/:issuanceId/revoke', authorizeRoles(Role.SUPER_ADMIN), validateBody(dmcRevokeSchema), resultsController.revokeOfficialDmc);
 
 router.use('/admin', adminRouter);

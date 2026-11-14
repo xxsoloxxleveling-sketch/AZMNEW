@@ -115,6 +115,7 @@ model User {
   dmcPreparations DmcIssuancePreparation[] @relation("DmcPreparationActor")
   issuedDmcDocuments DmcIssuance[] @relation("DmcIssuer")
   dmcIssuanceEvents DmcIssuanceEvent[] @relation("DmcEventActor")
+  reviewedDmcReplacements DmcReplacement[] @relation("DmcReplacementReviewer")
 }
 
 enum StudentStatus {
@@ -1050,6 +1051,8 @@ model DmcIssuance {
   result                ExaminationResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
   issuedBy              User              @relation("DmcIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
   events                DmcIssuanceEvent[]
+  replacementOfLegacy   DmcReplacement? @relation("DmcReplacementOriginal")
+  replacesLegacy        DmcReplacement? @relation("DmcReplacementNew")
 
   @@unique([resultId, documentType, issueNumber])
   @@unique([issuedById, idempotencyKey])
@@ -1068,4 +1071,18 @@ model DmcIssuanceEvent {
   actor       User                  @relation("DmcEventActor", fields: [actorId], references: [id], onDelete: Restrict)
 
   @@index([issuanceId, occurredAt])
+}
+
+// Immutable evidence linking one original issuance to one replacement.
+model DmcReplacement {
+  originalIssuanceId    String   @id
+  replacementIssuanceId String   @unique
+  actorId               String
+  actorName             String
+  evidence              String   @db.Text
+  reason                String   @db.Text
+  replacedAt            DateTime @default(now())
+  originalIssuance      DmcIssuance @relation("DmcReplacementOriginal", fields: [originalIssuanceId], references: [id], onDelete: Restrict)
+  replacementIssuance   DmcIssuance @relation("DmcReplacementNew", fields: [replacementIssuanceId], references: [id], onDelete: Restrict)
+  reviewer              User @relation("DmcReplacementReviewer", fields: [actorId], references: [id], onDelete: Restrict)
 }

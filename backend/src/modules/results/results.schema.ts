@@ -134,6 +134,14 @@ export const dmcIssueSchema = z.object({
   expectedRevision: z.number().int().min(1),
   idempotencyKey: z.string().uuid(),
 }).strict();
+export const dmcLegacyReplaceSchema = dmcIssueSchema.extend({
+  attemptSessionId: boundedId,
+  evidence: z.string().trim().min(24).max(1000),
+  reason: z.string().trim().min(12).max(1000),
+  confirmed: z.literal(true),
+}).strict();
+export type DmcLegacyReplaceRequest = z.infer<typeof dmcLegacyReplaceSchema>;
+
 export const dmcRevokeSchema = z.object({ reason: z.string().trim().min(12).max(1000) }).strict();
 
 export type OfficialResultsPageQuery = z.infer<typeof officialResultsPageQuerySchema>;

@@ -22,6 +22,7 @@ import {
   CreateDraftResultRequest,
   CreateExaminationRequest,
   CorrectResultRequest,
+  DmcLegacyReplaceRequest,
   ExaminationPublicationRequest,
   OfficialResultsPageQuery,
 } from './results.schema';
@@ -806,6 +807,15 @@ export class OfficialResultsService {
       const result = await tx.examinationResult.findUnique({ where: { id: resultId }, include: resultInclude });
       if (!result || result.resultRevision !== input.expectedRevision) throw serviceError(409, 'The result changed. Prepare a new document preview.', 'STALE_RESULT_REVISION');
       assertDmcEligible(result);
+      const existingDocuments = await tx.dmcIssuance.findMany({
+        where: { resultId, documentType: DmcDocumentType.OFFICIAL },
+        include: { events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 } },
+      });
+      if (existingDocuments.some((document: any) =>
+        !(document.snapshot as any)?.attemptAssociation?.sessionId
+        && latestEvent(document.events)?.eventType === DmcIssuanceEventType.ISSUED)) {
+        throw serviceError(409, 'An active legacy DMC requires administrator-reviewed replacement before another document can be issued.', 'LEGACY_DMC_REVIEW_REQUIRED');
+      }
       if ((preparation.snapshot as any)?.attemptAssociation?.sessionId !== result.attendanceSessionId)
         throw serviceError(409, 'The document preview does not verify this examination attempt. Prepare it again.', 'DMC_ATTEMPT_MISMATCH');
       const data = preparePdfData(preparation.snapshot);
@@ -826,6 +836,128 @@ export class OfficialResultsService {
       await tx.dmcIssuancePreparation.delete({ where: { id: preparation.id } });
       return { id: certificate.id, documentNumber: certificate.certificateNumber, resultRevision: certificate.resultRevision, issuedAt: certificate.issuedAt.toISOString(), status: 'ISSUED' as const };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  // A legacy certificate is never silently rebound. The reviewer chooses the
+  // exact original and confirms evidence; all changes commit as one transaction.
+  async replaceLegacyOfficialDmc(
+    resultId: string,
+    originalIssuanceId: string,
+    input: DmcLegacyReplaceRequest,
+    actor: Actor,
+  ) {
+    const previouslyIssued = await this.db.dmcIssuance.findUnique({
+      where: { issuedById_idempotencyKey: { issuedById: actor.id, idempotencyKey: input.idempotencyKey } },
+      include: { events: true },
+    });
+    if (previouslyIssued) {
+      const relationship = await this.db.dmcReplacement.findUnique({
+        where: { replacementIssuanceId: previouslyIssued.id },
+      });
+      if (!relationship || relationship.originalIssuanceId !== originalIssuanceId
+        || previouslyIssued.resultId !== resultId) {
+        throw serviceError(409, 'The idempotency key belongs to a different issuance.', 'IDEMPOTENCY_KEY_REUSED');
+      }
+      return {
+        id: previouslyIssued.id,
+        documentNumber: previouslyIssued.certificateNumber,
+        originalIssuanceId,
+        resultRevision: previouslyIssued.resultRevision,
+        issuedAt: previouslyIssued.issuedAt.toISOString(),
+        status: latestEvent(previouslyIssued.events)?.eventType || 'ISSUED',
+      };
+    }
+    try {
+      return await this.db.$transaction(async (tx) => {
+        await examLock(tx);
+        const original = await tx.dmcIssuance.findFirst({
+          where: { id: originalIssuanceId, resultId, documentType: DmcDocumentType.OFFICIAL },
+          include: { events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 } },
+        });
+        if (!original) throw serviceError(404, 'Legacy DMC issuance not found.', 'DMC_ISSUANCE_NOT_FOUND');
+        // Only an old, unbound certificate may go through this special procedure.
+        if ((original.snapshot as any)?.attemptAssociation?.sessionId) {
+          throw serviceError(409, 'This document is already associated with an attempt.', 'DMC_NOT_LEGACY');
+        }
+        if (latestEvent(original.events)?.eventType !== DmcIssuanceEventType.ISSUED) {
+          throw serviceError(409, 'Only an active legacy document can be replaced.', 'DMC_NOT_CURRENT');
+        }
+        if (await tx.dmcReplacement.findUnique({ where: { originalIssuanceId } })) {
+          throw serviceError(409, 'The legacy document already has a replacement.', 'DMC_ALREADY_REPLACED');
+        }
+
+        const result = await tx.examinationResult.findUnique({ where: { id: resultId }, include: resultInclude });
+        if (!result || result.resultRevision !== input.expectedRevision) {
+          throw serviceError(409, 'The result changed; review and prepare the replacement again.', 'STALE_RESULT_REVISION');
+        }
+        assertDmcEligible(result);
+        if (result.attendanceSessionId !== input.attemptSessionId
+          || result.attemptBinding?.sessionId !== input.attemptSessionId) {
+          throw serviceError(409, 'The approved examination attempt does not match this result.', 'DMC_ATTEMPT_MISMATCH');
+        }
+        const preparation = await tx.dmcIssuancePreparation.findFirst({
+          where: { id: input.preparationId, resultId, actorId: actor.id },
+        });
+        if (!preparation || preparation.expiresAt <= new Date()
+          || preparation.resultRevision !== input.expectedRevision) {
+          throw serviceError(409, 'The replacement preview expired or is out of date.', 'DMC_PREPARATION_NOT_CURRENT');
+        }
+        if ((preparation.snapshot as any)?.attemptAssociation?.sessionId !== input.attemptSessionId) {
+          throw serviceError(409, 'The preview has a different examination attempt.', 'DMC_ATTEMPT_MISMATCH');
+        }
+        const data = preparePdfData(preparation.snapshot);
+        const certificate = await tx.dmcIssuance.create({ data: {
+          id: randomUUID(),
+          resultId,
+          documentType: DmcDocumentType.OFFICIAL,
+          resultRevision: input.expectedRevision,
+          issueNumber: Number((preparation.snapshot as any).issueNumber),
+          certificateNumber: data.documentNumber,
+          verificationReference: String(data.verificationReference),
+          snapshot: preparation.snapshot as Prisma.InputJsonValue,
+          idempotencyKey: input.idempotencyKey,
+          issuedById: actor.id,
+          issuedByName: actor.name,
+        } });
+        // The old issuance is never edited. Terminal status is append-only.
+        await tx.dmcIssuanceEvent.create({ data: {
+          issuanceId: original.id,
+          eventType: DmcIssuanceEventType.SUPERSEDED,
+          reason: input.reason,
+          actorId: actor.id,
+          actorName: actor.name,
+        } });
+        await tx.dmcIssuanceEvent.create({ data: {
+          issuanceId: certificate.id,
+          eventType: DmcIssuanceEventType.ISSUED,
+          actorId: actor.id,
+          actorName: actor.name,
+        } });
+        await tx.dmcReplacement.create({ data: {
+          originalIssuanceId: original.id,
+          replacementIssuanceId: certificate.id,
+          actorId: actor.id,
+          actorName: actor.name,
+          evidence: input.evidence,
+          reason: input.reason,
+        } });
+        await tx.dmcIssuancePreparation.delete({ where: { id: preparation.id } });
+        return {
+          id: certificate.id,
+          documentNumber: certificate.certificateNumber,
+          originalIssuanceId,
+          resultRevision: certificate.resultRevision,
+          issuedAt: certificate.issuedAt.toISOString(),
+          status: 'ISSUED' as const,
+        };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error: any) {
+      if (['P2002', 'P2034'].includes(error?.code)
+        || (error?.code === 'P2010' && ['23505', '40001', '40P01'].includes(error?.meta?.code))) {
+        throw serviceError(409, 'Concurrent DMC replacement conflict; refresh and review again.', 'DMC_REPLACEMENT_CONFLICT');
+      }
+      throw error;
+    }
   }
 
   async renderElectronicDmc(resultId: string) {
@@ -854,7 +986,11 @@ export class OfficialResultsService {
     const result=await this.findResult(resultId);
     const issuances = await this.db.dmcIssuance.findMany({
       where: { resultId, documentType: DmcDocumentType.OFFICIAL },
-      include: { events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 } },
+      include: {
+        events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 },
+        replacementOfLegacy: { select: { replacementIssuanceId: true, replacedAt: true } },
+        replacesLegacy: { select: { originalIssuanceId: true } },
+      },
       orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
       take: 50,
     });
@@ -867,6 +1003,8 @@ export class OfficialResultsService {
       issuer: issuance.issuedByName,
       verificationReference: issuance.verificationReference,
       reason: issuance.events?.[0]?.reason ?? null,
+      replacementIssuanceId: issuance.replacementOfLegacy?.replacementIssuanceId ?? null,
+      replacesLegacyIssuanceId: issuance.replacesLegacy?.originalIssuanceId ?? null,
     }));
   }
 
@@ -887,9 +1025,12 @@ export class OfficialResultsService {
       include: { events: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 }, result: { select: { resultRevision: true, attendanceSessionId: true, publicationStatus: true, verificationStatus: true, examination: { select: { title: true, examDate: true, publicationStatus: true } } } } },
     });
     if (!issuance) return { valid: false, status: 'INVALID' as const, examinationTitle: null, examinationDate: null };
+    const recordedStatus = latestIssuanceStatusFromEvents(issuance.events);
+    if (recordedStatus === 'SUPERSEDED' || recordedStatus === 'REVOKED')
+      return { valid: false, status: recordedStatus, examinationTitle: null, examinationDate: null };
     if (!issuance.result.attendanceSessionId || (issuance.snapshot as any)?.attemptAssociation?.sessionId !== issuance.result.attendanceSessionId)
       return { valid: false, status: 'INVALID' as const, examinationTitle: null, examinationDate: null };
-    let status = latestIssuanceStatusFromEvents(issuance.events);
+    let status: ReturnType<typeof latestIssuanceStatusFromEvents> = recordedStatus;
     const current = !!issuance.result.attendanceSessionId && (issuance.snapshot as any)?.attemptAssociation?.sessionId === issuance.result.attendanceSessionId
       && issuance.resultRevision === issuance.result.resultRevision
       && issuance.result.publicationStatus === 'PUBLISHED'

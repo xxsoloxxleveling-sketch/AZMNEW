@@ -102,6 +102,102 @@ async function run() {
     const issuance = await call('POST', `/admin/${draft.id}/dmc/official/issue`, 'SUPER_ADMIN', { preparationId: prep.data.data.preparationId, expectedRevision: result.resultRevision, idempotencyKey: randomUUID() }); assert.equal(issuance.status, 201);
     const snapshot=(await target.query('SELECT snapshot FROM "DmcIssuance" WHERE id=$1',[issuance.data.data.id])).rows[0].snapshot;
     assert.equal(snapshot.attemptAssociation.sessionId,attempt.id);
+
+    // Synthetic legacy documents are immutable stand-ins: never import production records.
+    async function makeLegacyIssuance(label: string) {
+      const id = randomUUID();
+      const verificationReference = 'synthetic-legacy-' + randomUUID();
+      const legacySnapshot = { ...snapshot };
+      delete legacySnapshot.attemptAssociation;
+      const count = await target!.query('SELECT COALESCE(MAX("issueNumber"),0)+1 AS n FROM "DmcIssuance" WHERE "resultId"=$1', [draft.id]);
+      await target!.query(
+        'INSERT INTO "DmcIssuance" ("id","resultId","documentType","resultRevision","issueNumber","certificateNumber","verificationReference","snapshot","idempotencyKey","issuedById","issuedByName") VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)',
+        [id, draft.id, 'OFFICIAL', result.resultRevision, count.rows[0].n, 'AZM-DMC-SYNTH-LEGACY-' + label, verificationReference, JSON.stringify(legacySnapshot), randomUUID(), 'SUPER_ADMIN', 'Synthetic Reviewer'],
+      );
+      await target!.query(
+        'INSERT INTO "DmcIssuanceEvent" ("id","issuanceId","eventType","actorId","actorName") VALUES ($1,$2,$3,$4,$5)',
+        [randomUUID(), id, 'ISSUED', 'SUPER_ADMIN', 'Synthetic Reviewer'],
+      );
+      return { id, verificationReference, snapshot: legacySnapshot };
+    }
+    const originalLegacy = await makeLegacyIssuance('ONE');
+    const replacePreparation = await call('POST', '/admin/' + draft.id + '/dmc/official/prepare', 'SUPER_ADMIN', { expectedRevision: result.resultRevision });
+    assert.equal(replacePreparation.status, 201);
+    // Normal issuance must not bypass the reviewed legacy supersession path.
+    const bypass = await call('POST', '/admin/' + draft.id + '/dmc/official/issue', 'SUPER_ADMIN', {
+      preparationId: replacePreparation.data.data.preparationId,
+      expectedRevision: result.resultRevision,
+      idempotencyKey: randomUUID(),
+    });
+    assert.equal(bypass.status, 409);
+    const replacementInput = {
+      preparationId: replacePreparation.data.data.preparationId,
+      expectedRevision: result.resultRevision,
+      idempotencyKey: randomUUID(),
+      attemptSessionId: attempt.id,
+      evidence: 'Synthetic signed hall roster plus examination attendance sheet checked by reviewer',
+      reason: 'Synthetic legacy certificate needed a confirmed attempt association',
+      confirmed: true,
+    };
+    const replaceRoute = '/admin/' + draft.id + '/dmc/official/' + originalLegacy.id + '/replace';
+    assert.equal((await call('POST', replaceRoute, 'ADMIN', replacementInput)).status, 403);
+    assert.equal((await call('POST', replaceRoute, 'SUPER_ADMIN', { ...replacementInput, evidence: 'short' })).status, 400);
+    assert.equal((await call('POST', replaceRoute, 'SUPER_ADMIN', { ...replacementInput, attemptSessionId: 'incorrect-attempt' })).status, 409);
+    const replaced = await call('POST', replaceRoute, 'SUPER_ADMIN', replacementInput);
+    assert.equal(replaced.status, 201, JSON.stringify(replaced.data));
+    assert.equal(replaced.data.data.originalIssuanceId, originalLegacy.id);
+    assert.equal((await call('POST', replaceRoute, 'SUPER_ADMIN', replacementInput)).data.data.id, replaced.data.data.id, 'idempotent replacement returns same certificate');
+    const oldPublic = await call('GET', '/verification/' + originalLegacy.verificationReference);
+    assert.deepEqual(oldPublic.data.data, { valid: false, status: 'SUPERSEDED', examinationTitle: null, examinationDate: null });
+    const replacementDb = await target.query('SELECT "replacementIssuanceId",evidence,reason FROM "DmcReplacement" WHERE "originalIssuanceId"=$1', [originalLegacy.id]);
+    assert.equal(replacementDb.rowCount, 1);
+    assert.equal(replacementDb.rows[0].replacementIssuanceId, replaced.data.data.id);
+    const unchangedLegacySnapshot = (await target.query('SELECT snapshot FROM "DmcIssuance" WHERE id=$1', [originalLegacy.id])).rows[0].snapshot;
+    assert.deepEqual(unchangedLegacySnapshot, originalLegacy.snapshot, 'historical snapshot must not be mutated');
+    const oldEvents = await target.query('SELECT "eventType" FROM "DmcIssuanceEvent" WHERE "issuanceId"=$1 ORDER BY "occurredAt"', [originalLegacy.id]);
+    assert.deepEqual(oldEvents.rows.map(row => row.eventType).sort(), ['ISSUED', 'SUPERSEDED']);
+    assert.equal((await call('GET', '/admin/' + draft.id + '/dmc/official/' + replaced.data.data.id, 'ADMIN')).status, 200);
+    assert.equal((await call('POST', replaceRoute, 'SUPER_ADMIN', { ...replacementInput, idempotencyKey: randomUUID() })).status, 409);
+    await assert.rejects(runtime.query('UPDATE "DmcReplacement" SET reason=$1 WHERE "originalIssuanceId"=$2', ['corrupted history', originalLegacy.id]));
+    await assert.rejects(runtime.query('DELETE FROM "DmcReplacement" WHERE "originalIssuanceId"=$1', [originalLegacy.id]));
+
+    const raceLegacy = await makeLegacyIssuance('RACE');
+    const racePrep1 = await call('POST', '/admin/' + draft.id + '/dmc/official/prepare', 'SUPER_ADMIN', { expectedRevision: result.resultRevision });
+    const racePrep2 = await call('POST', '/admin/' + draft.id + '/dmc/official/prepare', 'SUPER_ADMIN', { expectedRevision: result.resultRevision });
+    assert.equal(racePrep1.status, 201); assert.equal(racePrep2.status, 201);
+    const raceRoute = '/admin/' + draft.id + '/dmc/official/' + raceLegacy.id + '/replace';
+    const raceResults = await Promise.all([
+      call('POST', raceRoute, 'SUPER_ADMIN', { ...replacementInput, preparationId: racePrep1.data.data.preparationId, idempotencyKey: randomUUID() }),
+      call('POST', raceRoute, 'SUPER_ADMIN', { ...replacementInput, preparationId: racePrep2.data.data.preparationId, idempotencyKey: randomUUID() }),
+    ]);
+    assert.deepEqual(raceResults.map(x => x.status).sort(), [201, 409], 'exactly one concurrent replacement may succeed');
+    assert.equal((await target.query('SELECT 1 FROM "DmcReplacement" WHERE "originalIssuanceId"=$1', [raceLegacy.id])).rowCount, 1);
+
+    const rollbackLegacy = await makeLegacyIssuance('ROLLBACK');
+    await assert.rejects(
+      runtime.query(
+        'INSERT INTO "DmcReplacement" ("originalIssuanceId","replacementIssuanceId","actorId","actorName",evidence,reason) VALUES ($1,$2,$3,$4,$5,$6)',
+        [rollbackLegacy.id, issuance.data.data.id, 'SUPER_ADMIN', 'Synthetic Reviewer',
+         'Fabricated evidence for a forged relationship', 'Fabricated forced relation that must be denied'],
+      ),
+      /Invalid or incomplete DMC replacement evidence/,
+    );
+    const rollbackPreparation = await call('POST', '/admin/' + draft.id + '/dmc/official/prepare', 'SUPER_ADMIN', { expectedRevision: result.resultRevision });
+    assert.equal(rollbackPreparation.status, 201);
+    const beforeFailedReplacement = (await target.query('SELECT COUNT(*)::int AS n FROM "DmcIssuance" WHERE "resultId"=$1', [draft.id])).rows[0].n;
+    await target.query('CREATE FUNCTION public.synthetic_replacement_reject() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION \'synthetic injected failure\'; END $$');
+    await target.query('CREATE TRIGGER synthetic_replacement_reject BEFORE INSERT ON "DmcReplacement" FOR EACH ROW EXECUTE FUNCTION public.synthetic_replacement_reject()');
+    const injectedFailure = await call('POST', '/admin/' + draft.id + '/dmc/official/' + rollbackLegacy.id + '/replace', 'SUPER_ADMIN', {
+      ...replacementInput, preparationId: rollbackPreparation.data.data.preparationId, idempotencyKey: randomUUID(),
+    });
+    assert.notEqual(injectedFailure.status, 201, 'forced failure must abort the entire transaction');
+    assert.equal((await target.query('SELECT COUNT(*)::int AS n FROM "DmcIssuance" WHERE "resultId"=$1', [draft.id])).rows[0].n, beforeFailedReplacement);
+    assert.equal((await target.query('SELECT 1 FROM "DmcReplacement" WHERE "originalIssuanceId"=$1', [rollbackLegacy.id])).rowCount, 0);
+    assert.deepEqual((await target.query('SELECT "eventType" FROM "DmcIssuanceEvent" WHERE "issuanceId"=$1', [rollbackLegacy.id])).rows.map(x => x.eventType), ['ISSUED']);
+    await target.query('DROP TRIGGER synthetic_replacement_reject ON "DmcReplacement"');
+    await target.query('DROP FUNCTION public.synthetic_replacement_reject()');
+    console.log('PASS synthetic legacy DMC atomic replacement, duplicate prevention, concurrency, rollback and preserved history');
+
     const resetScope={action:'RESET',testCenterId:'synthetic-center',businessDate:'2026-11-15',sessionIds:[attempt.id],entireLineage:false,clearAllocations:false,unfreeze:false,replace:true};
     const review=await control.preview(resetScope,'SUPER_ADMIN',0);
     await control.confirm({challenge:review.challenge,reason:'Synthetic preserve official result history',confirmationText:review.phrase},'SUPER_ADMIN',0,randomUUID());

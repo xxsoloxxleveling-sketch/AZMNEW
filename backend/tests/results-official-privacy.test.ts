@@ -114,6 +114,7 @@ test('public result lookup is closed and public DMC verification is identity- an
 
   const { OfficialResultsService } = await import('../src/modules/results/official-results.service');
   let hasAttemptSnapshot = true;
+  let eventType = 'ISSUED';
   const service = new OfficialResultsService({
     dmcIssuance: {
       findUnique: async () => ({
@@ -128,7 +129,7 @@ test('public result lookup is closed and public DMC verification is identity- an
           obtainedMarks: '99',
           examination: { title: 'Synthetic Examination', examDate: new Date('2026-11-13T00:00:00Z'), publicationStatus: 'PUBLISHED' },
         },
-        events: [{ eventType: 'ISSUED' }],
+        events: [{ eventType }],
       }),
     },
   } as any);
@@ -144,4 +145,10 @@ test('public result lookup is closed and public DMC verification is identity- an
   assert.deepEqual(await service.verifyDmc('synthetic-reference'), {
     valid: false, status: 'INVALID', examinationTitle: null, examinationDate: null,
   });
+  for (const terminal of ['SUPERSEDED', 'REVOKED']) {
+    eventType = terminal;
+    assert.deepEqual(await service.verifyDmc('synthetic-reference'), {
+      valid: false, status: terminal, examinationTitle: null, examinationDate: null,
+    });
+  }
 });
