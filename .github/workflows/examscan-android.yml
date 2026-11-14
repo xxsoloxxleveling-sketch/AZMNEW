@@ -31,12 +31,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Verify preinstalled Android command-line tools
+      - name: Install Android 36 SDK via runner command-line tools
         run: |
-          command -v sdkmanager
-          sdkmanager --version
-      - name: Install Android 36 SDK and build tools
-        run: sdkmanager --install 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --version
+          "$SDKMANAGER" --install 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
       - name: Install pinned dependencies
         run: npm install --no-audit --no-fund
       - name: Validate attendance API, signed-token parsing and Google scanner bridge
