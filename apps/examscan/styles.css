@@ -51,3 +51,30 @@ h1,h2,h3,p{margin-top:0}h1,h2,h3{letter-spacing:-.034em}h1{font-size:clamp(1.45r
 .google-native-note>span{max-width:310px;line-height:1.6;color:#c4d3ed;font-size:14px}
 .google-native-stage .video-controls{z-index:4}
 .google-native-stage .video-caption{z-index:4}
+
+/* Public install page. Contains no login state or student data. */
+.install-page{min-height:100vh;background:radial-gradient(circle at 18% -8%,#dce9ff 0,transparent 48%),#f6f9ff;color:#10233e}
+.install-wrap{max-width:680px;margin:auto;padding:32px 20px 45px}
+.install-back{display:inline-flex;text-decoration:none;color:#385577;font-weight:650;font-size:.8rem;margin-bottom:33px}
+.install-back:hover{color:#1d4ed8;text-decoration:underline}
+.install-brand{display:flex;align-items:center;gap:16px;margin-bottom:30px}
+.install-brand img{border-radius:18px;box-shadow:0 15px 24px -14px #142f59}
+.install-brand h1{margin:2px 0 4px;font-size:2rem;color:#0b1528}
+.install-brand p{font-size:.83rem;color:#64748b;margin:0}
+.install-eyebrow,.install-label{font-family:var(--mono);font-size:.67rem;font-weight:800;letter-spacing:.06em;color:#2554a6}
+.install-card{border:1px solid #d7e2f3;border-radius:22px;padding:30px;background:#fff;box-shadow:0 20px 45px -33px #52688d;margin-bottom:18px}
+.install-card h2{font-size:1.38rem;margin:8px 0 10px;color:#14253d}
+.install-card p{font-size:.88rem;line-height:1.68;color:#576c85;margin:0 0 18px}
+.install-download,.install-web{display:flex;justify-content:center;align-items:center;min-height:52px;padding:12px 18px;border-radius:11px;text-align:center;text-decoration:none;font-size:.92rem;font-weight:780;transition:background .16s ease,transform .16s ease}
+.install-download{color:white;background:#164cb2;box-shadow:0 8px 20px -11px #0e40a8}
+.install-download:hover{background:#0c357e;transform:translateY(-1px)}
+.install-download:focus-visible,.install-web:focus-visible{outline:3px solid #8fb3fd;outline-offset:3px}
+.install-card .install-warning{margin:18px 0 14px;background:#fff8e8;border:1px solid #efd89e;border-radius:11px;color:#81530e;font-size:.77rem;padding:12px 14px}
+.install-card .install-fingerprint{margin:0 0 10px;font-size:.76rem;color:#334155}
+.install-fingerprint code{display:block;overflow-wrap:anywhere;font-size:.66rem;margin-top:7px;line-height:1.7;color:#234a73;background:#edf3fb;padding:8px;border-radius:7px}
+.install-card .install-verify{margin:0;font-size:.74rem;color:#64748b}
+.install-secondary{background:#fdfefe}
+.install-web{border:1px solid #bbcae2;background:#f1f5fb;color:#17447f}
+.install-web:hover{background:#e3edfc}
+.install-footer{font-size:.75rem;color:#77869c;text-align:center;line-height:1.6;margin-top:22px}
+@media(max-width:500px){.install-wrap{padding:24px 15px 32px}.install-card{padding:23px 18px}.install-brand{gap:12px}.install-brand h1{font-size:1.7rem}}
