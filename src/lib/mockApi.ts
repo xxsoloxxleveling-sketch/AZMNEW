@@ -1076,7 +1076,12 @@ export const mockApi = {
 
   // 3. Students Management
 
-  async getStudentsPage(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; studyGroupReview?: boolean; page?: number; limit?: number }): Promise<{
+  async getStudentSchoolOptions(): Promise<string[]> {
+    const names = await apiFetch<string[]>('/api/students/school-options');
+    return Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string') : [];
+  },
+
+  async getStudentsPage(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; schoolName?: string; studyGroupReview?: boolean; page?: number; limit?: number }): Promise<{
     students: MockStudent[];
     pagination: { page: number; limit: number; total: number; totalPages: number };
   }> {
@@ -1088,6 +1093,7 @@ export const mockApi = {
     if (filters?.gender && filters?.gender !== 'ALL') params.append('gender', filters.gender);
     if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
     if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
+    if (filters?.schoolName && filters.schoolName.trim()) params.append('schoolName', filters.schoolName.trim());
     const query = `?${params.toString()}`;
 
     const res: any = await apiFetch<any>(`/api/students${query}`);
@@ -1109,7 +1115,7 @@ export const mockApi = {
     };
   },
 
-  async getStudents(filters?: { classLevel?: string; gender?: string; status?: string; search?: string }): Promise<MockStudent[]> {
+  async getStudents(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; schoolName?: string }): Promise<MockStudent[]> {
     const result = await this.getStudentsPage({ ...filters, page: 1, limit: 250 });
     return result.students;
   },
@@ -1459,7 +1465,7 @@ export const mockApi = {
   },
 
   async downloadStudentsListPdf(
-    filters?: { classLevel?: string; gender?: string; status?: string; search?: string; studyGroupReview?: boolean },
+    filters?: { classLevel?: string; gender?: string; status?: string; search?: string; schoolName?: string; studyGroupReview?: boolean },
     preloadedStudents?: MockStudent[]
   ): Promise<void> {
     void preloadedStudents;
@@ -1469,6 +1475,7 @@ export const mockApi = {
     if (filters?.gender && filters.gender !== 'ALL') params.append('gender', filters.gender);
     if (filters?.status && filters.status !== 'ALL') params.append('status', filters.status);
     if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
+    if (filters?.schoolName && filters.schoolName.trim()) params.append('schoolName', filters.schoolName.trim());
 
     const suggestedFilename = `AZM-Students-${new Date().toISOString().split('T')[0]}.pdf`;
     await apiDownloadPdf(`/api/students/export-pdf?${params.toString()}`, suggestedFilename);
