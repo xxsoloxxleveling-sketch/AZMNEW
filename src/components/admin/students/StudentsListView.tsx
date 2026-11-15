@@ -136,8 +136,10 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [activeActionMenuId]);
 
+  const latestStudentFetch = React.useRef(0);
   const fetchStudents = async (showFullLoading = true) => {
     if (authLoading) return;
+    const requestId = ++latestStudentFetch.current;
     if (showFullLoading && students.length === 0) setIsLoading(true);
     setIsRefreshing(true);
     setErrorMessage(null);
@@ -155,15 +157,21 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
         }),
         mockApi.getRollNumberStatus().catch(() => null),
       ]);
+      // Older requests may complete after someone changes a school or page filter.
+      // Never replace the current list with a stale response.
+      if (requestId !== latestStudentFetch.current) return;
       setStudents(Array.isArray(data.students) ? data.students : []);
       setPagination(data.pagination);
       if (statusData) setRollStatus(statusData);
     } catch (err: any) {
+      if (requestId !== latestStudentFetch.current) return;
       console.warn('Students fetch error:', err);
       setErrorMessage(err?.message || 'Failed to retrieve students from live database.');
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (requestId === latestStudentFetch.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   };
 
