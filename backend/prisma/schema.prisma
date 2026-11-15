@@ -212,6 +212,7 @@ model Student {
   studyGroupCorrections StudentStudyGroupCorrection[]
   examinationResults ExaminationResult[]
   legacyExamResultHistory ExamLegacyResultHistory[]
+  omrProvisionalMarks OmrProvisionalMark[]
 }
 
 // Dedicated append-only correction evidence; no attendance/document audit reuse.
@@ -1085,4 +1086,43 @@ model DmcReplacement {
   originalIssuance      DmcIssuance @relation("DmcReplacementOriginal", fields: [originalIssuanceId], references: [id], onDelete: Restrict)
   replacementIssuance   DmcIssuance @relation("DmcReplacementNew", fields: [replacementIssuanceId], references: [id], onDelete: Restrict)
   reviewer              User @relation("DmcReplacementReviewer", fields: [actorId], references: [id], onDelete: Restrict)
+}
+
+
+// Candidate-facing, explicitly provisional OMR marks. Never counted as an official result.
+model OmrProvisionalMark {
+  studentId String
+  sessionReference String @default("2026-V")
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  obtainedMarks Int
+  maximumMarks Int @default(100)
+  scanSha256 String @unique
+  sourceBatchSha256 String
+  sourceFile String
+  paperVersion String
+  paperVersionStatus String
+  identityStatus String
+  printedClassDisagrees Boolean
+  manualReviewRequired Boolean @default(true)
+  reviewCategory String
+  publishedAt DateTime?
+  importedAt DateTime @default(now())
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  @@id([sessionReference, studentId])
+  @@index([sessionReference, obtainedMarks(sort: Desc)])
+  @@index([sessionReference, reviewCategory])
+}
+
+// Append-only publication audit, with no fabricated authenticated operator attribution.
+model OmrProvisionalBatchAudit {
+  id String @id
+  sessionReference String
+  sourceBatchSha256 String
+  batchSize Int
+  publishedSize Int
+  reviewRequiredCount Int
+  operatorReason String
+  operation String
+  recordedAt DateTime @default(now())
 }
