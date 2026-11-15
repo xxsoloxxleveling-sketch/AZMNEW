@@ -7,7 +7,6 @@ import {
   updateStudentSchema,
   officeUseUpdateSchema,
   studentQuerySchema,
-  provisionalOmrMarksLookupSchema,
   provisionalOmrMarkCorrectionSchema,
   selectedStudentsPdfSchema,
   uploadDocumentSchema,
@@ -19,7 +18,6 @@ import {
   uploadSessionRateLimiter,
   documentUploadRateLimiter,
   publicSlipSearchRateLimiter,
-  provisionalOmrMarksLookupRateLimiter,
 } from '../../middleware/rateLimit.middleware';
 import { Role } from '@prisma/client';
 
@@ -77,13 +75,17 @@ router.post(
 router.post('/search-registration', studentsController.findPublicRegistration);
 router.post('/public/registration/search', studentsController.findPublicRegistration);
 
-// Marks-only provisional publication. Requires BOTH the exact official roll number
-// and matching CNIC/B-Form; no public roster or ranking endpoint is exposed.
+// Emergency public publication gate: the owner requested that this lookup stay closed.
+// Keep this backend guard even if a proxy URL variant bypasses nginx.
 router.post(
   '/public/omr-marks',
-  provisionalOmrMarksLookupRateLimiter,
-  validateBody(provisionalOmrMarksLookupSchema),
-  studentsController.lookupProvisionalOmrMarks
+  (_req, res) => {
+    res.set('Cache-Control', 'private, no-store');
+    return res.status(503).json({
+      success: false,
+      error: { message: 'Public OMR marks lookup is temporarily unavailable.' },
+    });
+  }
 );
 
 // Candidate self-service uses the matching CNIC / B-Form as the verification
