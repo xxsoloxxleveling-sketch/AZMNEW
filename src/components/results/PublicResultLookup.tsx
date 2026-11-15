@@ -8,7 +8,9 @@ type LookupState = 'idle' | 'loading' | 'invalid' | 'unpublished' | 'error' | 's
 type PublicResult = (typeof PUBLIC_DEMO_LOOKUPS)[number];
 
 export function PublicResultLookup() {
-  if (import.meta.env.PROD) return <ProvisionalOmrMarksLookup />;
+  // Emergency publication gate: public provisional marks must not be shown.
+  // Admin roster remains available and stored marks are preserved.
+  if (import.meta.env.PROD) return <PublicResultsUnavailable />;
   return <DemoPublicResultLookup />;
 }
 
@@ -96,8 +98,8 @@ function PublicResultsUnavailable() {
           Results page temporarily unavailable
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-slate-600">
-          Due to unusually high traffic, access to the Results page is temporarily limited.
-          Please check back in a little while.
+          Public results and provisional marks lookup have been temporarily disabled while the examination records are reviewed.
+          This does not affect student registrations or existing records.
         </p>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">
           Thank you for your patience. There is no need to refresh repeatedly.
