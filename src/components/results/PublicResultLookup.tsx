@@ -14,16 +14,26 @@ export function PublicResultLookup() {
 
 function PublicResultsUnavailable() {
   return (
-    <main className="mx-auto max-w-4xl space-y-5 px-4 py-7 sm:px-6">
-      <div className="border-b border-slate-200 pb-4">
-        <p className="text-xs font-semibold text-[#185b9d]">Public student service</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Examination Results</h1>
-        <p className="mt-2 text-sm text-slate-600">Results are coming soon.</p>
-      </div>
-      <div role="status" className="border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        <h2 className="font-semibold">Results coming soon</h2>
-        <p className="mt-1 text-xs leading-5">Examination results have not been published yet. Once evaluation and verification are complete, you can check your result here.</p>
-      </div>
+    <main className="mx-auto flex min-h-[60vh] max-w-4xl items-center justify-center px-4 py-12 sm:px-6">
+      <section role="status" aria-live="polite" className="w-full rounded-2xl border border-amber-200 bg-white px-6 py-10 text-center shadow-sm sm:px-12 sm:py-14">
+        <div aria-hidden="true" className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+          <AlertCircle size={32} strokeWidth={1.8} />
+        </div>
+        <p className="mt-6 text-xs font-bold uppercase tracking-widest text-[#185b9d]">AZM.AIO · Examination Results</p>
+        <h1 className="mx-auto mt-3 max-w-2xl text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          Results page temporarily unavailable
+        </h1>
+        <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-slate-600">
+          Due to unusually high traffic, access to the Results page is temporarily limited.
+          Please check back in a little while.
+        </p>
+        <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">
+          Thank you for your patience. There is no need to refresh repeatedly.
+        </p>
+        <a href="/#home" className="mt-8 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#185b9d] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#13497e] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+          Return to homepage
+        </a>
+      </section>
     </main>
   );
 }
