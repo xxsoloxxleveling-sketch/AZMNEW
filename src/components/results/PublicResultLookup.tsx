@@ -12,7 +12,7 @@ export function PublicResultLookup() {
   return <DemoPublicResultLookup />;
 }
 
-type ProvisionalMark = { rollNumber: string; obtainedMarks: number; maximumMarks: number; status: 'PROVISIONAL'; notice: string };
+type ProvisionalMark = { rollNumber: string; obtainedMarks: number; maximumMarks: number; status: 'PROVISIONAL'; notice: string; reviewPending?: boolean; paperVersionProvisional?: boolean };
 
 function ProvisionalOmrMarksLookup() {
   const [rollNumber, setRollNumber] = useState('');
@@ -77,6 +77,7 @@ function ProvisionalOmrMarksLookup() {
           <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Provisional OMR marks · Not official</p>
           <h2 className="mt-2 text-lg font-semibold text-slate-900">Roll: {mark.rollNumber}</h2>
           <p className="mt-4 text-4xl font-bold tabular-nums text-[#185b9d]">{mark.obtainedMarks} <span className="text-lg font-medium text-slate-500">/ {mark.maximumMarks}</span></p>
+          {mark.reviewPending && <p role="status" className="mt-3 text-sm font-semibold text-amber-800">Identity or class review pending · Do not treat this score as final.</p>}
           <p className="mt-3 text-sm text-slate-600">{mark.notice}</p>
         </section>}
       </div>
