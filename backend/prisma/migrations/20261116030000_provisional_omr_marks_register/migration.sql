@@ -63,7 +63,7 @@ DO $$
 DECLARE r RECORD;
 BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN
-    ('azm_app_dml', 'azm_app_readonly', 'azm_app_runtime') LOOP
+    ('azm_app_dml', 'azm_runtime', 'student_app') LOOP
     EXECUTE format('GRANT SELECT ON public."OmrProvisionalMark" TO %I', r.rolname);
   END LOOP;
 END $$;
