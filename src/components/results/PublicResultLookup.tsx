@@ -8,8 +8,80 @@ type LookupState = 'idle' | 'loading' | 'invalid' | 'unpublished' | 'error' | 's
 type PublicResult = (typeof PUBLIC_DEMO_LOOKUPS)[number];
 
 export function PublicResultLookup() {
-  if (import.meta.env.PROD) return <PublicResultsUnavailable />;
+  if (import.meta.env.PROD) return <ProvisionalOmrMarksLookup />;
   return <DemoPublicResultLookup />;
+}
+
+type ProvisionalMark = { rollNumber: string; obtainedMarks: number; maximumMarks: number; status: 'PROVISIONAL'; notice: string };
+
+function ProvisionalOmrMarksLookup() {
+  const [rollNumber, setRollNumber] = useState('');
+  const [cnic, setCnic] = useState('');
+  const [state, setState] = useState<'idle' | 'loading' | 'unavailable' | 'error' | 'success'>('idle');
+  const [mark, setMark] = useState<ProvisionalMark | null>(null);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (state === 'loading') return;
+    setMark(null);
+    setState('loading');
+    try {
+      const response = await fetch('/api/students/public/omr-marks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        cache: 'no-store',
+        credentials: 'omit',
+        body: JSON.stringify({ rollNumber: rollNumber.trim(), cnic: cnic.trim() }),
+      });
+      if (!response.ok) { setState('error'); return; }
+      const result = await response.json() as { success?: boolean; found?: boolean; data?: ProvisionalMark };
+      if (!result.success || !result.found || !result.data) { setState('unavailable'); return; }
+      setMark(result.data);
+      setState('success');
+    } catch {
+      setState('error');
+    }
+  };
+
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+      <header className="border-b border-slate-200 pb-6">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#185b9d]">AZM.AIO · Session V 2026</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">Check OMR marks</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Use your official roll number and registered CNIC / B-Form to check the marks recorded so far.
+        </p>
+      </header>
+      <section className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950" role="note">
+        These are <strong>provisional OMR marks</strong>, not an official verified examination result or DMC.
+        Some answer sheets are still under review. No ranking or qualification decision is being announced here.
+      </section>
+      <form onSubmit={submit} className="mt-7 grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+          Official roll number
+          <input required autoComplete="off" maxLength={64} value={rollNumber} onChange={(event) => { setRollNumber(event.target.value); setState('idle'); setMark(null); }} placeholder="AZMVS-2026-0001" className="min-h-11 rounded-md border border-slate-300 px-3 py-2 font-normal focus:border-[#185b9d] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+        </label>
+        <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+          CNIC / B-Form as registered
+          <input required autoComplete="off" maxLength={24} value={cnic} onChange={(event) => { setCnic(event.target.value); setState('idle'); setMark(null); }} placeholder="Enter CNIC / B-Form" className="min-h-11 rounded-md border border-slate-300 px-3 py-2 font-normal focus:border-[#185b9d] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+        </label>
+        <button type="submit" disabled={state === 'loading'} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#185b9d] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#13497e] disabled:opacity-60">
+          {state === 'loading' ? <><LoaderCircle size={16} className="animate-spin" /> Checking marks…</> : 'View my marks'}
+        </button>
+        <p className="text-xs text-slate-500">Your identifiers are submitted securely and are not placed in a website URL.</p>
+      </form>
+      <div aria-live="polite" className="mt-5">
+        {state === 'unavailable' && <Message tone="notice" title="Marks not available">No published provisional marks match those details yet. Please verify your roll number and CNIC / B-Form.</Message>}
+        {state === 'error' && <Message tone="error" title="Lookup unavailable">The request could not be completed. Please try again later.</Message>}
+        {state === 'success' && mark && <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Provisional OMR marks · Not official</p>
+          <h2 className="mt-2 text-lg font-semibold text-slate-900">Roll: {mark.rollNumber}</h2>
+          <p className="mt-4 text-4xl font-bold tabular-nums text-[#185b9d]">{mark.obtainedMarks} <span className="text-lg font-medium text-slate-500">/ {mark.maximumMarks}</span></p>
+          <p className="mt-3 text-sm text-slate-600">{mark.notice}</p>
+        </section>}
+      </div>
+    </main>
+  );
 }
 
 function PublicResultsUnavailable() {
