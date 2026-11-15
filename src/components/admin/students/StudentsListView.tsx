@@ -28,6 +28,7 @@ import { AdminWalkInModal } from './AdminWalkInModal';
 import { StudentDetailView } from './StudentDetailView';
 import { RollSlipPreviewModal } from './RollSlipPreviewModal';
 import { StudentOmrModal } from './StudentOmrModal';
+import { ProvisionalMarksEditorDialog } from './ProvisionalMarksEditorDialog';
 import { BulkPrintModal } from './BulkPrintModal';
 import { useAuth } from '../../../lib/authContext';
 import { apiFetchProtectedObjectUrl } from '../../../lib/apiClient';
@@ -98,6 +99,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [slipStudent, setSlipStudent] = useState<MockStudent | null>(null);
   const [omrStudent, setOmrStudent] = useState<MockStudent | null>(null);
+  const [editingMarksStudent, setEditingMarksStudent] = useState<MockStudent | null>(null);
   const [bulkPrintType, setBulkPrintType] = useState<'OMR' | 'ROLL_SLIP' | null>(null);
   const [studentToEdit, setStudentToEdit] = useState<MockStudent | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -985,13 +987,31 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                           </span>
                         </td>
 
-                        {/* Recorded score; legacy marks are not an official verification. */}
-                        <td className="py-3.5 px-4">
-                          {student.testScore !== null && student.testScore !== undefined ? (
-                            <span className="font-semibold text-slate-800 tabular-nums text-xs">{student.testScore} / 100</span>
-                          ) : (
-                            <span className="text-xs text-slate-400">Not uploaded</span>
-                          )}
+                        {/* Provisional OMR score. Only SUPER_ADMIN can correct it. */}
+                        <td className="py-3.5 px-4" onClick={(event) => event.stopPropagation()}>
+                          <div className="flex items-center gap-2">
+                            {student.testScore !== null && student.testScore !== undefined ? (
+                              <div className="leading-tight">
+                                <span className="font-semibold text-slate-800 tabular-nums text-xs">{student.testScore} / 100</span>
+                                {student.provisionalOmr && <span className="block text-[10px] font-medium text-amber-800">
+                                  Provisional{student.provisionalOmr.manuallyCorrected ? ' · Corrected' : ''}
+                                </span>}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">Not uploaded</span>
+                            )}
+                            {role === 'SUPER_ADMIN' && student.provisionalOmr && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingMarksStudent(student)}
+                                title={`Edit provisional marks for ${student.fullName}`}
+                                aria-label={`Edit provisional marks for ${student.fullName}`}
+                                className="inline-flex items-center gap-1 rounded-md border border-blue-200 px-2 py-1 text-[11px] font-semibold text-[#185b9d] hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-[#185b9d]"
+                              >
+                                <IconEditStudent size={12} aria-hidden="true" /> Edit
+                              </button>
+                            )}
+                          </div>
                         </td>
 
                         {/* Fee Status: Semantic Badge */}
@@ -1128,7 +1148,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                         <div className="flex items-center justify-between gap-1.5">
                           <span className="font-bold text-slate-900 text-xs truncate">{student.fullName}</span>
                           <span className="text-[11px] font-semibold tabular-nums text-slate-700">
-                            {student.testScore !== null && student.testScore !== undefined ? `${student.testScore} / 100` : 'Marks pending'}
+                            {student.testScore !== null && student.testScore !== undefined ? `${student.testScore} / 100${student.provisionalOmr ? ' · Provisional' : ''}` : 'Marks pending'}
                           </span>
                         </div>
                         <span className="text-[11px] text-slate-500 block truncate">S/D/O {student.fatherName}</span>
@@ -1185,6 +1205,15 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                         >
                           View Profile
                         </button>
+                        {role === 'SUPER_ADMIN' && student.provisionalOmr && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingMarksStudent(student)}
+                            className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-[#185b9d] hover:bg-blue-50"
+                          >
+                            <IconEditStudent size={13} aria-hidden="true" /> Edit marks
+                          </button>
+                        )}
 
                         {!wa.isDisabled && wa.url && (
                           <button
@@ -1316,6 +1345,14 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
               setSelectedStudent(updatedStudent);
             }
           }}
+        />
+      )}
+
+      {role === 'SUPER_ADMIN' && editingMarksStudent && (
+        <ProvisionalMarksEditorDialog
+          student={editingMarksStudent}
+          onClose={() => setEditingMarksStudent(null)}
+          onSaved={() => fetchStudents(false)}
         />
       )}
 
