@@ -22,6 +22,7 @@ import {
   MAX_FILE_SIZE_BYTES,
 } from './students.schema';
 import { AppError } from '../../middleware/error.middleware';
+import { buildStudentDirectoryTextCondition, buildStudentSchoolCondition } from './studentDirectoryFilters';
 
 export function buildIssuedAttendanceQrPayload(student: { rollNumber?: string | null; qrToken?: string | null }): string {
   if (!student.rollNumber || typeof student.qrToken !== 'string'
@@ -1700,18 +1701,10 @@ export class StudentsService {
       }
     }
 
-    if (query.search && query.search.trim()) {
-      const s = query.search.trim();
-      conditions.push({
-        OR: [
-          { fullName: { contains: s, mode: 'insensitive' } },
-          { rollNumber: { contains: s, mode: 'insensitive' } },
-          { cnicOrBForm: { contains: s, mode: 'insensitive' } },
-          { applicationNo: { contains: s, mode: 'insensitive' } },
-          { fatherName: { contains: s, mode: 'insensitive' } },
-        ],
-      });
-    }
+    const textCondition = buildStudentDirectoryTextCondition(query.search);
+    if (textCondition) conditions.push(textCondition);
+    const schoolCondition = buildStudentSchoolCondition(query.schoolName);
+    if (schoolCondition) conditions.push(schoolCondition);
 
     const where: any = conditions.length > 0 ? { AND: conditions } : {};
 
@@ -1795,6 +1788,25 @@ export class StudentsService {
         totalPages: Math.ceil(total / limit) || 1,
       },
     };
+  }
+
+  // Authenticated school-name suggestions only. No student identity or contact data is returned.
+  async getSchoolOptions(): Promise<string[]> {
+    const rows = await prisma.student.findMany({
+      where: { schoolName: { not: '' } },
+      select: { schoolName: true },
+      distinct: ['schoolName'],
+      orderBy: { schoolName: 'asc' },
+      take: 1500,
+    });
+    const normalized = new Map<string, string>();
+    for (const row of rows) {
+      const name = row.schoolName.trim();
+      if (name && !normalized.has(name.toLocaleLowerCase('en'))) {
+        normalized.set(name.toLocaleLowerCase('en'), name);
+      }
+    }
+    return [...normalized.values()].sort((a, b) => a.localeCompare(b, 'en'));
   }
 
   async getDocumentMetadata(query: { page?: string; limit?: string; studentId?: string }) {
@@ -1969,18 +1981,10 @@ th:nth-child(10){width:7%}th:nth-child(11){width:8%}
       }
     }
 
-    if (query.search && query.search.trim()) {
-      const s = query.search.trim();
-      conditions.push({
-        OR: [
-          { fullName: { contains: s, mode: 'insensitive' } },
-          { rollNumber: { contains: s, mode: 'insensitive' } },
-          { cnicOrBForm: { contains: s, mode: 'insensitive' } },
-          { applicationNo: { contains: s, mode: 'insensitive' } },
-          { fatherName: { contains: s, mode: 'insensitive' } },
-        ],
-      });
-    }
+    const textCondition = buildStudentDirectoryTextCondition(query.search);
+    if (textCondition) conditions.push(textCondition);
+    const schoolCondition = buildStudentSchoolCondition(query.schoolName);
+    if (schoolCondition) conditions.push(schoolCondition);
 
     const where: any = conditions.length > 0 ? { AND: conditions } : {};
 
