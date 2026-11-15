@@ -163,6 +163,7 @@ export const studentQuerySchema = z.object({
   studyGroupReview: z.enum(['true', 'false']).optional(),
   search: z.string().optional(),
   schoolName: z.string().trim().max(120, 'School search is too long').optional(),
+  marksSort: z.enum(['asc', 'desc']).optional(),
   classLevel: z.string().optional(),
   status: z
     .string()
