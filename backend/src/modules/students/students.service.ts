@@ -1676,6 +1676,43 @@ export class StudentsService {
     };
   }
 
+  /** Public provisional marks lookup. Neither a result roster nor an official DMC endpoint. */
+  async lookupProvisionalOmrMarks(rawRoll: string, rawCnic: string) {
+    const roll = rawRoll.trim();
+    const cnic = rawCnic.trim();
+    const digits = cnic.replace(/\D/g, '');
+    const unavailable = { success: true, found: false, message: 'Marks are not available for those details.' };
+    if (digits.length < 5 || !roll) return unavailable;
+    const formatted = digits.length === 13
+      ? `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`
+      : null;
+    const student = await prisma.student.findFirst({
+      where: {
+        rollNumber: { equals: roll, mode: 'insensitive' },
+        OR: [
+          { cnicOrBForm: { equals: cnic } },
+          { cnicOrBForm: { equals: digits } },
+          ...(formatted ? [{ cnicOrBForm: { equals: formatted } }] : []),
+        ],
+      },
+      select: { rollNumber: true, testScore: true },
+    });
+    // Do not distinguish invalid identity from a student whose score is absent.
+    if (!student || student.testScore === null || student.testScore === undefined ||
+        student.testScore < 0 || student.testScore > 100) return unavailable;
+    return {
+      success: true,
+      found: true,
+      data: {
+        rollNumber: student.rollNumber,
+        obtainedMarks: student.testScore,
+        maximumMarks: 100,
+        status: 'PROVISIONAL' as const,
+        notice: 'Provisional OMR marks only. Not an officially verified result or DMC.',
+      },
+    };
+  }
+
   /**
    * Retrieves paginated list of students with search & filter options.
    */
