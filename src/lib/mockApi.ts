@@ -81,6 +81,7 @@ export interface MockStudent {
   qrToken: string;
   qrImageUrl?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'PASSED_OUT' | 'EXPELLED';
+  testScore?: number | null; // Recorded score, not an official verified result.
   createdAt: string;
   attendancePercentage?: number;
   feeStatus?: 'PAID' | 'PARTIAL' | 'UNPAID' | 'OVERDUE';
@@ -1081,7 +1082,7 @@ export const mockApi = {
     return Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string') : [];
   },
 
-  async getStudentsPage(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; schoolName?: string; studyGroupReview?: boolean; page?: number; limit?: number }): Promise<{
+  async getStudentsPage(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; schoolName?: string; marksSort?: 'asc' | 'desc'; studyGroupReview?: boolean; page?: number; limit?: number }): Promise<{
     students: MockStudent[];
     pagination: { page: number; limit: number; total: number; totalPages: number };
   }> {
@@ -1094,6 +1095,7 @@ export const mockApi = {
     if (filters?.status && filters?.status !== 'ALL') params.append('status', filters.status);
     if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
     if (filters?.schoolName && filters.schoolName.trim()) params.append('schoolName', filters.schoolName.trim());
+    if (filters?.marksSort) params.append('marksSort', filters.marksSort);
     const query = `?${params.toString()}`;
 
     const res: any = await apiFetch<any>(`/api/students${query}`);
