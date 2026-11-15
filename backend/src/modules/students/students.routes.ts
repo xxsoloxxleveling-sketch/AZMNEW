@@ -7,6 +7,7 @@ import {
   updateStudentSchema,
   officeUseUpdateSchema,
   studentQuerySchema,
+  provisionalOmrMarksLookupSchema,
   selectedStudentsPdfSchema,
   uploadDocumentSchema,
 } from './students.schema';
@@ -17,6 +18,7 @@ import {
   uploadSessionRateLimiter,
   documentUploadRateLimiter,
   publicSlipSearchRateLimiter,
+  provisionalOmrMarksLookupRateLimiter,
 } from '../../middleware/rateLimit.middleware';
 import { Role } from '@prisma/client';
 
@@ -73,6 +75,15 @@ router.post(
 // Public Candidate Registration Search Endpoint (POST body: applicationNo, cnic)
 router.post('/search-registration', studentsController.findPublicRegistration);
 router.post('/public/registration/search', studentsController.findPublicRegistration);
+
+// Marks-only provisional publication. Requires BOTH the exact official roll number
+// and matching CNIC/B-Form; no public roster or ranking endpoint is exposed.
+router.post(
+  '/public/omr-marks',
+  provisionalOmrMarksLookupRateLimiter,
+  validateBody(provisionalOmrMarksLookupSchema),
+  studentsController.lookupProvisionalOmrMarks
+);
 
 // Candidate self-service uses the matching CNIC / B-Form as the verification
 // secret. Private staff routes below remain authenticated.

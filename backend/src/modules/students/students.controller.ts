@@ -560,6 +560,20 @@ export class StudentsController {
     }
   }
 
+  async lookupProvisionalOmrMarks(req: Request, res: Response, next: NextFunction) {
+    try {
+      res.set('Cache-Control', 'private, no-store, max-age=0');
+      res.set('Pragma', 'no-cache');
+      const result = await studentsService.lookupProvisionalOmrMarks(
+        req.body.rollNumber,
+        req.body.cnic,
+      );
+      return res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async searchPublicSlip(req: Request, res: Response, next: NextFunction) {
     try {
       const query = String(req.body?.query || req.body?.rollNo || req.body?.applicationNo || '').trim();

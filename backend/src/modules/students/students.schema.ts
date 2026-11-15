@@ -159,10 +159,17 @@ export const selectedStudentsPdfSchema = z.object({
     .refine((ids) => new Set(ids).size === ids.length, 'Student IDs must be unique'),
 }).strict();
 
+// Public marks-only access uses two matching identifiers and never discloses a student roster.
+export const provisionalOmrMarksLookupSchema = z.object({
+  rollNumber: z.string().trim().min(6).max(64).regex(/^[A-Za-z0-9_-]+$/),
+  cnic: z.string().trim().min(5).max(24).regex(/^[0-9\s-]+$/),
+}).strict();
+
 export const studentQuerySchema = z.object({
   studyGroupReview: z.enum(['true', 'false']).optional(),
   search: z.string().optional(),
   schoolName: z.string().trim().max(120, 'School search is too long').optional(),
+  marksSort: z.enum(['asc', 'desc']).optional(),
   classLevel: z.string().optional(),
   status: z
     .string()

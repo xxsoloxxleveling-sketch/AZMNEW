@@ -73,3 +73,16 @@ export const publicSlipSearchRateLimiter = rateLimit({
   },
 });
 
+
+
+/** Restrictive, public roll+CNIC-only provisional mark lookup. Never list marks or accept wildcard searches. */
+export const provisionalOmrMarksLookupRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { message: 'Too many mark lookups. Please wait 15 minutes before trying again.' },
+  },
+});
