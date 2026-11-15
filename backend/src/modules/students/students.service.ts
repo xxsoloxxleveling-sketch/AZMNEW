@@ -23,6 +23,7 @@ import {
 } from './students.schema';
 import { AppError } from '../../middleware/error.middleware';
 import { buildStudentDirectoryTextCondition, buildStudentSchoolCondition } from './studentDirectoryFilters';
+import { findPublishedProvisionalMarks, sortProvisionalStudentIds } from './provisionalOmrMarks';
 
 export function buildIssuedAttendanceQrPayload(student: { rollNumber?: string | null; qrToken?: string | null }): string {
   if (!student.rollNumber || typeof student.qrToken !== 'string'
@@ -1695,20 +1696,26 @@ export class StudentsService {
           ...(formatted ? [{ cnicOrBForm: { equals: formatted } }] : []),
         ],
       },
-      select: { rollNumber: true, testScore: true },
+      select: { id: true, rollNumber: true },
     });
-    // Do not distinguish invalid identity from a student whose score is absent.
-    if (!student || student.testScore === null || student.testScore === undefined ||
-        student.testScore < 0 || student.testScore > 100) return unavailable;
+    // Missing marks and mismatched credentials are indistinguishable to the caller.
+    if (!student) return unavailable;
+    const mark = (await findPublishedProvisionalMarks([student.id])).get(student.id);
+    if (!mark) return unavailable;
+    const reviewPending = mark.reviewCategory.startsWith('HOLD_');
     return {
       success: true,
       found: true,
       data: {
         rollNumber: student.rollNumber,
-        obtainedMarks: student.testScore,
+        obtainedMarks: mark.obtainedMarks,
         maximumMarks: 100,
         status: 'PROVISIONAL' as const,
-        notice: 'Provisional OMR marks only. Not an officially verified result or DMC.',
+        reviewPending,
+        paperVersionProvisional: mark.paperVersionStatus !== 'CONFIDENT_SINGLE',
+        notice: reviewPending
+          ? 'Provisional OMR mark, with candidate identity or printed-class review still pending. This mark may change.'
+          : 'Provisional OMR mark. Paper-version and scanning reviews may still change the score. Not an official result or DMC.',
       },
     };
   }
@@ -1751,18 +1758,25 @@ export class StudentsService {
       where.AND = [...conditions, { id: { in: ids } }];
     }
 
-    // Sort before pagination so high/low marks cover the entire filtered roster.
-    // Legacy Student.testScore is a recorded mark, not an official verified result.
-    const marksOrderBy = query.marksSort
-      ? [{ testScore: { sort: query.marksSort, nulls: 'last' as const } }, { id: 'asc' as const }]
-      : [{ createdAt: 'desc' as const }, { id: 'asc' as const }];
+    // The separate OMR register is the source of provisional marks.
+    // Sort the complete filtered roster before pagination; never sort only 20 visible rows.
+    let allPageMarkMap: Awaited<ReturnType<typeof findPublishedProvisionalMarks>> | null = null;
+    let orderedPageIds: string[] | null = null;
+    let sortedTotal: number | null = null;
+    if (query.marksSort) {
+      const rosterIds = (await prisma.student.findMany({ where, select: { id: true } })).map(student => student.id);
+      allPageMarkMap = await findPublishedProvisionalMarks(rosterIds);
+      const allSortedIds = sortProvisionalStudentIds(rosterIds, allPageMarkMap, query.marksSort);
+      sortedTotal = rosterIds.length;
+      orderedPageIds = allSortedIds.slice(skip, skip + limit);
+    }
 
     const listStudents = (includeDocumentMetadata: boolean) =>
       prisma.student.findMany({
-        where,
-        skip,
+        where: orderedPageIds !== null ? { AND: [where, { id: { in: orderedPageIds } }] } : where,
+        skip: orderedPageIds !== null ? 0 : skip,
         take: limit,
-        orderBy: marksOrderBy,
+        orderBy: orderedPageIds !== null ? { id: 'asc' as const } : { createdAt: 'desc' as const },
         select: {
           id: true,
           applicationNo: true,
@@ -1819,12 +1833,30 @@ export class StudentsService {
       [students, total] = await Promise.all([listStudents(false), prisma.student.count({ where })]);
     }
 
+    const displayed = orderedPageIds !== null
+      ? orderedPageIds.flatMap(id => {
+          const student = students.find(candidate => candidate.id === id);
+          return student ? [student] : [];
+        })
+      : students;
+    const markMap = allPageMarkMap ?? await findPublishedProvisionalMarks(displayed.map(student => student.id));
+    if (sortedTotal !== null) total = sortedTotal;
+
     return {
-      students: students.map((s) => ({
-        ...this.formatStudentWithDocuments(s),
-        // List responses intentionally never retrieve or serialize file bytes.
-        photoUrl: null,
-      })),
+      students: displayed.map((s) => {
+        const provisional = markMap.get(s.id);
+        return {
+          ...this.formatStudentWithDocuments(s),
+          testScore: provisional?.obtainedMarks ?? s.testScore,
+          provisionalOmr: provisional ? {
+            reviewCategory: provisional.reviewCategory,
+            identityStatus: provisional.identityStatus,
+            paperVersionStatus: provisional.paperVersionStatus,
+          } : null,
+          // List responses intentionally never retrieve or serialize file bytes.
+          photoUrl: null,
+        };
+      }),
       pagination: {
         page,
         limit,
