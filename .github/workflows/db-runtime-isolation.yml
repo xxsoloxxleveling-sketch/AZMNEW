@@ -83,6 +83,9 @@ jobs:
       - name: Verify searchable student school filters without database writes
         working-directory: backend
         run: node node_modules/tsx/dist/cli.mjs --test tests/students-school-filter.test.ts
+      - name: Verify recorded marks sorting query contract
+        working-directory: backend
+        run: node node_modules/tsx/dist/cli.mjs --test tests/students-marks-sort.test.ts
       - name: Verify read-only Results API and unpublished public routes
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/results-readonly.test.ts
