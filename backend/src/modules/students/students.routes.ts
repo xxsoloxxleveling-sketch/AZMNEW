@@ -117,6 +117,13 @@ router.get(
   studentsController.getAll
 );
 
+// School names are derived from the authenticated roster, not the public partner directory.
+// Register before '/:id' so this route cannot be mistaken for a student ID.
+router.get(
+  '/school-options',
+  studentsController.getSchoolOptions
+);
+
 router.get(
   '/documents',
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),

@@ -3,6 +3,7 @@ import { resolveHsscGroup, getStudyClassLabel } from '../../../utils/hsscGroup';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search as IconSearch,
+  School as IconSchool,
   ChevronLeft as IconChevronLeft,
   ChevronRight as IconChevronRight,
   ChevronsUpDown as IconChevronsUpDown,
@@ -58,6 +59,9 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   const [genderFilter, setGenderFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [schoolFilter, setSchoolFilter] = useState('');
+  const [debouncedSchoolFilter, setDebouncedSchoolFilter] = useState('');
+  const [schoolOptions, setSchoolOptions] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_STUDENTS_PER_PAGE);
   const compactListMode = pageSize > 20;
@@ -101,6 +105,26 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   // Row action menu dropdown tracking
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
+  // School filtering uses the live database so results include every page, not just visible rows.
+  // Debounce typing to avoid a query for each keystroke on busy days.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSchoolFilter(schoolFilter.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [schoolFilter]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+    const refresh = () => {
+      void mockApi.getStudentSchoolOptions()
+        .then((names) => { if (!cancelled) setSchoolOptions(names); })
+        .catch(() => { if (!cancelled) setSchoolOptions([]); });
+    };
+    refresh();
+    window.addEventListener('students-updated', refresh);
+    return () => { cancelled = true; window.removeEventListener('students-updated', refresh); };
+  }, [authLoading]);
+
   // Close active action menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -112,8 +136,10 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [activeActionMenuId]);
 
+  const latestStudentFetch = React.useRef(0);
   const fetchStudents = async (showFullLoading = true) => {
     if (authLoading) return;
+    const requestId = ++latestStudentFetch.current;
     if (showFullLoading && students.length === 0) setIsLoading(true);
     setIsRefreshing(true);
     setErrorMessage(null);
@@ -125,20 +151,27 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
           gender: genderFilter,
           status: statusFilter,
           search: searchQuery,
+          schoolName: debouncedSchoolFilter,
           page: currentPage,
           limit: pageSize,
         }),
         mockApi.getRollNumberStatus().catch(() => null),
       ]);
+      // Older requests may complete after someone changes a school or page filter.
+      // Never replace the current list with a stale response.
+      if (requestId !== latestStudentFetch.current) return;
       setStudents(Array.isArray(data.students) ? data.students : []);
       setPagination(data.pagination);
       if (statusData) setRollStatus(statusData);
     } catch (err: any) {
+      if (requestId !== latestStudentFetch.current) return;
       console.warn('Students fetch error:', err);
       setErrorMessage(err?.message || 'Failed to retrieve students from live database.');
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (requestId === latestStudentFetch.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   };
 
@@ -153,6 +186,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
           gender: genderFilter,
           status: statusFilter,
           search: searchQuery,
+          schoolName: debouncedSchoolFilter,
         },
         students
       );
@@ -214,13 +248,13 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
     if (!authLoading) {
       fetchStudents(students.length === 0);
     }
-  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize, studyGroupReview]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, debouncedSchoolFilter, currentPage, pageSize, studyGroupReview]);
 
   useEffect(() => {
     const refresh = () => { void fetchStudents(); };
     window.addEventListener('students-updated', refresh);
     return () => window.removeEventListener('students-updated', refresh);
-  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize, studyGroupReview]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, debouncedSchoolFilter, currentPage, pageSize, studyGroupReview]);
 
   useEffect(() => {
     const request = initialStudentResultsProfile;
@@ -244,7 +278,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   // Reset selection whenever paging or filters change so hidden candidates are never approved accidentally.
   useEffect(() => {
     setSelectedStudentIds([]);
-  }, [classFilter, genderFilter, statusFilter, searchQuery, currentPage, pageSize, studyGroupReview]);
+  }, [classFilter, genderFilter, statusFilter, searchQuery, schoolFilter, currentPage, pageSize, studyGroupReview]);
 
   // Fetch thumbnails only for smaller pages. Large page sizes use compact list mode
   // to avoid dozens/hundreds of protected image requests and object URLs.
@@ -580,7 +614,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
               <input
                 type="text"
                 id="student-directory-search"
-                placeholder="Search name, roll, or CNIC..."
+                placeholder="Search name, roll, CNIC, or school..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -588,6 +622,25 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                 }}
                 className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#185b9d] transition h-9"
               />
+            </div>
+
+            <div className="relative min-w-0 w-full sm:min-w-[200px] max-w-xs">
+              <label htmlFor="student-school-filter" className="sr-only">Filter students by school or college</label>
+              <IconSchool size={16} className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                id="student-school-filter"
+                type="search"
+                list="student-school-options"
+                maxLength={120}
+                autoComplete="off"
+                placeholder="Filter by school / college..."
+                value={schoolFilter}
+                onChange={(e) => { setSchoolFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#185b9d] transition h-9"
+              />
+              <datalist id="student-school-options">
+                {schoolOptions.map((name) => <option key={name} value={name} />)}
+              </datalist>
             </div>
 
             <select
@@ -632,7 +685,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
 
             <button
               onClick={handleExportPdf}
-              disabled={anyPdfExporting}
+              disabled={anyPdfExporting || schoolFilter.trim() !== debouncedSchoolFilter}
               className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 h-9"
               title="Download filtered candidate roster PDF (up to 250 matching students)"
             >
@@ -818,6 +871,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                       <IconChevronsUpDown size={12} className="text-slate-400" />
                     </div>
                   </th>
+                  <th className="py-3.5 px-4">School / College</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">Fee Status</th>
                   <th className="py-3.5 px-4">Assigned Seating</th>
@@ -908,6 +962,13 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                               {(student.scholarshipCategory || 'GENERAL_MERIT').replace(/_/g, ' ')}
                             </span>
                           </div>
+                        </td>
+
+                        {/* Stored school name, which is also searchable across the full server roster. */}
+                        <td className="py-3.5 px-4">
+                          <span className="block max-w-[200px] truncate text-xs text-slate-700" title={student.schoolName || ''}>
+                            {student.schoolName || 'Not recorded'}
+                          </span>
                         </td>
 
                         {/* Status */}
@@ -1080,6 +1141,12 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                         )}
                       </div>
                     </div>
+
+                    {student.schoolName && (
+                      <div className="text-[11px] text-slate-500 truncate" title={student.schoolName}>
+                        School: <span className="font-medium text-slate-700">{student.schoolName}</span>
+                      </div>
+                    )}
 
                     {/* Line 3: Seating & Bottom Action Bar */}
                     <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-50 text-xs">

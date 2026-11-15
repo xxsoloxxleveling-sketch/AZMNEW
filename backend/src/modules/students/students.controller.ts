@@ -148,6 +148,16 @@ export class StudentsController {
     }
   }
 
+  async getSchoolOptions(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const names = await studentsService.getSchoolOptions();
+      res.set('Cache-Control', 'private, no-store');
+      res.status(200).json({ success: true, data: names });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getDocumentMetadata(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await studentsService.getDocumentMetadata(req.query as any);

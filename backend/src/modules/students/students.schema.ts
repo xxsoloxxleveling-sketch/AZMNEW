@@ -162,6 +162,7 @@ export const selectedStudentsPdfSchema = z.object({
 export const studentQuerySchema = z.object({
   studyGroupReview: z.enum(['true', 'false']).optional(),
   search: z.string().optional(),
+  schoolName: z.string().trim().max(120, 'School search is too long').optional(),
   classLevel: z.string().optional(),
   status: z
     .string()
