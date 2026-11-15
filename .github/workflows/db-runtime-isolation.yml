@@ -86,6 +86,9 @@ jobs:
       - name: Verify recorded marks sorting query contract
         working-directory: backend
         run: node node_modules/tsx/dist/cli.mjs --test tests/students-marks-sort.test.ts
+      - name: Verify Super Admin provisional marks editor schema
+        working-directory: backend
+        run: node node_modules/tsx/dist/cli.mjs --test tests/provisional-omr-correction.test.ts
       - name: Verify read-only Results API and unpublished public routes
         working-directory: backend
         run: ./node_modules/.bin/tsx tests/results-readonly.test.ts

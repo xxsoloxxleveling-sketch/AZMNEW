@@ -82,6 +82,13 @@ export interface MockStudent {
   qrImageUrl?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'PASSED_OUT' | 'EXPELLED';
   testScore?: number | null; // Recorded score, not an official verified result.
+  provisionalOmr?: {
+    reviewCategory: string;
+    identityStatus: string;
+    paperVersionStatus: string;
+    originalScannedMarks: number;
+    manuallyCorrected: boolean;
+  } | null;
   createdAt: string;
   attendancePercentage?: number;
   feeStatus?: 'PAID' | 'PARTIAL' | 'UNPAID' | 'OVERDUE';
@@ -1120,6 +1127,32 @@ export const mockApi = {
   async getStudents(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; schoolName?: string }): Promise<MockStudent[]> {
     const result = await this.getStudentsPage({ ...filters, page: 1, limit: 250 });
     return result.students;
+  },
+
+  /** Only SUPER_ADMIN is authorized; the backend rechecks the role and audits the change. */
+  async correctProvisionalOmrMarks(
+    studentId: string,
+    data: { expectedCurrentMarks: number; newMarks: number; reason: string }
+  ): Promise<{ originalScannedMarks: number; previousMarks: number; newMarks: number; correctionId: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/provisional-marks`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getProvisionalOmrMarkHistory(studentId: string): Promise<Array<{
+    id: string;
+    originalScannedMarks: number;
+    previousEffectiveMarks: number;
+    newEffectiveMarks: number;
+    reason: string;
+    actorName: string;
+    occurredAt: string;
+  }>> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/provisional-marks/history`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
   },
 
   async getStudentById(id: string): Promise<MockStudent> {
