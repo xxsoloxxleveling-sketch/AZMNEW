@@ -72,6 +72,25 @@ function httpError(statusCode: number, message: string) {
   return error;
 }
 
+// Prisma sends JavaScript integer parameters as PostgreSQL int8. The audited
+// SECURITY DEFINER function explicitly accepts int4, so cast every argument
+// rather than relying on PostgreSQL function-resolution coercion.
+export function buildProvisionalMarkCorrectionQuery(
+  studentId: string,
+  expectedCurrentMarks: number,
+  newMarks: number,
+  reason: string,
+  actorId: string,
+): Prisma.Sql {
+  return Prisma.sql`
+    SELECT original_marks, previous_marks, updated_marks, correction_id
+    FROM public.azm_correct_provisional_omr_mark(
+      ${studentId}::text, ${expectedCurrentMarks}::integer, ${newMarks}::integer,
+      ${reason}::text, ${actorId}::text
+    )
+  `;
+}
+
 export async function correctPublishedProvisionalOmrMark(
   studentId: string,
   expectedCurrentMarks: number,
@@ -87,12 +106,7 @@ export async function correctPublishedProvisionalOmrMark(
       previous_marks: number;
       updated_marks: number;
       correction_id: string;
-    }>>`
-      SELECT original_marks, previous_marks, updated_marks, correction_id
-      FROM public.azm_correct_provisional_omr_mark(
-        ${studentId}, ${expectedCurrentMarks}, ${newMarks}, ${reason}, ${actorId}
-      )
-    `;
+    }>>(buildProvisionalMarkCorrectionQuery(studentId, expectedCurrentMarks, newMarks, reason, actorId));
     const result = rows[0];
     if (!result) throw httpError(404, 'Published provisional marks not found for this student.');
     return {
