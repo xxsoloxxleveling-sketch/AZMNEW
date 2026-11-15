@@ -988,7 +988,12 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                         {/* Recorded score; legacy marks are not an official verification. */}
                         <td className="py-3.5 px-4">
                           {student.testScore !== null && student.testScore !== undefined ? (
-                            <span className="font-semibold text-slate-800 tabular-nums text-xs">{student.testScore} / 100</span>
+                            <div className="leading-tight">
+                              <span className="font-semibold text-slate-800 tabular-nums text-xs">{student.testScore} / 100</span>
+                              {student.provisionalOmr && <span className="block text-[10px] text-amber-700 font-medium">
+                                Provisional{student.provisionalOmr.reviewCategory.startsWith('HOLD_') ? ' · Review pending' : ''}
+                              </span>}
+                            </div>
                           ) : (
                             <span className="text-xs text-slate-400">Not uploaded</span>
                           )}
@@ -1128,7 +1133,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                         <div className="flex items-center justify-between gap-1.5">
                           <span className="font-bold text-slate-900 text-xs truncate">{student.fullName}</span>
                           <span className="text-[11px] font-semibold tabular-nums text-slate-700">
-                            {student.testScore !== null && student.testScore !== undefined ? `${student.testScore} / 100` : 'Marks pending'}
+                            {student.testScore !== null && student.testScore !== undefined ? `${student.testScore} / 100${student.provisionalOmr ? ' · Provisional' : ''}` : 'Marks pending'}
                           </span>
                         </div>
                         <span className="text-[11px] text-slate-500 block truncate">S/D/O {student.fatherName}</span>
