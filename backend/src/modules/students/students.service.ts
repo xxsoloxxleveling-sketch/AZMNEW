@@ -1714,12 +1714,18 @@ export class StudentsService {
       where.AND = [...conditions, { id: { in: ids } }];
     }
 
+    // Sort before pagination so high/low marks cover the entire filtered roster.
+    // Legacy Student.testScore is a recorded mark, not an official verified result.
+    const marksOrderBy = query.marksSort
+      ? [{ testScore: { sort: query.marksSort, nulls: 'last' as const } }, { id: 'asc' as const }]
+      : [{ createdAt: 'desc' as const }, { id: 'asc' as const }];
+
     const listStudents = (includeDocumentMetadata: boolean) =>
       prisma.student.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: marksOrderBy,
         select: {
           id: true,
           applicationNo: true,
@@ -1748,6 +1754,7 @@ export class StudentsService {
           emergencyRelation: true,
           scholarshipCategory: true,
           status: true,
+          testScore: true,
           createdAt: true,
           feeRecords: { select: { status: true, amountDue: true, amountPaid: true } },
           officeUse: { select: { eligibility: true, eligibilityRemarks: true, testRollNo: true } },
