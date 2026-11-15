@@ -82,6 +82,7 @@ export interface MockStudent {
   qrImageUrl?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'PASSED_OUT' | 'EXPELLED';
   testScore?: number | null; // Recorded score, not an official verified result.
+  provisionalOmr?: { reviewCategory: string; identityStatus: string; paperVersionStatus: string } | null;
   createdAt: string;
   attendancePercentage?: number;
   feeStatus?: 'PAID' | 'PARTIAL' | 'UNPAID' | 'OVERDUE';
