@@ -91,7 +91,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   const [isApprovingSelectedFees, setIsApprovingSelectedFees] = useState(false);
 
   // Sorting state
-  const [sortField, setSortField] = useState<'rollNumber' | 'fullName' | 'currentClass' | null>(null);
+  const [sortField, setSortField] = useState<'rollNumber' | 'fullName' | 'currentClass' | 'testScore' | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
 
   // Pre-issue roll slips, OMR sheets, and batch printing state
@@ -152,6 +152,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
           status: statusFilter,
           search: searchQuery,
           schoolName: debouncedSchoolFilter,
+          marksSort: sortField === 'testScore' ? (sortAsc ? 'asc' : 'desc') : undefined,
           page: currentPage,
           limit: pageSize,
         }),
@@ -248,13 +249,13 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
     if (!authLoading) {
       fetchStudents(students.length === 0);
     }
-  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, debouncedSchoolFilter, currentPage, pageSize, studyGroupReview]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, debouncedSchoolFilter, currentPage, pageSize, studyGroupReview, sortField, sortAsc]);
 
   useEffect(() => {
     const refresh = () => { void fetchStudents(); };
     window.addEventListener('students-updated', refresh);
     return () => window.removeEventListener('students-updated', refresh);
-  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, debouncedSchoolFilter, currentPage, pageSize, studyGroupReview]);
+  }, [authLoading, classFilter, genderFilter, statusFilter, searchQuery, debouncedSchoolFilter, currentPage, pageSize, studyGroupReview, sortField, sortAsc]);
 
   useEffect(() => {
     const request = initialStudentResultsProfile;
@@ -357,17 +358,19 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
     } finally { setIsDeleting(false); }
   };
 
-  const handleSort = (field: 'rollNumber' | 'fullName' | 'currentClass') => {
+  const handleSort = (field: 'rollNumber' | 'fullName' | 'currentClass' | 'testScore') => {
     if (sortField === field) {
       setSortAsc(!sortAsc);
     } else {
       setSortField(field);
-      setSortAsc(true);
+      setSortAsc(field === 'testScore' ? false : true); // Highest first.
     }
+    if (field === 'testScore') setCurrentPage(1);
   };
 
   const sortedStudents = useMemo(() => {
-    if (!sortField) return students;
+    // Score ordering is server-side before pagination, not on one visible page.
+    if (!sortField || sortField === 'testScore') return students;
     return [...students].sort((a, b) => {
       const aVal = (a[sortField] || '').toString().toLowerCase();
       const bVal = (b[sortField] || '').toString().toLowerCase();
@@ -872,7 +875,18 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                     </div>
                   </th>
                   <th className="py-3.5 px-4">School / College</th>
-                  <th className="py-3.5 px-4">Status</th>
+                  <th
+                    onClick={() => handleSort('testScore')}
+                    className="py-3.5 px-4 cursor-pointer select-none hover:text-slate-900"
+                    title="Sort recorded marks across the entire filtered roster; missing marks last"
+                    aria-sort={sortField === 'testScore' ? (sortAsc ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Marks / 100</span>
+                      <IconChevronsUpDown size={12} className={sortField === 'testScore' ? 'text-[#185b9d]' : 'text-slate-400'} />
+                      {sortField === 'testScore' && <span className="text-[10px] text-[#185b9d]">{sortAsc ? '↑' : '↓'}</span>}
+                    </div>
+                  </th>
                   <th className="py-3.5 px-4">Fee Status</th>
                   <th className="py-3.5 px-4">Assigned Seating</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -971,9 +985,13 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                           </span>
                         </td>
 
-                        {/* Status */}
+                        {/* Recorded score; legacy marks are not an official verification. */}
                         <td className="py-3.5 px-4">
-                          <StatusBadge status={student.status} size="sm" />
+                          {student.testScore !== null && student.testScore !== undefined ? (
+                            <span className="font-semibold text-slate-800 tabular-nums text-xs">{student.testScore} / 100</span>
+                          ) : (
+                            <span className="text-xs text-slate-400">Not uploaded</span>
+                          )}
                         </td>
 
                         {/* Fee Status: Semantic Badge */}
@@ -1109,7 +1127,9 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1.5">
                           <span className="font-bold text-slate-900 text-xs truncate">{student.fullName}</span>
-                          <StatusBadge status={student.status} size="sm" />
+                          <span className="text-[11px] font-semibold tabular-nums text-slate-700">
+                            {student.testScore !== null && student.testScore !== undefined ? `${student.testScore} / 100` : 'Marks pending'}
+                          </span>
                         </div>
                         <span className="text-[11px] text-slate-500 block truncate">S/D/O {student.fatherName}</span>
                       </div>
