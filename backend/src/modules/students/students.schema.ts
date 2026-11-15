@@ -160,6 +160,14 @@ export const selectedStudentsPdfSchema = z.object({
 }).strict();
 
 // Public marks-only access uses two matching identifiers and never discloses a student roster.
+// Only a Super Admin may edit a recorded provisional mark. The current
+// value is required for optimistic concurrency and a reason for the audit.
+export const provisionalOmrMarkCorrectionSchema = z.object({
+  expectedCurrentMarks: z.number().int().min(0).max(100),
+  newMarks: z.number().int().min(0).max(100),
+  reason: z.string().trim().min(10).max(500),
+}).strict();
+
 export const provisionalOmrMarksLookupSchema = z.object({
   rollNumber: z.string().trim().min(6).max(64).regex(/^[A-Za-z0-9_-]+$/),
   cnic: z.string().trim().min(5).max(24).regex(/^[0-9\s-]+$/),
