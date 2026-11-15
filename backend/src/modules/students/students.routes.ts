@@ -8,6 +8,7 @@ import {
   officeUseUpdateSchema,
   studentQuerySchema,
   provisionalOmrMarksLookupSchema,
+  provisionalOmrMarkCorrectionSchema,
   selectedStudentsPdfSchema,
   uploadDocumentSchema,
 } from './students.schema';
@@ -198,6 +199,21 @@ router.post(
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(selectedStudentsPdfSchema),
   studentsController.printReadiness
+);
+
+// These endpoints follow router.use(authenticate). Other staff roles
+// cannot modify, inspect audit reasons or obtain correction receipts.
+router.get(
+  '/:id/provisional-marks/history',
+  authorizeRoles(Role.SUPER_ADMIN),
+  studentsController.getProvisionalMarkCorrectionHistory
+);
+
+router.patch(
+  '/:id/provisional-marks',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(provisionalOmrMarkCorrectionSchema),
+  studentsController.correctProvisionalOmrMarks
 );
 
 router.get(
