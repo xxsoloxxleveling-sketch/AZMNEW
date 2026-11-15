@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { spawn } from 'child_process';
 import { studentsService } from './students.service';
+import { correctPublishedProvisionalOmrMark, getProvisionalMarkCorrectionHistory } from './provisionalOmrMarks';
 import { signUploadSessionToken, verifyAccessToken, verifyUploadSessionToken } from '../../lib/jwt';
 
 let thumbnailBackfillJob: {
@@ -203,6 +204,39 @@ export class StudentsController {
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Length', buffer.length);
       res.status(200).send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getProvisionalMarkCorrectionHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const history = await getProvisionalMarkCorrectionHistory(req.params.id);
+      res.set('Cache-Control', 'private, no-store');
+      res.status(200).json({ success: true, data: history });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async correctProvisionalOmrMarks(req: Request, res: Response, next: NextFunction) {
+    try {
+      // The route requires an authenticated SUPER_ADMIN; the SQL function
+      // independently verifies the actor and writes the immutable audit.
+      if (!req.user) return res.status(401).json({ success: false, error: { message: 'Login required.' } });
+      const changed = await correctPublishedProvisionalOmrMark(
+        req.params.id,
+        req.body.expectedCurrentMarks,
+        req.body.newMarks,
+        req.body.reason,
+        req.user.id,
+      );
+      res.set('Cache-Control', 'private, no-store');
+      res.status(200).json({
+        success: true,
+        message: 'Provisional marks corrected and audit entry saved.',
+        data: changed,
+      });
     } catch (error) {
       next(error);
     }
