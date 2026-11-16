@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { pdfService } from '../documents/pdf.service';
 import { studentsService } from './students.service';
 import { findPublishedProvisionalMarks, provisionalEdmcOutcome, type ProvisionalOmrMark } from './provisionalOmrMarks';
+import { findPublishedManualExamMarks } from './manualExamMarks';
 
 const escapeHtml = (value: unknown): string => String(value ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -24,6 +25,7 @@ export interface VerifiedEdmcPrintData {
   schoolName: string | null; district: string | null; testCenter: string | null;
   verifiedAt: Date; obtainedMarks: number; maximumMarks: number;
   photoDataUrl: string | null; logoDataUrl: string | null;
+  resultSource?: 'OMR_SCAN' | 'MANUAL_ENTRY';
 }
 
 function conflict(message: string): never {
@@ -109,6 +111,7 @@ export function buildVerifiedEdmcHtml(record: VerifiedEdmcPrintData): string {
     field('District',record.district),
     field('Examination session','Session V · 2026'),
     field('Marks verified',formatDate(record.verifiedAt)),
+    field('Marks source',record.resultSource === 'MANUAL_ENTRY' ? 'Verified administrative mark entry' : 'Verified OMR score'),
     '</div><figure class="portrait">',photo,'<figcaption>STUDENT PHOTOGRAPH</figcaption></figure></section>',
     '<div class="section-title">Examination marks summary</div><section class="stats">',
     '<div class="stat"><label>Final obtained marks</label><strong>',
@@ -159,8 +162,18 @@ export async function generateVerifiedEdmcPdf(studentId: string): Promise<{ buff
     error.statusCode = 404;
     throw error;
   }
-  const mark = (await findPublishedProvisionalMarks([studentId])).get(studentId);
-  assertVerifiedEdmcScore(mark);
+  const omr = (await findPublishedProvisionalMarks([studentId])).get(studentId);
+  const manual = omr ? undefined : (await findPublishedManualExamMarks([studentId])).get(studentId);
+  if (omr) {
+    assertVerifiedEdmcScore(omr);
+  } else if (!manual?.verified || !manual.verifiedAt ||
+    manual.rollNumberSnapshot !== student.rollNumber ||
+    manual.applicationNoSnapshot !== student.applicationNo) {
+    conflict('Verify this student\'s manual examination marks before downloading the E-DMC.');
+  }
+  const obtainedMarks = omr?.obtainedMarks ?? manual!.obtainedMarks;
+  const maximumMarks = omr?.maximumMarks ?? manual!.maximumMarks;
+  const verifiedAt = (omr?.verifiedAt ?? manual!.verifiedAt)!;
   let photoDataUrl: string | null = null;
   try {
     const image = await studentsService.getStudentDocument(studentId, 'photoThumbnail');
@@ -176,8 +189,9 @@ export async function generateVerifiedEdmcPdf(studentId: string): Promise<{ buff
     className: student.currentClass, studyGroup: student.hsscGroup || student.bsDepartment || null,
     semester: student.bsSemester || null, schoolName: student.schoolName,
     district: student.district, testCenter: student.officeUse?.testCentre || student.registrationCentre || null,
-    verifiedAt: mark.verifiedAt!, obtainedMarks: mark.obtainedMarks, maximumMarks: mark.maximumMarks,
+    verifiedAt, obtainedMarks, maximumMarks,
     logoDataUrl: loadLogo(), photoDataUrl,
+    resultSource: manual ? 'MANUAL_ENTRY' : 'OMR_SCAN',
   });
   const buffer = await pdfService.generatePdfFromHtml(html, {
     format: 'A4', landscape: false,
@@ -186,10 +200,13 @@ export async function generateVerifiedEdmcPdf(studentId: string): Promise<{ buff
 
   // Verification is revision-specific. A correction or an identity change
   // during rendering must invalidate this download.
-  const current = (await findPublishedProvisionalMarks([studentId])).get(studentId);
-  if (!current?.verified || current.obtainedMarks !== mark.obtainedMarks ||
-      current.maximumMarks !== mark.maximumMarks ||
-      current.verifiedAt?.getTime() !== mark.verifiedAt?.getTime()) {
+  const currentOmr = (await findPublishedProvisionalMarks([studentId])).get(studentId);
+  const currentManual = currentOmr ? undefined : (await findPublishedManualExamMarks([studentId])).get(studentId);
+  const current = currentOmr ?? currentManual;
+  if (!current?.verified || current.obtainedMarks !== obtainedMarks ||
+      current.maximumMarks !== maximumMarks ||
+      current.verifiedAt?.getTime() !== verifiedAt.getTime() ||
+      Boolean(currentManual) !== Boolean(manual)) {
     conflict('The verified result changed while generating the E-DMC. Refresh and try again.');
   }
   const safeRoll = student.rollNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
