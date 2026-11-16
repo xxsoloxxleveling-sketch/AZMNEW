@@ -160,6 +160,18 @@ export const selectedStudentsPdfSchema = z.object({
 }).strict();
 
 // Public marks-only access uses two matching identifiers and never discloses a student roster.
+/** The reviewed manual score is immutable; verification seals the exact
+ * recorded value without claiming an OMR answer-sheet version exists.
+ */
+export const verifiedManualExamMarkSchema = z.object({
+  expectedCurrentMarks: z.number().int().min(0).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  attendanceReviewed: z.literal(true),
+  marksEvidenceReviewed: z.literal(true),
+}).strict();
+
 /** Manual entry is a new independent, immutable examination score, never
  * a fabricated OMR scan and never an overwrite of an existing mark.
  */
