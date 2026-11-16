@@ -133,7 +133,7 @@ jobs:
             'Independent synthetic review confirmed the recorded total, student identity and attendance.',
             TRUE,TRUE,TRUE,'admin-synthetic'
           );
-          DO $
+          DO $$
           BEGIN
             IF (SELECT count(*) FROM public."ManualExamMarkVerificationAudit")<>1 THEN
               RAISE EXCEPTION 'Missing manual verification audit';
@@ -162,6 +162,6 @@ jobs:
             EXCEPTION WHEN serialization_failure THEN
               RAISE NOTICE 'Stale manual score correctly rejected';
             END;
-          END $;
+          END $$;
           SQL
           echo 'All tests used synthetic records; no production connection or writes.'
