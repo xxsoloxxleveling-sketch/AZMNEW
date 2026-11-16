@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { spawn } from 'child_process';
 import { studentsService } from './students.service';
 import { correctPublishedProvisionalOmrMark, getProvisionalMarkCorrectionHistory, verifyPublishedOmrMark } from './provisionalOmrMarks';
-import { addManualExamMark } from './manualExamMarks';
+import { addManualExamMark, verifyManualExamMark } from './manualExamMarks';
 import { generateVerifiedEdmcPdf } from './verifiedEdmcPdf';
 import { signUploadSessionToken, verifyAccessToken, verifyUploadSessionToken } from '../../lib/jwt';
 
@@ -240,6 +240,32 @@ export class StudentsController {
         success: true,
         message: 'Manual examination marks recorded for review. No existing marks were changed.',
         data: result,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async verifyManualExamMark(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: { message: 'Login required.' } });
+      }
+      const receipt = await verifyManualExamMark(
+        req.params.id,
+        req.body.expectedCurrentMarks,
+        req.body.evidenceReference,
+        req.body.reason,
+        req.body.identityReviewed,
+        req.body.attendanceReviewed,
+        req.body.marksEvidenceReviewed,
+        req.user.id,
+      );
+      res.set('Cache-Control', 'private, no-store, max-age=0');
+      return res.status(201).json({
+        success: true,
+        message: 'Manual examination marks verified. The original score and audit history are unchanged.',
+        data: receipt,
       });
     } catch (error) {
       return next(error);
