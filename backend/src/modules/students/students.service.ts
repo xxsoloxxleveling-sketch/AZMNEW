@@ -1685,8 +1685,13 @@ export class StudentsService {
   async lookupProvisionalOmrMarks(rawCnic: string) {
     const cnic = rawCnic.trim();
     const digits = cnic.replace(/\D/g, '');
-    const unavailable = { success: true, found: false, message: 'No published E-DMC matches the supplied details.' };
+    const unavailable = { success: true, found: false, message: 'No published examination result matches the supplied details.' };
     if (!/^(?:[0-9]{13}|[0-9]{5}-[0-9]{7}-[0-9])$/.test(cnic)) return unavailable;
+    // Some legacy student records contain placeholder CNICs made of thirteen
+    // identical digits. These are not private lookup credentials. Fail closed
+    // instead of disclosing a student's result to anyone who guesses 13 zeros
+    // or another trivial placeholder. Fix the registered identity separately.
+    if (/^([0-9])\1{12}$/.test(digits)) return unavailable;
     const formatted = `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
     const matches = await prisma.student.findMany({
       where: {
