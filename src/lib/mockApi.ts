@@ -86,6 +86,8 @@ export interface MockStudent {
     source: 'SUPER_ADMIN_MANUAL';
     recordedAt: string;
     reviewRequired: boolean;
+    verified: boolean;
+    verifiedAt: string | null;
   } | null;
   provisionalOmr?: {
     reviewCategory: string;
@@ -1135,6 +1137,21 @@ export const mockApi = {
   async getStudents(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; schoolName?: string }): Promise<MockStudent[]> {
     const result = await this.getStudentsPage({ ...filters, page: 1, limit: 250 });
     return result.students;
+  },
+
+  /** Independently verify a signed manual-score record without editing the score. */
+  async verifyManualExamMark(studentId: string, payload: {
+    expectedCurrentMarks: number;
+    evidenceReference: string;
+    reason: string;
+    identityReviewed: true;
+    attendanceReviewed: true;
+    marksEvidenceReviewed: true;
+  }): Promise<{ verificationId: string; verifiedMarks: number; verifiedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/verify-manual-exam-mark`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   /** Add an immutable score only for a student with no examination marks. */
