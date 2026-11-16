@@ -81,13 +81,16 @@ export interface MockStudent {
   qrToken: string;
   qrImageUrl?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'PASSED_OUT' | 'EXPELLED';
-  testScore?: number | null; // Recorded score, not an official verified result.
+  testScore?: number | null; // Current overall score; verification state is on the OMR record.
   provisionalOmr?: {
     reviewCategory: string;
     identityStatus: string;
     paperVersionStatus: string;
     originalScannedMarks: number;
     manuallyCorrected: boolean;
+    printedClassDisagrees: boolean;
+    verified: boolean;
+    verifiedAt: string | null;
   } | null;
   createdAt: string;
   attendancePercentage?: number;
@@ -1136,6 +1139,24 @@ export const mockApi = {
   ): Promise<{ originalScannedMarks: number; previousMarks: number; newMarks: number; correctionId: string }> {
     return apiFetch(`/api/students/${encodeURIComponent(studentId)}/provisional-marks`, {
       method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /** Super Admin must attest to all three evidence checks per student. */
+  async verifyOmrMark(
+    studentId: string,
+    data: {
+      expectedCurrentMarks: number;
+      evidenceReference: string;
+      reason: string;
+      identityReviewed: true;
+      paperVersionReviewed: true;
+      printedClassReviewed: true;
+    }
+  ): Promise<{ verificationId: string; verifiedMarks: number; verifiedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/verify-omr-mark`, {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   },
