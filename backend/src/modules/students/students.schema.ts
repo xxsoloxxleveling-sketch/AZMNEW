@@ -305,6 +305,22 @@ export const publicEdmcLookupSchema = z.object({
 }).strict();
 
 /** Super Admin attests to the exact reviewed OMR score and matching candidate. */
+export const bulkVerifiedOmrMarkSchema = z.object({
+  students: z.array(z.object({
+    studentId: z.string().min(1).max(128),
+    expectedCurrentMarks: z.number().int().min(0).max(100),
+  }).strict()).min(1).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  paperVersionReviewed: z.literal(true),
+  printedClassReviewed: z.literal(true),
+}).strict().superRefine((data, ctx) => {
+  if (new Set(data.students.map(s => s.studentId)).size !== data.students.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['students'], message: 'Duplicate student IDs in batch.' });
+  }
+});
+
 export const verifiedOmrMarkSchema = z.object({
   expectedCurrentMarks: z.number().int().min(0).max(100),
   evidenceReference: z.string().trim().min(10).max(500),

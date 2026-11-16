@@ -30,6 +30,7 @@ import { RollSlipPreviewModal } from './RollSlipPreviewModal';
 import { StudentOmrModal } from './StudentOmrModal';
 import { ProvisionalMarksEditorDialog } from './ProvisionalMarksEditorDialog';
 import { OmrMarkVerificationDialog } from './OmrMarkVerificationDialog';
+import { BulkOmrMarkVerificationDialog } from './BulkOmrMarkVerificationDialog';
 import { BulkPrintModal } from './BulkPrintModal';
 import { useAuth } from '../../../lib/authContext';
 import { apiFetchProtectedObjectUrl } from '../../../lib/apiClient';
@@ -102,8 +103,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   const [omrStudent, setOmrStudent] = useState<MockStudent | null>(null);
   const [editingMarksStudent, setEditingMarksStudent] = useState<MockStudent | null>(null);
   const [verifyingMarksStudent, setVerifyingMarksStudent] = useState<MockStudent | null>(null);
-  const [verificationQueue, setVerificationQueue] = useState<MockStudent[]>([]);
-  const [verificationBatchTotal, setVerificationBatchTotal] = useState(0);
+  const [bulkVerificationStudents, setBulkVerificationStudents] = useState<MockStudent[]>([]);
   const [downloadingEdmcId, setDownloadingEdmcId] = useState<string | null>(null);
   const [bulkPrintType, setBulkPrintType] = useState<'OMR' | 'ROLL_SLIP' | null>(null);
   const [studentToEdit, setStudentToEdit] = useState<MockStudent | null>(null);
@@ -414,34 +414,20 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
       && !student.provisionalOmr.verified && Number.isInteger(student.testScore)
   );
 
-  // A multi-select action opens a guided, per-student review. It NEVER marks
-  // all selected students verified in one API call or reuses evidence checkboxes.
   const beginSelectedVerification = () => {
     if (role !== 'SUPER_ADMIN' || selectedForVerification.length === 0) return;
-    setVerificationQueue(selectedForVerification.slice(1));
-    setVerificationBatchTotal(selectedForVerification.length);
-    setVerifyingMarksStudent(selectedForVerification[0]);
+    if (selectedForVerification.length > 100) {
+      alert('Select at most 100 students per verification batch.');
+      return;
+    }
+    setBulkVerificationStudents([...selectedForVerification]);
   };
 
-  const beginSingleVerification = (student: MockStudent) => {
-    setVerificationQueue([]);
-    setVerificationBatchTotal(0);
-    setVerifyingMarksStudent(student);
-  };
-
-  const closeVerification = () => {
-    setVerificationQueue([]);
-    setVerificationBatchTotal(0);
-    setVerifyingMarksStudent(null);
-  };
+  const beginSingleVerification = (student: MockStudent) => setVerifyingMarksStudent(student);
 
   const completeVerifiedStudent = (student: MockStudent) => {
-    setSelectedStudentIds((prev) => prev.filter((id) => id !== student.id));
-    const next = verificationQueue[0] || null;
-    setVerificationQueue((prev) => prev.slice(1));
-    setVerifyingMarksStudent(next);
-    if (!next) setVerificationBatchTotal(0);
-    // Refresh the visible roster without resetting the remaining review queue.
+    setSelectedStudentIds(prev => prev.filter(id => id !== student.id));
+    setVerifyingMarksStudent(null);
     void fetchStudents(false);
   };
 
@@ -836,8 +822,8 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                 <button
                   type="button"
                   onClick={beginSelectedVerification}
-                  disabled={selectedForVerification.length === 0 || isLoading || !!verifyingMarksStudent}
-                  title="Review each selected student's original identity, paper version and class separately"
+                  disabled={selectedForVerification.length === 0 || isLoading || !!verifyingMarksStudent || bulkVerificationStudents.length > 0}
+                  title="Review and verify up to 100 selected students in one batch"
                   className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <IconApproveFee size={14} />
@@ -1475,12 +1461,19 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
         <OmrMarkVerificationDialog
           key={verifyingMarksStudent.id}
           student={verifyingMarksStudent}
-          batchProgress={verificationBatchTotal > 1 ? {
-            current: verificationBatchTotal - verificationQueue.length,
-            total: verificationBatchTotal,
-          } : undefined}
-          onClose={closeVerification}
+          onClose={() => setVerifyingMarksStudent(null)}
           onVerified={completeVerifiedStudent}
+        />
+      )}
+
+      {role === 'SUPER_ADMIN' && bulkVerificationStudents.length > 0 && (
+        <BulkOmrMarkVerificationDialog
+          students={bulkVerificationStudents}
+          onClose={() => setBulkVerificationStudents([])}
+          onCompleted={verifiedIds => {
+            setSelectedStudentIds(prev => prev.filter(id => !verifiedIds.includes(id)));
+            void fetchStudents(false);
+          }}
         />
       )}
 

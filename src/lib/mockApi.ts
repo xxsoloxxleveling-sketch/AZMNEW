@@ -1154,6 +1154,20 @@ export const mockApi = {
     );
   },
 
+  async verifySelectedOmrMarks(data: {
+    students: Array<{ studentId: string; expectedCurrentMarks: number }>;
+    evidenceReference: string; reason: string;
+    identityReviewed: true; paperVersionReviewed: true; printedClassReviewed: true;
+  }): Promise<{
+    verified: Array<{ studentId: string; verifiedMarks: number; verificationId: string }>;
+    failed: Array<{ studentId: string; message: string }>;
+    total: number;
+  }> {
+    return apiFetch('/api/students/verify-selected-omr-marks', {
+      method: 'POST', body: JSON.stringify(data), timeoutMs: 120000,
+    });
+  },
+
   async verifyOmrMark(
     studentId: string,
     data: {

@@ -257,6 +257,41 @@ export class StudentsController {
     }
   }
 
+  async verifySelectedOmrMarks(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, error: { message: 'Login required.' } });
+      const { students, evidenceReference, reason, identityReviewed, paperVersionReviewed, printedClassReviewed } = req.body;
+      const verified: Array<{ studentId: string; verifiedMarks: number; verificationId: string }> = [];
+      const failed: Array<{ studentId: string; message: string }> = [];
+      // The existing security-definer RPC verifies the actor and sealed revision
+      // for every student independently, preserving each immutable audit.
+      for (const student of students as Array<{ studentId: string; expectedCurrentMarks: number }>) {
+        try {
+          const receipt = await verifyPublishedOmrMark(
+            student.studentId, student.expectedCurrentMarks,
+            evidenceReference, reason, identityReviewed,
+            paperVersionReviewed, printedClassReviewed, req.user.id,
+          );
+          verified.push({ studentId: student.studentId, verifiedMarks: receipt.verifiedMarks, verificationId: receipt.verificationId });
+        } catch (error) {
+          const status = (error as { statusCode?: number }).statusCode;
+          const message = status && status >= 400 && status < 500
+            ? (error as Error).message
+            : 'Verification could not be completed. Review this student separately.';
+          failed.push({ studentId: student.studentId, message });
+        }
+      }
+      res.set('Cache-Control', 'private, no-store');
+      res.status(200).json({
+        success: true,
+        data: { verified, failed, total: students.length },
+        message: 'Selected student verification completed.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async verifyOmrMark(req: Request, res: Response, next: NextFunction) {
     try {
       if (!req.user) return res.status(401).json({ success: false, error: { message: 'Login required.' } });
