@@ -1710,15 +1710,14 @@ export class StudentsService {
     });
     if (!student) return unavailable;
     const mark = (await findPublishedProvisionalMarks([student.id])).get(student.id);
-    // An explicit HOLD never becomes a candidate-facing E-DMC merely because
-    // a batch publication timestamp exists. Regional review must resolve it.
-    if (!mark || mark.reviewCategory.startsWith('HOLD_')) return unavailable;
+    // Only a score revision explicitly signed off by a Super Admin may be
+    // presented as a final result. Original review flags remain historical.
+    if (!mark?.verified || !mark.verifiedAt) return unavailable;
 
     // The effective score includes an audited Super Admin correction when one
     // exists. Do not display the obsolete scanned score as the current result.
     const score = mark.obtainedMarks;
     const { resultStatus, percentage } = provisionalEdmcOutcome(score, mark.maximumMarks);
-    const reviewPending = mark.manualReviewRequired || mark.reviewCategory.startsWith('HOLD_');
     let photoDataUrl: string | null = null;
     // Only a verified candidate may see their private photo. Do not expose
     // storage paths, signed URLs, full-size documents, or fallback fake photos.
@@ -1735,7 +1734,7 @@ export class StudentsService {
       success: true,
       found: true,
       data: {
-        status: 'PROVISIONAL' as const,
+        status: 'VERIFIED' as const,
         fullName: student.fullName,
         fatherName: student.fatherName,
         rollNumber: student.rollNumber,
@@ -1748,16 +1747,14 @@ export class StudentsService {
         testCenter: student.officeUse?.testCentre || student.registrationCentre || null,
         session: 'Session V · 2026',
         publishedAt: mark.publishedAt.toISOString(),
+        verifiedAt: mark.verifiedAt.toISOString(),
         photoDataUrl,
         obtainedMarks: score,
         maximumMarks: mark.maximumMarks,
         percentage,
         resultStatus,
         passThreshold: 60,
-        reviewPending,
-        notice: reviewPending
-          ? 'This provisional E-DMC includes marks still subject to an OMR or identity review.'
-          : 'This E-DMC is provisional and is not an official examination certificate.',
+        notice: 'Final obtained marks have been verified by the examination administration. The Official / Original DMC will be provided separately by the Regional Office.',
       },
     };
   }
@@ -1894,8 +1891,11 @@ export class StudentsService {
             reviewCategory: provisional.reviewCategory,
             identityStatus: provisional.identityStatus,
             paperVersionStatus: provisional.paperVersionStatus,
+            printedClassDisagrees: provisional.printedClassDisagrees,
             originalScannedMarks: provisional.originalScannedMarks,
             manuallyCorrected: provisional.manuallyCorrected,
+            verified: provisional.verified,
+            verifiedAt: provisional.verifiedAt?.toISOString() ?? null,
           } : null,
           // List responses intentionally never retrieve or serialize file bytes.
           photoUrl: null,
