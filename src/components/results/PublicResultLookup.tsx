@@ -12,6 +12,7 @@ type LookupState = 'idle' | 'loading' | 'not-found' | 'closed' | 'limited' | 'er
  */
 interface CurrentOmrRecord {
   status: 'REVIEW_REQUIRED';
+  source?: 'MANUAL_ENTRY';
   session: string;
   obtainedMarks: number;
   maximumMarks: number;
@@ -116,6 +117,11 @@ export function PublicResultLookup() {
                 <p className="text-xs font-bold uppercase tracking-[.15em] text-[#18723e]">AZM.AIO · {record.session}</p>
                 <h2 className="mt-2 text-2xl font-bold text-[#0c355a]">Your current obtained marks</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-600">These scores are linked to the registered CNIC/B-Form you entered. Examination review is still in progress.</p>
+                {record.source === 'MANUAL_ENTRY' && (
+                  <p className="mt-3 inline-flex rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
+                    Manually recorded by examination administration · Verification pending
+                  </p>
+                )}
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-center">
@@ -133,7 +139,7 @@ export function PublicResultLookup() {
                 </div>
               </div>
               <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-                <strong>Review pending.</strong> These are the marks currently recorded in the examination system and may be corrected following review. This is not a verified E-DMC or an Official / Original DMC, and it does not guarantee a scholarship. The next selection phase is interviews.
+                <strong>Review pending.</strong> {record.notice}
               </p>
               <p className="mt-3 text-xs leading-5 text-slate-500">Passing rule: above 60 marks qualifies as Pass; exactly 60 or below does not. Final eligibility depends on verification and subsequent selection stages.</p>
             </section>
