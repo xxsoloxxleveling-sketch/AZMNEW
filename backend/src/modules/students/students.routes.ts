@@ -9,6 +9,7 @@ import {
   studentQuerySchema,
   publicEdmcLookupSchema,
   verifiedOmrMarkSchema,
+  bulkVerifiedOmrMarkSchema,
   provisionalOmrMarkCorrectionSchema,
   selectedStudentsPdfSchema,
   uploadDocumentSchema,
@@ -236,6 +237,14 @@ router.get(
   '/:id/verified-edmc.pdf',
   authorizeRoles(Role.SUPER_ADMIN),
   studentsController.downloadVerifiedEdmc
+);
+
+// Each selected student receives a separate audited verification.
+router.post(
+  '/verify-selected-omr-marks',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(bulkVerifiedOmrMarkSchema),
+  studentsController.verifySelectedOmrMarks
 );
 
 // Verification is an audited, per-candidate Super Admin action. Never bulk
