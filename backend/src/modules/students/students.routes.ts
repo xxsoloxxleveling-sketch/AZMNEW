@@ -12,6 +12,7 @@ import {
   bulkVerifiedOmrMarkSchema,
   provisionalOmrMarkCorrectionSchema,
   manualExamMarkEntrySchema,
+  verifiedManualExamMarkSchema,
   selectedStudentsPdfSchema,
   uploadDocumentSchema,
 } from './students.schema';
@@ -224,6 +225,13 @@ router.post(
   authorizeRoles(Role.SUPER_ADMIN),
   validateBody(manualExamMarkEntrySchema),
   studentsController.addManualExamMarks
+);
+
+router.post(
+  '/:id/verify-manual-exam-mark',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(verifiedManualExamMarkSchema),
+  studentsController.verifyManualExamMark
 );
 
 // These endpoints follow router.use(authenticate). Other staff roles
