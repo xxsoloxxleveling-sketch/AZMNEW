@@ -1323,7 +1323,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                         {role === 'SUPER_ADMIN' && student.provisionalOmr && (
                           <button
                             type="button"
-                            onClick={() => setEditingMarksStudent(student)
+                            onClick={() => setEditingMarksStudent(student)}
                             className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-[#185b9d] hover:bg-blue-50"
                           >
                             <IconEditStudent size={13} aria-hidden="true" /> Edit marks
