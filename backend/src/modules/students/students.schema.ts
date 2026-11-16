@@ -297,3 +297,9 @@ export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 export type StudentQueryInput = z.infer<typeof studentQuerySchema>;
 export type OfficeUseUpdateInput = z.infer<typeof officeUseUpdateSchema>;
 export type UploadDocumentInput = z.infer<typeof uploadDocumentSchema>;
+
+/** Public E-DMC is never searchable by roll alone. All values stay in POST body. */
+export const publicEdmcLookupSchema = z.object({
+  rollNumber: z.string().trim().min(4).max(64),
+  cnic: z.string().trim().regex(/^(?:[0-9]{13}|[0-9]{5}-[0-9]{7}-[0-9])$/, 'Enter the full 13-digit CNIC / B-Form.'),
+}).strict();
