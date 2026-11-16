@@ -81,7 +81,12 @@ test('manual verification migration is append-only and uses restricted database 
   assert.match(text, /CREATE TABLE public\."ManualExamMarkVerificationAudit"/);
   assert.match(text, /"ManualExamMarkVerificationAudit_immutable"/);
   assert.match(text, /CREATE FUNCTION public\.azm_verify_manual_exam_mark/);
-  assert.match(text, /FOR UPDATE/);
+  assert.match(text, /FROM public\."Student" s WHERE s\.id=p_student_id FOR UPDATE;/);
+  // Existing ManualExamMark is postgres-owned in production. The immutable
+  // source needs SELECT, not an UPDATE-capable row lock, under student_app.
+  const markRead = text.match(/SELECT m\.\* INTO v_mark[\s\S]*?;/)?.[0];
+  assert.ok(markRead, 'Verification must read the original manual score');
+  assert.doesNotMatch(markRead, /FOR (UPDATE|NO KEY UPDATE|SHARE|KEY SHARE)/);
   assert.match(text, /MANUAL_MARK_ALREADY_VERIFIED/);
   assert.match(text, /STALE_MANUAL_MARK/);
   assert.match(text, /MANUAL_IDENTITY_MISMATCH/);

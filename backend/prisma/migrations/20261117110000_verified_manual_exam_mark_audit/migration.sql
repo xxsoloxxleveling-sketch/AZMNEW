@@ -100,11 +100,14 @@ BEGIN
     RAISE EXCEPTION 'STUDENT_NOT_ACTIVE' USING ERRCODE='22023';
   END IF;
 
+  -- The manual source is immutable (BEFORE UPDATE/DELETE rejects edits),
+  -- and the Student row lock above serializes imports and verification.
+  -- Do not request FOR UPDATE on a postgres-owned legacy source: the
+  -- student_app SECURITY DEFINER needs SELECT, not mutation privileges.
   SELECT m.* INTO v_mark FROM public."ManualExamMark" m
   WHERE m."studentId"=p_student_id
     AND m."sessionReference"='2026-V'
-    AND m."publishedAt" IS NOT NULL
-  FOR UPDATE;
+    AND m."publishedAt" IS NOT NULL;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'MANUAL_MARK_NOT_FOUND' USING ERRCODE='P0002';
   END IF;

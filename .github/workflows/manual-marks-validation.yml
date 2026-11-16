@@ -6,6 +6,7 @@ on:
       - feature/superadmin-add-missing-manual-marks-20261116
       - feature/verified-manual-exam-marks-pr51-20261117
       - fix/pr51-threshold-migration-20261117
+      - fix/pr51-owner-parity-20261117
 
 permissions:
   contents: read
@@ -183,3 +184,6 @@ jobs:
           END $$;
           SQL
           echo 'All tests used synthetic records; no production connection or writes.'
+      - name: PostgreSQL 17 actual-owner privilege and restricted runtime parity
+        shell: bash
+        run: bash backend/tests/manual-owner-parity-ci.sh
