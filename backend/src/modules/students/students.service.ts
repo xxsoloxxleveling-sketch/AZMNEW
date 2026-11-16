@@ -1677,45 +1677,85 @@ export class StudentsService {
     };
   }
 
-  /** Public provisional marks lookup. Neither a result roster nor an official DMC endpoint. */
+  /**
+   * Candidate E-DMC lookup. Only an exact published Session V provisional mark
+   * and a matching 13-digit CNIC/B-Form may be returned. Never expose the
+   * student directory, original scan digest, correction audit or candidate
+   * document links here.
+   */
   async lookupProvisionalOmrMarks(rawRoll: string, rawCnic: string) {
     const roll = rawRoll.trim();
     const cnic = rawCnic.trim();
     const digits = cnic.replace(/\D/g, '');
-    const unavailable = { success: true, found: false, message: 'Marks are not available for those details.' };
-    if (digits.length < 5 || !roll) return unavailable;
-    const formatted = digits.length === 13
-      ? `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`
-      : null;
+    const unavailable = { success: true, found: false, message: 'No published E-DMC matches the supplied details.' };
+    if (digits.length !== 13 || roll.length < 4 || roll.length > 64) return unavailable;
+    const formatted = `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
     const student = await prisma.student.findFirst({
       where: {
+        status: 'ACTIVE',
         rollNumber: { equals: roll, mode: 'insensitive' },
         OR: [
           { cnicOrBForm: { equals: cnic } },
           { cnicOrBForm: { equals: digits } },
-          ...(formatted ? [{ cnicOrBForm: { equals: formatted } }] : []),
+          { cnicOrBForm: { equals: formatted } },
         ],
       },
-      select: { id: true, rollNumber: true },
+      select: {
+        id: true, rollNumber: true, applicationNo: true, fullName: true,
+        fatherName: true, currentClass: true, schoolName: true,
+        hsscGroup: true, bsDepartment: true, bsSemester: true,
+        district: true, registrationCentre: true,
+        officeUse: { select: { testCentre: true } },
+      },
     });
-    // Missing marks and mismatched credentials are indistinguishable to the caller.
     if (!student) return unavailable;
     const mark = (await findPublishedProvisionalMarks([student.id])).get(student.id);
     if (!mark) return unavailable;
-    const reviewPending = mark.reviewCategory.startsWith('HOLD_');
+
+    // The effective score includes an audited Super Admin correction when one
+    // exists. Do not display the obsolete scanned score as the current result.
+    const score = mark.obtainedMarks;
+    const resultStatus = score > 60 ? 'PASS' as const : 'FAIL' as const;
+    const reviewPending = mark.manualReviewRequired || mark.reviewCategory.startsWith('HOLD_');
+    let photoDataUrl: string | null = null;
+    // Only a verified candidate may see their private photo. Do not expose
+    // storage paths, signed URLs, full-size documents, or fallback fake photos.
+    try {
+      const image = await this.getStudentDocument(student.id, 'photoThumbnail');
+      if (['image/jpeg', 'image/png', 'image/webp'].includes(image.contentType)
+        && image.buffer.length > 0 && image.buffer.length <= 200_000) {
+        photoDataUrl = `data:${image.contentType};base64,${image.buffer.toString('base64')}`;
+      }
+    } catch {
+      // Missing older thumbnails are represented honestly in the certificate.
+    }
     return {
       success: true,
       found: true,
       data: {
-        rollNumber: student.rollNumber,
-        obtainedMarks: mark.obtainedMarks,
-        maximumMarks: 100,
         status: 'PROVISIONAL' as const,
+        fullName: student.fullName,
+        fatherName: student.fatherName,
+        rollNumber: student.rollNumber,
+        applicationNo: student.applicationNo,
+        className: student.currentClass,
+        studyGroup: student.hsscGroup || student.bsDepartment || null,
+        semester: student.bsSemester || null,
+        schoolName: student.schoolName,
+        district: student.district,
+        testCenter: student.officeUse?.testCentre || student.registrationCentre || null,
+        session: 'Session V · 2026',
+        publishedAt: mark.publishedAt.toISOString(),
+        photoDataUrl,
+        obtainedMarks: score,
+        maximumMarks: mark.maximumMarks,
+        percentage: mark.maximumMarks > 0 ? Number((score / mark.maximumMarks * 100).toFixed(2)) : 0,
+        resultStatus,
+        passThreshold: 60,
         reviewPending,
-        paperVersionProvisional: mark.paperVersionStatus !== 'CONFIDENT_SINGLE',
         notice: reviewPending
-          ? 'Provisional OMR mark, with candidate identity or printed-class review still pending. This mark may change.'
-          : 'Provisional OMR mark. Paper-version and scanning reviews may still change the score. Not an official result or DMC.',
+          ? 'This provisional E-DMC includes marks still subject to an OMR or identity review.'
+          : 'This E-DMC is provisional and is not an official examination certificate.',
       },
     };
   }
