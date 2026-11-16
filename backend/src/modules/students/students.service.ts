@@ -23,7 +23,7 @@ import {
 } from './students.schema';
 import { AppError } from '../../middleware/error.middleware';
 import { buildStudentDirectoryTextCondition, buildStudentSchoolCondition } from './studentDirectoryFilters';
-import { findPublishedProvisionalMarks, sortProvisionalStudentIds } from './provisionalOmrMarks';
+import { findPublishedProvisionalMarks, sortProvisionalStudentIds, provisionalEdmcOutcome } from './provisionalOmrMarks';
 
 export function buildIssuedAttendanceQrPayload(student: { rollNumber?: string | null; qrToken?: string | null }): string {
   if (!student.rollNumber || typeof student.qrToken !== 'string'
@@ -1715,7 +1715,7 @@ export class StudentsService {
     // The effective score includes an audited Super Admin correction when one
     // exists. Do not display the obsolete scanned score as the current result.
     const score = mark.obtainedMarks;
-    const resultStatus = score > 60 ? 'PASS' as const : 'FAIL' as const;
+    const { resultStatus, percentage } = provisionalEdmcOutcome(score, mark.maximumMarks);
     const reviewPending = mark.manualReviewRequired || mark.reviewCategory.startsWith('HOLD_');
     let photoDataUrl: string | null = null;
     // Only a verified candidate may see their private photo. Do not expose
@@ -1749,7 +1749,7 @@ export class StudentsService {
         photoDataUrl,
         obtainedMarks: score,
         maximumMarks: mark.maximumMarks,
-        percentage: mark.maximumMarks > 0 ? Number((score / mark.maximumMarks * 100).toFixed(2)) : 0,
+        percentage,
         resultStatus,
         passThreshold: 60,
         reviewPending,
