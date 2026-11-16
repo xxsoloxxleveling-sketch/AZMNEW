@@ -602,6 +602,21 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
         </button>
       )}
 
+      {role === 'SUPER_ADMIN' && (
+        <button
+          type="button"
+          disabled={!student.provisionalOmr?.verified || downloadingEdmcId !== null}
+          onClick={() => { setActiveActionMenuId(null); void downloadVerifiedEdmc(student); }}
+          title={student.provisionalOmr?.verified
+            ? 'Download verified final marks as AZM E-DMC'
+            : 'Verify this student’s final marks before downloading the E-DMC'}
+          className="w-full text-left px-3 py-1.5 text-xs font-semibold text-[#185b9d] hover:bg-blue-50 flex items-center gap-2 transition disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-white"
+        >
+          {downloadingEdmcId === student.id ? <IconLoader size={14} className="animate-spin" /> : <IconDownloadSlip size={14} />}
+          <span>Download E-DMC</span>
+        </button>
+      )}
+
       {/* Download Registration PDF - All staff */}
       <button
         type="button"
@@ -817,6 +832,18 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
             </div>
 
             <div className="flex items-center gap-2">
+              {role === 'SUPER_ADMIN' && (
+                <button
+                  type="button"
+                  onClick={beginSelectedVerification}
+                  disabled={selectedForVerification.length === 0 || isLoading || !!verifyingMarksStudent}
+                  title="Review each selected student's original identity, paper version and class separately"
+                  className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <IconApproveFee size={14} />
+                  <span>Verify Selected ({selectedForVerification.length})</span>
+                </button>
+              )}
               {canApproveFees && (
                 <button
                   type="button"
@@ -1068,12 +1095,22 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                             {role === 'SUPER_ADMIN' && student.provisionalOmr && !student.provisionalOmr.verified && (
                               <button
                                 type="button"
-                                onClick={() => setVerifyingMarksStudent(student)}
+                                onClick={() => beginSingleVerification(student)}
                                 title={`Review evidence and verify final marks for ${student.fullName}`}
                                 aria-label={`Verify final marks for ${student.fullName}`}
                                 className="inline-flex items-center gap-1 rounded-md border border-emerald-300 px-2 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-[#18723e]"
                               >
                                 <IconApproveFee size={12} aria-hidden="true" /> Verify
+                              </button>
+                            )}
+                            {role === 'SUPER_ADMIN' && student.provisionalOmr?.verified && (
+                              <button type="button"
+                                onClick={() => { void downloadVerifiedEdmc(student); }}
+                                disabled={downloadingEdmcId !== null}
+                                aria-label={`Download E-DMC for ${student.fullName}`}
+                                title="Download verified E-DMC as PDF"
+                                className="inline-flex items-center gap-1 rounded-md border border-sky-300 px-2 py-1 text-[11px] font-semibold text-[#185b9d] hover:bg-sky-50 disabled:opacity-50">
+                                {downloadingEdmcId === student.id ? <IconLoader size={12} className="animate-spin" /> : <IconDownloadSlip size={12} />} E-DMC
                               </button>
                             )}
                           </div>
@@ -1280,9 +1317,16 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                           </button>
                         )}
                         {role === 'SUPER_ADMIN' && student.provisionalOmr && !student.provisionalOmr.verified && (
-                          <button type="button" onClick={() => setVerifyingMarksStudent(student)}
+                          <button type="button" onClick={() => beginSingleVerification(student)}
                             className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">
                             <IconApproveFee size={13} aria-hidden="true" /> Verify
+                          </button>
+                        )}
+                        {role === 'SUPER_ADMIN' && student.provisionalOmr?.verified && (
+                          <button type="button" onClick={() => { void downloadVerifiedEdmc(student); }}
+                            disabled={downloadingEdmcId !== null}
+                            className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-white px-2 py-1 text-xs font-semibold text-[#185b9d] hover:bg-sky-50 disabled:opacity-50">
+                            {downloadingEdmcId === student.id ? <IconLoader size={13} className="animate-spin" /> : <IconDownloadSlip size={13} />} E-DMC
                           </button>
                         )}
 
@@ -1429,9 +1473,14 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
 
       {role === 'SUPER_ADMIN' && verifyingMarksStudent && (
         <OmrMarkVerificationDialog
+          key={verifyingMarksStudent.id}
           student={verifyingMarksStudent}
-          onClose={() => setVerifyingMarksStudent(null)}
-          onVerified={() => fetchStudents(false)}
+          batchProgress={verificationBatchTotal > 1 ? {
+            current: verificationBatchTotal - verificationQueue.length,
+            total: verificationBatchTotal,
+          } : undefined}
+          onClose={closeVerification}
+          onVerified={completeVerifiedStudent}
         />
       )}
 
