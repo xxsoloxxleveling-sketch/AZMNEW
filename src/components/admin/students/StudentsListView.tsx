@@ -102,6 +102,9 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   const [omrStudent, setOmrStudent] = useState<MockStudent | null>(null);
   const [editingMarksStudent, setEditingMarksStudent] = useState<MockStudent | null>(null);
   const [verifyingMarksStudent, setVerifyingMarksStudent] = useState<MockStudent | null>(null);
+  const [verificationQueue, setVerificationQueue] = useState<MockStudent[]>([]);
+  const [verificationBatchTotal, setVerificationBatchTotal] = useState(0);
+  const [downloadingEdmcId, setDownloadingEdmcId] = useState<string | null>(null);
   const [bulkPrintType, setBulkPrintType] = useState<'OMR' | 'ROLL_SLIP' | null>(null);
   const [studentToEdit, setStudentToEdit] = useState<MockStudent | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -406,6 +409,55 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   const selectedUnpaidStudents = students.filter(
     (student) => selectedStudentIds.includes(student.id) && student.feeStatus !== 'PAID'
   );
+  const selectedForVerification = students.filter(
+    (student) => selectedStudentIds.includes(student.id) && student.provisionalOmr
+      && !student.provisionalOmr.verified && Number.isInteger(student.testScore)
+  );
+
+  // A multi-select action opens a guided, per-student review. It NEVER marks
+  // all selected students verified in one API call or reuses evidence checkboxes.
+  const beginSelectedVerification = () => {
+    if (role !== 'SUPER_ADMIN' || selectedForVerification.length === 0) return;
+    setVerificationQueue(selectedForVerification.slice(1));
+    setVerificationBatchTotal(selectedForVerification.length);
+    setVerifyingMarksStudent(selectedForVerification[0]);
+  };
+
+  const beginSingleVerification = (student: MockStudent) => {
+    setVerificationQueue([]);
+    setVerificationBatchTotal(0);
+    setVerifyingMarksStudent(student);
+  };
+
+  const closeVerification = () => {
+    setVerificationQueue([]);
+    setVerificationBatchTotal(0);
+    setVerifyingMarksStudent(null);
+  };
+
+  const completeVerifiedStudent = (student: MockStudent) => {
+    setSelectedStudentIds((prev) => prev.filter((id) => id !== student.id));
+    const next = verificationQueue[0] || null;
+    setVerificationQueue((prev) => prev.slice(1));
+    setVerifyingMarksStudent(next);
+    if (!next) setVerificationBatchTotal(0);
+    // Refresh the visible roster without resetting the remaining review queue.
+    void fetchStudents(false);
+  };
+
+  const downloadVerifiedEdmc = async (student: MockStudent) => {
+    if (role !== 'SUPER_ADMIN' || !student.provisionalOmr?.verified || downloadingEdmcId) return;
+    setDownloadingEdmcId(student.id);
+    try {
+      await mockApi.downloadVerifiedEdmcPdf(student.id, student.rollNumber);
+    } catch (error: any) {
+      alert(error?.message || 'Could not generate the E-DMC. Ensure the marks are still verified.');
+      void fetchStudents(false);
+    } finally {
+      setDownloadingEdmcId(null);
+    }
+  };
+
 
   const handleApproveSelectedFees = async () => {
     if (!canApproveFees || selectedUnpaidStudents.length === 0 || isApprovingSelectedFees) return;
