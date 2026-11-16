@@ -119,7 +119,7 @@ export function buildVerifiedEdmcHtml(record: VerifiedEdmcPrintData): string {
     '<div class="stat"><label>Percentage</label><strong>',percentage,'<small>%</small></strong></div>',
     '<div class="stat ',result.resultStatus==='PASS'?'pass':'fail','"><label>Result status</label><strong>',
     result.resultStatus,'</strong><em>VERIFIED</em></div></section>',
-    '<p class="pass-rule">Passing rule: <b>Above 60 marks = Pass.</b> Exactly 60 or below is not a pass.</p>',
+    '<p class="pass-rule">Passing rule: <b>60 marks or above = Pass.</b> Below 60 is Fail.</p>',
     '<div class="section-title">Important notice</div><ol class="notices">',
     ...notices.map((notice,i) => '<li><span class="notice-num">'+(i+1)+'</span><span>'+escapeHtml(notice)+'</span></li>'),
     '</ol><footer><div><b>AZM.AIO</b><div>Scholarship Examination · Session V 2026</div></div>',

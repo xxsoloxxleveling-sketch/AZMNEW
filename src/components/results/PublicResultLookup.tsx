@@ -134,14 +134,14 @@ export function PublicResultLookup() {
                 </div>
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">Pass threshold</p>
-                  <p className="mt-2 text-2xl font-bold text-amber-950">{record.resultStatus === 'PASS' ? 'Above 60' : '60 or below'}</p>
+                  <p className="mt-2 text-2xl font-bold text-amber-950">{record.resultStatus === 'PASS' ? '60 or above' : 'Below 60'}</p>
                   <p className="mt-1 text-xs text-amber-800">Assessment subject to review</p>
                 </div>
               </div>
               <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
                 <strong>Review pending.</strong> {record.notice}
               </p>
-              <p className="mt-3 text-xs leading-5 text-slate-500">Passing rule: above 60 marks qualifies as Pass; exactly 60 or below does not. Final eligibility depends on verification and subsequent selection stages.</p>
+              <p className="mt-3 text-xs leading-5 text-slate-500">Passing rule: 60 marks or above qualifies as Pass; below 60 does not. Final eligibility depends on verification and subsequent selection stages.</p>
             </section>
           )}
         </div>

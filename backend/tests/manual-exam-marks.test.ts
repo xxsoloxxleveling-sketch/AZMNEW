@@ -61,7 +61,7 @@ test('public manual marks expose only a review-pending score, never scan claims 
   assert.equal(publicCurrentManualMarks({
     obtainedMarks: 60, maximumMarks: 100,
     publishedAt: new Date('2026-11-16T06:00:00.000Z'),
-  }).resultStatus, 'FAIL');
+  }).resultStatus, 'PASS');
 });
 
 test('manual-mark endpoint cannot be used by an unauthenticated visitor', async () => {

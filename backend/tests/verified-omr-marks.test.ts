@@ -20,8 +20,9 @@ test('signed OMR verification RPC casts every PostgreSQL argument explicitly', (
   ]);
 });
 
-test('marks exactly at passing boundary are not a pass', () => {
-  assert.equal(provisionalEdmcOutcome(60, 100).resultStatus, 'FAIL');
+test('59 fails and 60 or above passes at the boundary', () => {
+  assert.equal(provisionalEdmcOutcome(59, 100).resultStatus, 'FAIL');
+  assert.equal(provisionalEdmcOutcome(60, 100).resultStatus, 'PASS');
   assert.equal(provisionalEdmcOutcome(61, 100).resultStatus, 'PASS');
 });
 

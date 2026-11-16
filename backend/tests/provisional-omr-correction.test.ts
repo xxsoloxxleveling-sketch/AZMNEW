@@ -42,8 +42,8 @@ test('the correction SQL explicitly casts Prisma number params to PostgreSQL int
   assert.deepEqual(query.values, ['student-1', 54, 60, 'Checked original answer sheet.', 'admin-1']);
 });
 
-test('public E-DMC passing threshold is strictly above 60 with correct percentage', () => {
-  assert.deepEqual(provisionalEdmcOutcome(60, 100), { resultStatus: 'FAIL', percentage: 60 });
+test('public E-DMC passing threshold includes 60 with correct percentage', () => {
+  assert.deepEqual(provisionalEdmcOutcome(60, 100), { resultStatus: 'PASS', percentage: 60 });
   assert.deepEqual(provisionalEdmcOutcome(61, 100), { resultStatus: 'PASS', percentage: 61 });
   assert.deepEqual(provisionalEdmcOutcome(100, 100), { resultStatus: 'PASS', percentage: 100 });
   assert.deepEqual(provisionalEdmcOutcome(0, 100), { resultStatus: 'FAIL', percentage: 0 });
