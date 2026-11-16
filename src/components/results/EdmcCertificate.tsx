@@ -58,7 +58,7 @@ export function EdmcCertificate({ record }: { record: PublicEdmcRecord }) {
   const marks = Number(record.obtainedMarks);
   const maximum = Number(record.maximumMarks);
   const percentage = Number(record.percentage);
-  const isPass = marks > record.passThreshold;
+  const isPass = marks >= record.passThreshold;
   const status = isPass ? 'PASS' : 'FAIL';
 
   return (
@@ -122,7 +122,7 @@ export function EdmcCertificate({ record }: { record: PublicEdmcRecord }) {
             <small>Verified</small>
           </div>
         </div>
-        <p className="edmc-passing-rule"><ShieldCheck size={17} aria-hidden="true" /> Passing rule: <strong>Above 60 marks = Pass.</strong> Exactly 60 or below is not a pass.</p>
+        <p className="edmc-passing-rule"><ShieldCheck size={17} aria-hidden="true" /> Passing rule: <strong>60 marks or above = Pass.</strong> Below 60 is Fail.</p>
       </section>
 
       <section className="edmc-notices" aria-labelledby="edmc-terms-heading">

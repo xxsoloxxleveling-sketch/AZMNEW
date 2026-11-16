@@ -102,7 +102,7 @@ export function ManualExamMarksDialog({
                 required data-autofocus value={marks}
                 onChange={event => { setMarks(event.target.value); setError(''); }}
                 placeholder="Enter 0–100" className={attendanceField + ' mt-1.5'} />
-              <span className="mt-1 block text-[11px] font-normal text-slate-500">Enter a whole number. 60 or below = Fail; above 60 = Pass.</span>
+              <span className="mt-1 block text-[11px] font-normal text-slate-500">Enter a whole number. Below 60 = Fail; 60 or above = Pass.</span>
             </label>
             <label className="block text-xs font-semibold text-slate-700">
               Evidence reference (required)

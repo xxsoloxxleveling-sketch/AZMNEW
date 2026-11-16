@@ -5,6 +5,7 @@ on:
     branches:
       - feature/superadmin-add-missing-manual-marks-20261116
       - feature/verified-manual-exam-marks-pr51-20261117
+      - fix/pr51-threshold-migration-20261117
 
 permissions:
   contents: read
@@ -64,7 +65,7 @@ jobs:
         run: ./node_modules/.bin/tsc --noEmit --pretty false
       - name: Run manual score unit and public authorization tests
         working-directory: backend
-        run: node --import tsx --test tests/manual-exam-marks.test.ts tests/manual-mark-verification.test.ts tests/public-current-omr-marks.test.ts
+        run: node --import tsx --test tests/manual-exam-marks.test.ts tests/manual-mark-verification.test.ts tests/public-current-omr-marks.test.ts tests/provisional-omr-correction.test.ts tests/verified-omr-marks.test.ts
       - name: Synthetic PostgreSQL 17 migration and source-collision check
         shell: bash
         run: |
@@ -77,15 +78,32 @@ jobs:
           );
           CREATE TABLE public."OmrProvisionalMark" (
             "studentId" text NOT NULL, "sessionReference" text NOT NULL,
-            PRIMARY KEY ("sessionReference","studentId")
+            "paperVersion" text NOT NULL DEFAULT 'A',
+            "reviewCategory" text NOT NULL DEFAULT 'READY_HIGH_CONFIDENCE',
+            PRIMARY KEY ("sessionReference","studentId"),
+            CONSTRAINT "OmrProvisionalMark_paperVersion_check" CHECK ("paperVersion" IN ('A','B','C','D')),
+            CONSTRAINT "OmrProvisionalMark_reviewCategory_check" CHECK ("reviewCategory" IN ('READY_HIGH_CONFIDENCE','HOLD_SCORE'))
           );
           CREATE TABLE public."ExaminationResult" ("studentId" text NOT NULL);
           INSERT INTO public."User" VALUES ('admin-synthetic','Synthetic Super Admin','SUPER_ADMIN','ACTIVE');
           INSERT INTO public."Student" VALUES ('candidate-synthetic','ACTIVE','AZM-01','APP-01',NULL);
+          INSERT INTO public."Student" VALUES ('zero-synthetic','ACTIVE','AZM-00','APP-00',NULL);
           ALTER TABLE public."Student"
             ADD COLUMN "fullName" TEXT NOT NULL DEFAULT 'Synthetic Student',
             ADD COLUMN "fatherName" TEXT NOT NULL DEFAULT 'Synthetic Parent',
             ADD COLUMN "currentClass" TEXT NOT NULL DEFAULT 'Class 6';
+          SQL
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres \
+            -f backend/prisma/migrations/20261116100000_allow_administrative_zero_unmarked_omr/migration.sql
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres <<'SQL'
+          INSERT INTO public."OmrProvisionalMark" ("studentId","sessionReference","paperVersion","reviewCategory")
+            VALUES ('zero-synthetic','2026-V','UNDETERMINED','ADMIN_ZERO_OVERRIDE_REVIEW');
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM public."OmrProvisionalMark" WHERE "studentId"='zero-synthetic'
+              AND "paperVersion"='UNDETERMINED' AND "reviewCategory"='ADMIN_ZERO_OVERRIDE_REVIEW') THEN
+              RAISE EXCEPTION 'Administrative-zero migration semantics missing';
+            END IF;
+          END $$;
           SQL
           psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres \
             -f backend/prisma/migrations/20261116110000_superadmin_manual_exam_mark_entry/migration.sql

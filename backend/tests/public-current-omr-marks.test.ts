@@ -27,8 +27,9 @@ test('unverified marks public response contains only recorded score, not PII or 
   }
 });
 
-test('public current-score rule fails at 60 and passes at 61, never implies verification', () => {
-  assert.equal(publicCurrentOmrMarks(mark(60)).resultStatus, 'FAIL');
+test('public current-score rule fails at 59 and passes at 60 and 61, never implies verification', () => {
+  assert.equal(publicCurrentOmrMarks(mark(59)).resultStatus, 'FAIL');
+  assert.equal(publicCurrentOmrMarks(mark(60)).resultStatus, 'PASS');
   assert.equal(publicCurrentOmrMarks(mark(61)).resultStatus, 'PASS');
   assert.equal(publicCurrentOmrMarks(mark(61)).status, 'REVIEW_REQUIRED');
   assert.throws(() => publicCurrentOmrMarks(mark(101)));
