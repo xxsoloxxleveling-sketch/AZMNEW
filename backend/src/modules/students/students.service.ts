@@ -1710,7 +1710,9 @@ export class StudentsService {
     });
     if (!student) return unavailable;
     const mark = (await findPublishedProvisionalMarks([student.id])).get(student.id);
-    if (!mark) return unavailable;
+    // An explicit HOLD never becomes a candidate-facing E-DMC merely because
+    // a batch publication timestamp exists. Regional review must resolve it.
+    if (!mark || mark.reviewCategory.startsWith('HOLD_')) return unavailable;
 
     // The effective score includes an audited Super Admin correction when one
     // exists. Do not display the obsolete scanned score as the current result.
