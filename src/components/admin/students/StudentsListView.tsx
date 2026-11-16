@@ -1403,7 +1403,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                             <IconApproveFee size={13} aria-hidden="true" /> Verify
                           </button>
                         )}
-                        {role === 'SUPER_ADMIN' && student.provisionalOmr?.verified && (
+                        {role === 'SUPER_ADMIN' && (student.provisionalOmr?.verified || student.manualExamMark?.verified) && (
                           <button type="button" onClick={() => { void downloadVerifiedEdmc(student); }}
                             disabled={downloadingEdmcId !== null}
                             className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-white px-2 py-1 text-xs font-semibold text-[#185b9d] hover:bg-sky-50 disabled:opacity-50">
