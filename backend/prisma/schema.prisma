@@ -1168,6 +1168,9 @@ model OmrMarkVerificationAudit {
   latestCorrectionId String?
   rollNumberSnapshot String
   applicationNoSnapshot String
+  fullNameSnapshot String
+  fatherNameSnapshot String
+  currentClassSnapshot String
   reviewCategorySnapshot String
   identityStatusSnapshot String
   paperVersionStatusSnapshot String
