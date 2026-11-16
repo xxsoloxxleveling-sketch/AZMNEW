@@ -6,6 +6,8 @@ import { prisma } from '../../lib/prisma';
 export interface ProvisionalOmrMark {
   studentId: string;
   obtainedMarks: number;
+  maximumMarks: number;
+  publishedAt: Date;
   originalScannedMarks: number;
   manuallyCorrected: boolean;
   reviewCategory: string;
@@ -20,6 +22,7 @@ export async function findPublishedProvisionalMarks(studentIds: string[]): Promi
   const rows = await prisma.$queryRaw<ProvisionalOmrMark[]>(Prisma.sql`
     SELECT "studentId",
       COALESCE("correctedMarks","obtainedMarks") AS "obtainedMarks",
+      "maximumMarks", "publishedAt",
       "obtainedMarks" AS "originalScannedMarks",
       ("correctedMarks" IS NOT NULL) AS "manuallyCorrected",
       "reviewCategory", "identityStatus",
