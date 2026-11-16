@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { spawn } from 'child_process';
 import { studentsService } from './students.service';
-import { correctPublishedProvisionalOmrMark, getProvisionalMarkCorrectionHistory } from './provisionalOmrMarks';
+import { correctPublishedProvisionalOmrMark, getProvisionalMarkCorrectionHistory, verifyPublishedOmrMark } from './provisionalOmrMarks';
 import { signUploadSessionToken, verifyAccessToken, verifyUploadSessionToken } from '../../lib/jwt';
 
 let thumbnailBackfillJob: {
@@ -236,6 +236,30 @@ export class StudentsController {
         success: true,
         message: 'Provisional marks corrected and audit entry saved.',
         data: changed,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyOmrMark(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, error: { message: 'Login required.' } });
+      const verified = await verifyPublishedOmrMark(
+        req.params.id,
+        req.body.expectedCurrentMarks,
+        req.body.evidenceReference,
+        req.body.reason,
+        req.body.identityReviewed,
+        req.body.paperVersionReviewed,
+        req.body.printedClassReviewed,
+        req.user.id,
+      );
+      res.set('Cache-Control', 'private, no-store');
+      res.status(200).json({
+        success: true,
+        message: 'Final obtained marks verified with an immutable evidence record.',
+        data: verified,
       });
     } catch (error) {
       next(error);

@@ -15,21 +15,52 @@ export interface ProvisionalOmrMark {
   paperVersionStatus: string;
   printedClassDisagrees: boolean;
   manualReviewRequired: boolean;
+  verified: boolean;
+  verifiedAt: Date | null;
 }
 
 export async function findPublishedProvisionalMarks(studentIds: string[]): Promise<Map<string, ProvisionalOmrMark>> {
   if (studentIds.length === 0) return new Map();
   const rows = await prisma.$queryRaw<ProvisionalOmrMark[]>(Prisma.sql`
-    SELECT "studentId",
-      COALESCE("correctedMarks","obtainedMarks") AS "obtainedMarks",
-      "maximumMarks", "publishedAt",
-      "obtainedMarks" AS "originalScannedMarks",
-      ("correctedMarks" IS NOT NULL) AS "manuallyCorrected",
-      "reviewCategory", "identityStatus",
-      "paperVersionStatus", "printedClassDisagrees", "manualReviewRequired"
-    FROM public."OmrProvisionalMark"
-    WHERE "sessionReference" = '2026-V' AND "publishedAt" IS NOT NULL
-      AND "studentId" IN (${Prisma.join(studentIds)})
+    SELECT m."studentId",
+      COALESCE(m."correctedMarks",m."obtainedMarks") AS "obtainedMarks",
+      m."maximumMarks", m."publishedAt",
+      m."obtainedMarks" AS "originalScannedMarks",
+      (m."correctedMarks" IS NOT NULL) AS "manuallyCorrected",
+      m."reviewCategory", m."identityStatus",
+      m."paperVersionStatus", m."printedClassDisagrees", m."manualReviewRequired",
+      COALESCE(seal.valid, FALSE) AS "verified",
+      CASE WHEN seal.valid THEN seal."verifiedAt" ELSE NULL END AS "verifiedAt"
+    FROM public."OmrProvisionalMark" m
+    LEFT JOIN public."Student" s ON s.id=m."studentId"
+    LEFT JOIN LATERAL (
+      SELECT c.id FROM public."OmrProvisionalMarkCorrectionAudit" c
+      WHERE c."sessionReference"=m."sessionReference" AND c."studentId"=m."studentId"
+      ORDER BY c."occurredAt" DESC, c.id DESC LIMIT 1
+    ) latest_correction ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT
+        (
+          v."verifiedMarks" = COALESCE(m."correctedMarks",m."obtainedMarks")
+          AND v."maximumMarks" = m."maximumMarks"
+          AND v."scanSha256" = m."scanSha256"
+          AND v."latestCorrectionId" IS NOT DISTINCT FROM latest_correction.id
+          AND v."rollNumberSnapshot" = s."rollNumber"
+          AND v."applicationNoSnapshot" = s."applicationNo"
+          AND v."fullNameSnapshot" = s."fullName"
+          AND v."fatherNameSnapshot" = s."fatherName"
+          AND v."currentClassSnapshot" = s."currentClass"
+          AND v."rollNumberSnapshot" = m."rollNumberSnapshot"
+          AND v."applicationNoSnapshot" = m."applicationNoSnapshot"
+          AND s.status::TEXT = 'ACTIVE'
+        ) AS valid,
+        v."verifiedAt"
+      FROM public."OmrMarkVerificationAudit" v
+      WHERE v."sessionReference"=m."sessionReference" AND v."studentId"=m."studentId"
+      ORDER BY v.id DESC LIMIT 1
+    ) seal ON TRUE
+    WHERE m."sessionReference" = '2026-V' AND m."publishedAt" IS NOT NULL
+      AND m."studentId" IN (${Prisma.join(studentIds)})
   `);
   return new Map(rows.map((item) => [item.studentId, item]));
 }
@@ -137,6 +168,72 @@ export async function correctPublishedProvisionalOmrMark(
     if (details.includes('SUPER_ADMIN_REQUIRED')) throw httpError(403, 'An active Super Admin account is required to correct marks.');
     if (details.includes('NO_MARK_CHANGE')) throw httpError(400, 'Enter a new mark different from the current value.');
     if (details.includes('INVALID_MARK_CORRECTION')) throw httpError(400, 'Invalid mark or correction reason.');
+    throw error;
+  }
+}
+
+export interface MarkVerificationReceipt {
+  verificationId: string;
+  verifiedMarks: number;
+  verifiedAt: Date;
+}
+
+/** Explicitly signed evidence for the particular score revision. */
+export function buildOmrMarkVerificationQuery(
+  studentId: string,
+  expectedCurrentMarks: number,
+  evidenceReference: string,
+  reason: string,
+  identityReviewed: boolean,
+  paperVersionReviewed: boolean,
+  printedClassReviewed: boolean,
+  actorId: string,
+): Prisma.Sql {
+  return Prisma.sql`
+    SELECT verification_id, verified_marks, verified_at
+    FROM public.azm_verify_omr_mark(
+      ${studentId}::text, ${expectedCurrentMarks}::integer,
+      ${evidenceReference}::text, ${reason}::text,
+      ${identityReviewed}::boolean, ${paperVersionReviewed}::boolean,
+      ${printedClassReviewed}::boolean, ${actorId}::text
+    )
+  `;
+}
+
+export async function verifyPublishedOmrMark(
+  studentId: string,
+  expectedCurrentMarks: number,
+  evidenceReference: string,
+  reason: string,
+  identityReviewed: boolean,
+  paperVersionReviewed: boolean,
+  printedClassReviewed: boolean,
+  actorId: string,
+): Promise<MarkVerificationReceipt> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{
+      verification_id: string;
+      verified_marks: number;
+      verified_at: Date;
+    }>>(buildOmrMarkVerificationQuery(
+      studentId, expectedCurrentMarks, evidenceReference, reason,
+      identityReviewed, paperVersionReviewed, printedClassReviewed, actorId,
+    ));
+    const row = rows[0];
+    if (!row) throw httpError(409, 'Verification receipt was not produced.');
+    return {
+      verificationId: row.verification_id,
+      verifiedMarks: row.verified_marks,
+      verifiedAt: row.verified_at,
+    };
+  } catch (error) {
+    const details = String((error as any)?.meta?.message ?? (error as Error).message ?? '');
+    if (details.includes('STALE_MARK')) throw httpError(409, 'Marks have changed. Refresh before verifying.');
+    if (details.includes('MARK_NOT_FOUND')) throw httpError(404, 'No published marks exist for this student.');
+    if (details.includes('ALREADY_VERIFIED')) throw httpError(409, 'This score revision is already verified.');
+    if (details.includes('IDENTITY_SNAPSHOT_MISMATCH')) throw httpError(409, 'Student identity or roll number does not match the original OMR scan. Reconcile records before verification.');
+    if (details.includes('SUPER_ADMIN_REQUIRED')) throw httpError(403, 'An active Super Admin is required to verify marks.');
+    if (details.includes('INVALID_VERIFICATION_EVIDENCE')) throw httpError(400, 'Verification requires evidence, a detailed reason and explicit review of identity, paper version and class.');
     throw error;
   }
 }

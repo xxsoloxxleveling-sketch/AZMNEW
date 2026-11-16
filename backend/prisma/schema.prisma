@@ -113,6 +113,7 @@ model User {
   publishedExaminationResults ExaminationResult[] @relation("ResultPublisher")
   resultCorrectionAudits ResultCorrectionAudit[] @relation("ResultCorrectionActor")
   omrMarkCorrections OmrProvisionalMarkCorrectionAudit[] @relation("OmrMarkCorrectionActor")
+  omrMarkVerifications OmrMarkVerificationAudit[] @relation("OmrMarkVerifier")
   dmcPreparations DmcIssuancePreparation[] @relation("DmcPreparationActor")
   issuedDmcDocuments DmcIssuance[] @relation("DmcIssuer")
   dmcIssuanceEvents DmcIssuanceEvent[] @relation("DmcEventActor")
@@ -1112,6 +1113,7 @@ model OmrProvisionalMark {
   importedAt DateTime @default(now())
   student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
   corrections OmrProvisionalMarkCorrectionAudit[]
+  verifications OmrMarkVerificationAudit[]
   @@id([sessionReference, studentId])
   @@index([sessionReference, obtainedMarks(sort: Desc)])
   @@index([sessionReference, reviewCategory])
@@ -1149,4 +1151,40 @@ model OmrProvisionalMarkCorrectionAudit {
   actor User @relation("OmrMarkCorrectionActor", fields: [actorId], references: [id], onDelete: Restrict)
   @@index([studentId, occurredAt])
   @@index([actorId, occurredAt])
+}
+
+
+// Append-only Super Admin review attestations for final overall Session V
+// marks. Earlier events remain historical; only the newest event matching
+// the exact mark and correction revision counts as currently verified.
+model OmrMarkVerificationAudit {
+  id BigInt @id @default(autoincrement())
+  sessionReference String
+  studentId String
+  verifiedMarks Int
+  maximumMarks Int
+  originalScannedMarks Int
+  scanSha256 String
+  latestCorrectionId String?
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  fullNameSnapshot String
+  fatherNameSnapshot String
+  currentClassSnapshot String
+  reviewCategorySnapshot String
+  identityStatusSnapshot String
+  paperVersionStatusSnapshot String
+  printedClassDisagreesSnapshot Boolean
+  reviewEvidenceReference String @db.Text
+  verificationReason String @db.Text
+  identityReviewed Boolean
+  paperVersionReviewed Boolean
+  printedClassReviewed Boolean
+  actorId String
+  actorName String
+  verifiedAt DateTime @default(now())
+  mark OmrProvisionalMark @relation(fields: [sessionReference, studentId], references: [sessionReference, studentId], onDelete: Restrict)
+  actor User @relation("OmrMarkVerifier", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([sessionReference, studentId, id(sort: Desc)])
+  @@index([actorId, id(sort: Desc)])
 }

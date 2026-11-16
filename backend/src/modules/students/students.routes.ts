@@ -8,6 +8,7 @@ import {
   officeUseUpdateSchema,
   studentQuerySchema,
   publicEdmcLookupSchema,
+  verifiedOmrMarkSchema,
   provisionalOmrMarkCorrectionSchema,
   selectedStudentsPdfSchema,
   uploadDocumentSchema,
@@ -227,6 +228,15 @@ router.patch(
   authorizeRoles(Role.SUPER_ADMIN),
   validateBody(provisionalOmrMarkCorrectionSchema),
   studentsController.correctProvisionalOmrMarks
+);
+
+// Verification is an audited, per-candidate Super Admin action. Never bulk
+// label the entire roster as verified without checking the original evidence.
+router.post(
+  '/:id/verify-omr-mark',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(verifiedOmrMarkSchema),
+  studentsController.verifyOmrMark
 );
 
 router.get(

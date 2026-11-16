@@ -77,6 +77,26 @@ export class OmrStudioImportService {
         return fail('OMR_CORRECTION_AUDIT_MISMATCH', 'The revised mark is missing a matching audit record.');
       }
       const finalMarks = provisional?.correctedMarks ?? scored.marks;
+      // The official DMC pipeline must use the exact score revision the Super
+      // Admin attested to. Never silently import an unreviewed roster score.
+      const latestVerification = provisional ? await tx.omrMarkVerificationAudit.findFirst({
+        where: { sessionReference: '2026-V', studentId: student.id },
+        orderBy: { id: 'desc' },
+      }) : null;
+      if (provisional && (
+        !latestVerification
+        || latestVerification.verifiedMarks !== finalMarks
+        || latestVerification.maximumMarks !== provisional.maximumMarks
+        || latestVerification.scanSha256 !== provisional.scanSha256
+        || latestVerification.latestCorrectionId !== (latestCorrection?.id ?? null)
+        || latestVerification.rollNumberSnapshot !== student.rollNumber
+        || latestVerification.applicationNoSnapshot !== student.applicationNo
+        || latestVerification.fullNameSnapshot !== student.fullName
+        || latestVerification.fatherNameSnapshot !== student.fatherName
+        || latestVerification.currentClassSnapshot !== student.currentClass
+      )) {
+        return fail('OMR_MARK_NOT_VERIFIED', 'This score revision has not been signed off by an authorized examiner. Verify the final mark and original sheet before official import.');
+      }
       const correctionReason = provisional?.correctedMarks != null
         ? `Reviewed OMR correction ${latestCorrection!.id}: ${latestCorrection!.reason}`
         : null;
@@ -103,7 +123,7 @@ export class OmrStudioImportService {
       } });
       await tx.resultCorrectionAudit.create({ data: {
         resultId: result.id, studentId: student.id, examinationId: exam.id, previousRevision: 0, newRevision: 1,
-        oldValues: {}, newValues: { omrFingerprint: fingerprint, scanSha256: input.scanSha256, attemptId: roster.sessionId, cohort, paperVersion: input.paperVersion, obtainedMarks: finalMarks, originalScannedMarks: scored.marks, provisionalCorrectionId: latestCorrection?.id ?? null, identityBasis: 'Studio-reported identifiers matched to student and frozen roster; QR signature not verified.', responseSource: 'OMR_DETECTED', keyPdfSha256: OMR_SOURCE_PDF_SHA256 } as Prisma.InputJsonValue,
+        oldValues: {}, newValues: { omrFingerprint: fingerprint, scanSha256: input.scanSha256, attemptId: roster.sessionId, cohort, paperVersion: input.paperVersion, obtainedMarks: finalMarks, originalScannedMarks: scored.marks, provisionalCorrectionId: latestCorrection?.id ?? null, verificationAuditId: latestVerification?.id.toString() ?? null, identityBasis: 'Studio-reported identifiers matched to student and frozen roster; QR signature not verified.', responseSource: 'OMR_DETECTED', keyPdfSha256: OMR_SOURCE_PDF_SHA256 } as Prisma.InputJsonValue,
         reason: correctionReason ?? 'Automated OMR Studio import using approved marking policy.', actorId: actor.id, actorName: actor.name,
         source: 'RESULTS_DASHBOARD', publicationImpact: 'Final result available to authorized administrators.',
       } });
