@@ -4,11 +4,12 @@ import { AttendanceDialog, attendanceField, attendancePrimary, attendanceSeconda
 import { mockApi, type MockStudent } from '../../../lib/mockApi';
 
 export function OmrMarkVerificationDialog({
-  student, onClose, onVerified,
+  student, onClose, onVerified, batchProgress,
 }: {
   student: MockStudent;
   onClose: () => void;
-  onVerified: () => void | Promise<void>;
+  onVerified: (student: MockStudent) => void | Promise<void>;
+  batchProgress?: { current: number; total: number };
 }) {
   const [evidenceReference, setEvidenceReference] = useState('');
   const [reason, setReason] = useState('');
@@ -37,8 +38,10 @@ export function OmrMarkVerificationDialog({
         paperVersionReviewed: true,
         printedClassReviewed: true,
       });
-      await onVerified();
-      onClose();
+      // The parent decides whether to close or open the next selected
+      // student. Do not call onClose after onVerified: that would close
+      // the next record and risk carrying checklist state to a new student.
+      await onVerified(student);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not verify this score. Refresh and try again.');
     } finally {
@@ -48,7 +51,7 @@ export function OmrMarkVerificationDialog({
 
   return (
     <AttendanceDialog
-      title="Verify final examination marks"
+      title={batchProgress ? `Verify final marks · ${batchProgress.current} of ${batchProgress.total}` : 'Verify final examination marks'}
       busy={busy}
       onClose={onClose}
       footer={<>

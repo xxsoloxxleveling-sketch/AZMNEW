@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { spawn } from 'child_process';
 import { studentsService } from './students.service';
 import { correctPublishedProvisionalOmrMark, getProvisionalMarkCorrectionHistory, verifyPublishedOmrMark } from './provisionalOmrMarks';
+import { generateVerifiedEdmcPdf } from './verifiedEdmcPdf';
 import { signUploadSessionToken, verifyAccessToken, verifyUploadSessionToken } from '../../lib/jwt';
 
 let thumbnailBackfillJob: {
@@ -237,6 +238,20 @@ export class StudentsController {
         message: 'Provisional marks corrected and audit entry saved.',
         data: changed,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async downloadVerifiedEdmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { buffer, filename } = await generateVerifiedEdmcPdf(req.params.id);
+      res.set('Cache-Control', 'private, no-store, max-age=0');
+      res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', 'attachment; filename="' + filename + '"');
+      res.set('Content-Length', String(buffer.length));
+      res.status(200).send(buffer);
     } catch (error) {
       next(error);
     }
