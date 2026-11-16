@@ -24,6 +24,7 @@ import {
 import { AppError } from '../../middleware/error.middleware';
 import { buildStudentDirectoryTextCondition, buildStudentSchoolCondition } from './studentDirectoryFilters';
 import { findPublishedProvisionalMarks, sortProvisionalStudentIds, provisionalEdmcOutcome, publicCurrentOmrMarks } from './provisionalOmrMarks';
+import { findPublishedManualExamMarks, publicCurrentManualMarks } from './manualExamMarks';
 
 export function buildIssuedAttendanceQrPayload(student: { rollNumber?: string | null; qrToken?: string | null }): string {
   if (!student.rollNumber || typeof student.qrToken !== 'string'
@@ -1716,7 +1717,14 @@ export class StudentsService {
     if (matches.length !== 1) return unavailable;
     const student = matches[0];
     const mark = (await findPublishedProvisionalMarks([student.id])).get(student.id);
-    if (!mark) return unavailable;
+    if (!mark) {
+      const manual = (await findPublishedManualExamMarks([student.id])).get(student.id);
+      // A manually added mark remains under review and cannot borrow the
+      // scanner verification seal or a different student's identity details.
+      if (!manual || manual.rollNumberSnapshot !== student.rollNumber ||
+        manual.applicationNoSnapshot !== student.applicationNo) return unavailable;
+      return { success: true, found: true, data: publicCurrentManualMarks(manual) };
+    }
     // Published OMR totals are visible as current marks; only separately
     // attested score revisions can display the verified E-DMC with identity,
     // portrait and downloadable certificate. Never label an unchecked score
@@ -1811,12 +1819,22 @@ export class StudentsService {
     // The separate OMR register is the source of provisional marks.
     // Sort the complete filtered roster before pagination; never sort only 20 visible rows.
     let allPageMarkMap: Awaited<ReturnType<typeof findPublishedProvisionalMarks>> | null = null;
+    let allPageManualMarkMap: Awaited<ReturnType<typeof findPublishedManualExamMarks>> | null = null;
     let orderedPageIds: string[] | null = null;
     let sortedTotal: number | null = null;
     if (query.marksSort) {
       const rosterIds = (await prisma.student.findMany({ where, select: { id: true } })).map(student => student.id);
-      allPageMarkMap = await findPublishedProvisionalMarks(rosterIds);
-      const allSortedIds = sortProvisionalStudentIds(rosterIds, allPageMarkMap, query.marksSort);
+      [allPageMarkMap, allPageManualMarkMap] = await Promise.all([
+        findPublishedProvisionalMarks(rosterIds),
+        findPublishedManualExamMarks(rosterIds),
+      ]);
+      // OMR is the authoritative source when present. The DB excludes a
+      // second manual source, and manual entries are independently audited.
+      const sortable = new Map<string, { obtainedMarks: number }>([
+        ...Array.from(allPageManualMarkMap.entries()),
+        ...Array.from(allPageMarkMap.entries()),
+      ]);
+      const allSortedIds = sortProvisionalStudentIds(rosterIds, sortable, query.marksSort);
       sortedTotal = rosterIds.length;
       orderedPageIds = allSortedIds.slice(skip, skip + limit);
     }
@@ -1890,14 +1908,21 @@ export class StudentsService {
         })
       : students;
     const markMap = allPageMarkMap ?? await findPublishedProvisionalMarks(displayed.map(student => student.id));
+    const manualMarkMap = allPageManualMarkMap ?? await findPublishedManualExamMarks(displayed.map(student => student.id));
     if (sortedTotal !== null) total = sortedTotal;
 
     return {
       students: displayed.map((s) => {
         const provisional = markMap.get(s.id);
+        const manual = !provisional ? manualMarkMap.get(s.id) : undefined;
         return {
           ...this.formatStudentWithDocuments(s),
-          testScore: provisional?.obtainedMarks ?? s.testScore,
+          testScore: provisional?.obtainedMarks ?? manual?.obtainedMarks ?? s.testScore,
+          manualExamMark: manual ? {
+            source: 'SUPER_ADMIN_MANUAL' as const,
+            recordedAt: manual.recordedAt.toISOString(),
+            reviewRequired: true,
+          } : null,
           provisionalOmr: provisional ? {
             reviewCategory: provisional.reviewCategory,
             identityStatus: provisional.identityStatus,

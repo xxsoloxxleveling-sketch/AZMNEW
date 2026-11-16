@@ -160,6 +160,17 @@ export const selectedStudentsPdfSchema = z.object({
 }).strict();
 
 // Public marks-only access uses two matching identifiers and never discloses a student roster.
+/** Manual entry is a new independent, immutable examination score, never
+ * a fabricated OMR scan and never an overwrite of an existing mark.
+ */
+export const manualExamMarkEntrySchema = z.object({
+  obtainedMarks: z.number().int().min(0).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  attendanceReviewed: z.literal(true),
+}).strict();
+
 // Only a Super Admin may edit a recorded provisional mark. The current
 // value is required for optimistic concurrency and a reason for the audit.
 export const provisionalOmrMarkCorrectionSchema = z.object({

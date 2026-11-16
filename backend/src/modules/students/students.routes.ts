@@ -11,6 +11,7 @@ import {
   verifiedOmrMarkSchema,
   bulkVerifiedOmrMarkSchema,
   provisionalOmrMarkCorrectionSchema,
+  manualExamMarkEntrySchema,
   selectedStudentsPdfSchema,
   uploadDocumentSchema,
 } from './students.schema';
@@ -214,6 +215,15 @@ router.post(
   authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN),
   validateBody(selectedStudentsPdfSchema),
   studentsController.printReadiness
+);
+
+// A separate source for Super Admin-entered results missing an OMR mark.
+// The database refuses any existing OMR/manual/official score.
+router.post(
+  '/:id/manual-exam-mark',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(manualExamMarkEntrySchema),
+  studentsController.addManualExamMarks
 );
 
 // These endpoints follow router.use(authenticate). Other staff roles

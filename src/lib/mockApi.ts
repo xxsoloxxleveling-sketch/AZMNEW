@@ -82,6 +82,11 @@ export interface MockStudent {
   qrImageUrl?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'PASSED_OUT' | 'EXPELLED';
   testScore?: number | null; // Current overall score; verification state is on the OMR record.
+  manualExamMark?: {
+    source: 'SUPER_ADMIN_MANUAL';
+    recordedAt: string;
+    reviewRequired: boolean;
+  } | null;
   provisionalOmr?: {
     reviewCategory: string;
     identityStatus: string;
@@ -1130,6 +1135,20 @@ export const mockApi = {
   async getStudents(filters?: { classLevel?: string; gender?: string; status?: string; search?: string; schoolName?: string }): Promise<MockStudent[]> {
     const result = await this.getStudentsPage({ ...filters, page: 1, limit: 250 });
     return result.students;
+  },
+
+  /** Add an immutable score only for a student with no examination marks. */
+  async addManualExamMark(studentId: string, payload: {
+    obtainedMarks: number;
+    evidenceReference: string;
+    reason: string;
+    identityReviewed: true;
+    attendanceReviewed: true;
+  }): Promise<{ recordedMarks: number; recordedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   /** Only SUPER_ADMIN is authorized; the backend rechecks the role and audits the change. */
