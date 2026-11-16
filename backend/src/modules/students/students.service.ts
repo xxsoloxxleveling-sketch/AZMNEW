@@ -23,7 +23,7 @@ import {
 } from './students.schema';
 import { AppError } from '../../middleware/error.middleware';
 import { buildStudentDirectoryTextCondition, buildStudentSchoolCondition } from './studentDirectoryFilters';
-import { findPublishedProvisionalMarks, sortProvisionalStudentIds, provisionalEdmcOutcome } from './provisionalOmrMarks';
+import { findPublishedProvisionalMarks, sortProvisionalStudentIds, provisionalEdmcOutcome, publicCurrentOmrMarks } from './provisionalOmrMarks';
 
 export function buildIssuedAttendanceQrPayload(student: { rollNumber?: string | null; qrToken?: string | null }): string {
   if (!student.rollNumber || typeof student.qrToken !== 'string'
@@ -1711,9 +1711,14 @@ export class StudentsService {
     if (matches.length !== 1) return unavailable;
     const student = matches[0];
     const mark = (await findPublishedProvisionalMarks([student.id])).get(student.id);
-    // Only a score revision explicitly signed off by a Super Admin may be
-    // presented as a final result. Original review flags remain historical.
-    if (!mark?.verified || !mark.verifiedAt) return unavailable;
+    if (!mark) return unavailable;
+    // Published OMR totals are visible as current marks; only separately
+    // attested score revisions can display the verified E-DMC with identity,
+    // portrait and downloadable certificate. Never label an unchecked score
+    // as verified or disclose full student identity through CNIC-only search.
+    if (!mark.verified || !mark.verifiedAt) {
+      return { success: true, found: true, data: publicCurrentOmrMarks(mark) };
+    }
 
     // The effective score includes an audited Super Admin correction when one
     // exists. Do not display the obsolete scanned score as the current result.
