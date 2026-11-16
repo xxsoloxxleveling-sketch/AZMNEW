@@ -115,6 +115,7 @@ model User {
   omrMarkCorrections OmrProvisionalMarkCorrectionAudit[] @relation("OmrMarkCorrectionActor")
   omrMarkVerifications OmrMarkVerificationAudit[] @relation("OmrMarkVerifier")
   manualExamMarkEntries ManualExamMark[] @relation("ManualExamMarkActor")
+  manualExamMarkVerifications ManualExamMarkVerificationAudit[] @relation("ManualExamMarkVerifier")
   dmcPreparations DmcIssuancePreparation[] @relation("DmcPreparationActor")
   issuedDmcDocuments DmcIssuance[] @relation("DmcIssuer")
   dmcIssuanceEvents DmcIssuanceEvent[] @relation("DmcEventActor")
@@ -1111,9 +1112,38 @@ model ManualExamMark {
   publishedAt DateTime @default(now())
   student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
   actor User @relation("ManualExamMarkActor", fields: [actorId], references: [id], onDelete: Restrict)
+  verifications ManualExamMarkVerificationAudit[]
   @@id([sessionReference, studentId])
   @@index([actorId, recordedAt(sort: Desc)])
   @@index([sessionReference, publishedAt])
+}
+
+// Append-only Super Admin evidence for the exact immutable manual score and
+// its student identity snapshot. The newest matching audit is the current seal.
+model ManualExamMarkVerificationAudit {
+  id BigInt @id @default(autoincrement())
+  sessionReference String
+  studentId String
+  verifiedMarks Int
+  maximumMarks Int
+  recordedAtSnapshot DateTime
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  fullNameSnapshot String
+  fatherNameSnapshot String
+  currentClassSnapshot String
+  reviewEvidenceReference String @db.Text
+  verificationReason String @db.Text
+  identityReviewed Boolean
+  attendanceReviewed Boolean
+  marksEvidenceReviewed Boolean
+  actorId String
+  actorName String
+  verifiedAt DateTime @default(now())
+  mark ManualExamMark @relation(fields: [sessionReference, studentId], references: [sessionReference, studentId], onDelete: Restrict)
+  actor User @relation("ManualExamMarkVerifier", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([sessionReference, studentId, id(sort: Desc)], map: "ManualExamMarkVerificationAudit_latest_idx")
+  @@index([actorId, id(sort: Desc)], map: "ManualExamMarkVerificationAudit_actor_idx")
 }
 
 // Candidate-facing, explicitly provisional OMR marks. Never counted as an official result.
