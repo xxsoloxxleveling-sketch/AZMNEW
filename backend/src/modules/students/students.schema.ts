@@ -298,13 +298,30 @@ export type StudentQueryInput = z.infer<typeof studentQuerySchema>;
 export type OfficeUseUpdateInput = z.infer<typeof officeUseUpdateSchema>;
 export type UploadDocumentInput = z.infer<typeof uploadDocumentSchema>;
 
-/** Public E-DMC is never searchable by roll alone. All values stay in POST body. */
+/** Candidate E-DMC lookup takes one exact registered CNIC/B-Form in POST body.
+ * Do not accept roll numbers, wildcard queries, or other lookup parameters.
+ */
 export const publicEdmcLookupSchema = z.object({
-  rollNumber: z.string().trim().min(4).max(64),
   cnic: z.string().trim().regex(/^(?:[0-9]{13}|[0-9]{5}-[0-9]{7}-[0-9])$/, 'Enter the full 13-digit CNIC / B-Form.'),
 }).strict();
 
 /** Super Admin attests to the exact reviewed OMR score and matching candidate. */
+export const bulkVerifiedOmrMarkSchema = z.object({
+  students: z.array(z.object({
+    studentId: z.string().min(1).max(128),
+    expectedCurrentMarks: z.number().int().min(0).max(100),
+  }).strict()).min(1).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  paperVersionReviewed: z.literal(true),
+  printedClassReviewed: z.literal(true),
+}).strict().superRefine((data, ctx) => {
+  if (new Set(data.students.map(s => s.studentId)).size !== data.students.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['students'], message: 'Duplicate student IDs in batch.' });
+  }
+});
+
 export const verifiedOmrMarkSchema = z.object({
   expectedCurrentMarks: z.number().int().min(0).max(100),
   evidenceReference: z.string().trim().min(10).max(500),

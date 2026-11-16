@@ -8,7 +8,6 @@ import './ResultsStyles.css';
 type LookupState = 'idle' | 'loading' | 'not-found' | 'closed' | 'limited' | 'error' | 'success';
 
 export function PublicResultLookup() {
-  const [rollNumber, setRollNumber] = useState('');
   const [cnic, setCnic] = useState('');
   const [state, setState] = useState<LookupState>('idle');
   const [record, setRecord] = useState<PublicEdmcRecord | null>(null);
@@ -27,7 +26,7 @@ export function PublicResultLookup() {
         cache: 'no-store',
         credentials: 'omit',
         referrerPolicy: 'no-referrer',
-        body: JSON.stringify({ rollNumber: rollNumber.trim(), cnic: cnic.trim() }),
+        body: JSON.stringify({ cnic: cnic.trim() }),
       });
       if (response.status === 503) { setState('closed'); return; }
       if (response.status === 429) { setState('limited'); return; }
@@ -51,16 +50,10 @@ export function PublicResultLookup() {
           View your E-DMC
         </h1>
         <p className="mt-3 text-sm leading-7 text-slate-600">
-          Enter your official roll number and registered CNIC / B-Form to view your
+          Enter your registered CNIC / B-Form to view your
           E-DMC showing your verified final examination marks. The Official / Original DMC will be issued separately by the Regional Office.
         </p>
-        <form onSubmit={submit} className="mt-7 grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:p-6">
-          <label className="grid gap-1.5 text-xs font-bold text-slate-700">
-            Official roll number
-            <input required minLength={4} maxLength={64} autoComplete="off" value={rollNumber}
-              onChange={e => { setRollNumber(e.target.value); reset(); }} placeholder="Enter roll number"
-              className="h-11 min-w-0 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 focus:border-[#185b9d] focus:outline-none focus:ring-2 focus:ring-blue-100" />
-          </label>
+        <form onSubmit={submit} className="mt-7 grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-[1fr_auto] sm:items-end sm:p-6">
           <label className="grid gap-1.5 text-xs font-bold text-slate-700">
             Registered CNIC / B-Form
             <input required maxLength={15} inputMode="numeric" autoComplete="off" value={cnic}
@@ -76,7 +69,7 @@ export function PublicResultLookup() {
         <div aria-live="polite" className="mt-5">
           {state === 'closed' && <StatusMessage title="E-DMC publication is not open">The Regional Office has not enabled the public E-DMC release yet. Please check again after the official announcement.</StatusMessage>}
           {state === 'limited' && <StatusMessage title="Too many attempts">Please wait 15 minutes before searching again.</StatusMessage>}
-          {state === 'not-found' && <StatusMessage title="No published E-DMC found">Check the complete roll number and registered CNIC / B-Form. Records that have not been verified or published are not displayed.</StatusMessage>}
+          {state === 'not-found' && <StatusMessage title="No published E-DMC found">Check the registered CNIC / B-Form. Records that have not been verified or published are not displayed.</StatusMessage>}
           {state === 'error' && <StatusMessage title="Unable to verify the result">The request could not be completed. Please try again later.</StatusMessage>}
         </div>
       </div>
@@ -87,7 +80,7 @@ export function PublicResultLookup() {
             <p className="text-xs font-semibold text-emerald-900">Verified final marks found. This E-DMC is not the Official / Original DMC.</p>
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#0c355a] px-4 text-xs font-semibold text-white hover:bg-[#185b9d]"><Printer size={16} /> Print / Save as PDF</button>
-              <button type="button" onClick={() => { setRollNumber(''); setCnic(''); reset(); }} className="inline-flex min-h-10 items-center gap-1 rounded-md border border-emerald-300 bg-white px-3 text-xs font-semibold text-emerald-950 hover:bg-emerald-100"><ArrowLeft size={14} /> New search</button>
+              <button type="button" onClick={() => { setCnic(''); reset(); }} className="inline-flex min-h-10 items-center gap-1 rounded-md border border-emerald-300 bg-white px-3 text-xs font-semibold text-emerald-950 hover:bg-emerald-100"><ArrowLeft size={14} /> New search</button>
             </div>
           </div>
           <EdmcCertificate record={record} />
