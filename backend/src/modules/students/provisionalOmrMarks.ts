@@ -34,6 +34,18 @@ export async function findPublishedProvisionalMarks(studentIds: string[]): Promi
   return new Map(rows.map((item) => [item.studentId, item]));
 }
 
+/** A provisional pass does not imply scholarship selection or final verification. */
+export function provisionalEdmcOutcome(obtained: number, maximum: number, passThreshold = 60) {
+  if (!Number.isInteger(obtained) || !Number.isInteger(maximum) || maximum <= 0
+    || obtained < 0 || obtained > maximum || passThreshold < 0 || passThreshold > maximum) {
+    throw new Error('Invalid provisional examination score');
+  }
+  return {
+    resultStatus: obtained > passThreshold ? 'PASS' as const : 'FAIL' as const,
+    percentage: Number((obtained / maximum * 100).toFixed(2)),
+  };
+}
+
 /** Numeric ordering across the filtered roster, with students lacking a mark last. */
 export function sortProvisionalStudentIds(
   ids: string[],
