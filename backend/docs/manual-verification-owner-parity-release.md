@@ -42,6 +42,28 @@ reproduces the failure, and tests the narrow repair.
   duplicate and stale rejection, unauthorized reviewer rejection, the
   immutable source and audit, and no remaining REFERENCES grant.
 
+## Absolute database preservation rule
+
+- **Never delete, drop, truncate, reset, replace, or overwrite the live
+  database or any student, OMR, attendance, manual mark, DMC or audit table.**
+  Commands such as `DROP DATABASE`, `DROP TABLE`, `TRUNCATE`,
+  `DELETE FROM`, `prisma migrate reset`, `prisma db push --force-reset`,
+  and `pg_restore --clean` are not part of this release.
+- Backups are recovery evidence, not an automatic replacement for the
+  live database. Roll back the application release without restoring a
+  historical snapshot over potentially newer student records.
+- The optional `backend/ops/postgres/manual-verification-preflight-readonly.sql`
+  runs within a `REPEATABLE READ, READ ONLY` transaction, rejects the
+  wrong database name, and reports only aggregate counts/content hashes,
+  migration status, object ownership and privileges. Never bypass a blocked
+  connection or execution safeguard to run it.
+- The CI tests `backend/tests/manual-release-safety.test.ts` and the
+  synthetic PostgreSQL preflight step reject destructive SQL in the reviewed
+  migration and exercise the read-only gate without real records.
+- If any operation would violate this rule or requires additional permission
+  beyond the separately reviewed, temporary column REFERENCES grant:
+  **STOP. No automatic fallback or destructive cleanup on production.**
+
 ## Controlled maintenance procedure (not executable authorization)
 
 1. **Approval gate:** Obtain an independent DBA/release authorization for
