@@ -14,6 +14,9 @@ CREATE TABLE public."OmrMarkVerificationAudit" (
   "latestCorrectionId" TEXT,
   "rollNumberSnapshot" TEXT NOT NULL,
   "applicationNoSnapshot" TEXT NOT NULL,
+  "fullNameSnapshot" TEXT NOT NULL,
+  "fatherNameSnapshot" TEXT NOT NULL,
+  "currentClassSnapshot" TEXT NOT NULL,
   "reviewCategorySnapshot" TEXT NOT NULL,
   "identityStatusSnapshot" TEXT NOT NULL,
   "paperVersionStatusSnapshot" TEXT NOT NULL,
@@ -69,6 +72,9 @@ DECLARE
   v_last public."OmrMarkVerificationAudit"%ROWTYPE;
   v_roll TEXT;
   v_app TEXT;
+  v_full_name TEXT;
+  v_father_name TEXT;
+  v_current_class TEXT;
 BEGIN
   IF p_expected_mark IS NULL OR p_expected_mark NOT BETWEEN 0 AND 100
      OR p_evidence_reference IS NULL
@@ -95,7 +101,8 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'MARK_NOT_FOUND' USING ERRCODE='P0002';
   END IF;
-  SELECT s."rollNumber", s."applicationNo" INTO v_roll, v_app
+  SELECT s."rollNumber", s."applicationNo", s."fullName", s."fatherName", s."currentClass"
+  INTO v_roll, v_app, v_full_name, v_father_name, v_current_class
   FROM public."Student" s
   WHERE s.id=p_student_id AND s.status::TEXT='ACTIVE';
   IF NOT FOUND OR v_roll IS DISTINCT FROM v_mark."rollNumberSnapshot"
@@ -122,6 +129,9 @@ BEGIN
     AND v_last."latestCorrectionId" IS NOT DISTINCT FROM v_last_correction
     AND v_last."rollNumberSnapshot"=v_roll
     AND v_last."applicationNoSnapshot"=v_app
+    AND v_last."fullNameSnapshot"=v_full_name
+    AND v_last."fatherNameSnapshot"=v_father_name
+    AND v_last."currentClassSnapshot"=v_current_class
   THEN
     RAISE EXCEPTION 'ALREADY_VERIFIED' USING ERRCODE='22023';
   END IF;
@@ -131,6 +141,7 @@ BEGIN
     "sessionReference","studentId","verifiedMarks","maximumMarks",
     "originalScannedMarks","scanSha256","latestCorrectionId",
     "rollNumberSnapshot","applicationNoSnapshot",
+    "fullNameSnapshot","fatherNameSnapshot","currentClassSnapshot",
     "reviewCategorySnapshot","identityStatusSnapshot","paperVersionStatusSnapshot",
     "printedClassDisagreesSnapshot","reviewEvidenceReference","verificationReason",
     "identityReviewed","paperVersionReviewed","printedClassReviewed",
@@ -138,7 +149,7 @@ BEGIN
   ) VALUES (
     v_mark."sessionReference",v_mark."studentId",v_current_mark,v_mark."maximumMarks",
     v_mark."obtainedMarks",v_mark."scanSha256",v_last_correction,
-    v_roll,v_app,v_mark."reviewCategory",v_mark."identityStatus",v_mark."paperVersionStatus",
+    v_roll,v_app,v_full_name,v_father_name,v_current_class,v_mark."reviewCategory",v_mark."identityStatus",v_mark."paperVersionStatus",
     v_mark."printedClassDisagrees",btrim(p_evidence_reference),btrim(p_reason),
     TRUE,TRUE,TRUE,p_actor_id,v_actor_name
   )
