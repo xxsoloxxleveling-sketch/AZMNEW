@@ -3,6 +3,7 @@ import './EdmcCertificate.css';
 
 export interface PublicEdmcRecord {
   status: 'VERIFIED';
+  source?: 'MANUAL_ENTRY' | 'OMR_SCAN';
   fullName: string;
   fatherName: string;
   rollNumber: string;
@@ -90,6 +91,7 @@ export function EdmcCertificate({ record }: { record: PublicEdmcRecord }) {
             <Field label="District" value={record.district} />
             <Field label="Examination session" value={record.session} />
             <Field label="Marks verified" value={formatDate(record.verifiedAt)} />
+            <Field label="Result source" value={record.source === 'MANUAL_ENTRY' ? 'Verified administrative mark entry' : 'Verified OMR score'} />
           </dl>
         </div>
         <figure className="edmc-portrait">
