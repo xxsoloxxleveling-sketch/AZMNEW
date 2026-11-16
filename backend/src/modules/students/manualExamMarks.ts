@@ -11,6 +11,8 @@ export interface PublishedManualExamMark {
   maximumMarks: number;
   publishedAt: Date;
   recordedAt: Date;
+  verified: boolean;
+  verifiedAt: Date | null;
 }
 
 export interface ManualExamMarkReceipt {
@@ -88,19 +90,115 @@ export async function findPublishedManualExamMarks(
   studentIds: string[],
 ): Promise<Map<string, PublishedManualExamMark>> {
   if (!studentIds.length) return new Map();
-  const records = await prisma.manualExamMark.findMany({
-    where: {
-      sessionReference: '2026-V',
-      studentId: { in: studentIds },
-    },
-    select: {
-      sessionReference: true, studentId: true,
-      rollNumberSnapshot: true, applicationNoSnapshot: true,
-      obtainedMarks: true, maximumMarks: true,
-      publishedAt: true, recordedAt: true,
-    },
-  });
+  // Calculate the current seal from the newest immutable audit. A
+  // post-verification identity change invalidates it without deleting history.
+  const records = await prisma.$queryRaw<PublishedManualExamMark[]>(Prisma.sql`
+    SELECT m."studentId",m."sessionReference",
+      m."rollNumberSnapshot",m."applicationNoSnapshot",
+      m."obtainedMarks",m."maximumMarks",m."publishedAt",m."recordedAt",
+      COALESCE(seal.valid,FALSE) AS "verified",
+      CASE WHEN seal.valid THEN seal."verifiedAt" ELSE NULL END AS "verifiedAt"
+    FROM public."ManualExamMark" m
+    LEFT JOIN public."Student" student ON student.id=m."studentId"
+    LEFT JOIN LATERAL (
+      SELECT (
+        audit."verifiedMarks"=m."obtainedMarks"
+        AND audit."maximumMarks"=m."maximumMarks"
+        AND audit."recordedAtSnapshot"=m."recordedAt"
+        AND audit."rollNumberSnapshot"=m."rollNumberSnapshot"
+        AND audit."applicationNoSnapshot"=m."applicationNoSnapshot"
+        AND audit."rollNumberSnapshot"=student."rollNumber"
+        AND audit."applicationNoSnapshot"=student."applicationNo"
+        AND audit."fullNameSnapshot"=student."fullName"
+        AND audit."fatherNameSnapshot"=student."fatherName"
+        AND audit."currentClassSnapshot"=student."currentClass"
+        AND student.status::TEXT='ACTIVE'
+        AND student."testScore" IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM public."OmrProvisionalMark" omr
+          WHERE omr."sessionReference"=m."sessionReference"
+            AND omr."studentId"=m."studentId"
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM public."ExaminationResult" result
+          WHERE result."studentId"=m."studentId"
+        )
+      ) AS valid, audit."verifiedAt"
+      FROM public."ManualExamMarkVerificationAudit" audit
+      WHERE audit."sessionReference"=m."sessionReference"
+        AND audit."studentId"=m."studentId"
+      ORDER BY audit.id DESC LIMIT 1
+    ) seal ON TRUE
+    WHERE m."sessionReference"='2026-V'
+      AND m."publishedAt" IS NOT NULL
+      AND m."studentId" IN (${Prisma.join(studentIds)})
+  `);
   return new Map(records.map(record => [record.studentId, record]));
+}
+
+export interface ManualExamVerificationReceipt {
+  verificationId: string;
+  verifiedMarks: number;
+  verifiedAt: Date;
+}
+
+export function buildManualExamVerificationQuery(
+  studentId: string,
+  expectedCurrentMarks: number,
+  evidenceReference: string,
+  reason: string,
+  identityReviewed: boolean,
+  attendanceReviewed: boolean,
+  marksEvidenceReviewed: boolean,
+  actorId: string,
+): Prisma.Sql {
+  return Prisma.sql`
+    SELECT verification_id, verified_marks, verified_at
+    FROM public.azm_verify_manual_exam_mark(
+      ${studentId}::text,${expectedCurrentMarks}::integer,
+      ${evidenceReference}::text,${reason}::text,
+      ${identityReviewed}::boolean,${attendanceReviewed}::boolean,
+      ${marksEvidenceReviewed}::boolean,${actorId}::text
+    )
+  `;
+}
+
+export async function verifyManualExamMark(
+  studentId: string,
+  expectedCurrentMarks: number,
+  evidenceReference: string,
+  reason: string,
+  identityReviewed: boolean,
+  attendanceReviewed: boolean,
+  marksEvidenceReviewed: boolean,
+  actorId: string,
+): Promise<ManualExamVerificationReceipt> {
+  try {
+    const receipts = await prisma.$queryRaw<Array<{
+      verification_id: string; verified_marks: number; verified_at: Date;
+    }>>(buildManualExamVerificationQuery(
+      studentId, expectedCurrentMarks, evidenceReference, reason,
+      identityReviewed, attendanceReviewed, marksEvidenceReviewed, actorId,
+    ));
+    if (!receipts[0]) throw httpError(409, 'Manual verification receipt was not recorded.');
+    return {
+      verificationId: receipts[0].verification_id,
+      verifiedMarks: receipts[0].verified_marks,
+      verifiedAt: receipts[0].verified_at,
+    };
+  } catch (error) {
+    const details = String((error as any)?.meta?.message ?? (error as Error).message ?? '');
+    if (details.includes('SUPER_ADMIN_REQUIRED')) throw httpError(403, 'Only an active Super Admin can verify examination marks.');
+    if (details.includes('INVALID_MANUAL_VERIFICATION_EVIDENCE')) throw httpError(400, 'Verification requires original evidence, a detailed reason and all three review confirmations.');
+    if (details.includes('MANUAL_MARK_NOT_FOUND')) throw httpError(404, 'There is no manually recorded mark for this student.');
+    if (details.includes('STALE_MANUAL_MARK')) throw httpError(409, 'The recorded score changed. Refresh before verifying.');
+    if (details.includes('MANUAL_MARK_ALREADY_VERIFIED')) throw httpError(409, 'This manual score has already been verified.');
+    if (details.includes('MANUAL_IDENTITY_MISMATCH') || details.includes('STUDENT_NOT_ACTIVE'))
+      throw httpError(409, 'The current student identity no longer matches the manual examination entry.');
+    if (details.includes('CONFLICTING_EXAM_MARK_SOURCE'))
+      throw httpError(409, 'A conflicting official result or OMR score exists; manual verification is blocked.');
+    throw error;
+  }
 }
 
 /** A manually entered mark is visible as review-required, never as a
