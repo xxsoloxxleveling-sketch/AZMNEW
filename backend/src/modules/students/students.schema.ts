@@ -303,3 +303,13 @@ export const publicEdmcLookupSchema = z.object({
   rollNumber: z.string().trim().min(4).max(64),
   cnic: z.string().trim().regex(/^(?:[0-9]{13}|[0-9]{5}-[0-9]{7}-[0-9])$/, 'Enter the full 13-digit CNIC / B-Form.'),
 }).strict();
+
+/** Super Admin attests to the exact reviewed OMR score and matching candidate. */
+export const verifiedOmrMarkSchema = z.object({
+  expectedCurrentMarks: z.number().int().min(0).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  paperVersionReviewed: z.literal(true),
+  printedClassReviewed: z.literal(true),
+}).strict();
