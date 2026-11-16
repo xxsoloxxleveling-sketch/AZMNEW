@@ -77,6 +77,25 @@ export function provisionalEdmcOutcome(obtained: number, maximum: number, passTh
   };
 }
 
+/** Candidate-only view of published but not yet verified overall OMR marks.
+ * Deliberately excludes name, father, roll, application, photo and any scan
+ * evidence because a bare CNIC is not robust proof of document ownership.
+ */
+export function publicCurrentOmrMarks(mark: ProvisionalOmrMark) {
+  const score = provisionalEdmcOutcome(mark.obtainedMarks, mark.maximumMarks);
+  return {
+    status: 'REVIEW_REQUIRED' as const,
+    session: 'Session V · 2026',
+    obtainedMarks: mark.obtainedMarks,
+    maximumMarks: mark.maximumMarks,
+    percentage: score.percentage,
+    resultStatus: score.resultStatus,
+    passThreshold: 60,
+    publishedAt: mark.publishedAt.toISOString(),
+    notice: 'These are the currently recorded examination marks. Review and verification are still pending; scores may be corrected. This is not an Official / Original DMC and does not guarantee a scholarship. The next selection phase is interviews.',
+  };
+}
+
 /** Numeric ordering across the filtered roster, with students lacking a mark last. */
 export function sortProvisionalStudentIds(
   ids: string[],
