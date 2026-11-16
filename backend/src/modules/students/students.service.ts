@@ -1678,22 +1678,19 @@ export class StudentsService {
   }
 
   /**
-   * Candidate E-DMC lookup. Only an exact published Session V provisional mark
-   * and a matching 13-digit CNIC/B-Form may be returned. Never expose the
-   * student directory, original scan digest, correction audit or candidate
-   * document links here.
+   * CNIC/B-Form-only candidate E-DMC lookup. Return only the current,
+   * individually verified Session V score; never reveal unverified marks or
+   * scan/correction evidence. Treat ambiguous legacy CNIC formats as no match.
    */
-  async lookupProvisionalOmrMarks(rawRoll: string, rawCnic: string) {
-    const roll = rawRoll.trim();
+  async lookupProvisionalOmrMarks(rawCnic: string) {
     const cnic = rawCnic.trim();
     const digits = cnic.replace(/\D/g, '');
     const unavailable = { success: true, found: false, message: 'No published E-DMC matches the supplied details.' };
-    if (digits.length !== 13 || roll.length < 4 || roll.length > 64) return unavailable;
+    if (!/^(?:[0-9]{13}|[0-9]{5}-[0-9]{7}-[0-9])$/.test(cnic)) return unavailable;
     const formatted = `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
-    const student = await prisma.student.findFirst({
+    const matches = await prisma.student.findMany({
       where: {
         status: 'ACTIVE',
-        rollNumber: { equals: roll, mode: 'insensitive' },
         OR: [
           { cnicOrBForm: { equals: cnic } },
           { cnicOrBForm: { equals: digits } },
@@ -1707,8 +1704,12 @@ export class StudentsService {
         district: true, registrationCentre: true,
         officeUse: { select: { testCentre: true } },
       },
+      take: 2,
     });
-    if (!student) return unavailable;
+    // Legacy records may contain the same CNIC in hyphenated and plain
+    // formats. Never choose arbitrarily or disclose either candidate.
+    if (matches.length !== 1) return unavailable;
+    const student = matches[0];
     const mark = (await findPublishedProvisionalMarks([student.id])).get(student.id);
     // Only a score revision explicitly signed off by a Super Admin may be
     // presented as a final result. Original review flags remain historical.
