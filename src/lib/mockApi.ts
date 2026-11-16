@@ -1144,6 +1144,16 @@ export const mockApi = {
   },
 
   /** Super Admin must attest to all three evidence checks per student. */
+  /** Download the exact verified E-DMC for one student; backend rechecks audit seal. */
+  async downloadVerifiedEdmcPdf(studentId: string, rollNumber?: string): Promise<void> {
+    if (!studentId) throw new Error('Student identifier is required for the E-DMC.');
+    const safeRoll = (rollNumber || studentId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    await apiDownloadPdf(
+      `/api/students/${encodeURIComponent(studentId)}/verified-edmc.pdf`,
+      `AZM-E-DMC-${safeRoll}.pdf`
+    );
+  },
+
   async verifyOmrMark(
     studentId: string,
     data: {
