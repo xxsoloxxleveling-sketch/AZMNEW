@@ -29,6 +29,7 @@ import { StudentDetailView } from './StudentDetailView';
 import { RollSlipPreviewModal } from './RollSlipPreviewModal';
 import { StudentOmrModal } from './StudentOmrModal';
 import { ProvisionalMarksEditorDialog } from './ProvisionalMarksEditorDialog';
+import { ManualExamMarksDialog } from './ManualExamMarksDialog';
 import { OmrMarkVerificationDialog } from './OmrMarkVerificationDialog';
 import { BulkOmrMarkVerificationDialog } from './BulkOmrMarkVerificationDialog';
 import { BulkPrintModal } from './BulkPrintModal';
@@ -102,6 +103,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   const [slipStudent, setSlipStudent] = useState<MockStudent | null>(null);
   const [omrStudent, setOmrStudent] = useState<MockStudent | null>(null);
   const [editingMarksStudent, setEditingMarksStudent] = useState<MockStudent | null>(null);
+  const [manualMarksStudent, setManualMarksStudent] = useState<MockStudent | null>(null);
   const [verifyingMarksStudent, setVerifyingMarksStudent] = useState<MockStudent | null>(null);
   const [bulkVerificationStudents, setBulkVerificationStudents] = useState<MockStudent[]>([]);
   const [downloadingEdmcId, setDownloadingEdmcId] = useState<string | null>(null);
@@ -588,6 +590,15 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
         </button>
       )}
 
+      {role === 'SUPER_ADMIN' && !student.provisionalOmr && !student.manualExamMark &&
+        (student.testScore === null || student.testScore === undefined) && (
+        <button type="button"
+          onClick={() => { setActiveActionMenuId(null); setManualMarksStudent(student); }}
+          className="w-full text-left px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 transition">
+          <IconEditStudent size={14} /> <span>Add examination marks</span>
+        </button>
+      )}
+
       {role === 'SUPER_ADMIN' && (
         <button
           type="button"
@@ -1060,6 +1071,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                             {student.testScore !== null && student.testScore !== undefined ? (
                               <div className="leading-tight">
                                 <span className="font-semibold text-slate-800 tabular-nums text-xs">{student.testScore} / 100</span>
+                                {student.manualExamMark && <span className="block text-[10px] font-semibold text-amber-800">Manually recorded · Review pending</span>}
                                 {student.provisionalOmr && <span className={`block text-[10px] font-semibold ${student.provisionalOmr.verified ? 'text-emerald-700' : 'text-amber-800'}`}>
                                   {student.provisionalOmr.verified ? 'Verified final' : 'Review required'}{student.provisionalOmr.manuallyCorrected ? ' · Corrected' : ''}
                                 </span>}
@@ -1067,6 +1079,14 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                             ) : (
                               <span className="text-xs text-slate-400">Not uploaded</span>
                             )}
+                            {role === 'SUPER_ADMIN' && !student.provisionalOmr && !student.manualExamMark &&
+                              (student.testScore === null || student.testScore === undefined) && (
+                                <button type="button" onClick={() => setManualMarksStudent(student)}
+                                  title={`Add missing examination marks for ${student.fullName}`}
+                                  className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-50">
+                                  <IconEditStudent size={12} aria-hidden="true" /> Add Marks
+                                </button>
+                              )}
                             {role === 'SUPER_ADMIN' && student.provisionalOmr && (
                               <button
                                 type="button"
@@ -1293,10 +1313,17 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                         >
                           View Profile
                         </button>
+                        {role === 'SUPER_ADMIN' && !student.provisionalOmr && !student.manualExamMark &&
+                          (student.testScore === null || student.testScore === undefined) && (
+                          <button type="button" onClick={() => setManualMarksStudent(student)}
+                            className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">
+                            <IconEditStudent size={13} aria-hidden="true" /> Add Marks
+                          </button>
+                        )}
                         {role === 'SUPER_ADMIN' && student.provisionalOmr && (
                           <button
                             type="button"
-                            onClick={() => setEditingMarksStudent(student)}
+                            onClick={() => setEditingMarksStudent(student)
                             className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-[#185b9d] hover:bg-blue-50"
                           >
                             <IconEditStudent size={13} aria-hidden="true" /> Edit marks
@@ -1446,6 +1473,15 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
               setSelectedStudent(updatedStudent);
             }
           }}
+        />
+      )}
+
+      {role === 'SUPER_ADMIN' && manualMarksStudent && (
+        <ManualExamMarksDialog
+          key={manualMarksStudent.id}
+          student={manualMarksStudent}
+          onClose={() => setManualMarksStudent(null)}
+          onSaved={() => fetchStudents(false)}
         />
       )}
 
