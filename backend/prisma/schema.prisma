@@ -114,6 +114,7 @@ model User {
   resultCorrectionAudits ResultCorrectionAudit[] @relation("ResultCorrectionActor")
   omrMarkCorrections OmrProvisionalMarkCorrectionAudit[] @relation("OmrMarkCorrectionActor")
   omrMarkVerifications OmrMarkVerificationAudit[] @relation("OmrMarkVerifier")
+  manualExamMarkEntries ManualExamMark[] @relation("ManualExamMarkActor")
   dmcPreparations DmcIssuancePreparation[] @relation("DmcPreparationActor")
   issuedDmcDocuments DmcIssuance[] @relation("DmcIssuer")
   dmcIssuanceEvents DmcIssuanceEvent[] @relation("DmcEventActor")
@@ -215,6 +216,7 @@ model Student {
   examinationResults ExaminationResult[]
   legacyExamResultHistory ExamLegacyResultHistory[]
   omrProvisionalMarks OmrProvisionalMark[]
+  manualExamMarks ManualExamMark[]
 }
 
 // Dedicated append-only correction evidence; no attendance/document audit reuse.
@@ -1090,6 +1092,29 @@ model DmcReplacement {
   reviewer              User @relation("DmcReplacementReviewer", fields: [actorId], references: [id], onDelete: Restrict)
 }
 
+
+// Independent manually recorded Session V scores. No synthetic OMR scan hash
+// or fabricated A/B/C/D variant is created. Each row is an immutable audit
+// event recording the original score, Super Admin and evidence reference.
+model ManualExamMark {
+  sessionReference String @default("2026-V")
+  studentId String
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  obtainedMarks Int
+  maximumMarks Int @default(100)
+  sourceEvidenceReference String @db.Text
+  reason String @db.Text
+  actorId String
+  actorName String
+  recordedAt DateTime @default(now())
+  publishedAt DateTime @default(now())
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  actor User @relation("ManualExamMarkActor", fields: [actorId], references: [id], onDelete: Restrict)
+  @@id([sessionReference, studentId])
+  @@index([actorId, recordedAt(sort: Desc)])
+  @@index([sessionReference, publishedAt])
+}
 
 // Candidate-facing, explicitly provisional OMR marks. Never counted as an official result.
 model OmrProvisionalMark {
