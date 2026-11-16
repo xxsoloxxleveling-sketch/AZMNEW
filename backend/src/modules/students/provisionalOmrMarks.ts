@@ -47,6 +47,9 @@ export async function findPublishedProvisionalMarks(studentIds: string[]): Promi
           AND v."latestCorrectionId" IS NOT DISTINCT FROM latest_correction.id
           AND v."rollNumberSnapshot" = s."rollNumber"
           AND v."applicationNoSnapshot" = s."applicationNo"
+          AND v."fullNameSnapshot" = s."fullName"
+          AND v."fatherNameSnapshot" = s."fatherName"
+          AND v."currentClassSnapshot" = s."currentClass"
           AND v."rollNumberSnapshot" = m."rollNumberSnapshot"
           AND v."applicationNoSnapshot" = m."applicationNoSnapshot"
           AND s.status::TEXT = 'ACTIVE'
