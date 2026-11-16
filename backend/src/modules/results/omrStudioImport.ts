@@ -91,6 +91,9 @@ export class OmrStudioImportService {
         || latestVerification.latestCorrectionId !== (latestCorrection?.id ?? null)
         || latestVerification.rollNumberSnapshot !== student.rollNumber
         || latestVerification.applicationNoSnapshot !== student.applicationNo
+        || latestVerification.fullNameSnapshot !== student.fullName
+        || latestVerification.fatherNameSnapshot !== student.fatherName
+        || latestVerification.currentClassSnapshot !== student.currentClass
       )) {
         return fail('OMR_MARK_NOT_VERIFIED', 'This score revision has not been signed off by an authorized examiner. Verify the final mark and original sheet before official import.');
       }
