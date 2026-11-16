@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { publicCurrentOmrMarks, type ProvisionalOmrMark } from '../src/modules/students/provisionalOmrMarks';
+import { studentsService } from '../src/modules/students/students.service';
 
 const mark = (score: number): ProvisionalOmrMark => ({
   studentId: 'private-student-id', obtainedMarks: score, maximumMarks: 100,
@@ -31,4 +32,13 @@ test('public current-score rule fails at 60 and passes at 61, never implies veri
   assert.equal(publicCurrentOmrMarks(mark(61)).resultStatus, 'PASS');
   assert.equal(publicCurrentOmrMarks(mark(61)).status, 'REVIEW_REQUIRED');
   assert.throws(() => publicCurrentOmrMarks(mark(101)));
+});
+
+
+test('trivially repeated-digit legacy CNIC identifiers cannot reveal public results', async () => {
+  for (const placeholder of ['0000000000000','1111111111111','9999999999999']) {
+    const result = await studentsService.lookupProvisionalOmrMarks(placeholder);
+    assert.equal(result.found, false);
+    assert.ok(!('data' in result), 'Placeholder CNIC unexpectedly yielded student details');
+  }
 });
