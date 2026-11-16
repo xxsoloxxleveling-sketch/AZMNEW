@@ -230,6 +230,14 @@ router.patch(
   studentsController.correctProvisionalOmrMarks
 );
 
+// Only Super Admin may export the verified overall E-DMC, regardless of
+// the public results release switch. Unverified revisions are rejected.
+router.get(
+  '/:id/verified-edmc.pdf',
+  authorizeRoles(Role.SUPER_ADMIN),
+  studentsController.downloadVerifiedEdmc
+);
+
 // Verification is an audited, per-candidate Super Admin action. Never bulk
 // label the entire roster as verified without checking the original evidence.
 router.post(
