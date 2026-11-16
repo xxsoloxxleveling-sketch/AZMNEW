@@ -52,7 +52,7 @@ export function PublicResultLookup() {
         </h1>
         <p className="mt-3 text-sm leading-7 text-slate-600">
           Enter your official roll number and registered CNIC / B-Form to view your
-          provisional electronic marks certificate. The Original DMC will be issued separately by the Regional Office.
+          E-DMC showing your verified final examination marks. The Official / Original DMC will be issued separately by the Regional Office.
         </p>
         <form onSubmit={submit} className="mt-7 grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:p-6">
           <label className="grid gap-1.5 text-xs font-bold text-slate-700">
@@ -72,11 +72,11 @@ export function PublicResultLookup() {
             {state === 'loading' ? <><LoaderCircle size={17} className="animate-spin" /> Searching</> : <><Search size={17} /> View E-DMC</>}
           </button>
         </form>
-        <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-slate-500"><LockKeyhole size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> Your details are sent through a protected request, not displayed in the website URL. Results are shown only for matching published records.</p>
+        <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-slate-500"><LockKeyhole size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> Your details are sent through a protected request, not displayed in the website URL. Final marks are displayed only after an authorized examination officer has verified the result.</p>
         <div aria-live="polite" className="mt-5">
           {state === 'closed' && <StatusMessage title="E-DMC publication is not open">The Regional Office has not enabled the public E-DMC release yet. Please check again after the official announcement.</StatusMessage>}
           {state === 'limited' && <StatusMessage title="Too many attempts">Please wait 15 minutes before searching again.</StatusMessage>}
-          {state === 'not-found' && <StatusMessage title="No published E-DMC found">Check the complete roll number and registered CNIC / B-Form. Unpublished records are not displayed.</StatusMessage>}
+          {state === 'not-found' && <StatusMessage title="No published E-DMC found">Check the complete roll number and registered CNIC / B-Form. Records that have not been verified or published are not displayed.</StatusMessage>}
           {state === 'error' && <StatusMessage title="Unable to verify the result">The request could not be completed. Please try again later.</StatusMessage>}
         </div>
       </div>
@@ -84,7 +84,7 @@ export function PublicResultLookup() {
       {state === 'success' && record && (
         <div className="mt-9">
           <div className="no-print mx-auto mb-5 flex max-w-[900px] flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 sm:px-4">
-            <p className="text-xs font-semibold text-emerald-900">Record found. This is a provisional E-DMC, not the Final / Original DMC.</p>
+            <p className="text-xs font-semibold text-emerald-900">Verified final marks found. This E-DMC is not the Official / Original DMC.</p>
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#0c355a] px-4 text-xs font-semibold text-white hover:bg-[#185b9d]"><Printer size={16} /> Print / Save as PDF</button>
               <button type="button" onClick={() => { setRollNumber(''); setCnic(''); reset(); }} className="inline-flex min-h-10 items-center gap-1 rounded-md border border-emerald-300 bg-white px-3 text-xs font-semibold text-emerald-950 hover:bg-emerald-100"><ArrowLeft size={14} /> New search</button>
