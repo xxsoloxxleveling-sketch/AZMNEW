@@ -672,10 +672,7 @@ export class StudentsController {
     try {
       res.set('Cache-Control', 'private, no-store, max-age=0');
       res.set('Pragma', 'no-cache');
-      const result = await studentsService.lookupProvisionalOmrMarks(
-        req.body.rollNumber,
-        req.body.cnic,
-      );
+      const result = await studentsService.lookupProvisionalOmrMarks(req.body.cnic);
       return res.status(200).json(result);
     } catch (error) {
       next(error);
