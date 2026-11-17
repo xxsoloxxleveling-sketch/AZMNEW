@@ -1174,6 +1174,7 @@ export const mockApi = {
   async correctManualExamMark(studentId: string, payload: {
     expectedCurrentMarks: number;
     newMarks: number;
+    expectedCorrectionId: string | null;
     evidenceReference: string;
     reason: string;
     identityReviewed: true;
