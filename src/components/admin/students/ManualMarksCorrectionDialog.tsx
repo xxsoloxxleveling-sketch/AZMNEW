@@ -46,6 +46,7 @@ export function ManualMarksCorrectionDialog({ student, onClose, onSaved }: {
     try {
       await mockApi.correctManualExamMark(student.id, {
         expectedCurrentMarks: current, newMarks: Number(newMarks),
+        expectedCorrectionId: student.manualExamMark?.latestCorrectionId ?? null,
         evidenceReference: evidenceReference.trim(), reason: reason.trim(),
         identityReviewed: true, attendanceReviewed: true,
       });
