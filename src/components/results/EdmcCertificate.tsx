@@ -3,6 +3,7 @@ import './EdmcCertificate.css';
 
 export interface PublicEdmcRecord {
   status: 'VERIFIED';
+  source?: 'MANUAL_ENTRY' | 'OMR_SCAN';
   fullName: string;
   fatherName: string;
   rollNumber: string;
@@ -57,7 +58,7 @@ export function EdmcCertificate({ record }: { record: PublicEdmcRecord }) {
   const marks = Number(record.obtainedMarks);
   const maximum = Number(record.maximumMarks);
   const percentage = Number(record.percentage);
-  const isPass = marks > record.passThreshold;
+  const isPass = marks >= record.passThreshold;
   const status = isPass ? 'PASS' : 'FAIL';
 
   return (
@@ -90,6 +91,7 @@ export function EdmcCertificate({ record }: { record: PublicEdmcRecord }) {
             <Field label="District" value={record.district} />
             <Field label="Examination session" value={record.session} />
             <Field label="Marks verified" value={formatDate(record.verifiedAt)} />
+            <Field label="Result source" value={record.source === 'MANUAL_ENTRY' ? 'Verified administrative mark entry' : 'Verified OMR score'} />
           </dl>
         </div>
         <figure className="edmc-portrait">
@@ -120,7 +122,7 @@ export function EdmcCertificate({ record }: { record: PublicEdmcRecord }) {
             <small>Verified</small>
           </div>
         </div>
-        <p className="edmc-passing-rule"><ShieldCheck size={17} aria-hidden="true" /> Passing rule: <strong>Above 60 marks = Pass.</strong> Exactly 60 or below is not a pass.</p>
+        <p className="edmc-passing-rule"><ShieldCheck size={17} aria-hidden="true" /> Passing rule: <strong>60 marks or above = Pass.</strong> Below 60 is Fail.</p>
       </section>
 
       <section className="edmc-notices" aria-labelledby="edmc-terms-heading">

@@ -72,7 +72,7 @@ export function provisionalEdmcOutcome(obtained: number, maximum: number, passTh
     throw new Error('Invalid provisional examination score');
   }
   return {
-    resultStatus: obtained > passThreshold ? 'PASS' as const : 'FAIL' as const,
+    resultStatus: obtained >= passThreshold ? 'PASS' as const : 'FAIL' as const,
     percentage: Number((obtained / maximum * 100).toFixed(2)),
   };
 }

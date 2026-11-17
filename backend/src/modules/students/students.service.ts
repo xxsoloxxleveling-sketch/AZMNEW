@@ -1717,26 +1717,27 @@ export class StudentsService {
     if (matches.length !== 1) return unavailable;
     const student = matches[0];
     const mark = (await findPublishedProvisionalMarks([student.id])).get(student.id);
-    if (!mark) {
-      const manual = (await findPublishedManualExamMarks([student.id])).get(student.id);
-      // A manually added mark remains under review and cannot borrow the
-      // scanner verification seal or a different student's identity details.
-      if (!manual || manual.rollNumberSnapshot !== student.rollNumber ||
+    const manual = !mark ? (await findPublishedManualExamMarks([student.id])).get(student.id) : undefined;
+    if (manual) {
+      // A manual verification is a distinct signed audit; it can never
+      // inherit an OMR verification or present itself as scanned paper.
+      if (manual.rollNumberSnapshot !== student.rollNumber ||
         manual.applicationNoSnapshot !== student.applicationNo) return unavailable;
-      return { success: true, found: true, data: publicCurrentManualMarks(manual) };
-    }
-    // Published OMR totals are visible as current marks; only separately
-    // attested score revisions can display the verified E-DMC with identity,
-    // portrait and downloadable certificate. Never label an unchecked score
-    // as verified or disclose full student identity through CNIC-only search.
-    if (!mark.verified || !mark.verifiedAt) {
-      return { success: true, found: true, data: publicCurrentOmrMarks(mark) };
+      if (!manual.verified || !manual.verifiedAt) {
+        return { success: true, found: true, data: publicCurrentManualMarks(manual) };
+      }
+    } else if (mark) {
+      if (!mark.verified || !mark.verifiedAt) {
+        return { success: true, found: true, data: publicCurrentOmrMarks(mark) };
+      }
+    } else {
+      return unavailable;
     }
 
-    // The effective score includes an audited Super Admin correction when one
-    // exists. Do not display the obsolete scanned score as the current result.
-    const score = mark.obtainedMarks;
-    const { resultStatus, percentage } = provisionalEdmcOutcome(score, mark.maximumMarks);
+    // Both sources have an independently validated, current verification seal.
+    const score = mark?.obtainedMarks ?? manual!.obtainedMarks;
+    const maximumMarks = mark?.maximumMarks ?? manual!.maximumMarks;
+    const { resultStatus, percentage } = provisionalEdmcOutcome(score, maximumMarks);
     let photoDataUrl: string | null = null;
     // Only a verified candidate may see their private photo. Do not expose
     // storage paths, signed URLs, full-size documents, or fallback fake photos.
@@ -1754,6 +1755,7 @@ export class StudentsService {
       found: true,
       data: {
         status: 'VERIFIED' as const,
+        source: manual ? 'MANUAL_ENTRY' as const : 'OMR_SCAN' as const,
         fullName: student.fullName,
         fatherName: student.fatherName,
         rollNumber: student.rollNumber,
@@ -1765,11 +1767,11 @@ export class StudentsService {
         district: student.district,
         testCenter: student.officeUse?.testCentre || student.registrationCentre || null,
         session: 'Session V · 2026',
-        publishedAt: mark.publishedAt.toISOString(),
-        verifiedAt: mark.verifiedAt.toISOString(),
+        publishedAt: (mark?.publishedAt ?? manual!.publishedAt).toISOString(),
+        verifiedAt: (mark?.verifiedAt ?? manual!.verifiedAt)!.toISOString(),
         photoDataUrl,
         obtainedMarks: score,
-        maximumMarks: mark.maximumMarks,
+        maximumMarks,
         percentage,
         resultStatus,
         passThreshold: 60,
@@ -1921,7 +1923,12 @@ export class StudentsService {
           manualExamMark: manual ? {
             source: 'SUPER_ADMIN_MANUAL' as const,
             recordedAt: manual.recordedAt.toISOString(),
-            reviewRequired: true,
+            originalRecordedMarks: manual.originalRecordedMarks,
+            manuallyCorrected: manual.manuallyCorrected,
+            latestCorrectionId: manual.latestCorrectionId,
+            reviewRequired: !manual.verified,
+            verified: manual.verified,
+            verifiedAt: manual.verifiedAt?.toISOString() ?? null,
           } : null,
           provisionalOmr: provisional ? {
             reviewCategory: provisional.reviewCategory,

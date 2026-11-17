@@ -30,6 +30,9 @@ import { RollSlipPreviewModal } from './RollSlipPreviewModal';
 import { StudentOmrModal } from './StudentOmrModal';
 import { ProvisionalMarksEditorDialog } from './ProvisionalMarksEditorDialog';
 import { ManualExamMarksDialog } from './ManualExamMarksDialog';
+import { ManualMarksCorrectionDialog } from './ManualMarksCorrectionDialog';
+import { ManualMarkVerificationDialog } from './ManualMarkVerificationDialog';
+import { canApproveManualMark, canCorrectManualMark } from './manualApprovalEligibility';
 import { OmrMarkVerificationDialog } from './OmrMarkVerificationDialog';
 import { BulkOmrMarkVerificationDialog } from './BulkOmrMarkVerificationDialog';
 import { BulkPrintModal } from './BulkPrintModal';
@@ -104,6 +107,9 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   const [omrStudent, setOmrStudent] = useState<MockStudent | null>(null);
   const [editingMarksStudent, setEditingMarksStudent] = useState<MockStudent | null>(null);
   const [manualMarksStudent, setManualMarksStudent] = useState<MockStudent | null>(null);
+  const [manualCorrectionStudent, setManualCorrectionStudent] = useState<MockStudent | null>(null);
+  const [manualVerificationQueue, setManualVerificationQueue] = useState<MockStudent[]>([]);
+  const [manualVerificationTotal, setManualVerificationTotal] = useState(0);
   const [verifyingMarksStudent, setVerifyingMarksStudent] = useState<MockStudent | null>(null);
   const [bulkVerificationStudents, setBulkVerificationStudents] = useState<MockStudent[]>([]);
   const [downloadingEdmcId, setDownloadingEdmcId] = useState<string | null>(null);
@@ -416,6 +422,32 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
       && !student.provisionalOmr.verified && Number.isInteger(student.testScore)
   );
 
+  const selectedManualForVerification = students.filter(student =>
+    selectedStudentIds.includes(student.id) && canApproveManualMark(role, student)
+  );
+
+  const beginSelectedManualVerification = () => {
+    if (role !== 'SUPER_ADMIN' || selectedManualForVerification.length === 0) return;
+    if (selectedManualForVerification.length > 100) {
+      alert('Select at most 100 manual-mark students per review session.');
+      return;
+    }
+    setManualVerificationTotal(selectedManualForVerification.length);
+    setManualVerificationQueue([...selectedManualForVerification]);
+  };
+
+  const beginSingleManualVerification = (student: MockStudent) => {
+    if (!canApproveManualMark(role, student)) return;
+    setManualVerificationTotal(1);
+    setManualVerificationQueue([student]);
+  };
+
+  const completeVerifiedManualStudent = (student: MockStudent) => {
+    setSelectedStudentIds(prev => prev.filter(id => id !== student.id));
+    setManualVerificationQueue(prev => prev.slice(1));
+    void fetchStudents(false);
+  };
+
   const beginSelectedVerification = () => {
     if (role !== 'SUPER_ADMIN' || selectedForVerification.length === 0) return;
     if (selectedForVerification.length > 100) {
@@ -434,7 +466,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   };
 
   const downloadVerifiedEdmc = async (student: MockStudent) => {
-    if (role !== 'SUPER_ADMIN' || !student.provisionalOmr?.verified || downloadingEdmcId) return;
+    if (role !== 'SUPER_ADMIN' || !(student.provisionalOmr?.verified || student.manualExamMark?.verified) || downloadingEdmcId) return;
     setDownloadingEdmcId(student.id);
     try {
       await mockApi.downloadVerifiedEdmcPdf(student.id, student.rollNumber);
@@ -599,12 +631,28 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
         </button>
       )}
 
+      {canCorrectManualMark(role, student) && (
+        <button type="button"
+          onClick={() => { setActiveActionMenuId(null); setManualCorrectionStudent(student); }}
+          className="w-full text-left px-3 py-1.5 text-xs font-semibold text-[#185b9d] hover:bg-blue-50 flex items-center gap-2 transition">
+          <IconEditStudent size={14} /> <span>Edit manual marks</span>
+        </button>
+      )}
+
+      {canApproveManualMark(role, student) && (
+        <button type="button"
+          onClick={() => { setActiveActionMenuId(null); beginSingleManualVerification(student); }}
+          className="w-full text-left px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 transition">
+          <IconApproveFee size={14} /> <span>Approve manual marks</span>
+        </button>
+      )}
+
       {role === 'SUPER_ADMIN' && (
         <button
           type="button"
-          disabled={!student.provisionalOmr?.verified || downloadingEdmcId !== null}
+          disabled={!(student.provisionalOmr?.verified || student.manualExamMark?.verified) || downloadingEdmcId !== null}
           onClick={() => { setActiveActionMenuId(null); void downloadVerifiedEdmc(student); }}
-          title={student.provisionalOmr?.verified
+          title={student.provisionalOmr?.verified || student.manualExamMark?.verified
             ? 'Download verified final marks as AZM E-DMC'
             : 'Verify this student’s final marks before downloading the E-DMC'}
           className="w-full text-left px-3 py-1.5 text-xs font-semibold text-[#185b9d] hover:bg-blue-50 flex items-center gap-2 transition disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-white"
@@ -833,12 +881,22 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                 <button
                   type="button"
                   onClick={beginSelectedVerification}
-                  disabled={selectedForVerification.length === 0 || isLoading || !!verifyingMarksStudent || bulkVerificationStudents.length > 0}
+                  disabled={selectedForVerification.length === 0 || isLoading || !!verifyingMarksStudent || bulkVerificationStudents.length > 0 || manualVerificationQueue.length > 0}
                   title="Review and verify up to 100 selected students in one batch"
                   className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <IconApproveFee size={14} />
-                  <span>Verify Selected ({selectedForVerification.length})</span>
+                  <span>Verify OMR Selected ({selectedForVerification.length})</span>
+                </button>
+              )}
+              {role === 'SUPER_ADMIN' && (
+                <button type="button" onClick={beginSelectedManualVerification}
+                  disabled={selectedManualForVerification.length === 0 || isLoading || manualVerificationQueue.length > 0 ||
+                    !!verifyingMarksStudent || bulkVerificationStudents.length > 0}
+                  title="Approve selected manual marks after reviewing each student's original evidence separately"
+                  className="px-3 py-1 bg-[#185b9d] hover:bg-[#13497d] text-white rounded-md text-xs font-bold flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50">
+                  <IconApproveFee size={14} />
+                  <span>Approve Manual Selected ({selectedManualForVerification.length})</span>
                 </button>
               )}
               {canApproveFees && (
@@ -1071,7 +1129,9 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                             {student.testScore !== null && student.testScore !== undefined ? (
                               <div className="leading-tight">
                                 <span className="font-semibold text-slate-800 tabular-nums text-xs">{student.testScore} / 100</span>
-                                {student.manualExamMark && <span className="block text-[10px] font-semibold text-amber-800">Manually recorded · Review pending</span>}
+                                {student.manualExamMark && <span className={`block text-[10px] font-semibold ${student.manualExamMark.verified ? 'text-emerald-700' : 'text-amber-800'}`}>
+                                  {student.manualExamMark.verified ? 'Manually verified · Final' : 'Manually recorded · Review pending'}{student.manualExamMark.manuallyCorrected ? ' · Corrected' : ''}
+                                </span>}
                                 {student.provisionalOmr && <span className={`block text-[10px] font-semibold ${student.provisionalOmr.verified ? 'text-emerald-700' : 'text-amber-800'}`}>
                                   {student.provisionalOmr.verified ? 'Verified final' : 'Review required'}{student.provisionalOmr.manuallyCorrected ? ' · Corrected' : ''}
                                 </span>}
@@ -1087,6 +1147,21 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                                   <IconEditStudent size={12} aria-hidden="true" /> Add Marks
                                 </button>
                               )}
+                            {canCorrectManualMark(role, student) && (
+                              <button type="button" onClick={() => setManualCorrectionStudent(student)}
+                                title={`Correct manual marks for ${student.fullName} (even after approval)`}
+                                aria-label={`Edit manual marks for ${student.fullName}`}
+                                className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-[11px] font-semibold text-[#185b9d] hover:bg-blue-50">
+                                <IconEditStudent size={12} aria-hidden="true" /> Edit marks
+                              </button>
+                            )}
+                            {canApproveManualMark(role, student) && (
+                              <button type="button" onClick={() => beginSingleManualVerification(student)}
+                                title={`Approve manually recorded marks for ${student.fullName} after evidence review`}
+                                className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-50">
+                                <IconApproveFee size={12} aria-hidden="true" /> Approve manual
+                              </button>
+                            )}
                             {role === 'SUPER_ADMIN' && student.provisionalOmr && (
                               <button
                                 type="button"
@@ -1109,7 +1184,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                                 <IconApproveFee size={12} aria-hidden="true" /> Verify
                               </button>
                             )}
-                            {role === 'SUPER_ADMIN' && student.provisionalOmr?.verified && (
+                            {role === 'SUPER_ADMIN' && (student.provisionalOmr?.verified || student.manualExamMark?.verified) && (
                               <button type="button"
                                 onClick={() => { void downloadVerifiedEdmc(student); }}
                                 disabled={downloadingEdmcId !== null}
@@ -1256,7 +1331,11 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                         <div className="flex items-center justify-between gap-1.5">
                           <span className="font-bold text-slate-900 text-xs truncate">{student.fullName}</span>
                           <span className="text-[11px] font-semibold tabular-nums text-slate-700">
-                            {student.testScore !== null && student.testScore !== undefined ? `${student.testScore} / 100${student.provisionalOmr ? (student.provisionalOmr.verified ? ' · Verified' : ' · Review required') : ''}` : 'Marks pending'}
+                            {student.testScore !== null && student.testScore !== undefined
+                              ? `${student.testScore} / 100${student.manualExamMark
+                                  ? (student.manualExamMark.verified ? ' · Manual verified' : ' · Manual review')
+                                  : student.provisionalOmr ? (student.provisionalOmr.verified ? ' · Verified' : ' · Review required') : ''}`
+                              : 'Marks pending'}
                           </span>
                         </div>
                         <span className="text-[11px] text-slate-500 block truncate">S/D/O {student.fatherName}</span>
@@ -1329,13 +1408,25 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                             <IconEditStudent size={13} aria-hidden="true" /> Edit marks
                           </button>
                         )}
+                        {canCorrectManualMark(role, student) && (
+                          <button type="button" onClick={() => setManualCorrectionStudent(student)}
+                            className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-[#185b9d] hover:bg-blue-50">
+                            <IconEditStudent size={13} aria-hidden="true" /> Edit marks
+                          </button>
+                        )}
+                        {canApproveManualMark(role, student) && (
+                          <button type="button" onClick={() => beginSingleManualVerification(student)}
+                            className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">
+                            <IconApproveFee size={13} aria-hidden="true" /> Approve manual
+                          </button>
+                        )}
                         {role === 'SUPER_ADMIN' && student.provisionalOmr && !student.provisionalOmr.verified && (
                           <button type="button" onClick={() => beginSingleVerification(student)}
                             className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">
                             <IconApproveFee size={13} aria-hidden="true" /> Verify
                           </button>
                         )}
-                        {role === 'SUPER_ADMIN' && student.provisionalOmr?.verified && (
+                        {role === 'SUPER_ADMIN' && (student.provisionalOmr?.verified || student.manualExamMark?.verified) && (
                           <button type="button" onClick={() => { void downloadVerifiedEdmc(student); }}
                             disabled={downloadingEdmcId !== null}
                             className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-white px-2 py-1 text-xs font-semibold text-[#185b9d] hover:bg-sky-50 disabled:opacity-50">
@@ -1485,11 +1576,32 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
         />
       )}
 
+      {role === 'SUPER_ADMIN' && manualCorrectionStudent && (
+        <ManualMarksCorrectionDialog
+          key={manualCorrectionStudent.id}
+          student={manualCorrectionStudent}
+          onClose={() => setManualCorrectionStudent(null)}
+          onSaved={() => fetchStudents(false)}
+        />
+      )}
+
       {role === 'SUPER_ADMIN' && editingMarksStudent && (
         <ProvisionalMarksEditorDialog
           student={editingMarksStudent}
           onClose={() => setEditingMarksStudent(null)}
           onSaved={() => fetchStudents(false)}
+        />
+      )}
+
+      {role === 'SUPER_ADMIN' && manualVerificationQueue.length > 0 && (
+        <ManualMarkVerificationDialog
+          key={manualVerificationQueue[0].id}
+          student={manualVerificationQueue[0]}
+          batchProgress={manualVerificationTotal > 1
+            ? { current: manualVerificationTotal - manualVerificationQueue.length + 1, total: manualVerificationTotal }
+            : undefined}
+          onClose={() => setManualVerificationQueue([])}
+          onVerified={completeVerifiedManualStudent}
         />
       )}
 

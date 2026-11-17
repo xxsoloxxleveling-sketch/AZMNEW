@@ -160,6 +160,18 @@ export const selectedStudentsPdfSchema = z.object({
 }).strict();
 
 // Public marks-only access uses two matching identifiers and never discloses a student roster.
+/** The reviewed manual score is immutable; verification seals the exact
+ * recorded value without claiming an OMR answer-sheet version exists.
+ */
+export const verifiedManualExamMarkSchema = z.object({
+  expectedCurrentMarks: z.number().int().min(0).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  attendanceReviewed: z.literal(true),
+  marksEvidenceReviewed: z.literal(true),
+}).strict();
+
 /** Manual entry is a new independent, immutable examination score, never
  * a fabricated OMR scan and never an overwrite of an existing mark.
  */
@@ -170,6 +182,21 @@ export const manualExamMarkEntrySchema = z.object({
   identityReviewed: z.literal(true),
   attendanceReviewed: z.literal(true),
 }).strict();
+
+// Correct any manual score, including a previously verified score. Each
+// revision is immutable and requires a new verification of the current score.
+export const manualExamMarkCorrectionSchema = z.object({
+  expectedCurrentMarks: z.number().int().min(0).max(100),
+  newMarks: z.number().int().min(0).max(100),
+  expectedCorrectionId: z.string().regex(/^[0-9]{1,20}$/).nullable(),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  attendanceReviewed: z.literal(true),
+}).strict().refine(
+  values => values.newMarks !== values.expectedCurrentMarks,
+  { message: 'Enter a new score different from the current score.', path: ['newMarks'] },
+);
 
 // Only a Super Admin may edit a recorded provisional mark. The current
 // value is required for optimistic concurrency and a reason for the audit.

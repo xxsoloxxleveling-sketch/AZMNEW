@@ -85,7 +85,12 @@ export interface MockStudent {
   manualExamMark?: {
     source: 'SUPER_ADMIN_MANUAL';
     recordedAt: string;
+    originalRecordedMarks?: number;
+    manuallyCorrected?: boolean;
+    latestCorrectionId?: string | null;
     reviewRequired: boolean;
+    verified: boolean;
+    verifiedAt: string | null;
   } | null;
   provisionalOmr?: {
     reviewCategory: string;
@@ -1137,6 +1142,21 @@ export const mockApi = {
     return result.students;
   },
 
+  /** Independently verify a signed manual-score record without editing the score. */
+  async verifyManualExamMark(studentId: string, payload: {
+    expectedCurrentMarks: number;
+    evidenceReference: string;
+    reason: string;
+    identityReviewed: true;
+    attendanceReviewed: true;
+    marksEvidenceReviewed: true;
+  }): Promise<{ verificationId: string; verifiedMarks: number; verifiedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/verify-manual-exam-mark`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   /** Add an immutable score only for a student with no examination marks. */
   async addManualExamMark(studentId: string, payload: {
     obtainedMarks: number;
@@ -1148,6 +1168,31 @@ export const mockApi = {
     return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark`, {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+
+  /** Repeatedly correct an existing manual score without changing its original entry. */
+  async correctManualExamMark(studentId: string, payload: {
+    expectedCurrentMarks: number;
+    newMarks: number;
+    expectedCorrectionId: string | null;
+    evidenceReference: string;
+    reason: string;
+    identityReviewed: true;
+    attendanceReviewed: true;
+  }): Promise<{ correctionId: string; previousMarks: number; newMarks: number; correctedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark`, {
+      method: 'PATCH', body: JSON.stringify(payload),
+    });
+  },
+
+  async getManualExamMarkHistory(studentId: string): Promise<Array<{
+    id: string; originalRecordedMarks: number;
+    previousEffectiveMarks: number; newEffectiveMarks: number;
+    evidenceReference: string; reason: string; actorName: string; occurredAt: string;
+  }>> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark/history`, {
+      method: 'GET', cache: 'no-store',
     });
   },
 

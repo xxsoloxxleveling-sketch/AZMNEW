@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - feature/superadmin-add-missing-manual-marks-20261116
+      - feature/verified-manual-exam-marks-pr51-20261117
+      - fix/pr51-threshold-migration-20261117
+      - fix/pr51-owner-parity-20261117
+      - fix/pr51-readonly-database-guard-20261117
+      - fix/pr51-edmc-pdf-identity-20261117
+      - fix/pr51-manual-approve-controls-20261117
+      - fix/pr51-repeatable-manual-score-revisions-20261117
 
 permissions:
   contents: read
@@ -63,7 +70,7 @@ jobs:
         run: ./node_modules/.bin/tsc --noEmit --pretty false
       - name: Run manual score unit and public authorization tests
         working-directory: backend
-        run: node --import tsx --test tests/manual-exam-marks.test.ts tests/public-current-omr-marks.test.ts
+        run: node --import tsx --test tests/manual-exam-marks.test.ts tests/manual-mark-verification.test.ts tests/public-current-omr-marks.test.ts tests/provisional-omr-correction.test.ts tests/verified-omr-marks.test.ts tests/manual-release-safety.test.ts tests/manual-mark-corrections.test.ts tests/verified-edmc-download.test.ts tests/verified-edmc-freshness.test.ts tests/manual-approval-controls.test.ts
       - name: Synthetic PostgreSQL 17 migration and source-collision check
         shell: bash
         run: |
@@ -76,11 +83,32 @@ jobs:
           );
           CREATE TABLE public."OmrProvisionalMark" (
             "studentId" text NOT NULL, "sessionReference" text NOT NULL,
-            PRIMARY KEY ("sessionReference","studentId")
+            "paperVersion" text NOT NULL DEFAULT 'A',
+            "reviewCategory" text NOT NULL DEFAULT 'READY_HIGH_CONFIDENCE',
+            PRIMARY KEY ("sessionReference","studentId"),
+            CONSTRAINT "OmrProvisionalMark_paperVersion_check" CHECK ("paperVersion" IN ('A','B','C','D')),
+            CONSTRAINT "OmrProvisionalMark_reviewCategory_check" CHECK ("reviewCategory" IN ('READY_HIGH_CONFIDENCE','HOLD_SCORE'))
           );
           CREATE TABLE public."ExaminationResult" ("studentId" text NOT NULL);
           INSERT INTO public."User" VALUES ('admin-synthetic','Synthetic Super Admin','SUPER_ADMIN','ACTIVE');
           INSERT INTO public."Student" VALUES ('candidate-synthetic','ACTIVE','AZM-01','APP-01',NULL);
+          INSERT INTO public."Student" VALUES ('zero-synthetic','ACTIVE','AZM-00','APP-00',NULL);
+          ALTER TABLE public."Student"
+            ADD COLUMN "fullName" TEXT NOT NULL DEFAULT 'Synthetic Student',
+            ADD COLUMN "fatherName" TEXT NOT NULL DEFAULT 'Synthetic Parent',
+            ADD COLUMN "currentClass" TEXT NOT NULL DEFAULT 'Class 6';
+          SQL
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres \
+            -f backend/prisma/migrations/20261116100000_allow_administrative_zero_unmarked_omr/migration.sql
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres <<'SQL'
+          INSERT INTO public."OmrProvisionalMark" ("studentId","sessionReference","paperVersion","reviewCategory")
+            VALUES ('zero-synthetic','2026-V','UNDETERMINED','ADMIN_ZERO_OVERRIDE_REVIEW');
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM public."OmrProvisionalMark" WHERE "studentId"='zero-synthetic'
+              AND "paperVersion"='UNDETERMINED' AND "reviewCategory"='ADMIN_ZERO_OVERRIDE_REVIEW') THEN
+              RAISE EXCEPTION 'Administrative-zero migration semantics missing';
+            END IF;
+          END $$;
           SQL
           psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres \
             -f backend/prisma/migrations/20261116110000_superadmin_manual_exam_mark_entry/migration.sql
@@ -120,4 +148,79 @@ jobs:
             END IF;
           END $$;
           SQL
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres \
+            -f backend/prisma/migrations/20261117110000_verified_manual_exam_mark_audit/migration.sql
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres <<'SQL'
+          SELECT * FROM public.azm_verify_manual_exam_mark(
+            'candidate-synthetic',77,'SYNTHETIC-VERIFICATION-REGISTER-01',
+            'Independent synthetic review confirmed the recorded total, student identity and attendance.',
+            TRUE,TRUE,TRUE,'admin-synthetic'
+          );
+          DO $$
+          BEGIN
+            IF (SELECT count(*) FROM public."ManualExamMarkVerificationAudit")<>1 THEN
+              RAISE EXCEPTION 'Missing manual verification audit';
+            END IF;
+            IF (SELECT "verifiedMarks" FROM public."ManualExamMarkVerificationAudit")<>77 THEN
+              RAISE EXCEPTION 'Verification altered source score';
+            END IF;
+            IF (SELECT "obtainedMarks" FROM public."ManualExamMark")<>77 THEN
+              RAISE EXCEPTION 'Manual original score changed';
+            END IF;
+            BEGIN
+              PERFORM * FROM public.azm_verify_manual_exam_mark(
+                'candidate-synthetic',77,'SYNTHETIC-VERIFICATION-REGISTER-02',
+                'A repeated verification of the same score and identity must be rejected.',
+                TRUE,TRUE,TRUE,'admin-synthetic');
+              RAISE EXCEPTION 'Duplicate verification was incorrectly accepted';
+            EXCEPTION WHEN invalid_parameter_value THEN
+              RAISE NOTICE 'Already-verified score correctly rejected';
+            END;
+            BEGIN
+              PERFORM * FROM public.azm_verify_manual_exam_mark(
+                'candidate-synthetic',78,'SYNTHETIC-VERIFICATION-REGISTER-03',
+                'A stale score must never be allowed to seal a different recorded total.',
+                TRUE,TRUE,TRUE,'admin-synthetic');
+              RAISE EXCEPTION 'Stale score was incorrectly accepted';
+            EXCEPTION WHEN serialization_failure THEN
+              RAISE NOTICE 'Stale manual score correctly rejected';
+            END;
+          END $$;
+          SQL
           echo 'All tests used synthetic records; no production connection or writes.'
+      - name: PostgreSQL 17 repeatable manual correction migration and revision-bound verification
+        shell: bash
+        run: bash backend/tests/manual-mark-repeatable-ci.sh
+      - name: PostgreSQL 17 actual-owner privilege and restricted runtime parity
+        shell: bash
+        run: bash backend/tests/manual-owner-parity-ci.sh
+      - name: Exercise READ ONLY release preflight on synthetic student_app_db
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This database exists only inside this CI PostgreSQL container.
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres -c 'CREATE DATABASE student_app_db'
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d student_app_db <<'SQL'
+          CREATE TABLE public."Student" (id text PRIMARY KEY);
+          CREATE TABLE public."Attendance" (id text PRIMARY KEY);
+          CREATE TABLE public."AttendanceSession" (id text PRIMARY KEY);
+          CREATE TABLE public."OmrProvisionalMark" (id text PRIMARY KEY);
+          CREATE TABLE public."ManualExamMark" (id text PRIMARY KEY);
+          CREATE TABLE public."ExaminationResult" (id text PRIMARY KEY);
+          CREATE TABLE public."User" (id text PRIMARY KEY);
+          CREATE TABLE public._prisma_migrations (
+            migration_name text NOT NULL, finished_at timestamp, rolled_back_at timestamp
+          );
+          INSERT INTO public."Student" VALUES ('synthetic-student');
+          INSERT INTO public."ManualExamMark" VALUES ('synthetic-mark');
+          SQL
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d student_app_db \
+            -f backend/ops/postgres/manual-verification-preflight-readonly.sql
+          # The same preflight must refuse to run against the wrong database.
+          if psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres \
+              -f backend/ops/postgres/manual-verification-preflight-readonly.sql > wrong-db.log 2>&1; then
+            echo 'ERROR: preflight accepted unexpected database'
+            exit 1
+          fi
+          grep -q 'AZM_PR51_PREFLIGHT_WRONG_DATABASE' wrong-db.log
+          echo 'READ ONLY preflight and database identity gate passed on synthetic records'

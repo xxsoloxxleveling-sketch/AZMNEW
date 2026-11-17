@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { pdfService } from '../documents/pdf.service';
 import { studentsService } from './students.service';
 import { findPublishedProvisionalMarks, provisionalEdmcOutcome, type ProvisionalOmrMark } from './provisionalOmrMarks';
+import { findPublishedManualExamMarks } from './manualExamMarks';
 
 const escapeHtml = (value: unknown): string => String(value ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -24,6 +26,7 @@ export interface VerifiedEdmcPrintData {
   schoolName: string | null; district: string | null; testCenter: string | null;
   verifiedAt: Date; obtainedMarks: number; maximumMarks: number;
   photoDataUrl: string | null; logoDataUrl: string | null;
+  resultSource?: 'OMR_SCAN' | 'MANUAL_ENTRY';
 }
 
 function conflict(message: string): never {
@@ -109,6 +112,7 @@ export function buildVerifiedEdmcHtml(record: VerifiedEdmcPrintData): string {
     field('District',record.district),
     field('Examination session','Session V · 2026'),
     field('Marks verified',formatDate(record.verifiedAt)),
+    field('Marks source',record.resultSource === 'MANUAL_ENTRY' ? 'Verified administrative mark entry' : 'Verified OMR score'),
     '</div><figure class="portrait">',photo,'<figcaption>STUDENT PHOTOGRAPH</figcaption></figure></section>',
     '<div class="section-title">Examination marks summary</div><section class="stats">',
     '<div class="stat"><label>Final obtained marks</label><strong>',
@@ -116,7 +120,7 @@ export function buildVerifiedEdmcHtml(record: VerifiedEdmcPrintData): string {
     '<div class="stat"><label>Percentage</label><strong>',percentage,'<small>%</small></strong></div>',
     '<div class="stat ',result.resultStatus==='PASS'?'pass':'fail','"><label>Result status</label><strong>',
     result.resultStatus,'</strong><em>VERIFIED</em></div></section>',
-    '<p class="pass-rule">Passing rule: <b>Above 60 marks = Pass.</b> Exactly 60 or below is not a pass.</p>',
+    '<p class="pass-rule">Passing rule: <b>60 marks or above = Pass.</b> Below 60 is Fail.</p>',
     '<div class="section-title">Important notice</div><ol class="notices">',
     ...notices.map((notice,i) => '<li><span class="notice-num">'+(i+1)+'</span><span>'+escapeHtml(notice)+'</span></li>'),
     '</ol><footer><div><b>AZM.AIO</b><div>Scholarship Examination · Session V 2026</div></div>',
@@ -143,24 +147,64 @@ function loadLogo(): string | null {
   return null;
 }
 
+// Use one projection for the PDF snapshot and its final freshness check.
+// This includes certificate fields that are NOT part of the marks-verification
+// seal (for example school and test centre).
+const edmcStudentSelect = {
+  status: true, fullName: true, fatherName: true, rollNumber: true,
+  applicationNo: true, currentClass: true, schoolName: true, hsscGroup: true,
+  bsDepartment: true, bsSemester: true, district: true, registrationCentre: true,
+  officeUse: { select: { testCentre: true } },
+} as const satisfies Prisma.StudentSelect;
+
+type EdmcStudentSnapshot = Prisma.StudentGetPayload<{ select: typeof edmcStudentSelect }>;
+
+/** Stop a stale identity or school detail from escaping in a rendered PDF. */
+export function assertFreshEdmcStudentSnapshot(
+  issued: EdmcStudentSnapshot,
+  current: EdmcStudentSnapshot | null,
+): asserts current is EdmcStudentSnapshot {
+  if (!current || current.status !== 'ACTIVE' || !current.rollNumber ||
+      current.status !== issued.status ||
+      current.fullName !== issued.fullName ||
+      current.fatherName !== issued.fatherName ||
+      current.rollNumber !== issued.rollNumber ||
+      current.applicationNo !== issued.applicationNo ||
+      current.currentClass !== issued.currentClass ||
+      current.schoolName !== issued.schoolName ||
+      current.hsscGroup !== issued.hsscGroup ||
+      current.bsDepartment !== issued.bsDepartment ||
+      current.bsSemester !== issued.bsSemester ||
+      current.district !== issued.district ||
+      current.registrationCentre !== issued.registrationCentre ||
+      current.officeUse?.testCentre !== issued.officeUse?.testCentre) {
+    conflict('The student record changed while generating the E-DMC. Refresh and try again.');
+  }
+}
+
 /** Super Admin-only controller route calls this method. */
 export async function generateVerifiedEdmcPdf(studentId: string): Promise<{ buffer: Buffer; filename: string }> {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
-    select: {
-      status: true, fullName: true, fatherName: true, rollNumber: true,
-      applicationNo: true, currentClass: true, schoolName: true, hsscGroup: true,
-      bsDepartment: true, bsSemester: true, district: true, registrationCentre: true,
-      officeUse: { select: { testCentre: true } },
-    },
+    select: edmcStudentSelect,
   });
   if (!student || student.status !== 'ACTIVE' || !student.rollNumber) {
     const error = new Error('Student record is unavailable for E-DMC issuance.') as Error & { statusCode: number };
     error.statusCode = 404;
     throw error;
   }
-  const mark = (await findPublishedProvisionalMarks([studentId])).get(studentId);
-  assertVerifiedEdmcScore(mark);
+  const omr = (await findPublishedProvisionalMarks([studentId])).get(studentId);
+  const manual = omr ? undefined : (await findPublishedManualExamMarks([studentId])).get(studentId);
+  if (omr) {
+    assertVerifiedEdmcScore(omr);
+  } else if (!manual?.verified || !manual.verifiedAt ||
+    manual.rollNumberSnapshot !== student.rollNumber ||
+    manual.applicationNoSnapshot !== student.applicationNo) {
+    conflict('Verify this student\'s manual examination marks before downloading the E-DMC.');
+  }
+  const obtainedMarks = omr?.obtainedMarks ?? manual!.obtainedMarks;
+  const maximumMarks = omr?.maximumMarks ?? manual!.maximumMarks;
+  const verifiedAt = (omr?.verifiedAt ?? manual!.verifiedAt)!;
   let photoDataUrl: string | null = null;
   try {
     const image = await studentsService.getStudentDocument(studentId, 'photoThumbnail');
@@ -176,8 +220,9 @@ export async function generateVerifiedEdmcPdf(studentId: string): Promise<{ buff
     className: student.currentClass, studyGroup: student.hsscGroup || student.bsDepartment || null,
     semester: student.bsSemester || null, schoolName: student.schoolName,
     district: student.district, testCenter: student.officeUse?.testCentre || student.registrationCentre || null,
-    verifiedAt: mark.verifiedAt!, obtainedMarks: mark.obtainedMarks, maximumMarks: mark.maximumMarks,
+    verifiedAt, obtainedMarks, maximumMarks,
     logoDataUrl: loadLogo(), photoDataUrl,
+    resultSource: manual ? 'MANUAL_ENTRY' : 'OMR_SCAN',
   });
   const buffer = await pdfService.generatePdfFromHtml(html, {
     format: 'A4', landscape: false,
@@ -186,10 +231,18 @@ export async function generateVerifiedEdmcPdf(studentId: string): Promise<{ buff
 
   // Verification is revision-specific. A correction or an identity change
   // during rendering must invalidate this download.
-  const current = (await findPublishedProvisionalMarks([studentId])).get(studentId);
-  if (!current?.verified || current.obtainedMarks !== mark.obtainedMarks ||
-      current.maximumMarks !== mark.maximumMarks ||
-      current.verifiedAt?.getTime() !== mark.verifiedAt?.getTime()) {
+  const latestStudent = await prisma.student.findUnique({
+    where: { id: studentId }, select: edmcStudentSelect,
+  });
+  assertFreshEdmcStudentSnapshot(student, latestStudent);
+
+  const currentOmr = (await findPublishedProvisionalMarks([studentId])).get(studentId);
+  const currentManual = currentOmr ? undefined : (await findPublishedManualExamMarks([studentId])).get(studentId);
+  const current = currentOmr ?? currentManual;
+  if (!current?.verified || current.obtainedMarks !== obtainedMarks ||
+      current.maximumMarks !== maximumMarks ||
+      current.verifiedAt?.getTime() !== verifiedAt.getTime() ||
+      Boolean(currentManual) !== Boolean(manual)) {
     conflict('The verified result changed while generating the E-DMC. Refresh and try again.');
   }
   const safeRoll = student.rollNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
