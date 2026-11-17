@@ -7,6 +7,7 @@ function bad(statusCode: number, message: string) {
 
 export function buildManualMarkCorrectionQuery(
   studentId: string, expectedCurrentMarks: number, newMarks: number,
+  expectedCorrectionId: string | null,
   evidenceReference: string, reason: string,
   identityReviewed: boolean, attendanceReviewed: boolean, actorId: string,
 ): Prisma.Sql {
@@ -14,7 +15,7 @@ export function buildManualMarkCorrectionQuery(
     SELECT correction_id, previous_effective_marks, new_effective_marks, corrected_at
     FROM public.azm_correct_manual_exam_mark(
       ${studentId}::text,${expectedCurrentMarks}::integer,
-      ${newMarks}::integer,${evidenceReference}::text,${reason}::text,
+      ${newMarks}::integer,${expectedCorrectionId}::bigint,${evidenceReference}::text,${reason}::text,
       ${identityReviewed}::boolean,${attendanceReviewed}::boolean,${actorId}::text
     )
   `;
@@ -22,6 +23,7 @@ export function buildManualMarkCorrectionQuery(
 
 export async function correctManualExamMark(
   studentId: string, expectedCurrentMarks: number, newMarks: number,
+  expectedCorrectionId: string | null,
   evidenceReference: string, reason: string,
   identityReviewed: boolean, attendanceReviewed: boolean, actorId: string,
 ) {
@@ -30,7 +32,7 @@ export async function correctManualExamMark(
       correction_id: string; previous_effective_marks: number;
       new_effective_marks: number; corrected_at: Date;
     }>>(buildManualMarkCorrectionQuery(
-      studentId, expectedCurrentMarks, newMarks, evidenceReference,
+      studentId, expectedCurrentMarks, newMarks, expectedCorrectionId, evidenceReference,
       reason, identityReviewed, attendanceReviewed, actorId,
     ));
     if (!rows[0]) throw bad(409, 'The score was not changed. Refresh and retry.');
