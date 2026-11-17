@@ -183,6 +183,20 @@ export const manualExamMarkEntrySchema = z.object({
   attendanceReviewed: z.literal(true),
 }).strict();
 
+// Correct any manual score, including a previously verified score. Each
+// revision is immutable and requires a new verification of the current score.
+export const manualExamMarkCorrectionSchema = z.object({
+  expectedCurrentMarks: z.number().int().min(0).max(100),
+  newMarks: z.number().int().min(0).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  attendanceReviewed: z.literal(true),
+}).strict().refine(
+  values => values.newMarks !== values.expectedCurrentMarks,
+  { message: 'Enter a new score different from the current score.', path: ['newMarks'] },
+);
+
 // Only a Super Admin may edit a recorded provisional mark. The current
 // value is required for optimistic concurrency and a reason for the audit.
 export const provisionalOmrMarkCorrectionSchema = z.object({
