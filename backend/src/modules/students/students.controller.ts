@@ -286,7 +286,7 @@ export class StudentsController {
       if (!req.user) return res.status(401).json({ success: false, error: { message: 'Login required.' } });
       const receipt = await correctManualExamMark(
         req.params.id, req.body.expectedCurrentMarks, req.body.newMarks,
-        req.body.evidenceReference, req.body.reason,
+        req.body.expectedCorrectionId, req.body.evidenceReference, req.body.reason,
         req.body.identityReviewed, req.body.attendanceReviewed, req.user.id,
       );
       res.set('Cache-Control', 'private, no-store, max-age=0');
