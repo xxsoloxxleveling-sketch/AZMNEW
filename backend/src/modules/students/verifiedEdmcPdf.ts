@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { pdfService } from '../documents/pdf.service';
 import { studentsService } from './students.service';
@@ -146,16 +147,46 @@ function loadLogo(): string | null {
   return null;
 }
 
+// Use one projection for the PDF snapshot and its final freshness check.
+// This includes certificate fields that are NOT part of the marks-verification
+// seal (for example school and test centre).
+const edmcStudentSelect = {
+  status: true, fullName: true, fatherName: true, rollNumber: true,
+  applicationNo: true, currentClass: true, schoolName: true, hsscGroup: true,
+  bsDepartment: true, bsSemester: true, district: true, registrationCentre: true,
+  officeUse: { select: { testCentre: true } },
+} as const satisfies Prisma.StudentSelect;
+
+type EdmcStudentSnapshot = Prisma.StudentGetPayload<{ select: typeof edmcStudentSelect }>;
+
+/** Stop a stale identity or school detail from escaping in a rendered PDF. */
+export function assertFreshEdmcStudentSnapshot(
+  issued: EdmcStudentSnapshot,
+  current: EdmcStudentSnapshot | null,
+): asserts current is EdmcStudentSnapshot {
+  if (!current || current.status !== 'ACTIVE' || !current.rollNumber ||
+      current.status !== issued.status ||
+      current.fullName !== issued.fullName ||
+      current.fatherName !== issued.fatherName ||
+      current.rollNumber !== issued.rollNumber ||
+      current.applicationNo !== issued.applicationNo ||
+      current.currentClass !== issued.currentClass ||
+      current.schoolName !== issued.schoolName ||
+      current.hsscGroup !== issued.hsscGroup ||
+      current.bsDepartment !== issued.bsDepartment ||
+      current.bsSemester !== issued.bsSemester ||
+      current.district !== issued.district ||
+      current.registrationCentre !== issued.registrationCentre ||
+      current.officeUse?.testCentre !== issued.officeUse?.testCentre) {
+    conflict('The student record changed while generating the E-DMC. Refresh and try again.');
+  }
+}
+
 /** Super Admin-only controller route calls this method. */
 export async function generateVerifiedEdmcPdf(studentId: string): Promise<{ buffer: Buffer; filename: string }> {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
-    select: {
-      status: true, fullName: true, fatherName: true, rollNumber: true,
-      applicationNo: true, currentClass: true, schoolName: true, hsscGroup: true,
-      bsDepartment: true, bsSemester: true, district: true, registrationCentre: true,
-      officeUse: { select: { testCentre: true } },
-    },
+    select: edmcStudentSelect,
   });
   if (!student || student.status !== 'ACTIVE' || !student.rollNumber) {
     const error = new Error('Student record is unavailable for E-DMC issuance.') as Error & { statusCode: number };
@@ -200,6 +231,11 @@ export async function generateVerifiedEdmcPdf(studentId: string): Promise<{ buff
 
   // Verification is revision-specific. A correction or an identity change
   // during rendering must invalidate this download.
+  const latestStudent = await prisma.student.findUnique({
+    where: { id: studentId }, select: edmcStudentSelect,
+  });
+  assertFreshEdmcStudentSnapshot(student, latestStudent);
+
   const currentOmr = (await findPublishedProvisionalMarks([studentId])).get(studentId);
   const currentManual = currentOmr ? undefined : (await findPublishedManualExamMarks([studentId])).get(studentId);
   const current = currentOmr ?? currentManual;
