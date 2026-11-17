@@ -10,6 +10,7 @@ export interface PublishedManualExamMark {
   obtainedMarks: number;
   originalRecordedMarks: number;
   manuallyCorrected: boolean;
+  latestCorrectionId: string | null;
   maximumMarks: number;
   publishedAt: Date;
   recordedAt: Date;
@@ -100,6 +101,7 @@ export async function findPublishedManualExamMarks(
       COALESCE(correction."newEffectiveMarks",m."obtainedMarks") AS "obtainedMarks",
       m."obtainedMarks" AS "originalRecordedMarks",
       (correction.id IS NOT NULL) AS "manuallyCorrected",
+      correction.id::TEXT AS "latestCorrectionId",
       m."maximumMarks",COALESCE(correction."occurredAt",m."publishedAt") AS "publishedAt",m."recordedAt",
       COALESCE(seal.valid,FALSE) AS "verified",
       CASE WHEN seal.valid THEN seal."verifiedAt" ELSE NULL END AS "verifiedAt"
