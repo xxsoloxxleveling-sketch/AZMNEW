@@ -13,6 +13,7 @@ import {
   provisionalOmrMarkCorrectionSchema,
   manualExamMarkEntrySchema,
   verifiedManualExamMarkSchema,
+  manualExamMarkCorrectionSchema,
   selectedStudentsPdfSchema,
   uploadDocumentSchema,
 } from './students.schema';
@@ -232,6 +233,20 @@ router.post(
   authorizeRoles(Role.SUPER_ADMIN),
   validateBody(verifiedManualExamMarkSchema),
   studentsController.verifyManualExamMark
+);
+
+// The original manual mark stays immutable. A Super Admin may append
+// corrections repeatedly, including after verification, and review its history.
+router.get(
+  '/:id/manual-exam-mark/history',
+  authorizeRoles(Role.SUPER_ADMIN),
+  studentsController.getManualMarkCorrectionHistory
+);
+router.patch(
+  '/:id/manual-exam-mark',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(manualExamMarkCorrectionSchema),
+  studentsController.correctManualExamMark
 );
 
 // These endpoints follow router.use(authenticate). Other staff roles

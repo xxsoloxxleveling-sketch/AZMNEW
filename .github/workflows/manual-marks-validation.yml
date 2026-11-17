@@ -10,6 +10,7 @@ on:
       - fix/pr51-readonly-database-guard-20261117
       - fix/pr51-edmc-pdf-identity-20261117
       - fix/pr51-manual-approve-controls-20261117
+      - fix/pr51-repeatable-manual-score-revisions-20261117
 
 permissions:
   contents: read
@@ -69,7 +70,7 @@ jobs:
         run: ./node_modules/.bin/tsc --noEmit --pretty false
       - name: Run manual score unit and public authorization tests
         working-directory: backend
-        run: node --import tsx --test tests/manual-exam-marks.test.ts tests/manual-mark-verification.test.ts tests/public-current-omr-marks.test.ts tests/provisional-omr-correction.test.ts tests/verified-omr-marks.test.ts tests/manual-release-safety.test.ts tests/verified-edmc-download.test.ts tests/verified-edmc-freshness.test.ts tests/manual-approval-controls.test.ts
+        run: node --import tsx --test tests/manual-exam-marks.test.ts tests/manual-mark-verification.test.ts tests/public-current-omr-marks.test.ts tests/provisional-omr-correction.test.ts tests/verified-omr-marks.test.ts tests/manual-release-safety.test.ts tests/manual-mark-corrections.test.ts tests/verified-edmc-download.test.ts tests/verified-edmc-freshness.test.ts tests/manual-approval-controls.test.ts
       - name: Synthetic PostgreSQL 17 migration and source-collision check
         shell: bash
         run: |
@@ -187,6 +188,9 @@ jobs:
           END $$;
           SQL
           echo 'All tests used synthetic records; no production connection or writes.'
+      - name: PostgreSQL 17 repeatable manual correction migration and revision-bound verification
+        shell: bash
+        run: bash backend/tests/manual-mark-repeatable-ci.sh
       - name: PostgreSQL 17 actual-owner privilege and restricted runtime parity
         shell: bash
         run: bash backend/tests/manual-owner-parity-ci.sh

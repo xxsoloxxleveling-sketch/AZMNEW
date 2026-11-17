@@ -1923,6 +1923,9 @@ export class StudentsService {
           manualExamMark: manual ? {
             source: 'SUPER_ADMIN_MANUAL' as const,
             recordedAt: manual.recordedAt.toISOString(),
+            originalRecordedMarks: manual.originalRecordedMarks,
+            manuallyCorrected: manual.manuallyCorrected,
+            latestCorrectionId: manual.latestCorrectionId,
             reviewRequired: !manual.verified,
             verified: manual.verified,
             verifiedAt: manual.verifiedAt?.toISOString() ?? null,

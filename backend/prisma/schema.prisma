@@ -1126,6 +1126,7 @@ model ManualExamMarkVerificationAudit {
   studentId String
   verifiedMarks Int
   maximumMarks Int
+  latestCorrectionId BigInt?
   recordedAtSnapshot DateTime
   rollNumberSnapshot String
   applicationNoSnapshot String
@@ -1144,6 +1145,29 @@ model ManualExamMarkVerificationAudit {
   actor User @relation("ManualExamMarkVerifier", fields: [actorId], references: [id], onDelete: Restrict)
   @@index([sessionReference, studentId, id(sort: Desc)], map: "ManualExamMarkVerificationAudit_latest_idx")
   @@index([actorId, id(sort: Desc)], map: "ManualExamMarkVerificationAudit_actor_idx")
+}
+
+// Immutable correction chain. Legacy ManualExamMark and previous verification rows never change.
+model ManualExamMarkCorrectionAudit {
+  id BigInt @id @default(autoincrement())
+  sessionReference String
+  studentId String
+  originalRecordedMarks Int
+  previousEffectiveMarks Int
+  newEffectiveMarks Int
+  recordedAtSnapshot DateTime
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  evidenceReference String @db.Text
+  reason String @db.Text
+  identityReviewed Boolean
+  attendanceReviewed Boolean
+  actorId String
+  actorName String
+  occurredAt DateTime @default(now())
+
+  @@index([sessionReference, studentId, id(sort: Desc)], map: "ManualExamMarkCorrectionAudit_latest_idx")
+  @@index([actorId, id(sort: Desc)], map: "ManualExamMarkCorrectionAudit_actor_idx")
 }
 
 // Candidate-facing, explicitly provisional OMR marks. Never counted as an official result.

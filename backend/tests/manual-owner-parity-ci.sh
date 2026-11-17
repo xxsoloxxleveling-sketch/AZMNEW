@@ -205,3 +205,70 @@ BEGIN
 END $$;
 SQL
 echo "PASS: production-like ownership, one verified synthetic 82/100, strict grants and immutable sources."
+
+
+# Repeatable corrections must work under the same split owners WITHOUT a
+# second REFERENCES grant on the postgres-owned original source.
+correction_migration=backend/prisma/migrations/20261117150000_repeatable_manual_exam_mark_corrections/migration.sql
+{ printf 'SET ROLE student_app;\n'; cat "$correction_migration"; } | psql_test -q -f -
+psql_test -q <<'SQL'
+DO $$
+BEGIN
+ IF (SELECT pg_get_userbyid(proowner) FROM pg_proc
+     WHERE oid='public.azm_correct_manual_exam_mark(text,integer,integer,bigint,text,text,boolean,boolean,text)'::regprocedure) <> 'student_app'
+   OR (SELECT pg_get_userbyid(proowner) FROM pg_proc
+     WHERE oid='public.azm_verify_manual_exam_mark(text,integer,text,text,boolean,boolean,boolean,text)'::regprocedure) <> 'student_app' THEN
+   RAISE EXCEPTION 'Correction and verification RPC owners must both be student_app';
+ END IF;
+ IF has_column_privilege('student_app','public."ManualExamMark"','sessionReference','REFERENCES')
+   OR has_column_privilege('student_app','public."ManualExamMark"','studentId','REFERENCES')
+   OR has_table_privilege('azm_runtime','public."ManualExamMarkCorrectionAudit"','INSERT') THEN
+   RAISE EXCEPTION 'Unexpected source REFERENCES or runtime direct audit INSERT';
+ END IF;
+ IF NOT has_function_privilege('azm_runtime',
+   'public.azm_correct_manual_exam_mark(text,integer,integer,bigint,text,text,boolean,boolean,text)','EXECUTE') THEN
+   RAISE EXCEPTION 'Restricted correction function not executable by runtime role';
+ END IF;
+END $$;
+SET ROLE azm_runtime;
+SELECT * FROM public.azm_correct_manual_exam_mark(
+ 'ci-candidate',82,87,NULL,'SYNTHETIC-OWNER-PARITY-REGISTER-01',
+ 'Signed synthetic marks evidence independently checked for a correction after approval.',
+ TRUE,TRUE,'ci-superadmin');
+DO $$
+BEGIN
+ IF (SELECT "newEffectiveMarks" FROM public."ManualExamMarkCorrectionAudit" ORDER BY id DESC LIMIT 1) <> 87
+   OR (SELECT "obtainedMarks" FROM public."ManualExamMark") <> 82 THEN
+   RAISE EXCEPTION 'Correction failed or immutable source changed';
+ END IF;
+ BEGIN
+   PERFORM * FROM public.azm_correct_manual_exam_mark(
+     'ci-candidate',82,89,NULL,'SYNTHETIC-OWNER-PARITY-REGISTER-02',
+     'An obsolete value must be rejected as stale after a correction event.',
+     TRUE,TRUE,'ci-superadmin');
+   RAISE EXCEPTION 'Stale concurrent request accepted';
+ EXCEPTION WHEN serialization_failure THEN NULL;
+ END;
+ BEGIN
+   INSERT INTO public."ManualExamMarkCorrectionAudit"("sessionReference") VALUES ('2026-V');
+   RAISE EXCEPTION 'Runtime inserted correction audit directly';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+END $$;
+SELECT * FROM public.azm_verify_manual_exam_mark(
+ 'ci-candidate',87,'SYNTHETIC-OWNER-PARITY-VERIFY-01',
+ 'Independent confirmation of correction revision, signed evidence and student identity.',
+ TRUE,TRUE,TRUE,'ci-superadmin');
+RESET ROLE;
+DO $$
+BEGIN
+ IF (SELECT count(*) FROM public."ManualExamMarkVerificationAudit") <> 2
+   OR (SELECT "latestCorrectionId" FROM public."ManualExamMarkVerificationAudit"
+       ORDER BY id DESC LIMIT 1) IS DISTINCT FROM
+      (SELECT id FROM public."ManualExamMarkCorrectionAudit" ORDER BY id DESC LIMIT 1)
+   OR (SELECT "obtainedMarks" FROM public."ManualExamMark") <> 82 THEN
+   RAISE EXCEPTION 'Updated seal is not correction-bound or the original was modified';
+ END IF;
+END $$;
+SQL
+echo "PASS: actual owner split, no second REFERENCES grant, one audited correction and new verification."

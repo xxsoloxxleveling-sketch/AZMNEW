@@ -30,8 +30,9 @@ import { RollSlipPreviewModal } from './RollSlipPreviewModal';
 import { StudentOmrModal } from './StudentOmrModal';
 import { ProvisionalMarksEditorDialog } from './ProvisionalMarksEditorDialog';
 import { ManualExamMarksDialog } from './ManualExamMarksDialog';
+import { ManualMarksCorrectionDialog } from './ManualMarksCorrectionDialog';
 import { ManualMarkVerificationDialog } from './ManualMarkVerificationDialog';
-import { canApproveManualMark } from './manualApprovalEligibility';
+import { canApproveManualMark, canCorrectManualMark } from './manualApprovalEligibility';
 import { OmrMarkVerificationDialog } from './OmrMarkVerificationDialog';
 import { BulkOmrMarkVerificationDialog } from './BulkOmrMarkVerificationDialog';
 import { BulkPrintModal } from './BulkPrintModal';
@@ -106,6 +107,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
   const [omrStudent, setOmrStudent] = useState<MockStudent | null>(null);
   const [editingMarksStudent, setEditingMarksStudent] = useState<MockStudent | null>(null);
   const [manualMarksStudent, setManualMarksStudent] = useState<MockStudent | null>(null);
+  const [manualCorrectionStudent, setManualCorrectionStudent] = useState<MockStudent | null>(null);
   const [manualVerificationQueue, setManualVerificationQueue] = useState<MockStudent[]>([]);
   const [manualVerificationTotal, setManualVerificationTotal] = useState(0);
   const [verifyingMarksStudent, setVerifyingMarksStudent] = useState<MockStudent | null>(null);
@@ -629,6 +631,14 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
         </button>
       )}
 
+      {canCorrectManualMark(role, student) && (
+        <button type="button"
+          onClick={() => { setActiveActionMenuId(null); setManualCorrectionStudent(student); }}
+          className="w-full text-left px-3 py-1.5 text-xs font-semibold text-[#185b9d] hover:bg-blue-50 flex items-center gap-2 transition">
+          <IconEditStudent size={14} /> <span>Edit manual marks</span>
+        </button>
+      )}
+
       {canApproveManualMark(role, student) && (
         <button type="button"
           onClick={() => { setActiveActionMenuId(null); beginSingleManualVerification(student); }}
@@ -1120,7 +1130,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                               <div className="leading-tight">
                                 <span className="font-semibold text-slate-800 tabular-nums text-xs">{student.testScore} / 100</span>
                                 {student.manualExamMark && <span className={`block text-[10px] font-semibold ${student.manualExamMark.verified ? 'text-emerald-700' : 'text-amber-800'}`}>
-                                  {student.manualExamMark.verified ? 'Manually verified · Final' : 'Manually recorded · Review pending'}
+                                  {student.manualExamMark.verified ? 'Manually verified · Final' : 'Manually recorded · Review pending'}{student.manualExamMark.manuallyCorrected ? ' · Corrected' : ''}
                                 </span>}
                                 {student.provisionalOmr && <span className={`block text-[10px] font-semibold ${student.provisionalOmr.verified ? 'text-emerald-700' : 'text-amber-800'}`}>
                                   {student.provisionalOmr.verified ? 'Verified final' : 'Review required'}{student.provisionalOmr.manuallyCorrected ? ' · Corrected' : ''}
@@ -1137,6 +1147,14 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                                   <IconEditStudent size={12} aria-hidden="true" /> Add Marks
                                 </button>
                               )}
+                            {canCorrectManualMark(role, student) && (
+                              <button type="button" onClick={() => setManualCorrectionStudent(student)}
+                                title={`Correct manual marks for ${student.fullName} (even after approval)`}
+                                aria-label={`Edit manual marks for ${student.fullName}`}
+                                className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-[11px] font-semibold text-[#185b9d] hover:bg-blue-50">
+                                <IconEditStudent size={12} aria-hidden="true" /> Edit marks
+                              </button>
+                            )}
                             {canApproveManualMark(role, student) && (
                               <button type="button" onClick={() => beginSingleManualVerification(student)}
                                 title={`Approve manually recorded marks for ${student.fullName} after evidence review`}
@@ -1390,6 +1408,12 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
                             <IconEditStudent size={13} aria-hidden="true" /> Edit marks
                           </button>
                         )}
+                        {canCorrectManualMark(role, student) && (
+                          <button type="button" onClick={() => setManualCorrectionStudent(student)}
+                            className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-[#185b9d] hover:bg-blue-50">
+                            <IconEditStudent size={13} aria-hidden="true" /> Edit marks
+                          </button>
+                        )}
                         {canApproveManualMark(role, student) && (
                           <button type="button" onClick={() => beginSingleManualVerification(student)}
                             className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">
@@ -1548,6 +1572,15 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ initialStude
           key={manualMarksStudent.id}
           student={manualMarksStudent}
           onClose={() => setManualMarksStudent(null)}
+          onSaved={() => fetchStudents(false)}
+        />
+      )}
+
+      {role === 'SUPER_ADMIN' && manualCorrectionStudent && (
+        <ManualMarksCorrectionDialog
+          key={manualCorrectionStudent.id}
+          student={manualCorrectionStudent}
+          onClose={() => setManualCorrectionStudent(null)}
           onSaved={() => fetchStudents(false)}
         />
       )}

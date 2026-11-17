@@ -19,3 +19,19 @@ export function canApproveManualMark(
 ): boolean {
   return role === 'SUPER_ADMIN' && hasPendingManualApproval(student);
 }
+
+/** Previously approved as well as pending manual scores may be corrected.
+ * The source must be manual and the score must be a valid whole number. */
+export function hasManualMarksForCorrection(student: ManualApprovalCandidate): boolean {
+  return Boolean(
+    student.manualExamMark && !student.provisionalOmr &&
+    typeof student.testScore === 'number' && Number.isInteger(student.testScore) &&
+    student.testScore >= 0 && student.testScore <= 100,
+  );
+}
+
+export function canCorrectManualMark(
+  role: string | null | undefined, student: ManualApprovalCandidate,
+): boolean {
+  return role === 'SUPER_ADMIN' && hasManualMarksForCorrection(student);
+}
