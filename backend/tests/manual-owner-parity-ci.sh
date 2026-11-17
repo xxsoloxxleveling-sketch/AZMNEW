@@ -215,7 +215,7 @@ psql_test -q <<'SQL'
 DO $$
 BEGIN
  IF (SELECT pg_get_userbyid(proowner) FROM pg_proc
-     WHERE oid='public.azm_correct_manual_exam_mark(text,integer,integer,text,text,boolean,boolean,text)'::regprocedure) <> 'student_app'
+     WHERE oid='public.azm_correct_manual_exam_mark(text,integer,integer,bigint,text,text,boolean,boolean,text)'::regprocedure) <> 'student_app'
    OR (SELECT pg_get_userbyid(proowner) FROM pg_proc
      WHERE oid='public.azm_verify_manual_exam_mark(text,integer,text,text,boolean,boolean,boolean,text)'::regprocedure) <> 'student_app' THEN
    RAISE EXCEPTION 'Correction and verification RPC owners must both be student_app';
@@ -226,13 +226,13 @@ BEGIN
    RAISE EXCEPTION 'Unexpected source REFERENCES or runtime direct audit INSERT';
  END IF;
  IF NOT has_function_privilege('azm_runtime',
-   'public.azm_correct_manual_exam_mark(text,integer,integer,text,text,boolean,boolean,text)','EXECUTE') THEN
+   'public.azm_correct_manual_exam_mark(text,integer,integer,bigint,text,text,boolean,boolean,text)','EXECUTE') THEN
    RAISE EXCEPTION 'Restricted correction function not executable by runtime role';
  END IF;
 END $$;
 SET ROLE azm_runtime;
 SELECT * FROM public.azm_correct_manual_exam_mark(
- 'ci-candidate',82,87,'SYNTHETIC-OWNER-PARITY-REGISTER-01',
+ 'ci-candidate',82,87,NULL,'SYNTHETIC-OWNER-PARITY-REGISTER-01',
  'Signed synthetic marks evidence independently checked for a correction after approval.',
  TRUE,TRUE,'ci-superadmin');
 DO $$
@@ -243,7 +243,7 @@ BEGIN
  END IF;
  BEGIN
    PERFORM * FROM public.azm_correct_manual_exam_mark(
-     'ci-candidate',82,89,'SYNTHETIC-OWNER-PARITY-REGISTER-02',
+     'ci-candidate',82,89,NULL,'SYNTHETIC-OWNER-PARITY-REGISTER-02',
      'An obsolete value must be rejected as stale after a correction event.',
      TRUE,TRUE,'ci-superadmin');
    RAISE EXCEPTION 'Stale concurrent request accepted';
