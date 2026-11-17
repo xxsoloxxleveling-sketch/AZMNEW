@@ -48,7 +48,7 @@ ALTER TABLE public."ManualExamMarkVerificationAudit" ADD COLUMN "latestCorrectio
 
 CREATE FUNCTION public.azm_correct_manual_exam_mark(
  p_student_id TEXT, p_expected_marks INTEGER, p_new_marks INTEGER,
- p_evidence_reference TEXT, p_reason TEXT,
+ p_expected_revision_id BIGINT, p_evidence_reference TEXT, p_reason TEXT,
  p_identity_reviewed BOOLEAN, p_attendance_reviewed BOOLEAN, p_actor_id TEXT
 )
 RETURNS TABLE (correction_id TEXT, previous_effective_marks INTEGER,
@@ -97,7 +97,9 @@ BEGIN
  SELECT a.* INTO v_latest FROM public."ManualExamMarkCorrectionAudit" a
  WHERE a."sessionReference"='2026-V' AND a."studentId"=p_student_id ORDER BY a.id DESC LIMIT 1;
  v_effective:=COALESCE(v_latest."newEffectiveMarks",v_mark."obtainedMarks");
- IF p_expected_marks<>v_effective THEN RAISE EXCEPTION 'STALE_MANUAL_MARK' USING ERRCODE='40001'; END IF;
+ IF p_expected_revision_id IS DISTINCT FROM v_latest.id OR p_expected_marks<>v_effective THEN
+  RAISE EXCEPTION 'STALE_MANUAL_MARK' USING ERRCODE='40001';
+ END IF;
  IF p_new_marks=v_effective THEN RAISE EXCEPTION 'NO_MANUAL_MARK_CHANGE' USING ERRCODE='22023'; END IF;
  RETURN QUERY INSERT INTO public."ManualExamMarkCorrectionAudit" (
    "sessionReference","studentId","originalRecordedMarks","previousEffectiveMarks",
@@ -186,7 +188,7 @@ BEGIN
 END $$;
 
 REVOKE ALL ON FUNCTION public.azm_correct_manual_exam_mark(
- TEXT,INTEGER,INTEGER,TEXT,TEXT,BOOLEAN,BOOLEAN,TEXT
+ TEXT,INTEGER,INTEGER,BIGINT,TEXT,TEXT,BOOLEAN,BOOLEAN,TEXT
 ) FROM PUBLIC;
 DO $$
 DECLARE r RECORD;
@@ -195,7 +197,7 @@ BEGIN
  WHERE rolname IN ('azm_app_dml','azm_runtime','student_app') LOOP
   EXECUTE format('GRANT SELECT ON public."ManualExamMarkCorrectionAudit" TO %I',r.rolname);
   EXECUTE format(
-   'GRANT EXECUTE ON FUNCTION public.azm_correct_manual_exam_mark(TEXT,INTEGER,INTEGER,TEXT,TEXT,BOOLEAN,BOOLEAN,TEXT) TO %I',
+   'GRANT EXECUTE ON FUNCTION public.azm_correct_manual_exam_mark(TEXT,INTEGER,INTEGER,BIGINT,TEXT,TEXT,BOOLEAN,BOOLEAN,TEXT) TO %I',
    r.rolname);
  END LOOP;
 END $$;
