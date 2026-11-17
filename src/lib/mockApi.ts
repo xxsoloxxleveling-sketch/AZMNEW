@@ -87,6 +87,7 @@ export interface MockStudent {
     recordedAt: string;
     originalRecordedMarks?: number;
     manuallyCorrected?: boolean;
+    latestCorrectionId?: string | null;
     reviewRequired: boolean;
     verified: boolean;
     verifiedAt: string | null;
