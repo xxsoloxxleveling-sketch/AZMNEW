@@ -8,6 +8,8 @@ export interface PublishedManualExamMark {
   rollNumberSnapshot: string;
   applicationNoSnapshot: string;
   obtainedMarks: number;
+  originalRecordedMarks: number;
+  manuallyCorrected: boolean;
   maximumMarks: number;
   publishedAt: Date;
   recordedAt: Date;
@@ -95,14 +97,25 @@ export async function findPublishedManualExamMarks(
   const records = await prisma.$queryRaw<PublishedManualExamMark[]>(Prisma.sql`
     SELECT m."studentId",m."sessionReference",
       m."rollNumberSnapshot",m."applicationNoSnapshot",
-      m."obtainedMarks",m."maximumMarks",m."publishedAt",m."recordedAt",
+      COALESCE(correction."newEffectiveMarks",m."obtainedMarks") AS "obtainedMarks",
+      m."obtainedMarks" AS "originalRecordedMarks",
+      (correction.id IS NOT NULL) AS "manuallyCorrected",
+      m."maximumMarks",COALESCE(correction."occurredAt",m."publishedAt") AS "publishedAt",m."recordedAt",
       COALESCE(seal.valid,FALSE) AS "verified",
       CASE WHEN seal.valid THEN seal."verifiedAt" ELSE NULL END AS "verifiedAt"
     FROM public."ManualExamMark" m
     LEFT JOIN public."Student" student ON student.id=m."studentId"
     LEFT JOIN LATERAL (
+      SELECT c.id,c."newEffectiveMarks",c."occurredAt"
+      FROM public."ManualExamMarkCorrectionAudit" c
+      WHERE c."sessionReference"=m."sessionReference"
+        AND c."studentId"=m."studentId"
+      ORDER BY c.id DESC LIMIT 1
+    ) correction ON TRUE
+    LEFT JOIN LATERAL (
       SELECT (
-        audit."verifiedMarks"=m."obtainedMarks"
+        audit."verifiedMarks"=COALESCE(correction."newEffectiveMarks",m."obtainedMarks")
+        AND audit."latestCorrectionId" IS NOT DISTINCT FROM correction.id
         AND audit."maximumMarks"=m."maximumMarks"
         AND audit."recordedAtSnapshot"=m."recordedAt"
         AND audit."rollNumberSnapshot"=m."rollNumberSnapshot"
