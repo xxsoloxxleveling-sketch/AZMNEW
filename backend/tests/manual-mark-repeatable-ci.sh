@@ -73,6 +73,16 @@ BEGIN
     TRUE,TRUE,'admin-synthetic');
   SELECT max(id) INTO c3 FROM public."ManualExamMarkCorrectionAudit";
   IF c3<=c2 THEN RAISE EXCEPTION 'Third revision missing'; END IF;
+  -- Even with identical numeric marks, an old screen cannot overwrite
+  -- a new score revision (the ABA concurrency case).
+  BEGIN
+    PERFORM * FROM public.azm_correct_manual_exam_mark(
+      'candidate-synthetic',77,79,NULL,'SYNTHETIC-SIGNED-REGISTER-ABA',
+      'An obsolete edit opened before any correction must never overwrite this newer revision.',
+      TRUE,TRUE,'admin-synthetic');
+    RAISE EXCEPTION 'ABA-stale edit incorrectly accepted';
+  EXCEPTION WHEN serialization_failure THEN NULL;
+  END;
   PERFORM * FROM public.azm_verify_manual_exam_mark(
     'candidate-synthetic',77,'SYNTHETIC-INDEPENDENT-REVIEW-03',
     'Final revision has been independently verified even though it equals the original number.',
