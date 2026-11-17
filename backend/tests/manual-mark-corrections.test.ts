@@ -21,7 +21,7 @@ const candidate = {
 
 function correction(score: number, previous = 82) {
   return {
-    expectedCurrentMarks: previous, newMarks: score,
+    expectedCurrentMarks: previous, newMarks: score, expectedCorrectionId: null,
     evidenceReference: 'REGISTER-MANUAL-SYNTHETIC-001',
     reason: 'Independent signed manual result register checked with student attendance.',
     identityReviewed: true, attendanceReviewed: true,
@@ -59,14 +59,15 @@ test('score boundaries permit 0 to 100, but no-op, fractional and invalid eviden
 });
 
 test('correction uses parameterized SQL and explicit casts, not direct mutation', () => {
-  const query = buildManualMarkCorrectionQuery('candidate-synthetic',82,87,
+  const query = buildManualMarkCorrectionQuery('candidate-synthetic',82,87,null,
     'REGISTER-MANUAL-SYNTHETIC-001','Independent signed result register and attendance reviewed.',
     true,true,'admin-synthetic');
   assert.match(query.sql,/azm_correct_manual_exam_mark/);
   assert.match(query.sql,/::integer/);
+  assert.match(query.sql,/::bigint/);
   assert.match(query.sql,/::boolean/);
   assert.match(query.sql,/::text/);
-  assert.equal(query.values.length,8);
+  assert.equal(query.values.length,9);
   assert.equal(query.values[0],'candidate-synthetic');
   assert.equal(query.values[2],87);
 });
@@ -79,6 +80,7 @@ test('migration is append-only, identity-gated and binds approval to correction 
   assert.match(sql,/ManualExamMarkCorrectionAudit_immutable/);
   assert.match(sql,/CREATE OR REPLACE FUNCTION public\.azm_verify_manual_exam_mark/);
   assert.match(sql,/"latestCorrectionId" IS NOT DISTINCT FROM v_revision_id/);
+  assert.match(sql,/p_expected_revision_id IS DISTINCT FROM v_latest.id/);
   assert.match(sql,/FOR UPDATE/);
   assert.match(sql,/SUPER_ADMIN_REQUIRED/);
   assert.match(sql,/STALE_MANUAL_MARK/);
