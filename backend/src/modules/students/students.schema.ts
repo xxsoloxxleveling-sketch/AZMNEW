@@ -188,6 +188,7 @@ export const manualExamMarkEntrySchema = z.object({
 export const manualExamMarkCorrectionSchema = z.object({
   expectedCurrentMarks: z.number().int().min(0).max(100),
   newMarks: z.number().int().min(0).max(100),
+  expectedCorrectionId: z.string().regex(/^[0-9]{1,20}$/).nullable(),
   evidenceReference: z.string().trim().min(10).max(500),
   reason: z.string().trim().min(30).max(1000),
   identityReviewed: z.literal(true),
