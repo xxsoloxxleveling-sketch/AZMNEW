@@ -13,7 +13,7 @@ BEGIN
     RAISE EXCEPTION 'Expected prior verified synthetic score';
   END IF;
   PERFORM * FROM public.azm_correct_manual_exam_mark(
-    'candidate-synthetic',77,82,'SYNTHETIC-SIGNED-REGISTER-01',
+    'candidate-synthetic',77,82,NULL,'SYNTHETIC-SIGNED-REGISTER-01',
     'Synthetic original register independently reviewed: corrected 77 to 82.',
     TRUE,TRUE,'admin-synthetic');
   SELECT max(id) INTO c1 FROM public."ManualExamMarkCorrectionAudit";
@@ -23,7 +23,7 @@ BEGIN
   END IF;
   BEGIN
     PERFORM * FROM public.azm_correct_manual_exam_mark(
-      'candidate-synthetic',77,83,'SYNTHETIC-SIGNED-REGISTER-02',
+      'candidate-synthetic',77,83,c1,'SYNTHETIC-SIGNED-REGISTER-02',
       'Stale client values must not change the last recorded numerical score.',
       TRUE,TRUE,'admin-synthetic');
     RAISE EXCEPTION 'Stale edit accepted';
@@ -31,7 +31,7 @@ BEGIN
   END;
   BEGIN
     PERFORM * FROM public.azm_correct_manual_exam_mark(
-      'candidate-synthetic',82,82,'SYNTHETIC-SIGNED-REGISTER-03',
+      'candidate-synthetic',82,82,c1,'SYNTHETIC-SIGNED-REGISTER-03',
       'A duplicate score correction must never add another audit record.',
       TRUE,TRUE,'admin-synthetic');
     RAISE EXCEPTION 'No-op edit accepted';
@@ -39,7 +39,7 @@ BEGIN
   END;
   BEGIN
     PERFORM * FROM public.azm_correct_manual_exam_mark(
-      'candidate-synthetic',82,83,'SYNTHETIC-SIGNED-REGISTER-04',
+      'candidate-synthetic',82,83,c1,'SYNTHETIC-SIGNED-REGISTER-04',
       'This non-administrator actor is not allowed to modify any score.',
       TRUE,TRUE,'unknown-actor');
     RAISE EXCEPTION 'Invalid actor accepted';
@@ -54,7 +54,7 @@ BEGIN
     RAISE EXCEPTION 'First correction seal does not match revision';
   END IF;
   PERFORM * FROM public.azm_correct_manual_exam_mark(
-    'candidate-synthetic',82,60,'SYNTHETIC-SIGNED-REGISTER-05',
+    'candidate-synthetic',82,60,c1,'SYNTHETIC-SIGNED-REGISTER-05',
     'A second signed record review corrected the mark to the passing boundary.',
     TRUE,TRUE,'admin-synthetic');
   SELECT max(id) INTO c2 FROM public."ManualExamMarkCorrectionAudit";
@@ -68,7 +68,7 @@ BEGIN
     'Second corrected score and student identity were independently verified.',
     TRUE,TRUE,TRUE,'admin-synthetic');
   PERFORM * FROM public.azm_correct_manual_exam_mark(
-    'candidate-synthetic',60,77,'SYNTHETIC-SIGNED-REGISTER-06',
+    'candidate-synthetic',60,77,c2,'SYNTHETIC-SIGNED-REGISTER-06',
     'Third revision deliberately restores the original score while preserving all previous audits.',
     TRUE,TRUE,'admin-synthetic');
   SELECT max(id) INTO c3 FROM public."ManualExamMarkCorrectionAudit";
