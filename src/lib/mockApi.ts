@@ -85,6 +85,8 @@ export interface MockStudent {
   manualExamMark?: {
     source: 'SUPER_ADMIN_MANUAL';
     recordedAt: string;
+    originalRecordedMarks?: number;
+    manuallyCorrected?: boolean;
     reviewRequired: boolean;
     verified: boolean;
     verifiedAt: string | null;
@@ -1165,6 +1167,30 @@ export const mockApi = {
     return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark`, {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+
+  /** Repeatedly correct an existing manual score without changing its original entry. */
+  async correctManualExamMark(studentId: string, payload: {
+    expectedCurrentMarks: number;
+    newMarks: number;
+    evidenceReference: string;
+    reason: string;
+    identityReviewed: true;
+    attendanceReviewed: true;
+  }): Promise<{ correctionId: string; previousMarks: number; newMarks: number; correctedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark`, {
+      method: 'PATCH', body: JSON.stringify(payload),
+    });
+  },
+
+  async getManualExamMarkHistory(studentId: string): Promise<Array<{
+    id: string; originalRecordedMarks: number;
+    previousEffectiveMarks: number; newEffectiveMarks: number;
+    evidenceReference: string; reason: string; actorName: string; occurredAt: string;
+  }>> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark/history`, {
+      method: 'GET', cache: 'no-store',
     });
   },
 
