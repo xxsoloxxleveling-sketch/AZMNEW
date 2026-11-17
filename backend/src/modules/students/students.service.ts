@@ -1925,6 +1925,7 @@ export class StudentsService {
             recordedAt: manual.recordedAt.toISOString(),
             originalRecordedMarks: manual.originalRecordedMarks,
             manuallyCorrected: manual.manuallyCorrected,
+            latestCorrectionId: manual.latestCorrectionId,
             reviewRequired: !manual.verified,
             verified: manual.verified,
             verifiedAt: manual.verifiedAt?.toISOString() ?? null,
