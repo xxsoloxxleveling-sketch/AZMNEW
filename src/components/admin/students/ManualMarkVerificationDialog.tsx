@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, BadgeCheck, ClipboardCheck, ShieldCheck } from 'lucide-react';
 import { AttendanceDialog, attendanceField, attendancePrimary, attendanceSecondary } from '../attendance/AttendanceDialog';
 import { mockApi, type MockStudent } from '../../../lib/mockApi';
+import { hasPendingManualApproval } from './manualApprovalEligibility';
 
 export function ManualMarkVerificationDialog({
   student, onClose, onVerified, batchProgress,
@@ -20,10 +21,7 @@ export function ManualMarkVerificationDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const score = student.testScore;
-  const manual = student.manualExamMark;
-  const canVerify = Boolean(manual && !manual.verified
-    && !student.provisionalOmr && Number.isInteger(score)
-    && score !== null && score !== undefined && score >= 0 && score <= 100
+  const canVerify = Boolean(hasPendingManualApproval(student)
     && evidenceReference.trim().length >= 10 && evidenceReference.trim().length <= 500
     && reason.trim().length >= 30 && reason.trim().length <= 1000
     && identityReviewed && attendanceReviewed && marksEvidenceReviewed && !busy);
