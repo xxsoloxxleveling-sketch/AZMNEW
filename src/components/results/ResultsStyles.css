@@ -1,7 +1,22 @@
+/* Print only the verified E-DMC. Global print rules hide ordinary app content.
+   The show rule must be more specific than body:has(...)*, or all pages are blank. */
 @media print {
   body:has([data-result-print-root]) * { visibility: hidden !important; }
-  [data-result-print-root], [data-result-print-root] * { visibility: visible !important; }
-  [data-result-print-root] { position: absolute; inset: 0; width: 100%; border: 0 !important; padding: 0 !important; color: #111827 !important; }
+  body:has([data-result-print-root]) [data-result-print-root],
+  body:has([data-result-print-root]) [data-result-print-root] * {
+    visibility: visible !important;
+  }
   body:has([data-result-print-root]) .no-print { display: none !important; }
+  [data-result-print-root] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border: 0 !important;
+    padding: 0 !important;
+    color: #111827 !important;
+    overflow: visible !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
   @page { margin: 16mm; }
 }
