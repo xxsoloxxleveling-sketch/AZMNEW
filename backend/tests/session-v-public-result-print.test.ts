@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import puppeteer from 'puppeteer';
@@ -43,7 +43,13 @@ const mockCertificate = (length: number) => `
   </body></html>`;
 
 test('verified E-DMC prints visible text and excludes application controls (including long pages)', async () => {
+  const executablePath = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    process.platform === 'win32' ? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' : undefined,
+    process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : undefined,
+  ].find((candidate) => candidate && existsSync(candidate));
   const browser = await puppeteer.launch({
+    ...(executablePath ? { executablePath } : {}),
     headless: true,
     args: ['--no-sandbox', '--disable-gpu'],
   });
