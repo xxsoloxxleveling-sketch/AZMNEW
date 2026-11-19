@@ -133,9 +133,9 @@ export function PublicResultLookup() {
                   <p className="mt-2 text-4xl font-bold tabular-nums text-[#0c355a]">{record.percentage}%</p>
                 </div>
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">Pass threshold</p>
-                  <p className="mt-2 text-2xl font-bold text-amber-950">{record.resultStatus === 'PASS' ? '60 or above' : 'Below 60'}</p>
-                  <p className="mt-1 text-xs text-amber-800">Assessment subject to review</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">Provisional result status</p>
+                  <p className="mt-2 text-2xl font-bold text-amber-950">{Number(record.obtainedMarks) >= 60 ? 'PASS' : 'FAIL'}</p>
+                  <p className="mt-1 text-xs text-amber-800">60 marks or above passes · Subject to verification</p>
                 </div>
               </div>
               <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
