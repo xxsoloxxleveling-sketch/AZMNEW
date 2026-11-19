@@ -96,7 +96,7 @@
 }
 @media print {
  @page { size: A4 portrait; margin: 9mm; }
- .azm-edmc-certificate { max-width: none !important; width: 100% !important; border: 3px double #0c355a !important; box-shadow: none !important; padding: 20px 25px !important; break-inside: avoid; page-break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+ .azm-edmc-certificate { max-width: none !important; width: 100% !important; border: 3px double #0c355a !important; box-shadow: none !important; padding: 20px 25px !important; break-inside: auto; page-break-inside: auto; overflow: visible !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
  .edmc-identity { grid-template-columns: minmax(0,1fr) 140px; }
  .edmc-portrait, .edmc-portrait img, .edmc-no-photo { width: 140px; }
  .edmc-portrait img, .edmc-no-photo { height: 160px; }
