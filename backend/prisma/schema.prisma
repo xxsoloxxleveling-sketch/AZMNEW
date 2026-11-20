@@ -117,6 +117,11 @@ model User {
   issuedDmcDocuments DmcIssuance[] @relation("DmcIssuer")
   dmcIssuanceEvents DmcIssuanceEvent[] @relation("DmcEventActor")
   reviewedDmcReplacements DmcReplacement[] @relation("DmcReplacementReviewer")
+  interviewRoundsCreated InterviewRound[] @relation("InterviewRoundCreatedBy")
+  interviewRoundsPublished InterviewRound[] @relation("InterviewRoundPublishedBy")
+  interviewAssignmentsAssigned InterviewAssignment[] @relation("InterviewAssignmentAssignedBy")
+  interviewAssignmentsLocked InterviewAssignment[] @relation("InterviewAssignmentLockedBy")
+  interviewAudits InterviewAllocationAudit[] @relation("InterviewAuditActor")
 }
 
 enum StudentStatus {
@@ -214,6 +219,7 @@ model Student {
   examinationResults ExaminationResult[]
   legacyExamResultHistory ExamLegacyResultHistory[]
   omrProvisionalMarks OmrProvisionalMark[]
+  interviewAssignments InterviewAssignment[]
 }
 
 // Dedicated append-only correction evidence; no attendance/document audit reuse.
@@ -1149,4 +1155,135 @@ model OmrProvisionalMarkCorrectionAudit {
   actor User @relation("OmrMarkCorrectionActor", fields: [actorId], references: [id], onDelete: Restrict)
   @@index([studentId, occurredAt])
   @@index([actorId, occurredAt])
+}
+
+enum InterviewRoundStatus {
+  SETUP
+  OPEN
+  PUBLISHED
+  FINALIZED
+}
+
+enum InterviewHallStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InterviewAllocationType {
+  MANUAL
+  AUTO
+}
+
+enum InterviewAuditAction {
+  ROUND_CREATED
+  ROUND_PUBLISHED
+  ROUND_FINALIZED
+  HALL_CREATED
+  HALL_UPDATED
+  HALL_DEACTIVATED
+  ASSIGNED_MANUAL
+  ASSIGNED_AUTO
+  REASSIGNED
+  LOCKED
+  UNLOCKED
+  UNASSIGNED
+  AUTO_ALLOCATION_COMMITTED
+}
+
+model InterviewRound {
+  id                   String               @id @default(cuid())
+  sessionRef           String               @unique
+  title                String
+  eligibilityThreshold Int                  @default(60)
+  maximumMarks         Int                  @default(100)
+  status               InterviewRoundStatus @default(SETUP)
+  revision             Int                  @default(0)
+  createdById          String
+  createdBy            User                 @relation("InterviewRoundCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  publishedById        String?
+  publishedBy          User?                @relation("InterviewRoundPublishedBy", fields: [publishedById], references: [id], onDelete: Restrict)
+  publishedAt          DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  halls                InterviewHall[]
+  assignments          InterviewAssignment[]
+  audits               InterviewAllocationAudit[]
+
+  @@index([status, createdAt])
+}
+
+model InterviewHall {
+  id              String              @id @default(cuid())
+  roundId         String
+  round           InterviewRound      @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  name            String
+  roomNumber      String
+  venue           String?
+  interviewDate   DateTime?           @db.Date
+  reportingTime   String?
+  scheduleStartAt DateTime?
+  scheduleEndAt   DateTime?
+  capacity        Int
+  allowedClasses  String[]            @default([])
+  description     String?
+  status          InterviewHallStatus @default(ACTIVE)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  assignments     InterviewAssignment[]
+  audits          InterviewAllocationAudit[]
+
+  @@index([roundId, status, interviewDate])
+  @@index([venue, roomNumber, interviewDate])
+}
+
+model InterviewAssignment {
+  id                      String                 @id @default(cuid())
+  roundId                 String
+  round                   InterviewRound         @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  studentId               String
+  student                 Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  hallId                  String
+  hall                    InterviewHall          @relation(fields: [hallId], references: [id], onDelete: Restrict)
+  approvedResultReference String?
+  resultRevision          String?
+  approvedMarksSnapshot   Int?
+  allocationType          InterviewAllocationType
+  queueNumber             Int?
+  isLocked                Boolean                @default(false)
+  lockedAt                DateTime?
+  lockedById              String?
+  lockedBy                User?                  @relation("InterviewAssignmentLockedBy", fields: [lockedById], references: [id], onDelete: Restrict)
+  assignedById            String
+  assignedBy              User                   @relation("InterviewAssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt              DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  reason                  String?
+
+
+  @@unique([roundId, studentId])
+  @@unique([hallId, queueNumber])
+  @@index([roundId, hallId, isLocked])
+  @@index([studentId])
+}
+
+model InterviewAllocationAudit {
+  id             String               @id @default(cuid())
+  roundId        String
+  round          InterviewRound       @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  hallId         String?
+  hall           InterviewHall?       @relation(fields: [hallId], references: [id], onDelete: Restrict)
+  assignmentId   String?
+  studentId      String?
+  actorId        String
+  actor          User                 @relation("InterviewAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  action         InterviewAuditAction
+  idempotencyKey String?
+  reason         String?
+  details        Json?
+  occurredAt     DateTime             @default(now())
+
+  @@unique([roundId, idempotencyKey])
+  @@index([roundId, occurredAt])
+  @@index([hallId, occurredAt])
+  @@index([studentId, occurredAt])
 }

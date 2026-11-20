@@ -89,6 +89,9 @@ const AdminPartnersListView = lazy(() =>
 const AdminResultsView = lazy(() =>
   import('./components/results/AdminResultsView').then((m) => ({ default: m.AdminResultsView }))
 );
+const InterviewManagementView = lazy(() =>
+  import('./components/admin/interviews/InterviewManagementView').then((m) => ({ default: m.InterviewManagementView }))
+);
 const AdminWalkInModal = lazy(() =>
   import('./components/admin/students/AdminWalkInModal').then((m) => ({ default: m.AdminWalkInModal }))
 );
@@ -703,6 +706,7 @@ function AppContent() {
           {adminTab === 'storage' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <DocumentVaultView />}
           {adminTab === 'attendance' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <AttendanceHubView />}
           {adminTab === 'results' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <AdminResultsView initialResultContext={resultsReturnContext} />}
+          {adminTab === 'interviews' && (role === 'SUPER_ADMIN' || role === 'ADMIN') && <InterviewManagementView />}
           {['fees', 'payroll'].includes(adminTab) && (
             <DashboardView
               onNavigate={(tab) => {

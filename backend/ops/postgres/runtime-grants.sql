@@ -115,12 +115,12 @@ GRANT CONNECT ON DATABASE :"target_db" TO :"grant_role";
 GRANT USAGE ON SCHEMA public TO :"grant_role";
 
 -- No application read/write permission on the Prisma migrations ledger.
--- Mutation of either append-only attendance audit is denied at the ACL level.
+-- Mutation of append-only attendance and interview audit records is denied at the ACL level.
 -- Stage 1 also disallows DELETE on the Attendance table, even when a caller
 -- supplies a forged cancellation-audit context. Other application tables
 -- retain their existing DML surface. Database triggers remain mandatory.
 SELECT format('GRANT %s ON TABLE %I.%I TO %I',
-  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent','ExamLegacyResultHistory','OfficialResultAttemptBinding') THEN 'SELECT' WHEN c.relname IN ('DmcReplacement','DmcIssuance','DmcIssuanceEvent','AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','StudentStudyGroupCorrection')
+  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent','ExamLegacyResultHistory','OfficialResultAttemptBinding') THEN 'SELECT' WHEN c.relname IN ('DmcReplacement','DmcIssuance','DmcIssuanceEvent','AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','StudentStudyGroupCorrection','InterviewAllocationAudit')
     THEN 'SELECT, INSERT'
     WHEN c.relname IN ('Attendance','AttendanceSession','AttendanceSessionCandidate') THEN 'SELECT, INSERT, UPDATE'
     ELSE 'SELECT, INSERT, UPDATE, DELETE'

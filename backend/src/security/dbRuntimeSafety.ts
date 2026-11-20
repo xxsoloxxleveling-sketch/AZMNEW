@@ -54,6 +54,7 @@ const expectedTriggers = [
   'OfficialResultAttemptBinding_immutable',
   'ExaminationResult_attempt_guard',
   'ResultQuestionResponse_history_guard',
+  'InterviewAllocationAudit_immutable',
 ] as const;
 
 function loginFromUrl(value: string): string {

@@ -18,6 +18,7 @@ import {
   Shield as IconShield,
   QrCode as IconScanner,
   ClipboardList as IconResults,
+  ClipboardCheck as IconInterviews,
 } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { Role } from '../../../lib/mockApi';
@@ -35,7 +36,8 @@ export type AdminTab =
   | 'transactions'
   | 'settings'
   | 'scan'
-  | 'results';
+  | 'results'
+  | 'interviews';
 
 interface AdminSidebarProps {
   currentTab: AdminTab;
@@ -95,6 +97,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'results' as AdminTab,
       label: 'Results',
       icon: IconResults,
+      roles: ['SUPER_ADMIN', 'ADMIN'],
+    },
+    {
+      id: 'interviews' as AdminTab,
+      label: 'Interview Management',
+      icon: IconInterviews,
       roles: ['SUPER_ADMIN', 'ADMIN'],
     },
     {
