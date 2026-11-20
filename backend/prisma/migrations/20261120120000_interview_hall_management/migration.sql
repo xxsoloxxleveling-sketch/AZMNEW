@@ -6,7 +6,7 @@ CREATE TYPE "InterviewAuditAction" AS ENUM (
   'ROUND_CREATED', 'ROUND_PUBLISHED', 'ROUND_FINALIZED',
   'HALL_CREATED', 'HALL_UPDATED', 'HALL_DEACTIVATED',
   'ASSIGNED_MANUAL', 'ASSIGNED_AUTO', 'REASSIGNED',
-  'LOCKED', 'UNLOCKED', 'UNASSIGNED', 'AUTO_ALLOCATION_COMMITTED'
+  'LOCKED', 'UNLOCKED', 'UNASSIGNED', 'AUTO_ALLOCATION_COMMITTED', 'RESULTS_APPROVED'
 );
 
 CREATE TABLE "InterviewRound" (
@@ -35,6 +35,40 @@ CREATE TABLE "InterviewRound" (
 );
 CREATE UNIQUE INDEX "InterviewRound_sessionRef_key" ON "InterviewRound"("sessionRef");
 CREATE INDEX "InterviewRound_status_createdAt_idx" ON "InterviewRound"("status", "createdAt");
+
+CREATE TABLE "InterviewResultApproval" (
+  "id" TEXT NOT NULL,
+  "roundId" TEXT NOT NULL,
+  "campaignReference" TEXT NOT NULL,
+  "snapshotHash" VARCHAR(64) NOT NULL,
+  "candidateCount" INTEGER NOT NULL,
+  "officialResultCount" INTEGER NOT NULL,
+  "evidenceReference" TEXT NOT NULL,
+  "evidenceSha256" VARCHAR(64) NOT NULL,
+  "reason" TEXT NOT NULL,
+  "approvedById" TEXT NOT NULL,
+  "approvedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "InterviewResultApproval_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "InterviewResultApproval_candidateCount_check" CHECK ("candidateCount" > 0),
+  CONSTRAINT "InterviewResultApproval_officialResultCount_check" CHECK ("officialResultCount" >= "candidateCount"),
+  CONSTRAINT "InterviewResultApproval_snapshotHash_check" CHECK ("snapshotHash" ~ '^[a-f0-9]{64}$'),
+  CONSTRAINT "InterviewResultApproval_evidenceSha256_check" CHECK ("evidenceSha256" ~ '^[a-fA-F0-9]{64}$'),
+  CONSTRAINT "InterviewResultApproval_roundId_fkey" FOREIGN KEY ("roundId")
+    REFERENCES "InterviewRound"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "InterviewResultApproval_approvedById_fkey" FOREIGN KEY ("approvedById")
+    REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE INDEX "InterviewResultApproval_roundId_approvedAt_idx" ON "InterviewResultApproval"("roundId", "approvedAt");
+
+CREATE FUNCTION azm_reject_interview_result_approval_mutation() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+BEGIN
+  RAISE EXCEPTION 'Interview result approval evidence is append-only' USING ERRCODE = '23514';
+END;
+$$;
+CREATE TRIGGER "InterviewResultApproval_immutable"
+BEFORE UPDATE OR DELETE OR TRUNCATE ON "InterviewResultApproval"
+FOR EACH STATEMENT EXECUTE FUNCTION azm_reject_interview_result_approval_mutation();
 
 CREATE TABLE "InterviewHall" (
   "id" TEXT NOT NULL,
@@ -147,3 +181,4 @@ REVOKE ALL ON "InterviewRound" FROM PUBLIC;
 REVOKE ALL ON "InterviewHall" FROM PUBLIC;
 REVOKE ALL ON "InterviewAssignment" FROM PUBLIC;
 REVOKE ALL ON "InterviewAllocationAudit" FROM PUBLIC;
+REVOKE ALL ON "InterviewResultApproval" FROM PUBLIC;

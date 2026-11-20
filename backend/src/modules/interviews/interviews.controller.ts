@@ -38,6 +38,9 @@ export const interviewsController = {
     req.params.roundId, req.body as AutoAllocateCommitInput, actor(req),
   )),
   publishRound: respond(200, req => interviewsService.publishRound(req.params.roundId, actor(req))),
+  approveResults: respond(201, req => interviewsService.approveResults(
+    req.params.roundId, req.body as { evidenceReference: string; evidenceSha256: string; reason: string }, actor(req),
+  )),
   finalizeRound: respond(200, req => interviewsService.finalizeRound(
     req.params.roundId, req.body.reason, actor(req),
   )),

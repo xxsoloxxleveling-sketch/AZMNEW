@@ -15,9 +15,15 @@ describe('interview schema migration', () => {
       const tableNames = await db.query<{ table_name: string }>(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'Interview%' ORDER BY table_name",
       );
-      assert.equal(tableNames.rows.length, 4);
+      assert.equal(tableNames.rows.length, 5);
 
       await db.exec("INSERT INTO \"User\" (\"id\") VALUES ('u1'); INSERT INTO \"Student\" (\"id\") VALUES ('s1'), ('s2'); INSERT INTO \"InterviewRound\" (\"id\", \"sessionRef\", \"title\", \"createdById\", \"updatedAt\") VALUES ('r1', 'exam-session-1', 'Test round', 'u1', CURRENT_TIMESTAMP); INSERT INTO \"InterviewHall\" (\"id\", \"roundId\", \"name\", \"roomNumber\", \"capacity\", \"updatedAt\") VALUES ('h1', 'r1', 'Hall A', '101', 1, CURRENT_TIMESTAMP);");
+
+      await db.exec("INSERT INTO \"InterviewResultApproval\" (\"id\", \"roundId\", \"campaignReference\", \"snapshotHash\", \"candidateCount\", \"officialResultCount\", \"evidenceReference\", \"evidenceSha256\", \"reason\", \"approvedById\") VALUES ('approval-1', 'r1', '2026-V', repeat('a', 64), 1, 1, 'gazette-file-1', repeat('b', 64), 'Matched to final approved Gazette', 'u1')");
+      await assert.rejects(
+        db.exec("UPDATE \"InterviewResultApproval\" SET \"reason\" = 'changed' WHERE \"id\" = 'approval-1'"),
+        /append-only/,
+      );
 
       await assert.rejects(
         db.exec("INSERT INTO \"InterviewHall\" (\"id\", \"roundId\", \"name\", \"roomNumber\", \"capacity\", \"updatedAt\") VALUES ('bad-capacity', 'r1', 'Invalid', '102', 0, CURRENT_TIMESTAMP)"),

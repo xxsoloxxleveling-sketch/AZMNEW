@@ -5,7 +5,10 @@ import {
 } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middleware/error.middleware';
-import { assessInterviewEligibility, ApprovedResultSource, getAuthoritativeApprovedResult, InterviewEligibility } from './eligibility';
+import {
+  ApprovedResultSource, assessInterviewEligibility, InterviewEligibility,
+  resolveInterviewResultRecords, SESSION_V_CAMPAIGN_REF, SESSION_V_PASS_MARKS,
+} from './eligibility';
 
 import { AllocationCandidate, AllocationHall, AllocationStrategy, buildAllocationPlan } from './allocation';
 import {
@@ -20,6 +23,34 @@ type HallFields = {
   name: string; roomNumber: string; venue: string | null; interviewDate: Date | null;
   reportingTime: string | null; scheduleStartAt: Date | null; scheduleEndAt: Date | null;
   capacity: number; allowedClasses: string[]; description: string | null; status: InterviewHallStatus;
+};
+type CampaignCandidate = {
+  student: any;
+  roster: any | null;
+  source: ApprovedResultSource | null;
+  eligibility: InterviewEligibility;
+  assignment: any | null;
+  assignmentNeedsReview: boolean;
+};
+type CampaignSnapshot = {
+  candidates: CampaignCandidate[];
+  exams: any[];
+  resultFingerprints: string[];
+  assignments: any[];
+  officialResultCount: number;
+  campaignDataComplete: boolean;
+  approvalSnapshotHash: string;
+  resultApprovalCurrent: boolean;
+  resultApproval: any | null;
+  sourceStatus: string;
+  sourceMessage: string;
+  qualifiedCount: number;
+  notQualifiedCount: number;
+  pendingCount: number;
+  withheldCount: number;
+  duplicateCount: number;
+  missingResultCount: number;
+  reviewRequiredCount: number;
 };
 
 function fail(statusCode: number, message: string, code?: string): AppError {
@@ -127,14 +158,213 @@ export class InterviewsService {
     });
   }
 
+  private async loadCampaignSnapshot(db: Db, sessionRef: string, roundId?: string): Promise<CampaignSnapshot> {
+    if (sessionRef !== SESSION_V_CAMPAIGN_REF) {
+      return {
+        candidates: [], exams: [], resultFingerprints: [], assignments: [], officialResultCount: 0, campaignDataComplete: false,
+        approvalSnapshotHash: '', resultApprovalCurrent: false, resultApproval: null, sourceStatus: 'LEGACY_HALL_SCOPE',
+        sourceMessage: 'This stored round is scoped to an individual exam hall. Create the Session V campaign round to combine all original examination halls.',
+        qualifiedCount: 0, notQualifiedCount: 0, pendingCount: 0, withheldCount: 0,
+        duplicateCount: 0, missingResultCount: 0, reviewRequiredCount: 0,
+      };
+    }
+
+    const exams = await db.examination.findMany({
+      where: { sessionReference: SESSION_V_CAMPAIGN_REF },
+      select: {
+        id: true, reference: true, sessionReference: true, examDate: true, classGroup: true,
+        maximumMarks: true, publicationStatus: true, publishedAt: true, publishedById: true, revision: true,
+      },
+      orderBy: [{ examDate: 'asc' }, { reference: 'asc' }],
+    });
+    const resultInclude = {
+      examination: {
+        select: {
+          id: true, reference: true, sessionReference: true, maximumMarks: true,
+          publicationStatus: true, publishedAt: true, publishedById: true, revision: true,
+          paperKeyRevisions: { select: { paperVersion: true } },
+        },
+      },
+      attendanceSession: {
+        select: { id: true, isCurrent: true, status: true, attemptNumber: true, businessDate: true, hallNameSnapshot: true, roomNumberSnapshot: true },
+      },
+      attemptBinding: { select: { sessionId: true, studentId: true } },
+      corrections: {
+        select: { previousRevision: true, newRevision: true, occurredAt: true, id: true },
+        orderBy: [{ newRevision: 'desc' as const }, { occurredAt: 'desc' as const }, { id: 'desc' as const }],
+        take: 1,
+      },
+    };
+    const [resultRows, provisionalRows, assignments, resultApproval] = await Promise.all([
+      db.examinationResult.findMany({
+        where: { examination: { sessionReference: SESSION_V_CAMPAIGN_REF } },
+        include: resultInclude,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      }),
+      db.omrProvisionalMark.findMany({
+        where: { sessionReference: SESSION_V_CAMPAIGN_REF }, select: { studentId: true }, orderBy: { studentId: 'asc' },
+      }),
+      roundId ? db.interviewAssignment.findMany({
+        where: { roundId },
+        select: {
+          id: true, studentId: true, hallId: true, isLocked: true, allocationType: true,
+          approvedResultReference: true, resultRevision: true, approvedMarksSnapshot: true,
+          queueNumber: true, hall: { select: { name: true, roomNumber: true } },
+        },
+        orderBy: [{ studentId: 'asc' }, { id: 'asc' }],
+      }) : Promise.resolve([]),
+      roundId ? db.interviewResultApproval.findFirst({
+        where: { roundId, campaignReference: SESSION_V_CAMPAIGN_REF },
+        orderBy: [{ approvedAt: 'desc' }, { id: 'desc' }],
+      }) : Promise.resolve(null),
+    ]);
+
+    const dates = [...new Map(exams.filter(exam => exam.examDate).map(exam => {
+      const value = new Date(exam.examDate as Date);
+      return [value.toISOString().slice(0, 10), value] as const;
+    })).values()];
+    const sessions = dates.length ? await db.attendanceSession.findMany({
+      where: { businessDate: { in: dates }, isCurrent: true, status: { not: 'CANCELLED' } },
+      select: { id: true, businessDate: true, isCurrent: true, status: true, attemptNumber: true, hallNameSnapshot: true, roomNumberSnapshot: true },
+      orderBy: [{ businessDate: 'asc' }, { hallNameSnapshot: 'asc' }, { roomNumberSnapshot: 'asc' }, { id: 'asc' }],
+    }) : [];
+    const rosterRows = sessions.length ? await db.attendanceSessionCandidate.findMany({
+      where: { sessionId: { in: sessions.map(session => session.id) } },
+      select: { studentId: true, sessionId: true, fullNameSnapshot: true, rollNumberSnapshot: true, applicationNoSnapshot: true, currentClassSnapshot: true },
+      orderBy: [{ sessionId: 'asc' }, { studentId: 'asc' }],
+    }) : [];
+
+    const ids = [...new Set([
+      ...resultRows.map(row => row.studentId),
+      ...provisionalRows.map(row => row.studentId),
+      ...rosterRows.map(row => row.studentId),
+      ...assignments.map(row => row.studentId),
+    ])].sort((a, b) => a.localeCompare(b));
+    const students = ids.length ? await db.student.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, applicationNo: true, rollNumber: true, fullName: true, currentClass: true, hsscGroup: true, schoolName: true, gender: true },
+    }) : [];
+    const studentById = new Map(students.map(student => [student.id, student]));
+    const resultsByStudent = new Map<string, any[]>();
+    for (const row of resultRows) resultsByStudent.set(row.studentId, [...(resultsByStudent.get(row.studentId) ?? []), row]);
+    const rostersByStudent = new Map<string, any[]>();
+    for (const roster of rosterRows) rostersByStudent.set(roster.studentId, [...(rostersByStudent.get(roster.studentId) ?? []), roster]);
+    const assignmentByStudent = new Map(assignments.map(assignment => [assignment.studentId, assignment]));
+
+    const candidates: CampaignCandidate[] = ids.flatMap(studentId => {
+      const student = studentById.get(studentId);
+      if (!student) return [];
+      const records = resultsByStudent.get(studentId) ?? [];
+      const resolution = resolveInterviewResultRecords(records);
+      const rosterList = rostersByStudent.get(studentId) ?? [];
+      const sourceRecord = resolution.result
+        ? records.find(record => record.resultReference === resolution.result?.reference)
+        : undefined;
+      const roster = rosterList.find(item => item.sessionId === sourceRecord?.attendanceSessionId)
+        ?? rosterList.find(item => records.some(record => record.attendanceSessionId === item.sessionId))
+        ?? rosterList[0]
+        ?? null;
+      const assignment = assignmentByStudent.get(studentId) ?? null;
+      const result = resolution.result;
+      const assignmentNeedsReview = Boolean(assignment && (
+        resolution.eligibility.status !== 'QUALIFIED'
+        || !result
+        || assignment.approvedResultReference !== result.reference
+        || assignment.resultRevision !== result.revision
+        || assignment.approvedMarksSnapshot !== result.marks
+      ));
+      return [{ student, roster, source: result, eligibility: resolution.eligibility, assignment, assignmentNeedsReview }];
+    });
+
+    const qualifiedCount = candidates.filter(item => item.eligibility.status === 'QUALIFIED').length;
+    const notQualifiedCount = candidates.filter(item => item.eligibility.status === 'NOT_QUALIFIED').length;
+    const pendingCount = candidates.filter(item => item.eligibility.status === 'PENDING_VERIFICATION').length;
+    const withheldCount = candidates.filter(item => item.eligibility.status === 'EXCLUDED_PENDING_REVIEW' && item.eligibility.reason === 'WITHHELD').length;
+    const duplicateCount = candidates.filter(item => item.eligibility.status === 'EXCLUDED_PENDING_REVIEW' && item.eligibility.reason === 'DUPLICATE_OFFICIAL_RESULTS').length;
+    const missingResultCount = pendingCount + withheldCount + duplicateCount;
+    const reviewRequiredCount = candidates.filter(item => item.assignmentNeedsReview).length;
+    const examsAtApprovedScale = exams.length > 0 && exams.every(exam => exam.publicationStatus === 'PUBLISHED'
+      && Boolean(exam.publishedAt && exam.publishedById) && Number(exam.maximumMarks) === 100);
+    const campaignDataComplete = examsAtApprovedScale && candidates.length > 0
+      && candidates.every(item => item.eligibility.status === 'QUALIFIED' || item.eligibility.status === 'NOT_QUALIFIED');
+    const examFingerprint = exams.map(exam => ({
+      id: exam.id, reference: exam.reference, revision: exam.revision,
+      publicationStatus: exam.publicationStatus, maximumMarks: String(exam.maximumMarks),
+      publishedAt: exam.publishedAt?.toISOString?.() ?? null, publishedById: exam.publishedById,
+    }));
+    const candidateFingerprint = candidates.map(item => ({
+      studentId: item.student.id, eligibility: item.eligibility.status,
+      resultReference: item.source?.reference ?? null, resultRevision: item.source?.revision ?? null,
+      marks: item.source?.marks ?? null,
+    }));
+    const resultFingerprints = resultRows.map(row => JSON.stringify({
+      id: row.id, resultReference: row.resultReference, resultRevision: row.resultRevision,
+      obtainedMarks: row.obtainedMarks?.toString() ?? null, maximumMarks: row.maximumMarks.toString(),
+      identityStatus: row.identityStatus, scoringStatus: row.scoringStatus,
+      verificationStatus: row.verificationStatus, publicationStatus: row.publicationStatus,
+      verifiedAt: row.verifiedAt?.toISOString?.() ?? null, verifiedById: row.verifiedById,
+      publishedAt: row.publishedAt?.toISOString?.() ?? null, publishedById: row.publishedById,
+      attendanceSessionId: row.attendanceSessionId, examRevision: row.examination.revision,
+      latestCorrection: row.corrections?.[0] ? {
+        previousRevision: row.corrections[0].previousRevision, newRevision: row.corrections[0].newRevision,
+        id: row.corrections[0].id,
+      } : null,
+      updatedAt: row.updatedAt?.toISOString?.() ?? null,
+    })).sort((a, b) => a.localeCompare(b));
+    const approvalSnapshotHash = createHash('sha256').update(JSON.stringify({
+      campaignReference: SESSION_V_CAMPAIGN_REF, exams: examFingerprint,
+      candidateFingerprint, resultFingerprints,
+    })).digest('hex');
+    const resultApprovalCurrent = Boolean(campaignDataComplete && resultApproval
+      && resultApproval.snapshotHash === approvalSnapshotHash
+      && resultApproval.candidateCount === candidates.length
+      && resultApproval.officialResultCount === resultRows.length);
+    let sourceStatus = 'PENDING_SUPER_ADMIN_APPROVAL';
+    let sourceMessage = `${missingResultCount} of ${candidates.length} campaign candidates still need a current, unique, verified and published official result. Provisional OMR and legacy test scores are not used.`;
+    if (sessionRef !== SESSION_V_CAMPAIGN_REF) {
+      sourceStatus = 'LEGACY_HALL_SCOPE';
+      sourceMessage = 'This stored round is scoped to an individual exam hall. Create the Session V campaign round to combine all original examination halls.';
+    } else if (!exams.length) {
+      sourceStatus = 'NO_SESSION_V_EXAMINATION';
+      sourceMessage = 'No official 2026-V examination record is available. A Super Admin must register and publish the Session V examination and approve its final Gazette results.';
+    } else if (!examsAtApprovedScale) {
+      sourceStatus = 'SESSION_V_EXAMINATION_NOT_PUBLISHED';
+      sourceMessage = 'Every Session V examination must be published at 100 marks by a Super Admin before candidate eligibility can be confirmed.';
+    } else if (!candidates.length) {
+      sourceStatus = 'NO_SESSION_V_CANDIDATES';
+      sourceMessage = 'No Session V candidate roster or result records were found. The campaign roster or final Gazette import is missing.';
+    } else if (campaignDataComplete && resultApprovalCurrent) {
+      sourceStatus = 'VERIFIED';
+      sourceMessage = `Current official results for all ${candidates.length} Session V candidates match the Super Admin Gazette evidence approval. Passing marks are fixed at 60/100.`;
+    } else if (campaignDataComplete && resultApproval) {
+      sourceStatus = 'PENDING_GAZETTE_APPROVAL';
+      sourceMessage = 'Official results or the campaign roster changed after Gazette evidence approval. A Super Admin must reconcile the final Gazette and record a new evidence approval.';
+    } else if (campaignDataComplete) {
+      sourceStatus = 'PENDING_GAZETTE_APPROVAL';
+      sourceMessage = 'A Super Admin must confirm the complete verified Session V result set against the final approved Gazette and record its evidence reference and SHA-256.';
+    }
+
+    return {
+      candidates, exams, resultFingerprints,
+      assignments, officialResultCount: resultRows.length, campaignDataComplete,
+      approvalSnapshotHash, resultApprovalCurrent, resultApproval,
+      sourceStatus, sourceMessage, qualifiedCount, notQualifiedCount, pendingCount,
+      withheldCount, duplicateCount, missingResultCount, reviewRequiredCount,
+    };
+  }
+
   async createRound(input: CreateRoundInput, actor: Actor) {
     return this.transaction(async tx => {
-      const session = await tx.attendanceSession.findUnique({ where: { id: input.sessionRef }, select: { id: true } });
-      if (!session) throw fail(404, 'Examination session not found in Results.');
+      if (input.sessionRef !== SESSION_V_CAMPAIGN_REF || input.eligibilityThreshold !== SESSION_V_PASS_MARKS || input.maximumMarks !== 100) {
+        throw fail(400, 'Session V interviews use campaign 2026-V and a fixed 60/100 passing threshold.');
+      }
+      if (await tx.interviewRound.findUnique({ where: { sessionRef: SESSION_V_CAMPAIGN_REF }, select: { id: true } })) {
+        throw fail(409, 'A Session V campaign interview round already exists.');
+      }
       const round = await tx.interviewRound.create({
         data: {
-          sessionRef: input.sessionRef, title: input.title, eligibilityThreshold: input.eligibilityThreshold,
-          maximumMarks: 100, status: InterviewRoundStatus.OPEN, createdById: actor.id,
+          sessionRef: SESSION_V_CAMPAIGN_REF, title: input.title, eligibilityThreshold: SESSION_V_PASS_MARKS,
+          maximumMarks: 100, status: InterviewRoundStatus.SETUP, createdById: actor.id,
         },
       });
       await this.audit(tx, { roundId: round.id, actorId: actor.id, action: InterviewAuditAction.ROUND_CREATED,
@@ -146,91 +376,129 @@ export class InterviewsService {
   async getOverview(roundId: string) {
     const round = await this.db.interviewRound.findUnique({ where: { id: roundId } });
     if (!round) throw fail(404, 'Interview round not found.');
-    const [rosterCount, assignments, halls] = await Promise.all([
-      this.db.student.count({ where: { resultSessionId: round.sessionRef, status: 'ACTIVE' } }),
-      this.db.interviewAssignment.findMany({ where: { roundId }, select: { isLocked: true } }),
+    const [campaign, halls] = await Promise.all([
+      this.loadCampaignSnapshot(this.db, round.sessionRef, roundId),
       this.db.interviewHall.findMany({
         where: { roundId, status: InterviewHallStatus.ACTIVE },
         select: { capacity: true, _count: { select: { assignments: true } } },
       }),
     ]);
+    const assignments = campaign.assignments;
     const capacity = halls.reduce((sum, hall) => sum + hall.capacity, 0);
     const occupied = halls.reduce((sum, hall) => sum + hall._count.assignments, 0);
-    const qualified = 0;
+    const assignedIds = new Set(assignments.map(item => item.studentId));
+    const unassignedQualified = campaign.candidates.filter(item => item.eligibility.status === 'QUALIFIED' && !assignedIds.has(item.student.id)).length;
     return {
-      round, totalQualifiedCandidates: qualified, allocatedCandidates: assignments.length,
-      unassignedCandidates: Math.max(0, qualified - assignments.length),
-      pendingVerificationCandidates: rosterCount,
+      round, totalQualifiedCandidates: campaign.qualifiedCount, notQualifiedCandidates: campaign.notQualifiedCount,
+      campaignCandidateCount: campaign.candidates.length, allocatedCandidates: assignments.length,
+      unassignedCandidates: unassignedQualified,
+      pendingVerificationCandidates: campaign.missingResultCount,
       lockedCandidates: assignments.filter(item => item.isLocked).length,
+      reviewRequiredAssignments: campaign.reviewRequiredCount,
       activeHallCount: halls.length, totalCapacity: capacity,
       remainingSeats: Math.max(0, capacity - occupied),
-      completionPercent: qualified ? Math.round((assignments.length / qualified) * 100) : 0,
-      eligibilitySourceStatus: 'UNVERIFIED_SOURCE_UNAVAILABLE',
+      completionPercent: campaign.qualifiedCount ? Math.round(((campaign.qualifiedCount - unassignedQualified) / campaign.qualifiedCount) * 100) : 0,
+      eligibilitySourceStatus: campaign.sourceStatus, sourceMessage: campaign.sourceMessage,
+      campaignDataComplete: campaign.campaignDataComplete,
+      resultApprovalCurrent: campaign.resultApprovalCurrent,
+      resultApproval: campaign.resultApproval ? {
+        evidenceReference: campaign.resultApproval.evidenceReference,
+        evidenceSha256: campaign.resultApproval.evidenceSha256,
+        approvedAt: campaign.resultApproval.approvedAt,
+        candidateCount: campaign.resultApproval.candidateCount,
+        officialResultCount: campaign.resultApproval.officialResultCount,
+      } : null,
     };
+  }
+
+  async approveResults(roundId: string, input: { evidenceReference: string; evidenceSha256: string; reason: string }, actor: Actor) {
+    if (actor.role !== 'SUPER_ADMIN') throw fail(403, 'Only a Super Admin can approve the final Gazette evidence for interview eligibility.');
+    return this.transaction(async tx => {
+      const round = await this.lockRound(tx, roundId);
+      if (round.status === InterviewRoundStatus.FINALIZED) throw fail(409, 'A finalized interview round cannot receive a new result approval.');
+      if (round.sessionRef !== SESSION_V_CAMPAIGN_REF || round.eligibilityThreshold !== SESSION_V_PASS_MARKS || round.maximumMarks !== 100) {
+        throw fail(409, 'Gazette evidence approval is available only for the Session V campaign at the fixed 60/100 threshold.');
+      }
+      await this.lockCampaignResults(tx, round.sessionRef);
+      const campaign = await this.loadCampaignSnapshot(tx, round.sessionRef, roundId);
+      if (!campaign.campaignDataComplete) {
+        throw fail(409, 'Complete the verified and published official result set before approving Gazette evidence.');
+      }
+      const approval = await tx.interviewResultApproval.create({
+        data: {
+          roundId, campaignReference: SESSION_V_CAMPAIGN_REF,
+          snapshotHash: campaign.approvalSnapshotHash,
+          candidateCount: campaign.candidates.length,
+          officialResultCount: campaign.officialResultCount,
+          evidenceReference: input.evidenceReference.trim(),
+          evidenceSha256: input.evidenceSha256.trim().toLowerCase(),
+          reason: input.reason.trim(), approvedById: actor.id,
+        },
+      });
+      await this.audit(tx, {
+        roundId, actorId: actor.id, action: InterviewAuditAction.RESULTS_APPROVED, reason: input.reason,
+        details: {
+          campaignReference: SESSION_V_CAMPAIGN_REF, snapshotHash: campaign.approvalSnapshotHash,
+          candidateCount: campaign.candidates.length, officialResultCount: campaign.officialResultCount,
+          evidenceReference: input.evidenceReference.trim(), evidenceSha256: input.evidenceSha256.trim().toLowerCase(),
+        },
+      });
+      await tx.interviewRound.update({ where: { id: roundId }, data: { revision: { increment: 1 } } });
+      return approval;
+    });
   }
 
   async listCandidates(roundId: string, query: CandidateQuery) {
     const round = await this.db.interviewRound.findUnique({ where: { id: roundId } });
     if (!round) throw fail(404, 'Interview round not found.');
-    const search = query.search?.trim();
-    const where: Prisma.StudentWhereInput = {
-      resultSessionId: round.sessionRef, status: 'ACTIVE',
-      ...(query.className ? { currentClass: query.className } : {}),
-      ...(query.gender ? { gender: query.gender } : {}),
-      ...(query.schoolName ? { schoolName: { contains: query.schoolName, mode: 'insensitive' } } : {}),
-
-      ...(search ? { OR: [
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { applicationNo: { contains: search, mode: 'insensitive' } },
-        { rollNumber: { contains: search, mode: 'insensitive' } },
-      ] } : {}),
-      ...((query.hallId || query.assignment === 'assigned' || query.assignment === 'unassigned') ? {
-        AND: [
-          ...(query.hallId ? [{ interviewAssignments: { some: { roundId, hallId: query.hallId } } }] : []),
-          ...(query.assignment === 'assigned' ? [{ interviewAssignments: { some: { roundId } } }] : []),
-          ...(query.assignment === 'unassigned' ? [{ interviewAssignments: { none: { roundId } } }] : []),
-        ],
-      } : {}),
-
-    };
-    if (query.eligibility === 'qualified' || query.eligibility === 'excluded' || query.minimumMarks !== undefined || query.maximumMarks !== undefined) {
-      return {
-        sessionRef: round.sessionRef, verificationStatus: 'UNVERIFIED', results: [],
-        pagination: { page: query.page, limit: query.limit, total: 0, totalPages: 0 },
-      };
-    }
-    const [students, total] = await Promise.all([
-      this.db.student.findMany({
-        where,
-        select: {
-          id: true, applicationNo: true, rollNumber: true, fullName: true, currentClass: true,
-          hsscGroup: true, schoolName: true, gender: true,
-          interviewAssignments: {
-            where: { roundId },
-            select: {
-              id: true, hallId: true, isLocked: true, allocationType: true,
-              hall: { select: { name: true, roomNumber: true } },
-            }, take: 1,
-          },
-        },
-        orderBy: [{ rollNumber: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
-        skip: (query.page - 1) * query.limit, take: query.limit,
-      }),
-      this.db.student.count({ where }),
-    ]);
+    const campaign = await this.loadCampaignSnapshot(this.db, round.sessionRef, roundId);
+    const search = query.search?.trim().toLowerCase() ?? '';
+    const rows = campaign.candidates.filter(item => {
+      const student = item.student;
+      const assignment = item.assignment;
+      const className = item.roster?.currentClassSnapshot || student.currentClass || '';
+      const haystack = [student.fullName, student.applicationNo, student.rollNumber, item.roster?.fullNameSnapshot, item.roster?.rollNumberSnapshot]
+        .filter(Boolean).join(' ').toLowerCase();
+      if (search && !haystack.includes(search)) return false;
+      if (query.className && className.toLowerCase() !== query.className.toLowerCase()
+        && (student.hsscGroup ?? '').toLowerCase() !== query.className.toLowerCase()) return false;
+      if (query.gender && student.gender !== query.gender) return false;
+      if (query.schoolName && !(student.schoolName ?? '').toLowerCase().includes(query.schoolName.toLowerCase())) return false;
+      if (query.hallId && assignment?.hallId !== query.hallId) return false;
+      if (query.assignment === 'assigned' && !assignment) return false;
+      if (query.assignment === 'unassigned' && assignment) return false;
+      if (query.eligibility === 'qualified' && item.eligibility.status !== 'QUALIFIED') return false;
+      if (query.eligibility === 'unqualified' && item.eligibility.status !== 'NOT_QUALIFIED') return false;
+      if (query.eligibility === 'pending' && item.eligibility.status !== 'PENDING_VERIFICATION') return false;
+      if (query.eligibility === 'excluded' && item.eligibility.status !== 'EXCLUDED_PENDING_REVIEW') return false;
+      const marks = item.source?.marks;
+      if (query.minimumMarks !== undefined && (marks === undefined || marks < query.minimumMarks)) return false;
+      if (query.maximumMarks !== undefined && (marks === undefined || marks > query.maximumMarks)) return false;
+      return true;
+    }).sort((a, b) => {
+      const left = (a.roster?.rollNumberSnapshot || a.student.rollNumber || '').toLowerCase();
+      const right = (b.roster?.rollNumberSnapshot || b.student.rollNumber || '').toLowerCase();
+      return left.localeCompare(right) || a.student.id.localeCompare(b.student.id);
+    });
+    const total = rows.length;
+    const students = rows.slice((query.page - 1) * query.limit, query.page * query.limit);
     return {
-      sessionRef: round.sessionRef, verificationStatus: 'UNVERIFIED',
-      results: students.map(student => {
-        const assignment = student.interviewAssignments[0];
-        const eligibility = evaluateInterviewResult(getAuthoritativeApprovedResult(student), round.eligibilityThreshold, round.maximumMarks);
+      sessionRef: round.sessionRef, verificationStatus: campaign.sourceStatus,
+      eligibilitySourceStatus: campaign.sourceStatus,
+      results: students.map(item => {
+        const { student, roster, assignment, eligibility, source } = item;
         return {
-          id: student.id, applicationNo: student.applicationNo, rollNumber: student.rollNumber,
-          studentName: student.fullName, className: student.currentClass, groupName: student.hsscGroup,
-          schoolName: student.schoolName, gender: student.gender, finalApprovedMarks: null,
+          id: student.id, applicationNo: roster?.applicationNoSnapshot || student.applicationNo,
+          rollNumber: roster?.rollNumberSnapshot || student.rollNumber,
+          studentName: roster?.fullNameSnapshot || student.fullName,
+          className: roster?.currentClassSnapshot || student.currentClass, groupName: student.hsscGroup,
+          schoolName: student.schoolName, gender: student.gender,
+          finalApprovedMarks: eligibility.status === 'QUALIFIED' || eligibility.status === 'NOT_QUALIFIED' ? source?.marks ?? null : null,
           resultVerificationStatus: eligibility.status,
           interviewHall: assignment ? { id: assignment.hallId, name: assignment.hall.name, roomNumber: assignment.hall.roomNumber } : null,
           assignmentStatus: assignment ? assignment.allocationType : 'UNASSIGNED',
           isLocked: assignment?.isLocked ?? false, assignmentId: assignment?.id ?? null,
+          assignmentNeedsReview: item.assignmentNeedsReview, sourceRevision: source?.revision ?? null,
         };
       }),
       pagination: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) },
@@ -319,17 +587,26 @@ export class InterviewsService {
     });
   }
 
-  private async getVerifiedStudent(tx: Db, round: { sessionRef: string; eligibilityThreshold: number; maximumMarks: number }, studentId: string) {
-    const student = await tx.student.findFirst({
-      where: { id: studentId, resultSessionId: round.sessionRef, status: 'ACTIVE' },
-      select: { id: true, currentClass: true, hsscGroup: true, rollNumber: true },
-    });
-    if (!student) throw fail(404, 'Active student not found in this interview round’s examination session.');
-    const eligibility = evaluateInterviewResult(getAuthoritativeApprovedResult(student), round.eligibilityThreshold, round.maximumMarks);
-    if (eligibility.status !== 'QUALIFIED') {
-      throw fail(409, 'Student cannot be assigned until a verified final result on a 100-mark scale confirms qualification.');
+  private async getVerifiedStudent(tx: Db, round: { id: string; sessionRef: string; eligibilityThreshold: number; maximumMarks: number }, studentId: string) {
+    if (round.eligibilityThreshold !== SESSION_V_PASS_MARKS || round.maximumMarks !== 100) {
+      throw fail(409, 'Session V eligibility is fixed at 60/100. Recreate this as a campaign-level round.');
     }
-    return { student, eligibility };
+    const campaign = await this.loadCampaignSnapshot(tx, round.sessionRef, round.id);
+    if (campaign.sourceStatus !== 'VERIFIED') throw fail(409, campaign.sourceMessage, 'OFFICIAL_RESULTS_INCOMPLETE');
+    const candidate = campaign.candidates.find(item => item.student.id === studentId);
+    if (!candidate) throw fail(404, 'Student is not in the Session V campaign population.');
+    if (candidate.eligibility.status !== 'QUALIFIED' || !candidate.source) {
+      throw fail(409, 'Student cannot be assigned unless a current official result confirms marks of at least 60/100.');
+    }
+    return {
+      student: {
+        id: candidate.student.id,
+        currentClass: candidate.roster?.currentClassSnapshot || candidate.student.currentClass,
+        hsscGroup: candidate.student.hsscGroup,
+        rollNumber: candidate.roster?.rollNumberSnapshot || candidate.student.rollNumber,
+      },
+      eligibility: candidate.eligibility,
+    };
   }
 
   private async nextQueueNumber(tx: Prisma.TransactionClient, hallId: string) {
@@ -342,14 +619,33 @@ export class InterviewsService {
     return this.transaction(async tx => {
       const round = await this.lockRound(tx, roundId);
       assertRoundEditable(round, actor);
+      await this.lockCampaignResults(tx, round.sessionRef);
       const hall = await tx.interviewHall.findFirst({ where: { id: input.hallId, roundId, status: InterviewHallStatus.ACTIVE } });
       if (!hall) throw fail(404, 'Active interview hall not found in this round.');
       const existing = await tx.interviewAssignment.findMany({
         where: { roundId, studentId: { in: input.studentIds } }, select: { studentId: true },
       });
       if (existing.length) throw fail(409, 'One or more selected students are already assigned in this interview round.');
+      if (round.eligibilityThreshold !== SESSION_V_PASS_MARKS || round.maximumMarks !== 100) {
+        throw fail(409, 'Session V eligibility is fixed at 60/100. Recreate this as a campaign-level round.');
+      }
+      const campaign = await this.loadCampaignSnapshot(tx, round.sessionRef, roundId);
+      if (campaign.sourceStatus !== 'VERIFIED') throw fail(409, campaign.sourceMessage, 'OFFICIAL_RESULTS_INCOMPLETE');
       const verified: Array<{ student: any; eligibility: InterviewEligibility }> = [];
-      for (const studentId of input.studentIds) verified.push(await this.getVerifiedStudent(tx, round, studentId));
+      for (const studentId of input.studentIds) {
+        const candidate = campaign.candidates.find(item => item.student.id === studentId);
+        if (!candidate) throw fail(404, 'Student is not in the Session V campaign population.');
+        if (candidate.eligibility.status !== 'QUALIFIED' || !candidate.source) {
+          throw fail(409, 'Student cannot be assigned unless a current official result confirms marks of at least 60/100.');
+        }
+        verified.push({
+          student: {
+            id: candidate.student.id, currentClass: candidate.roster?.currentClassSnapshot || candidate.student.currentClass,
+            hsscGroup: candidate.student.hsscGroup, rollNumber: candidate.roster?.rollNumberSnapshot || candidate.student.rollNumber,
+          },
+          eligibility: candidate.eligibility,
+        });
+      }
       for (const row of verified) assertClassAllowed(row.student.currentClass, row.student.hsscGroup, hall.allowedClasses);
       const occupancy = await tx.interviewAssignment.count({ where: { hallId: hall.id } });
       if (occupancy + verified.length > hall.capacity) throw fail(409, 'The selected interview hall does not have enough available capacity.');
@@ -389,6 +685,7 @@ export class InterviewsService {
     return this.transaction(async tx => {
       const round = await this.lockRound(tx, initial.roundId);
       assertRoundEditable(round, actor, input.override, input.reason);
+      await this.lockCampaignResults(tx, round.sessionRef);
       const assignment = await tx.interviewAssignment.findUnique({ where: { id: assignmentId }, include: { hall: true } });
       if (!assignment) throw fail(404, 'Interview assignment not found.');
       if (assignment.isLocked) throw fail(409, 'Unlock this assignment explicitly before moving the student.');
@@ -425,9 +722,11 @@ export class InterviewsService {
     return this.transaction(async tx => {
       const round = await this.lockRound(tx, initial.roundId);
       assertRoundEditable(round, actor, input.override, input.reason);
+      await this.lockCampaignResults(tx, round.sessionRef);
       const assignment = await tx.interviewAssignment.findUnique({ where: { id: assignmentId } });
       if (!assignment) throw fail(404, 'Interview assignment not found.');
       if (assignment.isLocked) return assignment;
+      await this.getVerifiedStudent(tx, round, assignment.studentId);
       const updated = await tx.interviewAssignment.update({
         where: { id: assignmentId }, data: { isLocked: true, lockedAt: new Date(), lockedById: actor.id },
       });
@@ -482,34 +781,50 @@ export class InterviewsService {
     });
   }
 
+  private async lockCampaignResults(tx: Prisma.TransactionClient, sessionRef: string) {
+    if (sessionRef !== SESSION_V_CAMPAIGN_REF) throw fail(409, 'This round is not scoped to the Session V campaign.');
+    const exams = await tx.examination.findMany({
+      where: { sessionReference: SESSION_V_CAMPAIGN_REF }, select: { id: true }, orderBy: { id: 'asc' },
+    });
+    if (exams.length) {
+      await tx.$queryRawUnsafe<Array<{ id: string }>>(
+        'SELECT "id" FROM "Examination" WHERE "id" = ANY($1::text[]) ORDER BY "id" FOR UPDATE',
+        exams.map(exam => exam.id),
+      );
+    }
+    const rows = await tx.examinationResult.findMany({
+      where: { examination: { sessionReference: SESSION_V_CAMPAIGN_REF } }, select: { id: true }, orderBy: { id: 'asc' },
+    });
+    if (!rows.length) return;
+    await tx.$queryRawUnsafe<Array<{ id: string }>>(
+      'SELECT "id" FROM "ExaminationResult" WHERE "id" = ANY($1::text[]) ORDER BY "id" FOR UPDATE',
+      rows.map(row => row.id),
+    );
+  }
+
   private async buildPreview(db: Db, roundId: string, strategy: AllocationStrategy) {
     const round = await db.interviewRound.findUnique({ where: { id: roundId } });
     if (!round) throw fail(404, 'Interview round not found.');
     if (round.status === InterviewRoundStatus.FINALIZED) throw fail(409, 'A finalized interview round cannot be allocated.');
     if (round.status === InterviewRoundStatus.PUBLISHED) throw fail(409, 'Published interview allocations cannot be changed.');
-    const [students, halls, assignments] = await Promise.all([
-      db.student.findMany({
-        where: { resultSessionId: round.sessionRef, status: 'ACTIVE' },
-        select: { id: true, rollNumber: true, currentClass: true, hsscGroup: true },
-        orderBy: [{ rollNumber: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
-      }),
+    if (round.eligibilityThreshold !== SESSION_V_PASS_MARKS || round.maximumMarks !== 100) {
+      throw fail(409, 'Session V eligibility is fixed at 60/100. Recreate this as a campaign-level round.');
+    }
+    const [campaign, halls] = await Promise.all([
+      this.loadCampaignSnapshot(db, round.sessionRef, roundId),
       db.interviewHall.findMany({
         where: { roundId }, orderBy: [{ interviewDate: 'asc' }, { name: 'asc' }, { roomNumber: 'asc' }, { id: 'asc' }],
       }),
-      db.interviewAssignment.findMany({
-        where: { roundId }, select: { studentId: true, hallId: true, isLocked: true, queueNumber: true },
-        orderBy: [{ hallId: 'asc' }, { studentId: 'asc' }],
-      }),
     ]);
+    if (campaign.sourceStatus !== 'VERIFIED') throw fail(409, campaign.sourceMessage, 'OFFICIAL_RESULTS_INCOMPLETE');
+    const assignments = campaign.assignments.map(item => ({ studentId: item.studentId, hallId: item.hallId, isLocked: item.isLocked, queueNumber: item.queueNumber }));
     const assignedIds = new Set(assignments.map(item => item.studentId));
-    const statuses = students.map(student => ({
-      student,
-      result: evaluateInterviewResult(getAuthoritativeApprovedResult(student), round.eligibilityThreshold, round.maximumMarks),
-    }));
-    const pendingCount = statuses.filter(item => item.result.status === 'PENDING_VERIFICATION').length;
-    const eligible = statuses.filter(item => item.result.status === 'QUALIFIED' && !assignedIds.has(item.student.id));
-    const candidates: AllocationCandidate[] = eligible.map(({ student }) => ({
-      studentId: student.id, rollNumber: student.rollNumber, className: student.currentClass, groupName: student.hsscGroup,
+    const eligible = campaign.candidates.filter(item => item.eligibility.status === 'QUALIFIED' && !assignedIds.has(item.student.id));
+    const candidates: AllocationCandidate[] = eligible.map(item => ({
+      studentId: item.student.id,
+      rollNumber: item.roster?.rollNumberSnapshot || item.student.rollNumber,
+      className: item.roster?.currentClassSnapshot || item.student.currentClass,
+      groupName: item.student.hsscGroup,
     }));
     const allocationHalls: AllocationHall[] = halls.map(hall => {
       const occupants = assignments.filter(item => item.hallId === hall.id);
@@ -525,7 +840,16 @@ export class InterviewsService {
     const plan = buildAllocationPlan(candidates, allocationHalls, strategy);
     const hash = createHash('sha256').update(JSON.stringify({
       roundId, revision: round.revision, strategy,
-      students: students.map(student => ({ id: student.id, rollNumber: student.rollNumber, currentClass: student.currentClass, hsscGroup: student.hsscGroup })),
+      campaignReference: round.sessionRef,
+      examinations: campaign.exams.map(exam => ({ id: exam.id, reference: exam.reference, revision: exam.revision, status: exam.publicationStatus, maximumMarks: String(exam.maximumMarks) })),
+      candidates: campaign.candidates.map(item => ({
+        id: item.student.id, resultStatus: item.eligibility.status,
+        resultReference: item.source?.reference ?? null, resultRevision: item.source?.revision ?? null,
+        marks: item.source?.marks ?? null, currentAttemptId: item.source ? item.source.reference : null,
+        rollNumber: item.roster?.rollNumberSnapshot || item.student.rollNumber,
+        className: item.roster?.currentClassSnapshot || item.student.currentClass, groupName: item.student.hsscGroup,
+      })),
+      officialResultRevisions: campaign.resultFingerprints,
       assignments, halls: halls.map(hall => ({
         id: hall.id, capacity: hall.capacity, allowedClasses: hall.allowedClasses, status: hall.status,
         interviewDate: hall.interviewDate?.toISOString() ?? null,
@@ -534,12 +858,12 @@ export class InterviewsService {
     })).digest('hex');
     return {
       roundId, revision: round.revision, strategy,
-      totalQualifiedCandidates: eligible.length + assignments.length,
+      totalQualifiedCandidates: campaign.qualifiedCount,
       alreadyAssignedCandidates: assignments.length, lockedCandidates: assignments.filter(item => item.isLocked).length,
-      pendingVerificationCandidates: pendingCount, availableHallCapacity: plan.availableHallCapacity,
+      pendingVerificationCandidates: campaign.missingResultCount, availableHallCapacity: plan.availableHallCapacity,
       toAllocateCount: plan.assignments.length, assignments: plan.assignments,
       unallocatedStudentIds: plan.unallocatedIds, hallProjection: plan.hallProjection, planHash: hash,
-      eligibilitySourceStatus: 'UNVERIFIED_SOURCE_UNAVAILABLE',
+      eligibilitySourceStatus: campaign.sourceStatus,
     };
   }
 
@@ -560,6 +884,7 @@ export class InterviewsService {
         return { ...(prior?.result ?? {}), idempotentReplay: true };
       }
       const round = await this.lockRound(tx, roundId);
+      await this.lockCampaignResults(tx, round.sessionRef);
       if (round.revision !== input.expectedRevision) throw fail(409, 'The allocation preview is stale. Refresh the preview before committing.');
       if (round.status === InterviewRoundStatus.PUBLISHED || round.status === InterviewRoundStatus.FINALIZED) {
         throw fail(409, 'This interview round no longer accepts automatic allocation.');
@@ -569,11 +894,15 @@ export class InterviewsService {
       if (preview.unallocatedStudentIds.length && !input.allowPartial) {
         throw fail(409, 'Some qualified students do not fit. Confirm partial allocation explicitly to continue.');
       }
+      const campaign = await this.loadCampaignSnapshot(tx, round.sessionRef, roundId);
+      const candidatesById = new Map(campaign.candidates.map(item => [item.student.id, item]));
       const created = [];
       for (const row of preview.assignments) {
-        const detail = await this.getVerifiedStudent(tx, round, row.studentId);
-        if (detail.eligibility.status !== 'QUALIFIED') throw fail(409, 'A candidate result changed after preview. Refresh before committing.');
-        const eligible = detail.eligibility;
+        const candidate = candidatesById.get(row.studentId);
+        if (!candidate || candidate.eligibility.status !== 'QUALIFIED' || !candidate.source) {
+          throw fail(409, 'A candidate result changed after preview. Refresh before committing.');
+        }
+        const eligible = candidate.eligibility;
         const assignment = await tx.interviewAssignment.create({
           data: {
             roundId, studentId: row.studentId, hallId: row.hallId,
@@ -607,24 +936,20 @@ export class InterviewsService {
       const round = await this.lockRound(tx, roundId);
       if (round.status === InterviewRoundStatus.PUBLISHED) return round;
       if (round.status === InterviewRoundStatus.FINALIZED) throw fail(409, 'This interview round is already finalized.');
-      const students = await tx.student.findMany({
-        where: { resultSessionId: round.sessionRef, status: 'ACTIVE' },
-        select: { id: true, currentClass: true, hsscGroup: true, rollNumber: true },
-      });
-      const pending = students.filter(student => evaluateInterviewResult(
-        getAuthoritativeApprovedResult(student), round.eligibilityThreshold, round.maximumMarks,
-      ).status === 'PENDING_VERIFICATION');
-      if (pending.length) throw fail(409, 'This round cannot be published while the examination results remain unverified.');
-      const assignments = await tx.interviewAssignment.findMany({ where: { roundId }, select: { studentId: true } });
+      if (round.eligibilityThreshold !== SESSION_V_PASS_MARKS || round.maximumMarks !== 100) {
+        throw fail(409, 'Session V eligibility is fixed at 60/100. Recreate this as a campaign-level round.');
+      }
+      await this.lockCampaignResults(tx, round.sessionRef);
+      const campaign = await this.loadCampaignSnapshot(tx, round.sessionRef, roundId);
+      if (campaign.sourceStatus !== 'VERIFIED') throw fail(409, campaign.sourceMessage, 'OFFICIAL_RESULTS_INCOMPLETE');
+      if (campaign.reviewRequiredCount) throw fail(409, 'Review assignments whose official result revision or eligibility changed before publishing.');
+      const assignments = campaign.assignments;
       const assignedIds = new Set(assignments.map(item => item.studentId));
-      if (students.some(student => {
-        const status = evaluateInterviewResult(getAuthoritativeApprovedResult(student), round.eligibilityThreshold, round.maximumMarks).status;
-        return status === 'QUALIFIED' && !assignedIds.has(student.id);
-      })) throw fail(409, 'Assign every qualified candidate before publishing this interview round.');
+      if (campaign.candidates.some(item => item.eligibility.status === 'QUALIFIED' && !assignedIds.has(item.student.id))) {
+        throw fail(409, 'Assign every qualified candidate before publishing this interview round.');
+      }
       const now = new Date();
-      const unlocked = await tx.interviewAssignment.findMany({
-        where: { roundId, isLocked: false }, select: { id: true, studentId: true, hallId: true },
-      });
+      const unlocked = assignments.filter(item => !item.isLocked);
       for (const assignment of unlocked) {
         await tx.interviewAssignment.update({
           where: { id: assignment.id }, data: { isLocked: true, lockedAt: now, lockedById: actor.id },
@@ -640,7 +965,7 @@ export class InterviewsService {
       });
       await this.audit(tx, {
         roundId, actorId: actor.id, action: InterviewAuditAction.ROUND_PUBLISHED,
-        details: { assignmentCount: assignments.length, lockedAtPublication: unlocked.length },
+        details: { assignmentCount: assignments.length, lockedAtPublication: unlocked.length, campaignReference: round.sessionRef },
       });
       return published;
     });
@@ -652,6 +977,11 @@ export class InterviewsService {
     return this.transaction(async tx => {
       const round = await this.lockRound(tx, roundId);
       if (round.status !== InterviewRoundStatus.PUBLISHED) throw fail(409, 'Only a published interview round can be finalized.');
+      await this.lockCampaignResults(tx, round.sessionRef);
+      const campaign = await this.loadCampaignSnapshot(tx, round.sessionRef, roundId);
+      if (campaign.sourceStatus !== 'VERIFIED' || campaign.reviewRequiredCount) {
+        throw fail(409, 'Finalization is blocked while official results or assignment reviews are outstanding.');
+      }
       const finalized = await tx.interviewRound.update({
         where: { id: roundId }, data: { status: InterviewRoundStatus.FINALIZED, revision: { increment: 1 } },
       });

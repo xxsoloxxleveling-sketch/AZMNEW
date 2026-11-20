@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SESSION_V_CAMPAIGN_REF, SESSION_V_PASS_MARKS } from './eligibility';
 
 const optionalText = (maximum: number) => z.string().trim().max(maximum).optional().nullable();
 const validDate = z.string().refine(value => {
@@ -9,9 +10,9 @@ const validDate = z.string().refine(value => {
 }, 'Use a valid YYYY-MM-DD date.');
 
 export const createRoundSchema = z.object({
-  sessionRef: z.string().trim().min(1).max(128),
+  sessionRef: z.literal(SESSION_V_CAMPAIGN_REF),
   title: z.string().trim().min(1).max(160),
-  eligibilityThreshold: z.coerce.number().int().min(0).max(100).default(60),
+  eligibilityThreshold: z.coerce.number().int().refine(value => value === SESSION_V_PASS_MARKS, 'Session V passing marks are fixed at 60/100.').default(SESSION_V_PASS_MARKS),
   maximumMarks: z.literal(100).default(100),
 }).strict();
 
@@ -39,7 +40,7 @@ export const candidateQuerySchema = z.object({
   minimumMarks: z.coerce.number().int().min(0).max(100).optional(),
   maximumMarks: z.coerce.number().int().min(0).max(100).optional(),
   assignment: z.enum(['unassigned', 'assigned', 'all']).default('all'),
-  eligibility: z.enum(['all', 'qualified', 'pending', 'excluded']).default('all'),
+  eligibility: z.enum(['all', 'qualified', 'unqualified', 'pending', 'excluded']).default('all'),
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 }).strict().refine(
@@ -81,6 +82,11 @@ export const autoAllocateCommitSchema = autoAllocatePreviewSchema.extend({
   allowPartial: z.boolean().default(false),
 }).strict();
 export const finalizeRoundSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+export const resultApprovalSchema = z.object({
+  evidenceReference: z.string().trim().min(3).max(500),
+  evidenceSha256: z.string().regex(/^[a-f0-9]{64}$/i),
+  reason: z.string().trim().min(10).max(1000),
+}).strict();
 export const auditQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -97,3 +103,4 @@ export type UnlockAssignmentInput = z.infer<typeof unlockAssignmentSchema>;
 export type RemoveAssignmentInput = z.infer<typeof removeAssignmentSchema>;
 export type AutoAllocatePreviewInput = z.infer<typeof autoAllocatePreviewSchema>;
 export type AutoAllocateCommitInput = z.infer<typeof autoAllocateCommitSchema>;
+export type ResultApprovalInput = z.infer<typeof resultApprovalSchema>;

@@ -121,6 +121,7 @@ model User {
   interviewRoundsPublished InterviewRound[] @relation("InterviewRoundPublishedBy")
   interviewAssignmentsAssigned InterviewAssignment[] @relation("InterviewAssignmentAssignedBy")
   interviewAssignmentsLocked InterviewAssignment[] @relation("InterviewAssignmentLockedBy")
+  interviewResultApprovals InterviewResultApproval[] @relation("InterviewResultApprovalActor")
   interviewAudits InterviewAllocationAudit[] @relation("InterviewAuditActor")
 }
 
@@ -1188,6 +1189,7 @@ enum InterviewAuditAction {
   UNLOCKED
   UNASSIGNED
   AUTO_ALLOCATION_COMMITTED
+  RESULTS_APPROVED
 }
 
 model InterviewRound {
@@ -1207,9 +1209,30 @@ model InterviewRound {
   updatedAt            DateTime             @updatedAt
   halls                InterviewHall[]
   assignments          InterviewAssignment[]
+  resultApprovals      InterviewResultApproval[]
   audits               InterviewAllocationAudit[]
 
   @@index([status, createdAt])
+}
+
+// Immutable Super Admin evidence binding a final Gazette review to an exact
+// official ExaminationResult revision set for the Session V interview campaign.
+model InterviewResultApproval {
+  id                 String         @id @default(cuid())
+  roundId            String
+  campaignReference  String
+  snapshotHash       String         @db.VarChar(64)
+  candidateCount     Int
+  officialResultCount Int
+  evidenceReference String         @db.Text
+  evidenceSha256     String         @db.VarChar(64)
+  reason             String         @db.Text
+  approvedById       String
+  approvedAt         DateTime       @default(now())
+  round              InterviewRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  approvedBy         User           @relation("InterviewResultApprovalActor", fields: [approvedById], references: [id], onDelete: Restrict)
+
+  @@index([roundId, approvedAt])
 }
 
 model InterviewHall {

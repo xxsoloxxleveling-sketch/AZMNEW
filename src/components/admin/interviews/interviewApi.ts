@@ -1,19 +1,5 @@
 import { apiFetch } from '../../../lib/apiClient';
 
-export type ResultSession = {
-  id: string;
-  businessDate: string;
-  examDate: string;
-  hallName: string;
-  roomNumber: string;
-  testCenterName: string;
-  sessionStatus: string;
-  attemptNumber: number;
-  isCurrent: boolean;
-  rosterCount: number;
-  legacyScoreCount: number;
-};
-
 export type InterviewRound = {
   id: string;
   sessionRef: string;
@@ -38,6 +24,19 @@ export type InterviewOverview = {
   remainingSeats: number;
   completionPercent: number;
   eligibilitySourceStatus: string;
+  campaignCandidateCount: number;
+  notQualifiedCandidates: number;
+  reviewRequiredAssignments: number;
+  sourceMessage: string;
+  campaignDataComplete: boolean;
+  resultApprovalCurrent: boolean;
+  resultApproval: {
+    evidenceReference: string;
+    evidenceSha256: string;
+    approvedAt: string;
+    candidateCount: number;
+    officialResultCount: number;
+  } | null;
 };
 
 export type InterviewHall = {
@@ -74,6 +73,8 @@ export type InterviewCandidate = {
   assignmentStatus: string;
   isLocked: boolean;
   assignmentId: string | null;
+  assignmentNeedsReview: boolean;
+  sourceRevision: string | null;
 };
 
 export type CandidateFilters = {
@@ -85,7 +86,7 @@ export type CandidateFilters = {
   minimumMarks?: string;
   maximumMarks?: string;
   assignment?: 'all' | 'assigned' | 'unassigned';
-  eligibility?: 'all' | 'qualified' | 'pending' | 'excluded';
+  eligibility?: 'all' | 'qualified' | 'unqualified' | 'pending' | 'excluded';
   page?: number;
   limit?: number;
 };
@@ -93,6 +94,7 @@ export type CandidateFilters = {
 export type CandidatePage = {
   sessionRef: string;
   verificationStatus: string;
+  eligibilitySourceStatus: string;
   results: InterviewCandidate[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
 };
@@ -147,10 +149,11 @@ const json = (method: string, body?: unknown, headers?: Record<string, string>) 
 const root = (roundId: string) => '/api/interviews/' + encodeURIComponent(roundId);
 
 export const interviewApi = {
-  sessions: () => apiFetch<ResultSession[]>('/api/results/admin/sessions'),
   rounds: () => apiFetch<InterviewRound[]>('/api/interviews/rounds'),
-  createRound: (body: { sessionRef: string; title: string; eligibilityThreshold: number; maximumMarks: 100 }) =>
+  createRound: (body: { sessionRef: '2026-V'; title: string; eligibilityThreshold: 60; maximumMarks: 100 }) =>
     apiFetch<InterviewRound>('/api/interviews/rounds', json('POST', body)),
+  approveResults: (roundId: string, body: { evidenceReference: string; evidenceSha256: string; reason: string }) =>
+    apiFetch('/api/interviews/rounds/' + encodeURIComponent(roundId) + '/results/approval', json('POST', body)),
   overview: (roundId: string) => apiFetch<InterviewOverview>(root(roundId) + '/overview'),
   candidates: (roundId: string, filters: CandidateFilters) => {
     const params = new URLSearchParams();

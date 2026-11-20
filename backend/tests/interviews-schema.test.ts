@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   candidateQuerySchema, createAssignmentsSchema, createHallSchema, createRoundSchema, lockAssignmentSchema, unlockAssignmentSchema,
+  resultApprovalSchema,
 } from '../src/modules/interviews/interviews.schema.ts';
 
 describe('interview request validation', () => {
@@ -28,8 +29,12 @@ describe('interview request validation', () => {
   });
 
   it('fixes interview eligibility to a 100-mark scale', () => {
-    assert.equal(createRoundSchema.parse({ sessionRef: 'session-1', title: 'Round 1' }).maximumMarks, 100);
-    assert.equal(createRoundSchema.safeParse({ sessionRef: 'session-1', title: 'Round 1', maximumMarks: 120 }).success, false);
+    const round = createRoundSchema.parse({ sessionRef: '2026-V', title: 'Round 1' });
+    assert.equal(round.maximumMarks, 100);
+    assert.equal(round.eligibilityThreshold, 60);
+    assert.equal(createRoundSchema.safeParse({ sessionRef: 'session-1', title: 'Round 1' }).success, false);
+    assert.equal(createRoundSchema.safeParse({ sessionRef: '2026-V', title: 'Round 1', eligibilityThreshold: 59 }).success, false);
+    assert.equal(createRoundSchema.safeParse({ sessionRef: '2026-V', title: 'Round 1', maximumMarks: 120 }).success, false);
   });
 
   it('keeps override defaults explicit and false', () => {
@@ -38,6 +43,14 @@ describe('interview request validation', () => {
   it('rejects inverted final-mark filters', () => {
     assert.equal(candidateQuerySchema.safeParse({ minimumMarks: 80, maximumMarks: 60 }).success, false);
     assert.equal(candidateQuerySchema.parse({ minimumMarks: 60, maximumMarks: 100 }).minimumMarks, 60);
+    assert.equal(candidateQuerySchema.parse({ eligibility: 'unqualified' }).eligibility, 'unqualified');
+  });
+
+  it('requires a stable evidence reference, SHA-256 and reason for Gazette approval', () => {
+    const valid = { evidenceReference: 'gazette-2026-final', evidenceSha256: 'a'.repeat(64), reason: 'Matched the complete official result set to the approved Gazette.' };
+    assert.equal(resultApprovalSchema.safeParse(valid).success, true);
+    assert.equal(resultApprovalSchema.safeParse({ ...valid, evidenceSha256: 'invalid' }).success, false);
+    assert.equal(resultApprovalSchema.safeParse({ ...valid, reason: 'ok' }).success, false);
   });
 
 });

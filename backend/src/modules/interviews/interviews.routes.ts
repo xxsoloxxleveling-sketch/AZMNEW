@@ -8,7 +8,7 @@ import {
   auditQuerySchema, autoAllocateCommitSchema, autoAllocatePreviewSchema, candidateQuerySchema,
   createAssignmentsSchema, createHallSchema, createRoundSchema, finalizeRoundSchema,
   lockAssignmentSchema, removeAssignmentSchema, unlockAssignmentSchema, updateAssignmentSchema,
-  updateHallSchema,
+  updateHallSchema, resultApprovalSchema,
 } from './interviews.schema';
 
 const router = Router();
@@ -22,6 +22,7 @@ router.use(authenticate, authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN));
 router.get('/rounds', interviewsController.listRounds);
 router.post('/rounds', validateBody(createRoundSchema), interviewsController.createRound);
 router.post('/rounds/:roundId/publish', interviewsController.publishRound);
+router.post('/rounds/:roundId/results/approval', validateBody(resultApprovalSchema), interviewsController.approveResults);
 router.post('/rounds/:roundId/finalize', validateBody(finalizeRoundSchema), interviewsController.finalizeRound);
 router.get('/rounds/:roundId/audit', validateQuery(auditQuerySchema), interviewsController.audit);
 

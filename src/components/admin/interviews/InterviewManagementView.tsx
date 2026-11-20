@@ -8,7 +8,7 @@ import { useAuth } from '../../../lib/authContext';
 import { canAssignCandidates, clampPage, formatEligibility, getInterviewLoadState } from './interviewViewModel';
 import {
   AllocationPreview, AuditPage, CandidateFilters, CandidatePage, InterviewCandidate, InterviewHall,
-  InterviewOverview, InterviewRound, ResultSession, interviewApi,
+  InterviewOverview, InterviewRound, interviewApi,
 } from './interviewApi';
 
 type HallDraft = {
@@ -84,7 +84,6 @@ export function InterviewManagementView() {
   const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
   const isSuperAdmin = role === 'SUPER_ADMIN';
   const [rounds, setRounds] = useState<InterviewRound[]>([]);
-  const [sessions, setSessions] = useState<ResultSession[]>([]);
   const [selectedRoundId, setSelectedRoundId] = useState('');
   const [overview, setOverview] = useState<InterviewOverview | null>(null);
   const [halls, setHalls] = useState<InterviewHall[]>([]);
@@ -112,7 +111,8 @@ export function InterviewManagementView() {
   const [manualLocked, setManualLocked] = useState(true);
   const [manualReason, setManualReason] = useState('');
   const [newRoundOpen, setNewRoundOpen] = useState(false);
-  const [roundDraft, setRoundDraft] = useState({ sessionRef: '', title: '', eligibilityThreshold: '60' });
+  const [roundDraft, setRoundDraft] = useState({ title: '' });
+  const [gazetteEvidence, setGazetteEvidence] = useState({ reference: '', sha256: '', reason: '' });
   const [hallEditorOpen, setHallEditorOpen] = useState(false);
   const [editingHallId, setEditingHallId] = useState('');
   const [hallDraft, setHallDraft] = useState<HallDraft>(blankHall);
@@ -127,14 +127,9 @@ export function InterviewManagementView() {
     setPageError('');
     setUnauthorized(false);
     try {
-      const [nextRounds, nextSessions] = await Promise.all([interviewApi.rounds(), interviewApi.sessions()]);
+      const nextRounds = await interviewApi.rounds();
       setRounds(nextRounds);
-      setSessions(nextSessions);
       setSelectedRoundId(current => current || nextRounds[0]?.id || '');
-      setRoundDraft(current => ({
-        ...current,
-        sessionRef: current.sessionRef || nextSessions.find(session => session.isCurrent)?.id || nextSessions[0]?.id || '',
-      }));
     } catch (error) {
       setPageError(readableError(error));
       setUnauthorized(isUnauthorized(error));
@@ -206,14 +201,14 @@ export function InterviewManagementView() {
 
   async function saveRound(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!roundDraft.sessionRef || !roundDraft.title.trim()) return;
+    if (!roundDraft.title.trim()) return;
     setSaving(true);
     setActionError('');
     try {
       const created = await interviewApi.createRound({
-        sessionRef: roundDraft.sessionRef,
+        sessionRef: '2026-V',
         title: roundDraft.title.trim(),
-        eligibilityThreshold: Number(roundDraft.eligibilityThreshold),
+        eligibilityThreshold: 60,
         maximumMarks: 100,
       });
       const next = await interviewApi.rounds();
@@ -222,6 +217,30 @@ export function InterviewManagementView() {
       setNewRoundOpen(false);
       setTab('overview');
       setNotice('Interview round created.');
+    } catch (error) {
+      setActionError(readableError(error));
+      setUnauthorized(isUnauthorized(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function approveGazetteEvidence(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRoundId || !isSuperAdmin) return;
+    setSaving(true);
+    setActionError('');
+    setNotice('');
+    try {
+      await interviewApi.approveResults(selectedRoundId, {
+        evidenceReference: gazetteEvidence.reference.trim(),
+        evidenceSha256: gazetteEvidence.sha256.trim(),
+        reason: gazetteEvidence.reason.trim(),
+      });
+      setGazetteEvidence({ reference: '', sha256: '', reason: '' });
+      setNotice('Final Gazette evidence approval recorded for the current official result revisions.');
+      setRefreshKey(value => value + 1);
+      await loadInitial();
     } catch (error) {
       setActionError(readableError(error));
       setUnauthorized(isUnauthorized(error));
@@ -502,10 +521,10 @@ export function InterviewManagementView() {
             <button type="button" onClick={() => setNewRoundOpen(false)} className="rounded p-1 text-slate-500 hover:bg-slate-100" aria-label="Close round form"><X size={17} /></button>
           </div>
           <form onSubmit={saveRound} className="grid gap-3 md:grid-cols-4">
-            <label><span className={labelClass}>Examination session</span><select required className={inputClass} value={roundDraft.sessionRef} onChange={event => setRoundDraft(current => ({ ...current, sessionRef: event.target.value }))}><option value="">Choose a session</option>{sessions.map(session => <option key={session.id} value={session.id}>{session.businessDate} · {session.testCenterName} · {session.rosterCount} on roster</option>)}</select></label>
+            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"><span className="block text-xs font-semibold text-slate-500">Campaign</span>Session V 2026 · 2026-V</div>
             <label className="md:col-span-2"><span className={labelClass}>Round title</span><input required maxLength={160} className={inputClass} value={roundDraft.title} onChange={event => setRoundDraft(current => ({ ...current, title: event.target.value }))} placeholder="Session V 2026 interviews" /></label>
-            <label><span className={labelClass}>Minimum marks out of 100</span><input required type="number" min="0" max="100" className={inputClass} value={roundDraft.eligibilityThreshold} onChange={event => setRoundDraft(current => ({ ...current, eligibilityThreshold: event.target.value }))} /></label>
-            <div className="flex items-center gap-2 md:col-span-4"><button type="submit" className={buttonPrimary} disabled={saving || sessions.length === 0}><Plus size={15} /> Create round</button><span className="text-xs text-slate-500">Eligibility remains pending until a verified final result source is available.</span></div>
+            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"><span className="block text-xs font-semibold text-slate-500">Passing score</span>60 / 100 · fixed</div>
+            <div className="flex items-center gap-2 md:col-span-4"><button type="submit" className={buttonPrimary} disabled={saving}><Plus size={15} /> Create round</button><span className="text-xs text-slate-500">All original exam halls in the campaign share one interview round.</span></div>
           </form>
         </section>
       )}
@@ -516,9 +535,8 @@ export function InterviewManagementView() {
             <ClipboardCheck className="mt-0.5 text-[#185b9d]" size={20} />
             <div>
               <h3 className="text-sm font-semibold text-slate-900">No interview rounds yet</h3>
-              <p className="mt-1 text-sm text-slate-600">Create a round from an existing examination session to begin setting up interview halls.</p>
-              {sessions.length === 0 && <p className="mt-2 text-sm text-amber-800">No examination sessions are available from Results. Create a result session first.</p>}
-              {!newRoundOpen && <button className={buttonPrimary + ' mt-3'} onClick={() => setNewRoundOpen(true)} disabled={sessions.length === 0}><Plus size={15} /> Create first round</button>}
+              <p className="mt-1 text-sm text-slate-600">Create one Session V campaign round that covers candidates from every original examination hall.</p>
+              {!newRoundOpen && <button className={buttonPrimary + ' mt-3'} onClick={() => setNewRoundOpen(true)}><Plus size={15} /> Create first round</button>}
             </div>
           </div>
         </section>
@@ -529,7 +547,7 @@ export function InterviewManagementView() {
           {overview.eligibilitySourceStatus !== 'VERIFIED' && (
             <StateNotice kind="info">
               <AlertCircle size={18} />
-              <span><strong>Eligibility source unavailable.</strong> The existing Results API exposes legacy scores as unverified. Candidate qualification, manual assignment, auto-allocation and publication stay blocked until a verified final result on a 100-mark scale is available.</span>
+              <span><strong>Session V approvals incomplete.</strong> {overview.sourceMessage} Assignment, automatic allocation and publication remain blocked until the complete campaign has current, verified and published official results.</span>
             </StateNotice>
           )}
 
@@ -541,14 +559,31 @@ export function InterviewManagementView() {
             <section className="space-y-4">
               <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-b border-slate-200 py-2 sm:grid-cols-4 xl:grid-cols-8">
                 <Stat label="Qualified candidates" value={overview.totalQualifiedCandidates} />
+                <Stat label="Below threshold" value={overview.notQualifiedCandidates} />
+                <Stat label="Campaign candidates" value={overview.campaignCandidateCount} />
                 <Stat label="Allocated" value={overview.allocatedCandidates} />
                 <Stat label="Unassigned" value={overview.unassignedCandidates} />
                 <Stat label="Locked" value={overview.lockedCandidates} />
+                <Stat label="Review required" value={overview.reviewRequiredAssignments} />
                 <Stat label="Active halls" value={overview.activeHallCount} />
                 <Stat label="Total capacity" value={overview.totalCapacity} />
                 <Stat label="Remaining seats" value={overview.remainingSeats} />
                 <Stat label="Allocation complete" value={overview.completionPercent} suffix="%" />
               </div>
+              {overview.resultApprovalCurrent && overview.resultApproval && (
+                <div className="border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  Gazette evidence approved by a Super Admin: <strong>{overview.resultApproval.evidenceReference}</strong> · SHA-256 {overview.resultApproval.evidenceSha256}
+                </div>
+              )}
+              {overview.campaignDataComplete && !overview.resultApprovalCurrent && isSuperAdmin && selectedRound.status !== 'FINALIZED' && (
+                <form onSubmit={approveGazetteEvidence} className="grid gap-3 border border-amber-200 bg-amber-50 p-4 md:grid-cols-2" aria-label="Approve final Gazette evidence">
+                  <div className="md:col-span-2"><h3 className="text-sm font-semibold text-amber-950">Confirm final Gazette evidence</h3><p className="mt-1 text-xs text-amber-900">This approval binds the evidence to all current verified and published Session V result revisions. A later correction or roster change will require a new approval.</p></div>
+                  <label><span className={labelClass}>Gazette evidence reference</span><input required minLength={3} maxLength={500} className={inputClass} value={gazetteEvidence.reference} onChange={event => setGazetteEvidence(current => ({ ...current, reference: event.target.value }))} placeholder="Approved Gazette file or registry reference" /></label>
+                  <label><span className={labelClass}>Evidence SHA-256</span><input required minLength={64} maxLength={64} pattern="[A-Fa-f0-9]{64}" className={inputClass} value={gazetteEvidence.sha256} onChange={event => setGazetteEvidence(current => ({ ...current, sha256: event.target.value }))} /></label>
+                  <label className="md:col-span-2"><span className={labelClass}>Approval reason</span><textarea required minLength={10} maxLength={1000} className={inputClass + ' min-h-20 py-2'} value={gazetteEvidence.reason} onChange={event => setGazetteEvidence(current => ({ ...current, reason: event.target.value }))} placeholder="Record how the final Gazette evidence was matched to the official results." /></label>
+                  <div className="md:col-span-2"><button type="submit" className={buttonPrimary} disabled={saving}><ShieldCheck size={15} /> Approve current result set</button></div>
+                </form>
+              )}
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <section className="border border-slate-200 bg-white">
                   <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -570,8 +605,8 @@ export function InterviewManagementView() {
                     <div className="flex justify-between gap-3"><dt className="text-slate-500">Revision</dt><dd className="font-medium text-slate-800">{selectedRound.revision}</dd></div>
                   </dl>
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                    {selectedRound.status === 'OPEN' && <button className={buttonSecondary} onClick={() => void publishRound()} disabled={!sourceVerified || overview.pendingVerificationCandidates > 0 || overview.unassignedCandidates > 0 || saving}>Publish and lock</button>}
-                    {selectedRound.status === 'PUBLISHED' && isSuperAdmin && <button className={buttonSecondary} onClick={() => void finalizeRound()} disabled={saving}>Finalize round</button>}
+                    {selectedRound.status === 'OPEN' && <button className={buttonSecondary} onClick={() => void publishRound()} disabled={!sourceVerified || overview.pendingVerificationCandidates > 0 || overview.unassignedCandidates > 0 || overview.reviewRequiredAssignments > 0 || saving}>Publish and lock</button>}
+                    {selectedRound.status === 'PUBLISHED' && isSuperAdmin && <button className={buttonSecondary} onClick={() => void finalizeRound()} disabled={!sourceVerified || overview.reviewRequiredAssignments > 0 || saving}>Finalize round</button>}
                     {selectedRound.status === 'FINALIZED' && <span className="text-xs text-slate-500">This round is finalized and read-only.</span>}
                   </div>
                 </section>
@@ -583,7 +618,7 @@ export function InterviewManagementView() {
             <section className="space-y-3">
               <form onSubmit={applyFilters} className="grid gap-2 border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
                 <label className="xl:col-span-2"><span className={labelClass}>Search name, application or roll no.</span><div className="relative"><Search className="absolute left-2.5 top-2.5 text-slate-400" size={15} /><input className={inputClass + ' pl-8'} value={draftFilters.search ?? ''} onChange={event => updateDraftFilter('search', event.target.value)} /></div></label>
-                <label><span className={labelClass}>Eligibility</span><select className={inputClass} value={draftFilters.eligibility} onChange={event => updateDraftFilter('eligibility', event.target.value)}><option value="qualified">Eligible (verified)</option><option value="pending">Pending verification</option><option value="excluded">Withheld / excluded</option><option value="all">All statuses</option></select></label>
+                <label><span className={labelClass}>Eligibility</span><select className={inputClass} value={draftFilters.eligibility} onChange={event => updateDraftFilter('eligibility', event.target.value)}><option value="qualified">Qualified (60 or above)</option><option value="unqualified">Below 60</option><option value="pending">Pending verification</option><option value="excluded">Withheld / review</option><option value="all">All statuses</option></select></label>
                 <label><span className={labelClass}>Class</span><input className={inputClass} value={draftFilters.className ?? ''} onChange={event => updateDraftFilter('className', event.target.value)} /></label>
                 <label><span className={labelClass}>Gender</span><select className={inputClass} value={draftFilters.gender ?? ''} onChange={event => updateDraftFilter('gender', event.target.value)}><option value="">All</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>
                 <label><span className={labelClass}>School</span><input className={inputClass} value={draftFilters.schoolName ?? ''} onChange={event => updateDraftFilter('schoolName', event.target.value)} /></label>
@@ -600,7 +635,7 @@ export function InterviewManagementView() {
                   <button className={buttonPrimary} onClick={() => void assignSelected()} disabled={!canAssignCandidates({ isAdmin, sourceVerified, roundOpen: !!roundOpen, hallActive: activeHalls.some(hall => hall.id === manualHallId && hall.availableCapacity > 0), seatsAvailable: activeHalls.find(hall => hall.id === manualHallId)?.availableCapacity ?? 0 }) || selectedStudents.length === 0 || selectedStudents.length > (activeHalls.find(hall => hall.id === manualHallId)?.availableCapacity ?? 0) || saving}>Assign selected ({selectedStudents.length})</button>
                 </div>
               </div>
-              {!sourceVerified && <p className="text-xs text-slate-600">Unverified and legacy scores are not eligible for selection. The qualified list remains empty until approved final results are connected.</p>}
+              {!sourceVerified && <p className="text-xs text-slate-600">{overview.sourceMessage} Only official verified results can qualify; legacy and provisional marks are not used.</p>}
               <div className="overflow-x-auto border border-slate-200 bg-white">
                 <table className="w-full min-w-[1000px]">
                   <thead><tr><th className={thClass}><input aria-label="Select visible eligible students" type="checkbox" checked={currentCandidates.filter(candidate => candidate.resultVerificationStatus === 'QUALIFIED').length > 0 && currentCandidates.filter(candidate => candidate.resultVerificationStatus === 'QUALIFIED').every(candidate => selectedStudents.includes(candidate.id))} onChange={toggleVisibleStudents} /></th><th className={thClass}>Student</th><th className={thClass}>Class / group</th><th className={thClass}>School</th><th className={thClass}>Gender</th><th className={thClass}>Final marks</th><th className={thClass}>Verification</th><th className={thClass}>Interview hall</th><th className={thClass}>Assignment</th><th className={thClass}>Actions</th></tr></thead>
@@ -617,7 +652,7 @@ export function InterviewManagementView() {
                         <td className={tdClass}>{candidate.finalApprovedMarks === null ? '—' : candidate.finalApprovedMarks + ' / 100'}</td>
                         <td className={tdClass}><span className={candidate.resultVerificationStatus === 'QUALIFIED' ? 'font-medium text-emerald-700' : candidate.resultVerificationStatus === 'EXCLUDED_PENDING_REVIEW' ? 'font-medium text-red-700' : 'text-amber-800'}>{formatEligibility(candidate.resultVerificationStatus)}</span></td>
                         <td className={tdClass}>{candidate.interviewHall ? candidate.interviewHall.name + ' · ' + candidate.interviewHall.roomNumber : '—'}</td>
-                        <td className={tdClass}>{candidate.assignmentId ? <span className="flex items-center gap-1.5">{candidate.isLocked ? <Lock size={14} aria-label="Locked" className="text-[#185b9d]" /> : null}{candidate.isLocked ? 'Locked' : 'Unlocked'}</span> : 'Unassigned'}</td>
+                        <td className={tdClass}>{candidate.assignmentId ? <span className="flex items-center gap-1.5">{candidate.assignmentNeedsReview ? <span className="font-medium text-amber-800">Review required · </span> : null}{candidate.isLocked ? <Lock size={14} aria-label="Locked" className="text-[#185b9d]" /> : null}{candidate.isLocked ? 'Locked' : 'Unlocked'}</span> : 'Unassigned'}</td>
                         <td className={tdClass}>
                           <div className="flex items-center gap-1.5">
                             {candidate.assignmentId && canManageExisting && <button type="button" className="rounded border border-slate-300 p-1.5 text-slate-700 hover:bg-slate-100" onClick={() => void changeLock(candidate)} aria-label={candidate.isLocked ? 'Unlock assignment' : 'Lock assignment'} title={candidate.isLocked ? 'Unlock assignment' : 'Lock assignment'}>{candidate.isLocked ? <Unlock size={14} /> : <Lock size={14} />}</button>}
