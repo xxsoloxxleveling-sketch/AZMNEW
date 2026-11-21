@@ -113,6 +113,9 @@ model User {
   publishedExaminationResults ExaminationResult[] @relation("ResultPublisher")
   resultCorrectionAudits ResultCorrectionAudit[] @relation("ResultCorrectionActor")
   omrMarkCorrections OmrProvisionalMarkCorrectionAudit[] @relation("OmrMarkCorrectionActor")
+  omrMarkVerifications OmrMarkVerificationAudit[] @relation("OmrMarkVerifier")
+  manualExamMarkEntries ManualExamMark[] @relation("ManualExamMarkActor")
+  manualExamMarkVerifications ManualExamMarkVerificationAudit[] @relation("ManualExamMarkVerifier")
   dmcPreparations DmcIssuancePreparation[] @relation("DmcPreparationActor")
   issuedDmcDocuments DmcIssuance[] @relation("DmcIssuer")
   dmcIssuanceEvents DmcIssuanceEvent[] @relation("DmcEventActor")
@@ -223,6 +226,7 @@ model Student {
   omrProvisionalMarks OmrProvisionalMark[]
   interviewAssignments InterviewAssignment[]
   fixedInterviewPlacements InterviewFixedPlacement[]
+  manualExamMarks ManualExamMark[]
 }
 
 // Dedicated append-only correction evidence; no attendance/document audit reuse.
@@ -1099,6 +1103,82 @@ model DmcReplacement {
 }
 
 
+// Independent manually recorded Session V scores. No synthetic OMR scan hash
+// or fabricated A/B/C/D variant is created. Each row is an immutable audit
+// event recording the original score, Super Admin and evidence reference.
+model ManualExamMark {
+  sessionReference String @default("2026-V")
+  studentId String
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  obtainedMarks Int
+  maximumMarks Int @default(100)
+  sourceEvidenceReference String @db.Text
+  reason String @db.Text
+  actorId String
+  actorName String
+  recordedAt DateTime @default(now())
+  publishedAt DateTime @default(now())
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  actor User @relation("ManualExamMarkActor", fields: [actorId], references: [id], onDelete: Restrict)
+  verifications ManualExamMarkVerificationAudit[]
+  @@id([sessionReference, studentId])
+  @@index([actorId, recordedAt(sort: Desc)])
+  @@index([sessionReference, publishedAt])
+}
+
+// Append-only Super Admin evidence for the exact immutable manual score and
+// its student identity snapshot. The newest matching audit is the current seal.
+model ManualExamMarkVerificationAudit {
+  id BigInt @id @default(autoincrement())
+  sessionReference String
+  studentId String
+  verifiedMarks Int
+  maximumMarks Int
+  latestCorrectionId BigInt?
+  recordedAtSnapshot DateTime
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  fullNameSnapshot String
+  fatherNameSnapshot String
+  currentClassSnapshot String
+  reviewEvidenceReference String @db.Text
+  verificationReason String @db.Text
+  identityReviewed Boolean
+  attendanceReviewed Boolean
+  marksEvidenceReviewed Boolean
+  actorId String
+  actorName String
+  verifiedAt DateTime @default(now())
+  mark ManualExamMark @relation(fields: [sessionReference, studentId], references: [sessionReference, studentId], onDelete: Restrict)
+  actor User @relation("ManualExamMarkVerifier", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([sessionReference, studentId, id(sort: Desc)], map: "ManualExamMarkVerificationAudit_latest_idx")
+  @@index([actorId, id(sort: Desc)], map: "ManualExamMarkVerificationAudit_actor_idx")
+}
+
+// Immutable correction chain. Legacy ManualExamMark and previous verification rows never change.
+model ManualExamMarkCorrectionAudit {
+  id BigInt @id @default(autoincrement())
+  sessionReference String
+  studentId String
+  originalRecordedMarks Int
+  previousEffectiveMarks Int
+  newEffectiveMarks Int
+  recordedAtSnapshot DateTime
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  evidenceReference String @db.Text
+  reason String @db.Text
+  identityReviewed Boolean
+  attendanceReviewed Boolean
+  actorId String
+  actorName String
+  occurredAt DateTime @default(now())
+
+  @@index([sessionReference, studentId, id(sort: Desc)], map: "ManualExamMarkCorrectionAudit_latest_idx")
+  @@index([actorId, id(sort: Desc)], map: "ManualExamMarkCorrectionAudit_actor_idx")
+}
+
 // Candidate-facing, explicitly provisional OMR marks. Never counted as an official result.
 model OmrProvisionalMark {
   studentId String
@@ -1121,6 +1201,7 @@ model OmrProvisionalMark {
   importedAt DateTime @default(now())
   student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
   corrections OmrProvisionalMarkCorrectionAudit[]
+  verifications OmrMarkVerificationAudit[]
   @@id([sessionReference, studentId])
   @@index([sessionReference, obtainedMarks(sort: Desc)])
   @@index([sessionReference, reviewCategory])
@@ -1347,4 +1428,39 @@ model InterviewFixedPlacement {
   @@unique([scheduleId, panel, batch, sequence])
   @@unique([scheduleId, panel, batch, slotTime])
   @@index([studentId])
+}
+
+// Append-only Super Admin review attestations for final overall Session V
+// marks. Earlier events remain historical; only the newest event matching
+// the exact mark and correction revision counts as currently verified.
+model OmrMarkVerificationAudit {
+  id BigInt @id @default(autoincrement())
+  sessionReference String
+  studentId String
+  verifiedMarks Int
+  maximumMarks Int
+  originalScannedMarks Int
+  scanSha256 String
+  latestCorrectionId String?
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  fullNameSnapshot String
+  fatherNameSnapshot String
+  currentClassSnapshot String
+  reviewCategorySnapshot String
+  identityStatusSnapshot String
+  paperVersionStatusSnapshot String
+  printedClassDisagreesSnapshot Boolean
+  reviewEvidenceReference String @db.Text
+  verificationReason String @db.Text
+  identityReviewed Boolean
+  paperVersionReviewed Boolean
+  printedClassReviewed Boolean
+  actorId String
+  actorName String
+  verifiedAt DateTime @default(now())
+  mark OmrProvisionalMark @relation(fields: [sessionReference, studentId], references: [sessionReference, studentId], onDelete: Restrict)
+  actor User @relation("OmrMarkVerifier", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([sessionReference, studentId, id(sort: Desc)])
+  @@index([actorId, id(sort: Desc)])
 }

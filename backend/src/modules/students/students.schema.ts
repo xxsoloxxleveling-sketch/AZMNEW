@@ -160,6 +160,44 @@ export const selectedStudentsPdfSchema = z.object({
 }).strict();
 
 // Public marks-only access uses two matching identifiers and never discloses a student roster.
+/** The reviewed manual score is immutable; verification seals the exact
+ * recorded value without claiming an OMR answer-sheet version exists.
+ */
+export const verifiedManualExamMarkSchema = z.object({
+  expectedCurrentMarks: z.number().int().min(0).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  attendanceReviewed: z.literal(true),
+  marksEvidenceReviewed: z.literal(true),
+}).strict();
+
+/** Manual entry is a new independent, immutable examination score, never
+ * a fabricated OMR scan and never an overwrite of an existing mark.
+ */
+export const manualExamMarkEntrySchema = z.object({
+  obtainedMarks: z.number().int().min(0).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  attendanceReviewed: z.literal(true),
+}).strict();
+
+// Correct any manual score, including a previously verified score. Each
+// revision is immutable and requires a new verification of the current score.
+export const manualExamMarkCorrectionSchema = z.object({
+  expectedCurrentMarks: z.number().int().min(0).max(100),
+  newMarks: z.number().int().min(0).max(100),
+  expectedCorrectionId: z.string().regex(/^[0-9]{1,20}$/).nullable(),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  attendanceReviewed: z.literal(true),
+}).strict().refine(
+  values => values.newMarks !== values.expectedCurrentMarks,
+  { message: 'Enter a new score different from the current score.', path: ['newMarks'] },
+);
+
 // Only a Super Admin may edit a recorded provisional mark. The current
 // value is required for optimistic concurrency and a reason for the audit.
 export const provisionalOmrMarkCorrectionSchema = z.object({
@@ -297,3 +335,36 @@ export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 export type StudentQueryInput = z.infer<typeof studentQuerySchema>;
 export type OfficeUseUpdateInput = z.infer<typeof officeUseUpdateSchema>;
 export type UploadDocumentInput = z.infer<typeof uploadDocumentSchema>;
+
+/** Candidate E-DMC lookup takes one exact registered CNIC/B-Form in POST body.
+ * Do not accept roll numbers, wildcard queries, or other lookup parameters.
+ */
+export const publicEdmcLookupSchema = z.object({
+  cnic: z.string().trim().regex(/^(?:[0-9]{13}|[0-9]{5}-[0-9]{7}-[0-9])$/, 'Enter the full 13-digit CNIC / B-Form.'),
+}).strict();
+
+/** Super Admin attests to the exact reviewed OMR score and matching candidate. */
+export const bulkVerifiedOmrMarkSchema = z.object({
+  students: z.array(z.object({
+    studentId: z.string().min(1).max(128),
+    expectedCurrentMarks: z.number().int().min(0).max(100),
+  }).strict()).min(1).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  paperVersionReviewed: z.literal(true),
+  printedClassReviewed: z.literal(true),
+}).strict().superRefine((data, ctx) => {
+  if (new Set(data.students.map(s => s.studentId)).size !== data.students.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['students'], message: 'Duplicate student IDs in batch.' });
+  }
+});
+
+export const verifiedOmrMarkSchema = z.object({
+  expectedCurrentMarks: z.number().int().min(0).max(100),
+  evidenceReference: z.string().trim().min(10).max(500),
+  reason: z.string().trim().min(30).max(1000),
+  identityReviewed: z.literal(true),
+  paperVersionReviewed: z.literal(true),
+  printedClassReviewed: z.literal(true),
+}).strict();

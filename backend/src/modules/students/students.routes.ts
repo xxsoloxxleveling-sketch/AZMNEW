@@ -7,7 +7,13 @@ import {
   updateStudentSchema,
   officeUseUpdateSchema,
   studentQuerySchema,
+  publicEdmcLookupSchema,
+  verifiedOmrMarkSchema,
+  bulkVerifiedOmrMarkSchema,
   provisionalOmrMarkCorrectionSchema,
+  manualExamMarkEntrySchema,
+  verifiedManualExamMarkSchema,
+  manualExamMarkCorrectionSchema,
   selectedStudentsPdfSchema,
   uploadDocumentSchema,
 } from './students.schema';
@@ -18,6 +24,7 @@ import {
   uploadSessionRateLimiter,
   documentUploadRateLimiter,
   publicSlipSearchRateLimiter,
+  provisionalOmrMarksLookupRateLimiter,
 } from '../../middleware/rateLimit.middleware';
 import { Role } from '@prisma/client';
 
@@ -75,17 +82,26 @@ router.post(
 router.post('/search-registration', studentsController.findPublicRegistration);
 router.post('/public/registration/search', studentsController.findPublicRegistration);
 
-// Emergency public publication gate: the owner requested that this lookup stay closed.
-// Keep this backend guard even if a proxy URL variant bypasses nginx.
+// Explicit server-side release switch. Fail closed until the administration
+// authorizes publication; a built frontend never overrides the backend gate.
 router.post(
   '/public/omr-marks',
-  (_req, res) => {
-    res.set('Cache-Control', 'private, no-store');
-    return res.status(503).json({
-      success: false,
-      error: { message: 'Public OMR marks lookup is temporarily unavailable.' },
-    });
-  }
+  provisionalOmrMarksLookupRateLimiter,
+  (_req, res, next) => {
+    res.set('Cache-Control', 'private, no-store, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.set('Referrer-Policy', 'no-referrer');
+    if (process.env.AZM_PUBLIC_EDMC_ENABLED !== 'true') {
+      return res.status(503).json({
+        success: false,
+        error: { message: 'E-DMC lookup has not yet been released.' },
+      });
+    }
+    next();
+  },
+  validateBody(publicEdmcLookupSchema),
+  studentsController.lookupProvisionalOmrMarks,
 );
 
 // Candidate self-service uses the matching CNIC / B-Form as the verification
@@ -203,6 +219,36 @@ router.post(
   studentsController.printReadiness
 );
 
+// A separate source for Super Admin-entered results missing an OMR mark.
+// The database refuses any existing OMR/manual/official score.
+router.post(
+  '/:id/manual-exam-mark',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(manualExamMarkEntrySchema),
+  studentsController.addManualExamMarks
+);
+
+router.post(
+  '/:id/verify-manual-exam-mark',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(verifiedManualExamMarkSchema),
+  studentsController.verifyManualExamMark
+);
+
+// The original manual mark stays immutable. A Super Admin may append
+// corrections repeatedly, including after verification, and review its history.
+router.get(
+  '/:id/manual-exam-mark/history',
+  authorizeRoles(Role.SUPER_ADMIN),
+  studentsController.getManualMarkCorrectionHistory
+);
+router.patch(
+  '/:id/manual-exam-mark',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(manualExamMarkCorrectionSchema),
+  studentsController.correctManualExamMark
+);
+
 // These endpoints follow router.use(authenticate). Other staff roles
 // cannot modify, inspect audit reasons or obtain correction receipts.
 router.get(
@@ -216,6 +262,31 @@ router.patch(
   authorizeRoles(Role.SUPER_ADMIN),
   validateBody(provisionalOmrMarkCorrectionSchema),
   studentsController.correctProvisionalOmrMarks
+);
+
+// Only Super Admin may export the verified overall E-DMC, regardless of
+// the public results release switch. Unverified revisions are rejected.
+router.get(
+  '/:id/verified-edmc.pdf',
+  authorizeRoles(Role.SUPER_ADMIN),
+  studentsController.downloadVerifiedEdmc
+);
+
+// Each selected student receives a separate audited verification.
+router.post(
+  '/verify-selected-omr-marks',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(bulkVerifiedOmrMarkSchema),
+  studentsController.verifySelectedOmrMarks
+);
+
+// Verification is an audited, per-candidate Super Admin action. Never bulk
+// label the entire roster as verified without checking the original evidence.
+router.post(
+  '/:id/verify-omr-mark',
+  authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(verifiedOmrMarkSchema),
+  studentsController.verifyOmrMark
 );
 
 router.get(

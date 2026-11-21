@@ -23,7 +23,8 @@ import {
 } from './students.schema';
 import { AppError } from '../../middleware/error.middleware';
 import { buildStudentDirectoryTextCondition, buildStudentSchoolCondition } from './studentDirectoryFilters';
-import { findPublishedProvisionalMarks, sortProvisionalStudentIds } from './provisionalOmrMarks';
+import { findPublishedProvisionalMarks, sortProvisionalStudentIds, provisionalEdmcOutcome, publicCurrentOmrMarks } from './provisionalOmrMarks';
+import { findPublishedManualExamMarks, publicCurrentManualMarks } from './manualExamMarks';
 
 export function buildIssuedAttendanceQrPayload(student: { rollNumber?: string | null; qrToken?: string | null }): string {
   if (!student.rollNumber || typeof student.qrToken !== 'string'
@@ -1677,45 +1678,104 @@ export class StudentsService {
     };
   }
 
-  /** Public provisional marks lookup. Neither a result roster nor an official DMC endpoint. */
-  async lookupProvisionalOmrMarks(rawRoll: string, rawCnic: string) {
-    const roll = rawRoll.trim();
+  /**
+   * CNIC/B-Form-only candidate E-DMC lookup. Return only the current,
+   * individually verified Session V score; never reveal unverified marks or
+   * scan/correction evidence. Treat ambiguous legacy CNIC formats as no match.
+   */
+  async lookupProvisionalOmrMarks(rawCnic: string) {
     const cnic = rawCnic.trim();
     const digits = cnic.replace(/\D/g, '');
-    const unavailable = { success: true, found: false, message: 'Marks are not available for those details.' };
-    if (digits.length < 5 || !roll) return unavailable;
-    const formatted = digits.length === 13
-      ? `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`
-      : null;
-    const student = await prisma.student.findFirst({
+    const unavailable = { success: true, found: false, message: 'No published examination result matches the supplied details.' };
+    if (!/^(?:[0-9]{13}|[0-9]{5}-[0-9]{7}-[0-9])$/.test(cnic)) return unavailable;
+    // Some legacy student records contain placeholder CNICs made of thirteen
+    // identical digits. These are not private lookup credentials. Fail closed
+    // instead of disclosing a student's result to anyone who guesses 13 zeros
+    // or another trivial placeholder. Fix the registered identity separately.
+    if (/^([0-9])\1{12}$/.test(digits)) return unavailable;
+    const formatted = `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+    const matches = await prisma.student.findMany({
       where: {
-        rollNumber: { equals: roll, mode: 'insensitive' },
+        status: 'ACTIVE',
         OR: [
           { cnicOrBForm: { equals: cnic } },
           { cnicOrBForm: { equals: digits } },
-          ...(formatted ? [{ cnicOrBForm: { equals: formatted } }] : []),
+          { cnicOrBForm: { equals: formatted } },
         ],
       },
-      select: { id: true, rollNumber: true },
+      select: {
+        id: true, rollNumber: true, applicationNo: true, fullName: true,
+        fatherName: true, currentClass: true, schoolName: true,
+        hsscGroup: true, bsDepartment: true, bsSemester: true,
+        district: true, registrationCentre: true,
+        officeUse: { select: { testCentre: true } },
+      },
+      take: 2,
     });
-    // Missing marks and mismatched credentials are indistinguishable to the caller.
-    if (!student) return unavailable;
+    // Legacy records may contain the same CNIC in hyphenated and plain
+    // formats. Never choose arbitrarily or disclose either candidate.
+    if (matches.length !== 1) return unavailable;
+    const student = matches[0];
     const mark = (await findPublishedProvisionalMarks([student.id])).get(student.id);
-    if (!mark) return unavailable;
-    const reviewPending = mark.reviewCategory.startsWith('HOLD_');
+    const manual = !mark ? (await findPublishedManualExamMarks([student.id])).get(student.id) : undefined;
+    if (manual) {
+      // A manual verification is a distinct signed audit; it can never
+      // inherit an OMR verification or present itself as scanned paper.
+      if (manual.rollNumberSnapshot !== student.rollNumber ||
+        manual.applicationNoSnapshot !== student.applicationNo) return unavailable;
+      if (!manual.verified || !manual.verifiedAt) {
+        return { success: true, found: true, data: publicCurrentManualMarks(manual) };
+      }
+    } else if (mark) {
+      if (!mark.verified || !mark.verifiedAt) {
+        return { success: true, found: true, data: publicCurrentOmrMarks(mark) };
+      }
+    } else {
+      return unavailable;
+    }
+
+    // Both sources have an independently validated, current verification seal.
+    const score = mark?.obtainedMarks ?? manual!.obtainedMarks;
+    const maximumMarks = mark?.maximumMarks ?? manual!.maximumMarks;
+    const { resultStatus, percentage } = provisionalEdmcOutcome(score, maximumMarks);
+    let photoDataUrl: string | null = null;
+    // Only a verified candidate may see their private photo. Do not expose
+    // storage paths, signed URLs, full-size documents, or fallback fake photos.
+    try {
+      const image = await this.getStudentDocument(student.id, 'photoThumbnail');
+      if (['image/jpeg', 'image/png', 'image/webp'].includes(image.contentType)
+        && image.buffer.length > 0 && image.buffer.length <= 200_000) {
+        photoDataUrl = `data:${image.contentType};base64,${image.buffer.toString('base64')}`;
+      }
+    } catch {
+      // Missing older thumbnails are represented honestly in the certificate.
+    }
     return {
       success: true,
       found: true,
       data: {
+        status: 'VERIFIED' as const,
+        source: manual ? 'MANUAL_ENTRY' as const : 'OMR_SCAN' as const,
+        fullName: student.fullName,
+        fatherName: student.fatherName,
         rollNumber: student.rollNumber,
-        obtainedMarks: mark.obtainedMarks,
-        maximumMarks: 100,
-        status: 'PROVISIONAL' as const,
-        reviewPending,
-        paperVersionProvisional: mark.paperVersionStatus !== 'CONFIDENT_SINGLE',
-        notice: reviewPending
-          ? 'Provisional OMR mark, with candidate identity or printed-class review still pending. This mark may change.'
-          : 'Provisional OMR mark. Paper-version and scanning reviews may still change the score. Not an official result or DMC.',
+        applicationNo: student.applicationNo,
+        className: student.currentClass,
+        studyGroup: student.hsscGroup || student.bsDepartment || null,
+        semester: student.bsSemester || null,
+        schoolName: student.schoolName,
+        district: student.district,
+        testCenter: student.officeUse?.testCentre || student.registrationCentre || null,
+        session: 'Session V · 2026',
+        publishedAt: (mark?.publishedAt ?? manual!.publishedAt).toISOString(),
+        verifiedAt: (mark?.verifiedAt ?? manual!.verifiedAt)!.toISOString(),
+        photoDataUrl,
+        obtainedMarks: score,
+        maximumMarks,
+        percentage,
+        resultStatus,
+        passThreshold: 60,
+        notice: 'Final obtained marks have been verified by the examination administration. The Official / Original DMC will be provided separately by the Regional Office.',
       },
     };
   }
@@ -1761,12 +1821,22 @@ export class StudentsService {
     // The separate OMR register is the source of provisional marks.
     // Sort the complete filtered roster before pagination; never sort only 20 visible rows.
     let allPageMarkMap: Awaited<ReturnType<typeof findPublishedProvisionalMarks>> | null = null;
+    let allPageManualMarkMap: Awaited<ReturnType<typeof findPublishedManualExamMarks>> | null = null;
     let orderedPageIds: string[] | null = null;
     let sortedTotal: number | null = null;
     if (query.marksSort) {
       const rosterIds = (await prisma.student.findMany({ where, select: { id: true } })).map(student => student.id);
-      allPageMarkMap = await findPublishedProvisionalMarks(rosterIds);
-      const allSortedIds = sortProvisionalStudentIds(rosterIds, allPageMarkMap, query.marksSort);
+      [allPageMarkMap, allPageManualMarkMap] = await Promise.all([
+        findPublishedProvisionalMarks(rosterIds),
+        findPublishedManualExamMarks(rosterIds),
+      ]);
+      // OMR is the authoritative source when present. The DB excludes a
+      // second manual source, and manual entries are independently audited.
+      const sortable = new Map<string, { obtainedMarks: number }>([
+        ...Array.from(allPageManualMarkMap.entries()),
+        ...Array.from(allPageMarkMap.entries()),
+      ]);
+      const allSortedIds = sortProvisionalStudentIds(rosterIds, sortable, query.marksSort);
       sortedTotal = rosterIds.length;
       orderedPageIds = allSortedIds.slice(skip, skip + limit);
     }
@@ -1840,20 +1910,35 @@ export class StudentsService {
         })
       : students;
     const markMap = allPageMarkMap ?? await findPublishedProvisionalMarks(displayed.map(student => student.id));
+    const manualMarkMap = allPageManualMarkMap ?? await findPublishedManualExamMarks(displayed.map(student => student.id));
     if (sortedTotal !== null) total = sortedTotal;
 
     return {
       students: displayed.map((s) => {
         const provisional = markMap.get(s.id);
+        const manual = !provisional ? manualMarkMap.get(s.id) : undefined;
         return {
           ...this.formatStudentWithDocuments(s),
-          testScore: provisional?.obtainedMarks ?? s.testScore,
+          testScore: provisional?.obtainedMarks ?? manual?.obtainedMarks ?? s.testScore,
+          manualExamMark: manual ? {
+            source: 'SUPER_ADMIN_MANUAL' as const,
+            recordedAt: manual.recordedAt.toISOString(),
+            originalRecordedMarks: manual.originalRecordedMarks,
+            manuallyCorrected: manual.manuallyCorrected,
+            latestCorrectionId: manual.latestCorrectionId,
+            reviewRequired: !manual.verified,
+            verified: manual.verified,
+            verifiedAt: manual.verifiedAt?.toISOString() ?? null,
+          } : null,
           provisionalOmr: provisional ? {
             reviewCategory: provisional.reviewCategory,
             identityStatus: provisional.identityStatus,
             paperVersionStatus: provisional.paperVersionStatus,
+            printedClassDisagrees: provisional.printedClassDisagrees,
             originalScannedMarks: provisional.originalScannedMarks,
             manuallyCorrected: provisional.manuallyCorrected,
+            verified: provisional.verified,
+            verifiedAt: provisional.verifiedAt?.toISOString() ?? null,
           } : null,
           // List responses intentionally never retrieve or serialize file bytes.
           photoUrl: null,

@@ -49,6 +49,58 @@ export class OmrStudioImportService {
       if (policy.correctMarks == null || Number(policy.correctMarks) !== 1 || ['wrongMarks', 'blankMarks', 'multipleMarks'].some(key => policy[key] == null || Number(policy[key]) !== 0))
         return fail('OMR_SCORING_POLICY_MISMATCH', 'The examination must use the approved 1/0 scoring policy.');
       const scored = scoreOmrAnswers(keys, cohort, input.paperVersion, input.answers);
+
+      // A reviewed Super Admin correction is the effective score for the
+      // official result. Verify that it belongs to this exact scan and student,
+      // and that its immutable correction audit agrees with the current override.
+      // This is NOT a shortcut around the existing examination, roster or key
+      // checks above. DMCs are rendered from the resulting ExaminationResult.
+      const provisional = await tx.omrProvisionalMark.findUnique({
+        where: { sessionReference_studentId: { sessionReference: '2026-V', studentId: student.id } },
+        include: { corrections: { orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 } },
+      });
+      if (provisional && (
+        provisional.scanSha256 !== input.scanSha256
+        || provisional.rollNumberSnapshot !== input.rollNumber
+        || provisional.applicationNoSnapshot !== input.applicationNo
+        || provisional.paperVersion !== input.paperVersion
+        || provisional.obtainedMarks !== scored.marks
+      )) {
+        return fail('OMR_PROVISIONAL_SOURCE_MISMATCH', 'The reviewed provisional record and submitted scan disagree. Reconcile the original sheet before final publication.');
+      }
+      const latestCorrection = provisional?.corrections[0];
+      if (provisional?.correctedMarks !== null && provisional?.correctedMarks !== undefined && (
+        !latestCorrection || latestCorrection.newEffectiveMarks !== provisional.correctedMarks
+        || latestCorrection.originalScannedMarks !== provisional.obtainedMarks
+        || latestCorrection.scanSha256 !== provisional.scanSha256
+      )) {
+        return fail('OMR_CORRECTION_AUDIT_MISMATCH', 'The revised mark is missing a matching audit record.');
+      }
+      const finalMarks = provisional?.correctedMarks ?? scored.marks;
+      // The official DMC pipeline must use the exact score revision the Super
+      // Admin attested to. Never silently import an unreviewed roster score.
+      const latestVerification = provisional ? await tx.omrMarkVerificationAudit.findFirst({
+        where: { sessionReference: '2026-V', studentId: student.id },
+        orderBy: { id: 'desc' },
+      }) : null;
+      if (provisional && (
+        !latestVerification
+        || latestVerification.verifiedMarks !== finalMarks
+        || latestVerification.maximumMarks !== provisional.maximumMarks
+        || latestVerification.scanSha256 !== provisional.scanSha256
+        || latestVerification.latestCorrectionId !== (latestCorrection?.id ?? null)
+        || latestVerification.rollNumberSnapshot !== student.rollNumber
+        || latestVerification.applicationNoSnapshot !== student.applicationNo
+        || latestVerification.fullNameSnapshot !== student.fullName
+        || latestVerification.fatherNameSnapshot !== student.fatherName
+        || latestVerification.currentClassSnapshot !== student.currentClass
+      )) {
+        return fail('OMR_MARK_NOT_VERIFIED', 'This score revision has not been signed off by an authorized examiner. Verify the final mark and original sheet before official import.');
+      }
+      const correctionReason = provisional?.correctedMarks != null
+        ? `Reviewed OMR correction ${latestCorrection!.id}: ${latestCorrection!.reason}`
+        : null;
+
       const result = await tx.examinationResult.create({ data: {
         resultReference: `OMR-${randomUUID()}`, studentId: student.id, examinationId: exam.id,
         sourceScanReference: scanRef, paperVersion: input.paperVersion, maximumMarks: 100, createdById: actor.id,
@@ -62,15 +114,17 @@ export class OmrStudioImportService {
         marksAwarded: response.classification === 'CORRECT' ? 1 : 0, responseSource: 'OMR_DETECTED',
       })) });
       await tx.examinationResult.update({ where: { id: result.id }, data: {
-        obtainedMarks: scored.marks, correctCount: counts.CORRECT, wrongCount: counts.WRONG,
+        obtainedMarks: finalMarks, correctCount: counts.CORRECT, wrongCount: counts.WRONG,
         blankCount: counts.BLANK, multipleCount: counts.MULTIPLE, uncertainCount: 0,
         identityStatus: 'VERIFIED', scoringStatus: 'VERIFIED', verificationStatus: 'VERIFIED', publicationStatus: 'PUBLISHED',
         verifiedAt: new Date(), verifiedById: actor.id, publishedAt: new Date(), publishedById: actor.id,
+        administrativelyAdjusted: correctionReason !== null,
+        administrativeAdjustmentReason: correctionReason,
       } });
       await tx.resultCorrectionAudit.create({ data: {
         resultId: result.id, studentId: student.id, examinationId: exam.id, previousRevision: 0, newRevision: 1,
-        oldValues: {}, newValues: { omrFingerprint: fingerprint, scanSha256: input.scanSha256, attemptId: roster.sessionId, cohort, paperVersion: input.paperVersion, obtainedMarks: scored.marks, identityBasis: 'Studio-reported identifiers matched to student and frozen roster; QR signature not verified.', responseSource: 'OMR_DETECTED', keyPdfSha256: OMR_SOURCE_PDF_SHA256 } as Prisma.InputJsonValue,
-        reason: 'Automated OMR Studio import using approved marking policy.', actorId: actor.id, actorName: actor.name,
+        oldValues: {}, newValues: { omrFingerprint: fingerprint, scanSha256: input.scanSha256, attemptId: roster.sessionId, cohort, paperVersion: input.paperVersion, obtainedMarks: finalMarks, originalScannedMarks: scored.marks, provisionalCorrectionId: latestCorrection?.id ?? null, verificationAuditId: latestVerification?.id.toString() ?? null, identityBasis: 'Studio-reported identifiers matched to student and frozen roster; QR signature not verified.', responseSource: 'OMR_DETECTED', keyPdfSha256: OMR_SOURCE_PDF_SHA256 } as Prisma.InputJsonValue,
+        reason: correctionReason ?? 'Automated OMR Studio import using approved marking policy.', actorId: actor.id, actorName: actor.name,
         source: 'RESULTS_DASHBOARD', publicationImpact: 'Final result available to authorized administrators.',
       } });
       await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE');

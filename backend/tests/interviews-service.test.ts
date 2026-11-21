@@ -93,6 +93,7 @@ function makeService(options: { candidateCount?: number; assignments?: any[] } =
         return state.round;
       },
     },
+    interviewFixedSchedule: { findUnique: async () => null },
     examination: { findMany: async () => [exam] },
     examinationResult: { findMany: async () => results },
     omrProvisionalMark: { findMany: async () => [] },

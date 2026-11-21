@@ -56,7 +56,7 @@ export function ProvisionalMarksEditorDialog({
 
   return (
     <AttendanceDialog
-      title="Correct provisional OMR marks"
+      title="Correct overall OMR marks"
       busy={busy}
       onClose={onClose}
       footer={<>
@@ -72,7 +72,7 @@ export function ProvisionalMarksEditorDialog({
         </p>
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
           <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <p>This changes only the displayed <strong>provisional OMR mark</strong>. The original scanned score, scan evidence, examination results and DMCs remain unchanged. Every correction is permanently audited.</p>
+          <p>This updates the recorded overall mark. If the score was verified, that verification becomes invalid and requires a new evidence review. The original scanned score, scan evidence, previously issued official results and DMCs remain unchanged. Every correction is permanently audited.</p>
         </div>
         <dl className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3">
           <div>
@@ -85,7 +85,7 @@ export function ProvisionalMarksEditorDialog({
           </div>
         </dl>
         {student.provisionalOmr?.reviewCategory.startsWith('HOLD_') && (
-          <p className="text-xs font-medium text-amber-800">Identity or printed-class review is still pending. Correcting marks does not clear this flag.</p>
+          <p className="text-xs font-medium text-amber-800">This scan has unresolved identity or printed-class flags. Correcting marks does not verify the result; review the evidence separately.</p>
         )}
         <label className="block text-xs font-semibold text-slate-700">
           Corrected mark (out of 100)

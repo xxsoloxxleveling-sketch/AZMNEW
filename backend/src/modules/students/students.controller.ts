@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { spawn } from 'child_process';
 import { studentsService } from './students.service';
-import { correctPublishedProvisionalOmrMark, getProvisionalMarkCorrectionHistory } from './provisionalOmrMarks';
+import { correctPublishedProvisionalOmrMark, getProvisionalMarkCorrectionHistory, verifyPublishedOmrMark } from './provisionalOmrMarks';
+import { addManualExamMark, verifyManualExamMark } from './manualExamMarks';
+import { correctManualExamMark, getManualMarkCorrectionHistory } from './manualExamMarkCorrections';
+import { generateVerifiedEdmcPdf } from './verifiedEdmcPdf';
 import { signUploadSessionToken, verifyAccessToken, verifyUploadSessionToken } from '../../lib/jwt';
 
 let thumbnailBackfillJob: {
@@ -219,6 +222,82 @@ export class StudentsController {
     }
   }
 
+  async addManualExamMarks(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: { message: 'Login required.' } });
+      }
+      const result = await addManualExamMark(
+        req.params.id,
+        req.body.obtainedMarks,
+        req.body.evidenceReference,
+        req.body.reason,
+        req.body.identityReviewed,
+        req.body.attendanceReviewed,
+        req.user.id,
+      );
+      res.set('Cache-Control', 'private, no-store, max-age=0');
+      return res.status(201).json({
+        success: true,
+        message: 'Manual examination marks recorded for review. No existing marks were changed.',
+        data: result,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async verifyManualExamMark(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: { message: 'Login required.' } });
+      }
+      const receipt = await verifyManualExamMark(
+        req.params.id,
+        req.body.expectedCurrentMarks,
+        req.body.evidenceReference,
+        req.body.reason,
+        req.body.identityReviewed,
+        req.body.attendanceReviewed,
+        req.body.marksEvidenceReviewed,
+        req.user.id,
+      );
+      res.set('Cache-Control', 'private, no-store, max-age=0');
+      return res.status(201).json({
+        success: true,
+        message: 'Manual examination marks verified. The original score and audit history are unchanged.',
+        data: receipt,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async getManualMarkCorrectionHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const rows = await getManualMarkCorrectionHistory(req.params.id);
+      res.set('Cache-Control', 'private, no-store, max-age=0');
+      return res.status(200).json({ success: true, data: rows });
+    } catch (error) { return next(error); }
+  }
+
+  async correctManualExamMark(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, error: { message: 'Login required.' } });
+      const receipt = await correctManualExamMark(
+        req.params.id, req.body.expectedCurrentMarks, req.body.newMarks,
+        req.body.expectedCorrectionId, req.body.evidenceReference, req.body.reason,
+        req.body.identityReviewed, req.body.attendanceReviewed, req.user.id,
+      );
+      res.set('Cache-Control', 'private, no-store, max-age=0');
+      return res.status(200).json({
+        success: true,
+        message: 'Correction saved with immutable history. Approve the new score before issuing an updated E-DMC.',
+        data: receipt,
+      });
+    } catch (error) { return next(error); }
+  }
+
   async correctProvisionalOmrMarks(req: Request, res: Response, next: NextFunction) {
     try {
       // The route requires an authenticated SUPER_ADMIN; the SQL function
@@ -236,6 +315,79 @@ export class StudentsController {
         success: true,
         message: 'Provisional marks corrected and audit entry saved.',
         data: changed,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async downloadVerifiedEdmc(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { buffer, filename } = await generateVerifiedEdmcPdf(req.params.id);
+      res.set('Cache-Control', 'private, no-store, max-age=0');
+      res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', 'attachment; filename="' + filename + '"');
+      res.set('Content-Length', String(buffer.length));
+      res.status(200).send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifySelectedOmrMarks(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, error: { message: 'Login required.' } });
+      const { students, evidenceReference, reason, identityReviewed, paperVersionReviewed, printedClassReviewed } = req.body;
+      const verified: Array<{ studentId: string; verifiedMarks: number; verificationId: string }> = [];
+      const failed: Array<{ studentId: string; message: string }> = [];
+      // The existing security-definer RPC verifies the actor and sealed revision
+      // for every student independently, preserving each immutable audit.
+      for (const student of students as Array<{ studentId: string; expectedCurrentMarks: number }>) {
+        try {
+          const receipt = await verifyPublishedOmrMark(
+            student.studentId, student.expectedCurrentMarks,
+            evidenceReference, reason, identityReviewed,
+            paperVersionReviewed, printedClassReviewed, req.user.id,
+          );
+          verified.push({ studentId: student.studentId, verifiedMarks: receipt.verifiedMarks, verificationId: receipt.verificationId });
+        } catch (error) {
+          const status = (error as { statusCode?: number }).statusCode;
+          const message = status && status >= 400 && status < 500
+            ? (error as Error).message
+            : 'Verification could not be completed. Review this student separately.';
+          failed.push({ studentId: student.studentId, message });
+        }
+      }
+      res.set('Cache-Control', 'private, no-store');
+      res.status(200).json({
+        success: true,
+        data: { verified, failed, total: students.length },
+        message: 'Selected student verification completed.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyOmrMark(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, error: { message: 'Login required.' } });
+      const verified = await verifyPublishedOmrMark(
+        req.params.id,
+        req.body.expectedCurrentMarks,
+        req.body.evidenceReference,
+        req.body.reason,
+        req.body.identityReviewed,
+        req.body.paperVersionReviewed,
+        req.body.printedClassReviewed,
+        req.user.id,
+      );
+      res.set('Cache-Control', 'private, no-store');
+      res.status(200).json({
+        success: true,
+        message: 'Final obtained marks verified with an immutable evidence record.',
+        data: verified,
       });
     } catch (error) {
       next(error);
@@ -598,10 +750,7 @@ export class StudentsController {
     try {
       res.set('Cache-Control', 'private, no-store, max-age=0');
       res.set('Pragma', 'no-cache');
-      const result = await studentsService.lookupProvisionalOmrMarks(
-        req.body.rollNumber,
-        req.body.cnic,
-      );
+      const result = await studentsService.lookupProvisionalOmrMarks(req.body.cnic);
       return res.status(200).json(result);
     } catch (error) {
       next(error);
