@@ -81,13 +81,26 @@ export interface MockStudent {
   qrToken: string;
   qrImageUrl?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'PASSED_OUT' | 'EXPELLED';
-  testScore?: number | null; // Recorded score, not an official verified result.
+  testScore?: number | null; // Current overall score; verification state is on the OMR record.
+  manualExamMark?: {
+    source: 'SUPER_ADMIN_MANUAL';
+    recordedAt: string;
+    originalRecordedMarks?: number;
+    manuallyCorrected?: boolean;
+    latestCorrectionId?: string | null;
+    reviewRequired: boolean;
+    verified: boolean;
+    verifiedAt: string | null;
+  } | null;
   provisionalOmr?: {
     reviewCategory: string;
     identityStatus: string;
     paperVersionStatus: string;
     originalScannedMarks: number;
     manuallyCorrected: boolean;
+    printedClassDisagrees: boolean;
+    verified: boolean;
+    verifiedAt: string | null;
   } | null;
   createdAt: string;
   attendancePercentage?: number;
@@ -1129,6 +1142,60 @@ export const mockApi = {
     return result.students;
   },
 
+  /** Independently verify a signed manual-score record without editing the score. */
+  async verifyManualExamMark(studentId: string, payload: {
+    expectedCurrentMarks: number;
+    evidenceReference: string;
+    reason: string;
+    identityReviewed: true;
+    attendanceReviewed: true;
+    marksEvidenceReviewed: true;
+  }): Promise<{ verificationId: string; verifiedMarks: number; verifiedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/verify-manual-exam-mark`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Add an immutable score only for a student with no examination marks. */
+  async addManualExamMark(studentId: string, payload: {
+    obtainedMarks: number;
+    evidenceReference: string;
+    reason: string;
+    identityReviewed: true;
+    attendanceReviewed: true;
+  }): Promise<{ recordedMarks: number; recordedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Repeatedly correct an existing manual score without changing its original entry. */
+  async correctManualExamMark(studentId: string, payload: {
+    expectedCurrentMarks: number;
+    newMarks: number;
+    expectedCorrectionId: string | null;
+    evidenceReference: string;
+    reason: string;
+    identityReviewed: true;
+    attendanceReviewed: true;
+  }): Promise<{ correctionId: string; previousMarks: number; newMarks: number; correctedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark`, {
+      method: 'PATCH', body: JSON.stringify(payload),
+    });
+  },
+
+  async getManualExamMarkHistory(studentId: string): Promise<Array<{
+    id: string; originalRecordedMarks: number;
+    previousEffectiveMarks: number; newEffectiveMarks: number;
+    evidenceReference: string; reason: string; actorName: string; occurredAt: string;
+  }>> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/manual-exam-mark/history`, {
+      method: 'GET', cache: 'no-store',
+    });
+  },
+
   /** Only SUPER_ADMIN is authorized; the backend rechecks the role and audits the change. */
   async correctProvisionalOmrMarks(
     studentId: string,
@@ -1136,6 +1203,48 @@ export const mockApi = {
   ): Promise<{ originalScannedMarks: number; previousMarks: number; newMarks: number; correctionId: string }> {
     return apiFetch(`/api/students/${encodeURIComponent(studentId)}/provisional-marks`, {
       method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /** Super Admin must attest to all three evidence checks per student. */
+  /** Download the exact verified E-DMC for one student; backend rechecks audit seal. */
+  async downloadVerifiedEdmcPdf(studentId: string, rollNumber?: string): Promise<void> {
+    if (!studentId) throw new Error('Student identifier is required for the E-DMC.');
+    const safeRoll = (rollNumber || studentId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    await apiDownloadPdf(
+      `/api/students/${encodeURIComponent(studentId)}/verified-edmc.pdf`,
+      `AZM-E-DMC-${safeRoll}.pdf`
+    );
+  },
+
+  async verifySelectedOmrMarks(data: {
+    students: Array<{ studentId: string; expectedCurrentMarks: number }>;
+    evidenceReference: string; reason: string;
+    identityReviewed: true; paperVersionReviewed: true; printedClassReviewed: true;
+  }): Promise<{
+    verified: Array<{ studentId: string; verifiedMarks: number; verificationId: string }>;
+    failed: Array<{ studentId: string; message: string }>;
+    total: number;
+  }> {
+    return apiFetch('/api/students/verify-selected-omr-marks', {
+      method: 'POST', body: JSON.stringify(data), timeoutMs: 120000,
+    });
+  },
+
+  async verifyOmrMark(
+    studentId: string,
+    data: {
+      expectedCurrentMarks: number;
+      evidenceReference: string;
+      reason: string;
+      identityReviewed: true;
+      paperVersionReviewed: true;
+      printedClassReviewed: true;
+    }
+  ): Promise<{ verificationId: string; verifiedMarks: number; verifiedAt: string }> {
+    return apiFetch(`/api/students/${encodeURIComponent(studentId)}/verify-omr-mark`, {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   },

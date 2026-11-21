@@ -54,6 +54,9 @@ const expectedTriggers = [
   'OfficialResultAttemptBinding_immutable',
   'ExaminationResult_attempt_guard',
   'ResultQuestionResponse_history_guard',
+  'InterviewAllocationAudit_immutable',
+  'InterviewFixedSchedule_immutable',
+  'InterviewFixedPlacement_immutable',
 ] as const;
 
 function loginFromUrl(value: string): string {
@@ -164,6 +167,7 @@ export async function assertRestrictedRuntimeDatabase(
   }
   await assertStudyGroupAuditRuntime(db);
   await assertDmcReplacementRuntime(db);
+  await assertFixedInterviewScheduleRuntime(db);
   const signingKey=process.env.EXAM_CONTROL_SIGNING_KEY;
   if(!signingKey||signingKey.length<64)blocked('Exam Session Control signing key is missing');
   const probe=randomUUID();
@@ -262,4 +266,24 @@ export async function assertDmcReplacementRuntime(db: PrismaClient) {
       !access.rls || !access.immutable || !access.validated ||
       !access.read_policy || !access.insert_policy)
     blocked('DMC replacement audit access/protection is missing or unsafe');
+}
+
+
+/** The immutable imported timetable is readable and insert-only for the application role. */
+export async function assertFixedInterviewScheduleRuntime(db: PrismaClient): Promise<void> {
+  const rows = await db.$queryRawUnsafe<Array<{
+    scheduleRead: boolean; scheduleInsert: boolean; scheduleMutation: boolean;
+    placementRead: boolean; placementInsert: boolean; placementMutation: boolean;
+  }>>("SELECT " +
+    "has_table_privilege(current_user,'public.\"InterviewFixedSchedule\"','SELECT') AS \"scheduleRead\", " +
+    "has_table_privilege(current_user,'public.\"InterviewFixedSchedule\"','INSERT') AS \"scheduleInsert\", " +
+    "has_table_privilege(current_user,'public.\"InterviewFixedSchedule\"','UPDATE,DELETE,TRUNCATE,TRIGGER') AS \"scheduleMutation\", " +
+    "has_table_privilege(current_user,'public.\"InterviewFixedPlacement\"','SELECT') AS \"placementRead\", " +
+    "has_table_privilege(current_user,'public.\"InterviewFixedPlacement\"','INSERT') AS \"placementInsert\", " +
+    "has_table_privilege(current_user,'public.\"InterviewFixedPlacement\"','UPDATE,DELETE,TRUNCATE,TRIGGER') AS \"placementMutation\"");
+  const r = rows[0];
+  if (!r || !r.scheduleRead || !r.scheduleInsert || r.scheduleMutation ||
+      !r.placementRead || !r.placementInsert || r.placementMutation) {
+    throw new Error('Blocked unsafe production DB runtime: immutable fixed interview timetable privileges do not match.');
+  }
 }

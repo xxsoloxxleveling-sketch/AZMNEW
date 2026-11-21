@@ -77,6 +77,9 @@ jobs:
       - name: Backend TypeScript
         working-directory: backend
         run: ./node_modules/.bin/tsc --noEmit --pretty false
+      - name: Verify fixed Session V interview timetable with synthetic candidate data
+        working-directory: backend
+        run: node node_modules/tsx/dist/cli.mjs --test tests/interviews-fixed-schedule.test.ts
       - name: Verify DMC replacement pre-listen audit guard
         working-directory: backend
         run: node node_modules/tsx/dist/cli.mjs --test tests/dmc-replacement-runtime-guard.test.ts

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { provisionalOmrMarkCorrectionSchema } from '../src/modules/students/students.schema';
-import { sortProvisionalStudentIds } from '../src/modules/students/provisionalOmrMarks';
+import { sortProvisionalStudentIds, buildProvisionalMarkCorrectionQuery, provisionalEdmcOutcome } from '../src/modules/students/provisionalOmrMarks';
 
 test('Super Admin correction input requires exact integer marks and a meaningful reason', () => {
   const good = provisionalOmrMarkCorrectionSchema.parse({
@@ -33,4 +33,20 @@ test('sort handles corrected effective marks numerically and places absent marks
   assert.deepEqual(sortProvisionalStudentIds(ids, marks, 'desc'), ['second', 'first', 'third', 'missing']);
   assert.deepEqual(sortProvisionalStudentIds(ids, marks, 'asc'), ['third', 'first', 'second', 'missing']);
   assert.deepEqual(ids, ['missing', 'first', 'third', 'second']);
+});
+
+test('the correction SQL explicitly casts Prisma number params to PostgreSQL integer arguments', () => {
+  const query = buildProvisionalMarkCorrectionQuery('student-1', 54, 60, 'Checked original answer sheet.', 'admin-1');
+  assert.match(query.sql, /azm_correct_provisional_omr_mark\(/);
+  assert.match(query.sql, /::text,\s*\?::integer,\s*\?::integer,\s*\?::text,\s*\?::text/);
+  assert.deepEqual(query.values, ['student-1', 54, 60, 'Checked original answer sheet.', 'admin-1']);
+});
+
+test('public E-DMC passing threshold includes 60 with correct percentage', () => {
+  assert.deepEqual(provisionalEdmcOutcome(60, 100), { resultStatus: 'PASS', percentage: 60 });
+  assert.deepEqual(provisionalEdmcOutcome(61, 100), { resultStatus: 'PASS', percentage: 61 });
+  assert.deepEqual(provisionalEdmcOutcome(100, 100), { resultStatus: 'PASS', percentage: 100 });
+  assert.deepEqual(provisionalEdmcOutcome(0, 100), { resultStatus: 'FAIL', percentage: 0 });
+  assert.throws(() => provisionalEdmcOutcome(101, 100));
+  assert.throws(() => provisionalEdmcOutcome(-1, 100));
 });

@@ -113,10 +113,20 @@ model User {
   publishedExaminationResults ExaminationResult[] @relation("ResultPublisher")
   resultCorrectionAudits ResultCorrectionAudit[] @relation("ResultCorrectionActor")
   omrMarkCorrections OmrProvisionalMarkCorrectionAudit[] @relation("OmrMarkCorrectionActor")
+  omrMarkVerifications OmrMarkVerificationAudit[] @relation("OmrMarkVerifier")
+  manualExamMarkEntries ManualExamMark[] @relation("ManualExamMarkActor")
+  manualExamMarkVerifications ManualExamMarkVerificationAudit[] @relation("ManualExamMarkVerifier")
   dmcPreparations DmcIssuancePreparation[] @relation("DmcPreparationActor")
   issuedDmcDocuments DmcIssuance[] @relation("DmcIssuer")
   dmcIssuanceEvents DmcIssuanceEvent[] @relation("DmcEventActor")
   reviewedDmcReplacements DmcReplacement[] @relation("DmcReplacementReviewer")
+  interviewRoundsCreated InterviewRound[] @relation("InterviewRoundCreatedBy")
+  interviewRoundsPublished InterviewRound[] @relation("InterviewRoundPublishedBy")
+  interviewAssignmentsAssigned InterviewAssignment[] @relation("InterviewAssignmentAssignedBy")
+  interviewAssignmentsLocked InterviewAssignment[] @relation("InterviewAssignmentLockedBy")
+  interviewResultApprovals InterviewResultApproval[] @relation("InterviewResultApprovalActor")
+  interviewAudits InterviewAllocationAudit[] @relation("InterviewAuditActor")
+  importedFixedInterviewSchedules InterviewFixedSchedule[] @relation("FixedScheduleImporter")
 }
 
 enum StudentStatus {
@@ -214,6 +224,9 @@ model Student {
   examinationResults ExaminationResult[]
   legacyExamResultHistory ExamLegacyResultHistory[]
   omrProvisionalMarks OmrProvisionalMark[]
+  interviewAssignments InterviewAssignment[]
+  fixedInterviewPlacements InterviewFixedPlacement[]
+  manualExamMarks ManualExamMark[]
 }
 
 // Dedicated append-only correction evidence; no attendance/document audit reuse.
@@ -1090,6 +1103,82 @@ model DmcReplacement {
 }
 
 
+// Independent manually recorded Session V scores. No synthetic OMR scan hash
+// or fabricated A/B/C/D variant is created. Each row is an immutable audit
+// event recording the original score, Super Admin and evidence reference.
+model ManualExamMark {
+  sessionReference String @default("2026-V")
+  studentId String
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  obtainedMarks Int
+  maximumMarks Int @default(100)
+  sourceEvidenceReference String @db.Text
+  reason String @db.Text
+  actorId String
+  actorName String
+  recordedAt DateTime @default(now())
+  publishedAt DateTime @default(now())
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  actor User @relation("ManualExamMarkActor", fields: [actorId], references: [id], onDelete: Restrict)
+  verifications ManualExamMarkVerificationAudit[]
+  @@id([sessionReference, studentId])
+  @@index([actorId, recordedAt(sort: Desc)])
+  @@index([sessionReference, publishedAt])
+}
+
+// Append-only Super Admin evidence for the exact immutable manual score and
+// its student identity snapshot. The newest matching audit is the current seal.
+model ManualExamMarkVerificationAudit {
+  id BigInt @id @default(autoincrement())
+  sessionReference String
+  studentId String
+  verifiedMarks Int
+  maximumMarks Int
+  latestCorrectionId BigInt?
+  recordedAtSnapshot DateTime
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  fullNameSnapshot String
+  fatherNameSnapshot String
+  currentClassSnapshot String
+  reviewEvidenceReference String @db.Text
+  verificationReason String @db.Text
+  identityReviewed Boolean
+  attendanceReviewed Boolean
+  marksEvidenceReviewed Boolean
+  actorId String
+  actorName String
+  verifiedAt DateTime @default(now())
+  mark ManualExamMark @relation(fields: [sessionReference, studentId], references: [sessionReference, studentId], onDelete: Restrict)
+  actor User @relation("ManualExamMarkVerifier", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([sessionReference, studentId, id(sort: Desc)], map: "ManualExamMarkVerificationAudit_latest_idx")
+  @@index([actorId, id(sort: Desc)], map: "ManualExamMarkVerificationAudit_actor_idx")
+}
+
+// Immutable correction chain. Legacy ManualExamMark and previous verification rows never change.
+model ManualExamMarkCorrectionAudit {
+  id BigInt @id @default(autoincrement())
+  sessionReference String
+  studentId String
+  originalRecordedMarks Int
+  previousEffectiveMarks Int
+  newEffectiveMarks Int
+  recordedAtSnapshot DateTime
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  evidenceReference String @db.Text
+  reason String @db.Text
+  identityReviewed Boolean
+  attendanceReviewed Boolean
+  actorId String
+  actorName String
+  occurredAt DateTime @default(now())
+
+  @@index([sessionReference, studentId, id(sort: Desc)], map: "ManualExamMarkCorrectionAudit_latest_idx")
+  @@index([actorId, id(sort: Desc)], map: "ManualExamMarkCorrectionAudit_actor_idx")
+}
+
 // Candidate-facing, explicitly provisional OMR marks. Never counted as an official result.
 model OmrProvisionalMark {
   studentId String
@@ -1112,6 +1201,7 @@ model OmrProvisionalMark {
   importedAt DateTime @default(now())
   student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
   corrections OmrProvisionalMarkCorrectionAudit[]
+  verifications OmrMarkVerificationAudit[]
   @@id([sessionReference, studentId])
   @@index([sessionReference, obtainedMarks(sort: Desc)])
   @@index([sessionReference, reviewCategory])
@@ -1149,4 +1239,228 @@ model OmrProvisionalMarkCorrectionAudit {
   actor User @relation("OmrMarkCorrectionActor", fields: [actorId], references: [id], onDelete: Restrict)
   @@index([studentId, occurredAt])
   @@index([actorId, occurredAt])
+}
+
+enum InterviewRoundStatus {
+  SETUP
+  OPEN
+  PUBLISHED
+  FINALIZED
+}
+
+enum InterviewHallStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InterviewAllocationType {
+  MANUAL
+  AUTO
+}
+
+enum InterviewAuditAction {
+  ROUND_CREATED
+  ROUND_PUBLISHED
+  ROUND_FINALIZED
+  HALL_CREATED
+  HALL_UPDATED
+  HALL_DEACTIVATED
+  ASSIGNED_MANUAL
+  ASSIGNED_AUTO
+  REASSIGNED
+  LOCKED
+  UNLOCKED
+  UNASSIGNED
+  AUTO_ALLOCATION_COMMITTED
+  RESULTS_APPROVED
+  FIXED_SCHEDULE_IMPORTED
+}
+
+model InterviewRound {
+  id                   String               @id @default(cuid())
+  sessionRef           String               @unique
+  title                String
+  eligibilityThreshold Int                  @default(60)
+  maximumMarks         Int                  @default(100)
+  status               InterviewRoundStatus @default(SETUP)
+  revision             Int                  @default(0)
+  createdById          String
+  createdBy            User                 @relation("InterviewRoundCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  publishedById        String?
+  publishedBy          User?                @relation("InterviewRoundPublishedBy", fields: [publishedById], references: [id], onDelete: Restrict)
+  publishedAt          DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  halls                InterviewHall[]
+  assignments          InterviewAssignment[]
+  resultApprovals      InterviewResultApproval[]
+  fixedSchedule        InterviewFixedSchedule?
+  audits               InterviewAllocationAudit[]
+
+  @@index([status, createdAt])
+}
+
+// Immutable Super Admin evidence binding a final Gazette review to an exact
+// official ExaminationResult revision set for the Session V interview campaign.
+model InterviewResultApproval {
+  id                 String         @id @default(cuid())
+  roundId            String
+  campaignReference  String
+  snapshotHash       String         @db.VarChar(64)
+  candidateCount     Int
+  officialResultCount Int
+  evidenceReference String         @db.Text
+  evidenceSha256     String         @db.VarChar(64)
+  reason             String         @db.Text
+  approvedById       String
+  approvedAt         DateTime       @default(now())
+  round              InterviewRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  approvedBy         User           @relation("InterviewResultApprovalActor", fields: [approvedById], references: [id], onDelete: Restrict)
+
+  @@index([roundId, approvedAt])
+}
+
+model InterviewHall {
+  id              String              @id @default(cuid())
+  roundId         String
+  round           InterviewRound      @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  name            String
+  roomNumber      String
+  venue           String?
+  interviewDate   DateTime?           @db.Date
+  reportingTime   String?
+  scheduleStartAt DateTime?
+  scheduleEndAt   DateTime?
+  capacity        Int
+  allowedClasses  String[]            @default([])
+  description     String?
+  status          InterviewHallStatus @default(ACTIVE)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  assignments     InterviewAssignment[]
+  audits          InterviewAllocationAudit[]
+
+  @@index([roundId, status, interviewDate])
+  @@index([venue, roomNumber, interviewDate])
+}
+
+model InterviewAssignment {
+  id                      String                 @id @default(cuid())
+  roundId                 String
+  round                   InterviewRound         @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  studentId               String
+  student                 Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  hallId                  String
+  hall                    InterviewHall          @relation(fields: [hallId], references: [id], onDelete: Restrict)
+  approvedResultReference String?
+  resultRevision          String?
+  approvedMarksSnapshot   Int?
+  allocationType          InterviewAllocationType
+  queueNumber             Int?
+  isLocked                Boolean                @default(false)
+  lockedAt                DateTime?
+  lockedById              String?
+  lockedBy                User?                  @relation("InterviewAssignmentLockedBy", fields: [lockedById], references: [id], onDelete: Restrict)
+  assignedById            String
+  assignedBy              User                   @relation("InterviewAssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt              DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  reason                  String?
+
+
+  @@unique([roundId, studentId])
+  @@unique([hallId, queueNumber])
+  @@index([roundId, hallId, isLocked])
+  @@index([studentId])
+}
+
+model InterviewAllocationAudit {
+  id             String               @id @default(cuid())
+  roundId        String
+  round          InterviewRound       @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  hallId         String?
+  hall           InterviewHall?       @relation(fields: [hallId], references: [id], onDelete: Restrict)
+  assignmentId   String?
+  studentId      String?
+  actorId        String
+  actor          User                 @relation("InterviewAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  action         InterviewAuditAction
+  idempotencyKey String?
+  reason         String?
+  details        Json?
+  occurredAt     DateTime             @default(now())
+
+  @@unique([roundId, idempotencyKey])
+  @@index([roundId, occurredAt])
+  @@index([hallId, occurredAt])
+  @@index([studentId, occurredAt])
+}
+
+
+// Official results are intentionally NOT modified by this finalized,
+// administrative interview placement record.
+model InterviewFixedSchedule {
+  id             String   @id @default(cuid())
+  roundId        String   @unique
+  round          InterviewRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  csvSha256      String   @db.VarChar(64)
+  pdfSha256      String   @db.VarChar(64)
+  interviewDate  DateTime @db.Date
+  importedById   String
+  importedBy     User     @relation("FixedScheduleImporter", fields: [importedById], references: [id], onDelete: Restrict)
+  importedAt     DateTime @default(now())
+  placements     InterviewFixedPlacement[]
+}
+
+model InterviewFixedPlacement {
+  id           String @id @default(cuid())
+  scheduleId   String
+  schedule     InterviewFixedSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  studentId    String
+  student      Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  panel        Int
+  batch        Int
+  sequence     Int
+  slotTime     String
+  printedMarks Int
+
+  @@unique([scheduleId, studentId])
+  @@unique([scheduleId, panel, batch, sequence])
+  @@unique([scheduleId, panel, batch, slotTime])
+  @@index([studentId])
+}
+
+// Append-only Super Admin review attestations for final overall Session V
+// marks. Earlier events remain historical; only the newest event matching
+// the exact mark and correction revision counts as currently verified.
+model OmrMarkVerificationAudit {
+  id BigInt @id @default(autoincrement())
+  sessionReference String
+  studentId String
+  verifiedMarks Int
+  maximumMarks Int
+  originalScannedMarks Int
+  scanSha256 String
+  latestCorrectionId String?
+  rollNumberSnapshot String
+  applicationNoSnapshot String
+  fullNameSnapshot String
+  fatherNameSnapshot String
+  currentClassSnapshot String
+  reviewCategorySnapshot String
+  identityStatusSnapshot String
+  paperVersionStatusSnapshot String
+  printedClassDisagreesSnapshot Boolean
+  reviewEvidenceReference String @db.Text
+  verificationReason String @db.Text
+  identityReviewed Boolean
+  paperVersionReviewed Boolean
+  printedClassReviewed Boolean
+  actorId String
+  actorName String
+  verifiedAt DateTime @default(now())
+  mark OmrProvisionalMark @relation(fields: [sessionReference, studentId], references: [sessionReference, studentId], onDelete: Restrict)
+  actor User @relation("OmrMarkVerifier", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([sessionReference, studentId, id(sort: Desc)])
+  @@index([actorId, id(sort: Desc)])
 }
