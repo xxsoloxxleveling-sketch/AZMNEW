@@ -104,3 +104,16 @@ export type RemoveAssignmentInput = z.infer<typeof removeAssignmentSchema>;
 export type AutoAllocatePreviewInput = z.infer<typeof autoAllocatePreviewSchema>;
 export type AutoAllocateCommitInput = z.infer<typeof autoAllocateCommitSchema>;
 export type ResultApprovalInput = z.infer<typeof resultApprovalSchema>;
+
+// Upload uses base64 of the *original bytes* to preserve the CSV BOM and checksum.
+export const fixedSchedulePreviewSchema = z.object({
+  csvBase64: z.string().min(1).max(135000),
+  pdfSha256: z.string().regex(/^[a-fA-F0-9]{64}$/),
+}).strict();
+export const fixedScheduleCommitSchema = fixedSchedulePreviewSchema.extend({
+  expectedRevision: z.number().int().min(0),
+  planHash: z.string().regex(/^[a-f0-9]{64}$/),
+  confirmed: z.literal(true),
+}).strict();
+export type FixedSchedulePreviewInput = z.infer<typeof fixedSchedulePreviewSchema>;
+export type FixedScheduleCommitInput = z.infer<typeof fixedScheduleCommitSchema>;
