@@ -5,6 +5,7 @@ import {
   Loader2, Lock, Pencil, Plus, RefreshCw, Search, ShieldCheck, Unlock, Users, X,
 } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
+import { FixedScheduleView } from './FixedScheduleView';
 import { canAssignCandidates, clampPage, formatEligibility, getInterviewLoadState } from './interviewViewModel';
 import {
   AllocationPreview, AuditPage, CandidateFilters, CandidatePage, InterviewCandidate, InterviewHall,
@@ -89,7 +90,8 @@ export function InterviewManagementView() {
   const [halls, setHalls] = useState<InterviewHall[]>([]);
   const [candidatePage, setCandidatePage] = useState<CandidatePage | null>(null);
   const [auditPage, setAuditPage] = useState<AuditPage | null>(null);
-  const [tab, setTab] = useState<'overview' | 'candidates' | 'halls' | 'allocation' | 'audit'>('overview');
+  const [fixedImported, setFixedImported] = useState(false);
+  const [tab, setTab] = useState<'overview' | 'schedule' | 'candidates' | 'halls' | 'allocation' | 'audit'>('overview');
   const [pageLoading, setPageLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -145,6 +147,7 @@ export function InterviewManagementView() {
       setOverview(null);
       setHalls([]);
       setCandidatePage(null);
+      setFixedImported(false);
       return;
     }
     let current = true;
@@ -152,15 +155,17 @@ export function InterviewManagementView() {
       setDataLoading(true);
       setActionError('');
       try {
-        const [nextOverview, nextHalls, nextCandidates] = await Promise.all([
+        const [nextOverview, nextHalls, nextCandidates, nextFixed] = await Promise.all([
           interviewApi.overview(selectedRoundId),
           interviewApi.halls(selectedRoundId),
           interviewApi.candidates(selectedRoundId, { ...filters, page, limit: 25 }),
+          interviewApi.fixedSchedule(selectedRoundId),
         ]);
         if (!current) return;
         setOverview(nextOverview);
         setHalls(nextHalls);
         setCandidatePage(nextCandidates);
+        setFixedImported(nextFixed.imported);
         const boundedPage = clampPage(page, nextCandidates.pagination.totalPages);
         if (boundedPage !== page) setPage(boundedPage);
         setUnauthorized(false);
@@ -180,7 +185,7 @@ export function InterviewManagementView() {
   const selectedRound = rounds.find(round => round.id === selectedRoundId) ?? null;
   const sourceVerified = overview?.eligibilitySourceStatus === 'VERIFIED';
   const roundOpen = selectedRound?.status === 'OPEN' || selectedRound?.status === 'SETUP';
-  const canManageExisting = isAdmin && (roundOpen || (isSuperAdmin && selectedRound?.status === 'PUBLISHED'));
+  const canManageExisting = isAdmin && !fixedImported && (roundOpen || (isSuperAdmin && selectedRound?.status === 'PUBLISHED'));
   const activeHalls = halls.filter(hall => hall.status === 'ACTIVE');
   const pageCount = candidatePage?.pagination.totalPages ?? 0;
   const pageState = getInterviewLoadState({
@@ -191,6 +196,7 @@ export function InterviewManagementView() {
   });
   const tabItems = useMemo(() => [
     { id: 'overview' as const, label: 'Overview' },
+    { id: 'schedule' as const, label: 'Final panel schedule' },
     { id: 'candidates' as const, label: 'Candidates' },
     { id: 'halls' as const, label: 'Interview halls' },
     { id: 'allocation' as const, label: 'Allocation center' },
@@ -555,6 +561,10 @@ export function InterviewManagementView() {
             {tabItems.map(item => <button key={item.id} type="button" className={'whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ' + (tab === item.id ? 'border-[#185b9d] text-[#185b9d]' : 'border-transparent text-slate-600 hover:text-slate-900')} onClick={() => setTab(item.id)}>{item.label}</button>)}
           </nav>
 
+          {tab === 'schedule' && (
+            <FixedScheduleView roundId={selectedRoundId} isSuperAdmin={isSuperAdmin} onImported={refreshRound} />
+          )}
+
           {tab === 'overview' && (
             <section className="space-y-4">
               <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-b border-slate-200 py-2 sm:grid-cols-4 xl:grid-cols-8">
@@ -632,7 +642,7 @@ export function InterviewManagementView() {
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={manualLocked} onChange={event => setManualLocked(event.target.checked)} /> Lock manual assignments</label>
                   <select className={inputClass + ' w-auto min-w-40'} value={manualHallId} onChange={event => setManualHallId(event.target.value)} aria-label="Hall for selected students"><option value="">Choose hall</option>{activeHalls.map(hall => <option key={hall.id} value={hall.id} disabled={hall.availableCapacity < 1}>{hall.name} · {hall.availableCapacity} seats</option>)}</select>
-                  <button className={buttonPrimary} onClick={() => void assignSelected()} disabled={!canAssignCandidates({ isAdmin, sourceVerified, roundOpen: !!roundOpen, hallActive: activeHalls.some(hall => hall.id === manualHallId && hall.availableCapacity > 0), seatsAvailable: activeHalls.find(hall => hall.id === manualHallId)?.availableCapacity ?? 0 }) || selectedStudents.length === 0 || selectedStudents.length > (activeHalls.find(hall => hall.id === manualHallId)?.availableCapacity ?? 0) || saving}>Assign selected ({selectedStudents.length})</button>
+                  <button className={buttonPrimary} onClick={() => void assignSelected()} disabled={!canAssignCandidates({ isAdmin, sourceVerified: sourceVerified && !fixedImported, roundOpen: !!roundOpen, hallActive: activeHalls.some(hall => hall.id === manualHallId && hall.availableCapacity > 0), seatsAvailable: activeHalls.find(hall => hall.id === manualHallId)?.availableCapacity ?? 0 }) || selectedStudents.length === 0 || selectedStudents.length > (activeHalls.find(hall => hall.id === manualHallId)?.availableCapacity ?? 0) || saving}>Assign selected ({selectedStudents.length})</button>
                 </div>
               </div>
               {!sourceVerified && <p className="text-xs text-slate-600">{overview.sourceMessage} Only official verified results can qualify; legacy and provisional marks are not used.</p>}
@@ -722,9 +732,10 @@ export function InterviewManagementView() {
               <div className="border border-slate-200 bg-white p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div><h3 className="text-sm font-semibold text-slate-900">Automatic allocation</h3><p className="mt-1 max-w-3xl text-sm text-slate-600">Preview a deterministic allocation before saving. Existing locked assignments remain fixed; active hall restrictions and remaining capacity are checked on the server.</p></div>
-                  <div className="flex items-center gap-2"><label><span className={labelClass}>Strategy</span><select className={inputClass} value={strategy} onChange={event => { setStrategy(event.target.value as typeof strategy); setPreview(null); }}><option value="BALANCED">Balanced</option><option value="SEQUENTIAL">Sequential</option></select></label><button className={buttonPrimary} onClick={() => void loadPreview()} disabled={saving || !roundOpen || !sourceVerified}><Users size={15} /> Preview allocation</button></div>
+                  <div className="flex items-center gap-2"><label><span className={labelClass}>Strategy</span><select className={inputClass} value={strategy} onChange={event => { setStrategy(event.target.value as typeof strategy); setPreview(null); }}><option value="BALANCED">Balanced</option><option value="SEQUENTIAL">Sequential</option></select></label><button className={buttonPrimary} onClick={() => void loadPreview()} disabled={saving || !roundOpen || !sourceVerified || fixedImported}><Users size={15} /> Preview allocation</button></div>
                 </div>
-                {!sourceVerified && <p className="mt-3 text-sm text-amber-800">Preview is disabled because no verified final-result source is available.</p>}
+                {fixedImported && <p className="mt-3 text-sm text-emerald-800">Final panel placements are imported and locked. Auto-allocation is disabled permanently for this round.</p>}
+                {!sourceVerified && !fixedImported && <p className="mt-3 text-sm text-amber-800">Preview is disabled because no verified final-result source is available.</p>}
               </div>
               {preview && (
                 <div className="space-y-3 border border-slate-200 bg-white p-4">
