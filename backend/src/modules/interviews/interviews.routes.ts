@@ -8,7 +8,7 @@ import {
   auditQuerySchema, autoAllocateCommitSchema, autoAllocatePreviewSchema, candidateQuerySchema,
   createAssignmentsSchema, createHallSchema, createRoundSchema, finalizeRoundSchema,
   lockAssignmentSchema, removeAssignmentSchema, unlockAssignmentSchema, updateAssignmentSchema,
-  updateHallSchema, resultApprovalSchema,
+  updateHallSchema, resultApprovalSchema, fixedSchedulePreviewSchema, fixedScheduleCommitSchema,
 } from './interviews.schema';
 
 const router = Router();
@@ -27,6 +27,11 @@ router.post('/rounds/:roundId/finalize', validateBody(finalizeRoundSchema), inte
 router.get('/rounds/:roundId/audit', validateQuery(auditQuerySchema), interviewsController.audit);
 
 router.get('/:roundId/overview', interviewsController.overview);
+router.get('/:roundId/fixed-schedule', interviewsController.fixedSchedule);
+router.post('/:roundId/fixed-schedule/preview', authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(fixedSchedulePreviewSchema), interviewsController.previewFixedSchedule);
+router.post('/:roundId/fixed-schedule/commit', authorizeRoles(Role.SUPER_ADMIN),
+  validateBody(fixedScheduleCommitSchema), interviewsController.commitFixedSchedule);
 router.get('/:roundId/candidates', validateQuery(candidateQuerySchema), interviewsController.candidates);
 router.get('/:roundId/halls', interviewsController.halls);
 router.post('/:roundId/halls', validateBody(createHallSchema), interviewsController.createHall);
