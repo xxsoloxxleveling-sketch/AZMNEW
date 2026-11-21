@@ -521,7 +521,7 @@ export class InterviewsService {
   }
 
   private async lockVenueSchedule(tx: Prisma.TransactionClient) {
-    await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtextextended('AZM_INTERVIEW_HALL_SCHEDULE', 0))");
+    await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtextextended('AZM_INTERVIEW_HALL_SCHEDULE', 0))::text AS lock_result");
   }
   private async assertNoScheduleConflict(tx: Prisma.TransactionClient, candidate: HallFields, excludeHallId?: string) {
     if (candidate.status !== InterviewHallStatus.ACTIVE) return;
