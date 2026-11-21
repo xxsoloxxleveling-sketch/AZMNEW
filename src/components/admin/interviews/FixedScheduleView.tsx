@@ -150,9 +150,9 @@ export function FixedScheduleView({ roundId, isSuperAdmin, onImported }: {
           {preview.missingRollNumbers.length > 0 && <p className="text-sm text-red-700">Missing roll numbers: {preview.missingRollNumbers.join(', ')}</p>}
           {preview.resultConflicts.length > 0 && <p className="text-sm text-red-700">Result discrepancies: {preview.resultConflicts.map(item => item.rollNumber + ' (' + item.reason + ')').join(', ')}</p>}
           {preview.alreadyImported && <p className="text-sm text-slate-700">This exact approved schedule is already imported. A second import is unnecessary.</p>}
-          {preview.canCommit && !preview.alreadyImported ? (
+          {!preview.alreadyImported && (preview.canCommit ? (
             <button className={primaryButton} type="button" onClick={() => void importSchedule()} disabled={loading}><Lock size={15} />{loading ? 'Importing…' : 'Confirm exact placement and lock all 349'}</button>
-          ) : <p className="text-sm text-amber-800">Import remains blocked until all identity, result and placement conflicts are resolved.</p>}
+          ) : <p className="text-sm text-amber-800">Import remains blocked until all identity, result and placement conflicts are resolved.</p>)}
         </div>
       )}
 
