@@ -122,8 +122,8 @@ model User {
   interviewAssignmentsAssigned InterviewAssignment[] @relation("InterviewAssignmentAssignedBy")
   interviewAssignmentsLocked InterviewAssignment[] @relation("InterviewAssignmentLockedBy")
   interviewResultApprovals InterviewResultApproval[] @relation("InterviewResultApprovalActor")
-  interviewAudits InterviewAllocationAudit[]
-  importedFixedInterviewSchedules InterviewFixedSchedule[] @relation("FixedScheduleImporter") @relation("InterviewAuditActor")
+  interviewAudits InterviewAllocationAudit[] @relation("InterviewAuditActor")
+  importedFixedInterviewSchedules InterviewFixedSchedule[] @relation("FixedScheduleImporter")
 }
 
 enum StudentStatus {
