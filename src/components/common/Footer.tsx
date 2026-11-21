@@ -110,7 +110,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab, language = 'en' }) 
                   onClick={() => onSelectTab('about')}
                   className="hover:text-emerald-400 transition-colors flex items-center gap-1.5"
                 >
-                  <span className="text-[#70a9db]">›</span> 6-Member Interview Protocol
+                  <span className="text-[#70a9db]">›</span> 3-Member Interview Protocol
                 </button>
               </li>
               <li>

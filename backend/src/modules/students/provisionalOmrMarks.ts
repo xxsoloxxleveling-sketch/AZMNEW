@@ -17,14 +17,21 @@ export interface ProvisionalOmrMark {
   manualReviewRequired: boolean;
   verified: boolean;
   verifiedAt: Date | null;
+  latestCorrectionId?: string | null;
+  verificationId?: string | null;
+  scanSha256?: string;
 }
 
-export async function findPublishedProvisionalMarks(studentIds: string[]): Promise<Map<string, ProvisionalOmrMark>> {
+export async function findPublishedProvisionalMarks(
+  studentIds: string[],
+  db: Pick<Prisma.TransactionClient, '$queryRaw'> = prisma,
+): Promise<Map<string, ProvisionalOmrMark>> {
   if (studentIds.length === 0) return new Map();
-  const rows = await prisma.$queryRaw<ProvisionalOmrMark[]>(Prisma.sql`
+  const rows = await db.$queryRaw<ProvisionalOmrMark[]>(Prisma.sql`
     SELECT m."studentId",
       COALESCE(m."correctedMarks",m."obtainedMarks") AS "obtainedMarks",
-      m."maximumMarks", m."publishedAt",
+      m."maximumMarks", m."publishedAt", m."scanSha256",
+      latest_correction.id AS "latestCorrectionId", seal."verificationId",
       m."obtainedMarks" AS "originalScannedMarks",
       (m."correctedMarks" IS NOT NULL) AS "manuallyCorrected",
       m."reviewCategory", m."identityStatus",
@@ -54,7 +61,7 @@ export async function findPublishedProvisionalMarks(studentIds: string[]): Promi
           AND v."applicationNoSnapshot" = m."applicationNoSnapshot"
           AND s.status::TEXT = 'ACTIVE'
         ) AS valid,
-        v."verifiedAt"
+        v."verifiedAt", v.id::TEXT AS "verificationId"
       FROM public."OmrMarkVerificationAudit" v
       WHERE v."sessionReference"=m."sessionReference" AND v."studentId"=m."studentId"
       ORDER BY v.id DESC LIMIT 1

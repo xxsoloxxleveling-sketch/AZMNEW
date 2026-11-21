@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../lib/authContext';
 import { FixedScheduleView } from './FixedScheduleView';
+import { InterviewAssessmentView } from './InterviewAssessmentView';
+import { InterviewMeritPreviewView } from './InterviewMeritPreviewView';
 import { canAssignCandidates, clampPage, formatEligibility, getInterviewLoadState } from './interviewViewModel';
 import {
   AllocationPreview, AuditPage, CandidateFilters, CandidatePage, InterviewCandidate, InterviewHall,
@@ -91,7 +93,8 @@ export function InterviewManagementView() {
   const [candidatePage, setCandidatePage] = useState<CandidatePage | null>(null);
   const [auditPage, setAuditPage] = useState<AuditPage | null>(null);
   const [fixedImported, setFixedImported] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'schedule' | 'candidates' | 'halls' | 'allocation' | 'audit'>('overview');
+  const [tab, setTab] = useState<'overview' | 'schedule' | 'assessments' | 'merit' | 'candidates' | 'halls' | 'allocation' | 'audit'>('overview');
+  const [assessmentDirty, setAssessmentDirty] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -197,6 +200,8 @@ export function InterviewManagementView() {
   const tabItems = useMemo(() => [
     { id: 'overview' as const, label: 'Overview' },
     { id: 'schedule' as const, label: 'Final panel schedule' },
+    { id: 'assessments' as const, label: 'Marks & assessments' },
+    { id: 'merit' as const, label: 'Merit preview' },
     { id: 'candidates' as const, label: 'Candidates' },
     { id: 'halls' as const, label: 'Interview halls' },
     { id: 'allocation' as const, label: 'Allocation center' },
@@ -503,6 +508,8 @@ export function InterviewManagementView() {
             <label className="flex min-w-56 items-center gap-2 text-sm">
               <span className="sr-only">Select interview round</span>
               <select className={inputClass} value={selectedRoundId} onChange={event => {
+                if (assessmentDirty && !window.confirm('Discard unsaved assessment entries and change the interview round?')) return;
+                setAssessmentDirty(false);
                 setSelectedRoundId(event.target.value);
                 setPage(1);
                 setPreview(null);
@@ -512,8 +519,8 @@ export function InterviewManagementView() {
               </select>
             </label>
           )}
-          <button className={buttonSecondary} onClick={() => void loadInitial()} disabled={saving || pageLoading}><RefreshCw size={15} /> Refresh</button>
-          <button className={buttonPrimary} onClick={() => setNewRoundOpen(value => !value)}><Plus size={15} /> New round</button>
+          <button className={buttonSecondary} onClick={() => void loadInitial()} disabled={saving || pageLoading || assessmentDirty} title={assessmentDirty ? 'Save the assessment draft before refreshing.' : undefined}><RefreshCw size={15} /> Refresh</button>
+          <button className={buttonPrimary} disabled={assessmentDirty} title={assessmentDirty ? 'Save the assessment draft before creating another round.' : undefined} onClick={() => setNewRoundOpen(value => !value)}><Plus size={15} /> New round</button>
         </div>
       </div>
 
@@ -553,19 +560,27 @@ export function InterviewManagementView() {
           {overview.eligibilitySourceStatus !== 'VERIFIED' && !fixedImported && (
             <StateNotice kind="info">
               <AlertCircle size={18} />
-              <span><strong>Session V approvals incomplete.</strong> {overview.sourceMessage} Assignment, automatic allocation and publication remain blocked until the complete campaign has current, verified and published official results.</span>
+              <span><strong>Final written marks need review.</strong> {overview.sourceMessage} Candidate eligibility uses the current final verified marks. Fixed-roster assessment entry is available separately.</span>
             </StateNotice>
           )}
 
-          {fixedImported && <StateNotice kind="success"><Lock size={18} /> {overview.fixedScheduledCandidates} candidates have approved fixed panel placements. This timetable is administratively locked and is not a statement that official exam marks have been verified.</StateNotice>}
+          {fixedImported && <StateNotice kind="success"><Lock size={18} /> {overview.fixedScheduledCandidates} candidates have approved fixed panel placements. Panel, batch and time are locked; assessment marks are entered separately.</StateNotice>}
 
           <nav aria-label="Interview management sections" className="flex gap-1 overflow-x-auto border-b border-slate-200">
-            {tabItems.map(item => <button key={item.id} type="button" className={'whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ' + (tab === item.id ? 'border-[#185b9d] text-[#185b9d]' : 'border-transparent text-slate-600 hover:text-slate-900')} onClick={() => setTab(item.id)}>{item.label}</button>)}
+            {tabItems.map(item => <button key={item.id} type="button" className={'whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ' + (tab === item.id ? 'border-[#185b9d] text-[#185b9d]' : 'border-transparent text-slate-600 hover:text-slate-900')} onClick={() => {
+              if (item.id === tab) return;
+              if (assessmentDirty && !window.confirm('Discard unsaved assessment entries and leave this tab?')) return;
+              setAssessmentDirty(false);
+              setTab(item.id);
+            }}>{item.label}</button>)}
           </nav>
 
           {tab === 'schedule' && (
             <FixedScheduleView roundId={selectedRoundId} isSuperAdmin={isSuperAdmin} onImported={refreshRound} />
           )}
+
+          {tab === 'assessments' && <InterviewAssessmentView key={selectedRoundId} roundId={selectedRoundId} canEdit={isAdmin} isSuperAdmin={isSuperAdmin} onDirtyChange={setAssessmentDirty} />}
+          {tab === 'merit' && <InterviewMeritPreviewView key={selectedRoundId} roundId={selectedRoundId} />}
 
           {tab === 'overview' && (
             <section className="space-y-4">
@@ -588,7 +603,7 @@ export function InterviewManagementView() {
                   Gazette evidence approved by a Super Admin: <strong>{overview.resultApproval.evidenceReference}</strong> · SHA-256 {overview.resultApproval.evidenceSha256}
                 </div>
               )}
-              {overview.campaignDataComplete && !overview.resultApprovalCurrent && isSuperAdmin && selectedRound.status !== 'FINALIZED' && (
+              {overview.eligibilitySourceStatus === 'PENDING_GAZETTE_APPROVAL' && isSuperAdmin && selectedRound.status !== 'FINALIZED' && (
                 <form onSubmit={approveGazetteEvidence} className="grid gap-3 border border-amber-200 bg-amber-50 p-4 md:grid-cols-2" aria-label="Approve final Gazette evidence">
                   <div className="md:col-span-2"><h3 className="text-sm font-semibold text-amber-950">Confirm final Gazette evidence</h3><p className="mt-1 text-xs text-amber-900">This approval binds the evidence to all current verified and published Session V result revisions. A later correction or roster change will require a new approval.</p></div>
                   <label><span className={labelClass}>Gazette evidence reference</span><input required minLength={3} maxLength={500} className={inputClass} value={gazetteEvidence.reference} onChange={event => setGazetteEvidence(current => ({ ...current, reference: event.target.value }))} placeholder="Approved Gazette file or registry reference" /></label>
@@ -620,7 +635,7 @@ export function InterviewManagementView() {
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                     {selectedRound.status === 'OPEN' && <button className={buttonSecondary} onClick={() => void publishRound()} disabled={!sourceVerified || overview.pendingVerificationCandidates > 0 || overview.unassignedCandidates > 0 || overview.reviewRequiredAssignments > 0 || saving}>Publish and lock</button>}
                     {selectedRound.status === 'PUBLISHED' && isSuperAdmin && <button className={buttonSecondary} onClick={() => void finalizeRound()} disabled={!sourceVerified || overview.reviewRequiredAssignments > 0 || saving}>Finalize round</button>}
-                    {selectedRound.status === 'FINALIZED' && <span className="text-xs text-slate-500">This round is finalized and read-only.</span>}
+                    {selectedRound.status === 'FINALIZED' && <span className="text-xs text-slate-500">Allocations are finalized. Interview assessment entry remains available.</span>}
                   </div>
                 </section>
               </div>

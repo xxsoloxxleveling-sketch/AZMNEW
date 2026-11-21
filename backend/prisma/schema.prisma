@@ -127,6 +127,8 @@ model User {
   interviewResultApprovals InterviewResultApproval[] @relation("InterviewResultApprovalActor")
   interviewAudits InterviewAllocationAudit[] @relation("InterviewAuditActor")
   importedFixedInterviewSchedules InterviewFixedSchedule[] @relation("FixedScheduleImporter")
+  interviewPanelRevisions InterviewPanelRevision[] @relation("InterviewPanelRevisionActor")
+  interviewAssessmentRevisions InterviewAssessmentRevision[] @relation("InterviewAssessmentRevisionActor")
 }
 
 enum StudentStatus {
@@ -1296,6 +1298,8 @@ model InterviewRound {
   resultApprovals      InterviewResultApproval[]
   fixedSchedule        InterviewFixedSchedule?
   audits               InterviewAllocationAudit[]
+  panelRevisions       InterviewPanelRevision[]
+  assessmentRevisions  InterviewAssessmentRevision[]
 
   @@index([status, createdAt])
 }
@@ -1423,11 +1427,67 @@ model InterviewFixedPlacement {
   sequence     Int
   slotTime     String
   printedMarks Int
+  assessmentRevisions InterviewAssessmentRevision[]
 
   @@unique([scheduleId, studentId])
   @@unique([scheduleId, panel, batch, sequence])
   @@unique([scheduleId, panel, batch, slotTime])
   @@index([studentId])
+}
+
+// Membership and assessment revisions are append-only; the approved timetable is never updated.
+model InterviewPanelRevision {
+  id          String   @id @default(cuid())
+  roundId     String
+  panel       Int
+  revision    Int
+  members     Json
+  reason      String   @db.Text
+  actorId     String
+  actorName   String
+  createdAt   DateTime @default(now())
+  round       InterviewRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  actor       User @relation("InterviewPanelRevisionActor", fields: [actorId], references: [id], onDelete: Restrict)
+  assessments InterviewAssessmentRevision[]
+
+  @@unique([roundId, panel, revision])
+  @@index([roundId, panel, createdAt])
+}
+
+model InterviewAssessmentRevision {
+  id                       String   @id @default(cuid())
+  roundId                  String
+  placementId              String
+  panelRevisionId          String
+  revision                 Int
+  status                   String
+  attendance               String
+  scores                   Json
+  extracurricular          Decimal? @db.Decimal(5, 2)
+  extracurricularEvidence  String   @default("") @db.Text
+  extracurricularReviewed  Boolean  @default(false)
+  academic                 Decimal? @db.Decimal(5, 2)
+  academicEvidence         String   @default("") @db.Text
+  academicReviewed         Boolean  @default(false)
+  notes                    String   @default("") @db.Text
+  reason                   String   @default("") @db.Text
+  classSnapshot            String
+  writtenSnapshot          Json
+  policyVersion            String   @default("SESSION_V_2026_60_20_10_5_5_V1")
+  actorId                  String
+  actorName                String
+  idempotencyKey           String?
+  requestHash              String?
+  createdAt                DateTime @default(now())
+  round                    InterviewRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  placement                InterviewFixedPlacement @relation(fields: [placementId], references: [id], onDelete: Restrict)
+  panelRevision            InterviewPanelRevision @relation(fields: [panelRevisionId], references: [id], onDelete: Restrict)
+  actor                    User @relation("InterviewAssessmentRevisionActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@unique([placementId, revision])
+  @@unique([roundId, idempotencyKey])
+  @@index([roundId, placementId, createdAt])
+  @@index([panelRevisionId])
 }
 
 // Append-only Super Admin review attestations for final overall Session V

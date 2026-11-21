@@ -69,10 +69,13 @@ function makeService(options: { candidateCount?: number; assignments?: any[] } =
       maximumMarks: 100, status: InterviewRoundStatus.OPEN, revision: 1,
     },
     assignments: options.assignments ?? [], approvals: [], audits: [], nextId: 1,
+    exams: [exam], manualMarks: [], provisionalMarks: [], fixedPlacements: [], fixedSchedule: null,
   };
   let transactionTail = Promise.resolve();
   const hallFor = (id: string) => halls.find(hall => hall.id === id);
   const db: any = {
+    $queryRaw: async (query: any) => query.text.includes('FROM public."OmrProvisionalMark" m')
+      ? state.provisionalMarks : state.manualMarks,
     $transaction: async (work: (tx: any) => Promise<any>) => {
       const prior = transactionTail;
       let release!: () => void;
@@ -93,10 +96,12 @@ function makeService(options: { candidateCount?: number; assignments?: any[] } =
         return state.round;
       },
     },
-    interviewFixedSchedule: { findUnique: async () => null },
-    examination: { findMany: async () => [exam] },
+    interviewFixedSchedule: { findUnique: async () => state.fixedSchedule },
+    interviewFixedPlacement: { findMany: async () => state.fixedPlacements },
+    examination: { findMany: async () => state.exams },
     examinationResult: { findMany: async () => results },
-    omrProvisionalMark: { findMany: async () => [] },
+    omrProvisionalMark: { findMany: async () => state.provisionalMarks.map((mark: any) => ({ studentId: mark.studentId })) },
+    manualExamMark: { findMany: async () => state.manualMarks.map((mark: any) => ({ studentId: mark.studentId })) },
     attendanceSession: { findMany: async () => sessions },
     attendanceSessionCandidate: { findMany: async () => rosterRows },
     student: { findMany: async ({ where }: any) => students.filter(student => where?.id?.in?.includes(student.id)) },
@@ -143,6 +148,59 @@ async function approveCampaign(service: InterviewsService) {
 }
 
 describe('Session V interview allocation service', () => {
+  it('recognizes final Student-list marks without a new official result or Gazette approval', async () => {
+    const { service, state, results } = makeService({ candidateCount: 3 });
+    results.splice(0);
+    state.exams = [];
+    state.manualMarks = [64, 85, 31].map((marks, index) => ({
+      studentId: `student-${index + 1}`, sessionReference: '2026-V', obtainedMarks: marks,
+      originalRecordedMarks: marks, maximumMarks: 100, verified: true, verifiedAt: approvedAt,
+      publishedAt: approvedAt, recordedAt: approvedAt, manuallyCorrected: false,
+      latestCorrectionId: null, verificationId: String(index + 1),
+    }));
+    const overview = await service.getOverview('interview-round-v');
+    assert.equal(overview.eligibilitySourceStatus, 'VERIFIED');
+    assert.equal(overview.campaignCandidateCount, 3);
+    assert.equal(overview.totalQualifiedCandidates, 2);
+    assert.equal(overview.notQualifiedCandidates, 1);
+    assert.equal(overview.pendingVerificationCandidates, 0);
+    assert.equal(overview.resultApproval, null);
+    assert.match(overview.sourceMessage, /No further official-result or Gazette approval/);
+    assert.equal((await service.previewAutoAllocation('interview-round-v', 'BALANCED')).toAllocateCount, 2);
+    assert.equal(state.approvals.length, 0);
+  });
+
+  it('includes fixed placements with missing marks in the roster, preserves their locks, and counts only valid seals', async () => {
+    const { service, state, results } = makeService({ candidateCount: 3 });
+    results.splice(0);
+    state.exams = [];
+    state.manualMarks = [true, false].map((verified, index) => ({
+      studentId: `student-${index + 1}`, sessionReference: '2026-V', obtainedMarks: 64,
+      originalRecordedMarks: 64, maximumMarks: 100, verified, verifiedAt: verified ? approvedAt : null,
+      publishedAt: approvedAt, recordedAt: approvedAt, manuallyCorrected: false,
+      latestCorrectionId: null, verificationId: String(index + 1),
+    }));
+    state.fixedPlacements = [1, 2, 3].map(index => ({
+      id: `fixed-${index}`, studentId: `student-${index}`, panel: 1, batch: 1,
+      sequence: index, slotTime: `09:${index * 5}`, printedMarks: 64,
+    }));
+    state.fixedSchedule = { id: 'fixed-schedule', _count: { placements: 3 } };
+    const overview = await service.getOverview('interview-round-v');
+    assert.equal(overview.campaignCandidateCount, 3);
+    assert.equal(overview.totalQualifiedCandidates, 1);
+    assert.equal(overview.pendingVerificationCandidates, 2);
+    assert.equal(overview.eligibilitySourceStatus, 'PARTIALLY_VERIFIED');
+    assert.equal(overview.allocatedCandidates, 3);
+    assert.equal(overview.lockedCandidates, 3);
+    assert.equal(overview.unassignedCandidates, 0);
+    const candidates = await service.listCandidates('interview-round-v', { page: 1, limit: 25, assignment: 'assigned' });
+    assert.equal(candidates.pagination.total, 3);
+    assert.equal(candidates.results.every(row => row.isLocked && row.assignmentStatus === 'FIXED'), true);
+    assert.equal(candidates.results.filter(row => row.finalApprovedMarks !== null).length, 1);
+    await assert.rejects(service.previewAutoAllocation('interview-round-v', 'BALANCED'), /Automatic sorting is permanently disabled/);
+    assert.deepEqual(state.fixedPlacements.map((row: any) => row.id), ['fixed-1', 'fixed-2', 'fixed-3']);
+  });
+
   it('requires a Super Admin Gazette evidence approval before allocation', async () => {
     const { service, state } = makeService({ candidateCount: 1 });
     await assert.rejects(service.previewAutoAllocation('interview-round-v', 'BALANCED'), /Super Admin must confirm/);

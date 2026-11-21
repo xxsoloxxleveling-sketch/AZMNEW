@@ -24,8 +24,8 @@ export const FaqSection: React.FC<FaqSectionProps> = ({ onSelectTab }) => {
       a: '100% of exam questions are derived directly from the official AZM Question Bank published for your specific class level (~1,000 MCQs course book covering Sciences, Math, English, General Knowledge, and Islamiat/Pak Studies). There are no out-of-syllabus surprise questions.'
     },
     {
-      q: 'How does the 4-stage merit selection lifecycle work?',
-      a: 'Merit is decided through 4 transparent phases: 1) Optical OMR Test (70% weight), 2) Past Academic DMC Record (10% weight), 3) Structured 6-Member Panel Interview (15% weight), and 4) Domicile & Need Verification (5% weight). The final ranked ledger is published openly with zero discretion.'
+      q: 'How is Session V final merit calculated?',
+      a: 'The final verified written exam result contributes 60%, detailed interview 20%, extracurricular activities 10%, previous academic record 5%, and discipline, confidence and overall personality 5%. Three independent panel members each record interview and personality scores, which are averaged for those components. Financial need is reviewed separately for assistance. Final merit and awards are communicated after verification and AZM approval.'
     },
     {
       q: 'Can students from private schools and colleges apply, or is it only for government schools?',

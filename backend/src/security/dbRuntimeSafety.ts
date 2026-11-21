@@ -168,6 +168,7 @@ export async function assertRestrictedRuntimeDatabase(
   await assertStudyGroupAuditRuntime(db);
   await assertDmcReplacementRuntime(db);
   await assertFixedInterviewScheduleRuntime(db);
+  await assertInterviewAssessmentRuntime(db);
   const signingKey=process.env.EXAM_CONTROL_SIGNING_KEY;
   if(!signingKey||signingKey.length<64)blocked('Exam Session Control signing key is missing');
   const probe=randomUUID();
@@ -285,5 +286,26 @@ export async function assertFixedInterviewScheduleRuntime(db: PrismaClient): Pro
   if (!r || !r.scheduleRead || !r.scheduleInsert || r.scheduleMutation ||
       !r.placementRead || !r.placementInsert || r.placementMutation) {
     throw new Error('Blocked unsafe production DB runtime: immutable fixed interview timetable privileges do not match.');
+  }
+}
+
+/** Score and panel revisions are append-only even for the restricted API login. */
+export async function assertInterviewAssessmentRuntime(db: PrismaClient): Promise<void> {
+  const rows = await db.$queryRawUnsafe<Array<{
+    tableName: string; readable: boolean; insertable: boolean; mutable: boolean; immutable: boolean;
+  }>>(`SELECT c.relname AS "tableName",
+    has_table_privilege(current_user,c.oid,'SELECT') AS readable,
+    has_table_privilege(current_user,c.oid,'INSERT') AS insertable,
+    has_table_privilege(current_user,c.oid,'UPDATE,DELETE,TRUNCATE,TRIGGER') AS mutable,
+    EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid
+      AND t.tgname=c.relname || '_immutable' AND t.tgenabled IN ('O','A') AND t.tgtype=58) AS immutable
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relname IN ('InterviewPanelRevision','InterviewAssessmentRevision')`);
+  const expected = ['InterviewPanelRevision', 'InterviewAssessmentRevision'];
+  if (rows.length !== expected.length || expected.some(tableName => {
+    const row = rows.find(item => item.tableName === tableName);
+    return !row?.readable || !row.insertable || row.mutable || !row.immutable;
+  })) {
+    blocked('interview assessment revision access/protection is missing or unsafe');
   }
 }

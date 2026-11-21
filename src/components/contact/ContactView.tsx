@@ -76,8 +76,8 @@ export const ContactView: React.FC<ContactViewProps> = ({ onSelectTab }) => {
       a: '100% of questions are selected from the official ~1,000 MCQs Question Bank published by AZM for each grade level.'
     },
     {
-      q: 'How are candidates evaluated during the 6-member interview?',
-      a: 'Final selection combines 70% OMR test score, 15% interview evaluation, 10% past academic records, and 5% socioeconomic criteria.'
+      q: 'How are interview marks and final merit calculated?',
+      a: 'Final merit combines the final verified written exam result (60%), detailed interview (20%), extracurricular activities (10%), previous academic record (5%), and discipline, confidence and overall personality (5%). Three independent panel members each record interview and personality scores; each component uses their average. Financial need is assessed separately for assistance. Awards require verification and AZM approval.'
     }
   ];
 

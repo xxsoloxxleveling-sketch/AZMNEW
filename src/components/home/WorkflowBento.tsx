@@ -54,14 +54,14 @@ export const WorkflowBento: React.FC<WorkflowBentoProps> = ({ onSelectTab }) => 
     {
       step: 3,
       tag: 'Stage 3',
-      title: 'Optical Scan & Panel Interview',
+      title: 'Verified Marks & Panel Interview',
       duration: '20 Nov – 13 Dec 2026',
       icon: Users2,
-      summary: 'Optical scanning produces verified scores, followed by qualitative assessment by a 6-member board.',
+      summary: 'Final verified written marks are combined with individual scores from three independent panel members and the other approved assessment components.',
       bullets: [
-        '70% Written Exam + 15% Interview + 10% DMC + 5% Need',
-        'Transparent verification of orphan & income records',
-        'Zero manual tampering in OMR score tabulation'
+        'Written exam 60% + interview 20% + activities 10%',
+        'Previous academics 5% + discipline, confidence & personality 5%',
+        'Financial need reviewed separately; awards require verification and approval'
       ],
       actionLabel: 'Read Interview Protocol',
       tabTarget: 'about' as PageTab

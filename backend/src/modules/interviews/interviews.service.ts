@@ -7,8 +7,9 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import {
   ApprovedResultSource, assessInterviewEligibility, InterviewEligibility,
-  resolveInterviewResultRecords, SESSION_V_CAMPAIGN_REF, SESSION_V_PASS_MARKS,
+  SESSION_V_CAMPAIGN_REF, SESSION_V_PASS_MARKS,
 } from './eligibility';
+import { loadFinalWrittenMarks } from './finalWrittenMarks';
 
 import { AllocationCandidate, AllocationHall, AllocationStrategy, buildAllocationPlan } from './allocation';
 import {
@@ -30,6 +31,7 @@ type CampaignCandidate = {
   source: ApprovedResultSource | null;
   eligibility: InterviewEligibility;
   assignment: any | null;
+  fixedPlacement: any | null;
   assignmentNeedsReview: boolean;
 };
 type CampaignSnapshot = {
@@ -37,6 +39,7 @@ type CampaignSnapshot = {
   exams: any[];
   resultFingerprints: string[];
   assignments: any[];
+  fixedPlacements: any[];
   officialResultCount: number;
   campaignDataComplete: boolean;
   approvalSnapshotHash: string;
@@ -161,7 +164,7 @@ export class InterviewsService {
   private async loadCampaignSnapshot(db: Db, sessionRef: string, roundId?: string): Promise<CampaignSnapshot> {
     if (sessionRef !== SESSION_V_CAMPAIGN_REF) {
       return {
-        candidates: [], exams: [], resultFingerprints: [], assignments: [], officialResultCount: 0, campaignDataComplete: false,
+        candidates: [], exams: [], resultFingerprints: [], assignments: [], fixedPlacements: [], officialResultCount: 0, campaignDataComplete: false,
         approvalSnapshotHash: '', resultApprovalCurrent: false, resultApproval: null, sourceStatus: 'LEGACY_HALL_SCOPE',
         sourceMessage: 'This stored round is scoped to an individual exam hall. Create the Session V campaign round to combine all original examination halls.',
         qualifiedCount: 0, notQualifiedCount: 0, pendingCount: 0, withheldCount: 0,
@@ -195,7 +198,7 @@ export class InterviewsService {
         take: 1,
       },
     };
-    const [resultRows, provisionalRows, assignments, resultApproval] = await Promise.all([
+    const [resultRows, provisionalRows, manualRows, fixedPlacements, assignments, resultApproval] = await Promise.all([
       db.examinationResult.findMany({
         where: { examination: { sessionReference: SESSION_V_CAMPAIGN_REF } },
         include: resultInclude,
@@ -203,6 +206,14 @@ export class InterviewsService {
       }),
       db.omrProvisionalMark.findMany({
         where: { sessionReference: SESSION_V_CAMPAIGN_REF }, select: { studentId: true }, orderBy: { studentId: 'asc' },
+      }),
+      db.manualExamMark.findMany({
+        where: { sessionReference: SESSION_V_CAMPAIGN_REF }, select: { studentId: true }, orderBy: { studentId: 'asc' },
+      }),
+      db.interviewFixedPlacement.findMany({
+        where: { schedule: roundId ? { roundId } : { round: { sessionRef: SESSION_V_CAMPAIGN_REF } } },
+        select: { id: true, studentId: true, panel: true, batch: true, sequence: true, slotTime: true, printedMarks: true },
+        orderBy: [{ panel: 'asc' }, { batch: 'asc' }, { sequence: 'asc' }],
       }),
       roundId ? db.interviewAssignment.findMany({
         where: { roundId },
@@ -237,6 +248,8 @@ export class InterviewsService {
     const ids = [...new Set([
       ...resultRows.map(row => row.studentId),
       ...provisionalRows.map(row => row.studentId),
+      ...manualRows.map(row => row.studentId),
+      ...fixedPlacements.map(row => row.studentId),
       ...rosterRows.map(row => row.studentId),
       ...assignments.map(row => row.studentId),
     ])].sort((a, b) => a.localeCompare(b));
@@ -250,12 +263,14 @@ export class InterviewsService {
     const rostersByStudent = new Map<string, any[]>();
     for (const roster of rosterRows) rostersByStudent.set(roster.studentId, [...(rostersByStudent.get(roster.studentId) ?? []), roster]);
     const assignmentByStudent = new Map(assignments.map(assignment => [assignment.studentId, assignment]));
+    const fixedByStudent = new Map(fixedPlacements.map(placement => [placement.studentId, placement]));
+    const finalMarks = await loadFinalWrittenMarks(db, ids, resultRows);
 
     const candidates: CampaignCandidate[] = ids.flatMap(studentId => {
       const student = studentById.get(studentId);
       if (!student) return [];
       const records = resultsByStudent.get(studentId) ?? [];
-      const resolution = resolveInterviewResultRecords(records);
+      const resolution = finalMarks.get(studentId)!;
       const rosterList = rostersByStudent.get(studentId) ?? [];
       const sourceRecord = resolution.result
         ? records.find(record => record.resultReference === resolution.result?.reference)
@@ -273,19 +288,25 @@ export class InterviewsService {
         || assignment.resultRevision !== result.revision
         || assignment.approvedMarksSnapshot !== result.marks
       ));
-      return [{ student, roster, source: result, eligibility: resolution.eligibility, assignment, assignmentNeedsReview }];
+      return [{ student, roster, source: result, eligibility: resolution.eligibility, assignment,
+        fixedPlacement: fixedByStudent.get(studentId) ?? null, assignmentNeedsReview }];
     });
 
     const qualifiedCount = candidates.filter(item => item.eligibility.status === 'QUALIFIED').length;
     const notQualifiedCount = candidates.filter(item => item.eligibility.status === 'NOT_QUALIFIED').length;
     const pendingCount = candidates.filter(item => item.eligibility.status === 'PENDING_VERIFICATION').length;
     const withheldCount = candidates.filter(item => item.eligibility.status === 'EXCLUDED_PENDING_REVIEW' && item.eligibility.reason === 'WITHHELD').length;
-    const duplicateCount = candidates.filter(item => item.eligibility.status === 'EXCLUDED_PENDING_REVIEW' && item.eligibility.reason === 'DUPLICATE_OFFICIAL_RESULTS').length;
+    const duplicateCount = candidates.filter(item => item.eligibility.status === 'EXCLUDED_PENDING_REVIEW'
+      && item.eligibility.reason !== 'WITHHELD').length;
     const missingResultCount = pendingCount + withheldCount + duplicateCount;
     const reviewRequiredCount = candidates.filter(item => item.assignmentNeedsReview).length;
     const examsAtApprovedScale = exams.length > 0 && exams.every(exam => exam.publicationStatus === 'PUBLISHED'
       && Boolean(exam.publishedAt && exam.publishedById) && Number(exam.maximumMarks) === 100);
-    const campaignDataComplete = examsAtApprovedScale && candidates.length > 0
+    const usesOfficialResults = candidates.some(item => item.source?.sourceType === 'OFFICIAL_RESULT');
+    const verifiedStudentListCount = candidates.filter(item => item.source?.isFinal
+      && item.source.sourceType !== 'OFFICIAL_RESULT'
+      && (item.eligibility.status === 'QUALIFIED' || item.eligibility.status === 'NOT_QUALIFIED')).length;
+    const campaignDataComplete = (!usesOfficialResults || examsAtApprovedScale) && candidates.length > 0
       && candidates.every(item => item.eligibility.status === 'QUALIFIED' || item.eligibility.status === 'NOT_QUALIFIED');
     const examFingerprint = exams.map(exam => ({
       id: exam.id, reference: exam.reference, revision: exam.revision,
@@ -319,23 +340,26 @@ export class InterviewsService {
       && resultApproval.snapshotHash === approvalSnapshotHash
       && resultApproval.candidateCount === candidates.length
       && resultApproval.officialResultCount === resultRows.length);
-    let sourceStatus = 'PENDING_SUPER_ADMIN_APPROVAL';
-    let sourceMessage = `${missingResultCount} of ${candidates.length} campaign candidates still need a current, unique, verified and published official result. Provisional OMR and legacy test scores are not used.`;
+    let sourceStatus = verifiedStudentListCount ? 'PARTIALLY_VERIFIED' : 'PENDING_VERIFICATION';
+    let sourceMessage = `${qualifiedCount + notQualifiedCount} of ${candidates.length} campaign candidates have current final verified written marks. ${missingResultCount} remain pending or excluded for review. Already verified manual and OMR marks need no additional official-result or Gazette approval; assessment entry for the fixed roster remains available.`;
     if (sessionRef !== SESSION_V_CAMPAIGN_REF) {
       sourceStatus = 'LEGACY_HALL_SCOPE';
       sourceMessage = 'This stored round is scoped to an individual exam hall. Create the Session V campaign round to combine all original examination halls.';
-    } else if (!exams.length) {
-      sourceStatus = 'NO_SESSION_V_EXAMINATION';
-      sourceMessage = 'No official 2026-V examination record is available. A Super Admin must register and publish the Session V examination and approve its final Gazette results.';
-    } else if (!examsAtApprovedScale) {
-      sourceStatus = 'SESSION_V_EXAMINATION_NOT_PUBLISHED';
-      sourceMessage = 'Every Session V examination must be published at 100 marks by a Super Admin before candidate eligibility can be confirmed.';
     } else if (!candidates.length) {
       sourceStatus = 'NO_SESSION_V_CANDIDATES';
-      sourceMessage = 'No Session V candidate roster or result records were found. The campaign roster or final Gazette import is missing.';
+      sourceMessage = 'No Session V candidate roster, manual mark, OMR mark or fixed placement records were found.';
+    } else if (campaignDataComplete && !usesOfficialResults) {
+      sourceStatus = 'VERIFIED';
+      sourceMessage = `All ${candidates.length} Session V candidates have current final verified written marks from the Student list. Corrected effective scores are used and passing marks are fixed at 60/100. No further official-result or Gazette approval is required.`;
+    } else if (!verifiedStudentListCount && !exams.length && usesOfficialResults) {
+      sourceStatus = 'NO_SESSION_V_EXAMINATION';
+      sourceMessage = 'No official 2026-V examination record is available. A Super Admin must register and publish the Session V examination and approve its final Gazette results.';
+    } else if (usesOfficialResults && !examsAtApprovedScale) {
+      sourceStatus = 'SESSION_V_EXAMINATION_NOT_PUBLISHED';
+      sourceMessage = 'Every Session V examination must be published at 100 marks by a Super Admin before candidate eligibility can be confirmed.';
     } else if (campaignDataComplete && resultApprovalCurrent) {
       sourceStatus = 'VERIFIED';
-      sourceMessage = `Current official results for all ${candidates.length} Session V candidates match the Super Admin Gazette evidence approval. Passing marks are fixed at 60/100.`;
+      sourceMessage = `Current final written marks for all ${candidates.length} Session V candidates are verified; official-result fallback sources match the Super Admin Gazette evidence approval. Passing marks are fixed at 60/100.`;
     } else if (campaignDataComplete && resultApproval) {
       sourceStatus = 'PENDING_GAZETTE_APPROVAL';
       sourceMessage = 'Official results or the campaign roster changed after Gazette evidence approval. A Super Admin must reconcile the final Gazette and record a new evidence approval.';
@@ -346,7 +370,7 @@ export class InterviewsService {
 
     return {
       candidates, exams, resultFingerprints,
-      assignments, officialResultCount: resultRows.length, campaignDataComplete,
+      assignments, fixedPlacements, officialResultCount: resultRows.length, campaignDataComplete,
       approvalSnapshotHash, resultApprovalCurrent, resultApproval,
       sourceStatus, sourceMessage, qualifiedCount, notQualifiedCount, pendingCount,
       withheldCount, duplicateCount, missingResultCount, reviewRequiredCount,
@@ -389,16 +413,16 @@ export class InterviewsService {
     const assignments = campaign.assignments;
     const capacity = halls.reduce((sum, hall) => sum + hall.capacity, 0);
     const occupied = halls.reduce((sum, hall) => sum + hall._count.assignments, 0);
-    const assignedIds = new Set(assignments.map(item => item.studentId));
+    const assignedIds = new Set([...assignments, ...campaign.fixedPlacements].map(item => item.studentId));
     const unassignedQualified = campaign.candidates.filter(item => item.eligibility.status === 'QUALIFIED' && !assignedIds.has(item.student.id)).length;
     return {
       round, totalQualifiedCandidates: campaign.qualifiedCount, notQualifiedCandidates: campaign.notQualifiedCount,
-      campaignCandidateCount: campaign.candidates.length, allocatedCandidates: assignments.length,
+      campaignCandidateCount: campaign.candidates.length, allocatedCandidates: assignedIds.size,
       fixedScheduleImported: Boolean(fixedSchedule),
       fixedScheduledCandidates: fixedSchedule?._count.placements ?? 0,
       unassignedCandidates: unassignedQualified,
       pendingVerificationCandidates: campaign.missingResultCount,
-      lockedCandidates: assignments.filter(item => item.isLocked).length,
+      lockedCandidates: new Set([...assignments.filter(item => item.isLocked), ...campaign.fixedPlacements].map(item => item.studentId)).size,
       reviewRequiredAssignments: campaign.reviewRequiredCount,
       activeHallCount: halls.length, totalCapacity: capacity,
       remainingSeats: Math.max(0, capacity - occupied),
@@ -461,6 +485,7 @@ export class InterviewsService {
     const rows = campaign.candidates.filter(item => {
       const student = item.student;
       const assignment = item.assignment;
+      const isAssigned = Boolean(assignment || item.fixedPlacement);
       const className = item.roster?.currentClassSnapshot || student.currentClass || '';
       const haystack = [student.fullName, student.applicationNo, student.rollNumber, item.roster?.fullNameSnapshot, item.roster?.rollNumberSnapshot]
         .filter(Boolean).join(' ').toLowerCase();
@@ -470,8 +495,8 @@ export class InterviewsService {
       if (query.gender && student.gender !== query.gender) return false;
       if (query.schoolName && !(student.schoolName ?? '').toLowerCase().includes(query.schoolName.toLowerCase())) return false;
       if (query.hallId && assignment?.hallId !== query.hallId) return false;
-      if (query.assignment === 'assigned' && !assignment) return false;
-      if (query.assignment === 'unassigned' && assignment) return false;
+      if (query.assignment === 'assigned' && !isAssigned) return false;
+      if (query.assignment === 'unassigned' && isAssigned) return false;
       if (query.eligibility === 'qualified' && item.eligibility.status !== 'QUALIFIED') return false;
       if (query.eligibility === 'unqualified' && item.eligibility.status !== 'NOT_QUALIFIED') return false;
       if (query.eligibility === 'pending' && item.eligibility.status !== 'PENDING_VERIFICATION') return false;
@@ -501,8 +526,10 @@ export class InterviewsService {
           finalApprovedMarks: eligibility.status === 'QUALIFIED' || eligibility.status === 'NOT_QUALIFIED' ? source?.marks ?? null : null,
           resultVerificationStatus: eligibility.status,
           interviewHall: assignment ? { id: assignment.hallId, name: assignment.hall.name, roomNumber: assignment.hall.roomNumber } : null,
-          assignmentStatus: assignment ? assignment.allocationType : 'UNASSIGNED',
-          isLocked: assignment?.isLocked ?? false, assignmentId: assignment?.id ?? null,
+          assignmentStatus: item.fixedPlacement ? 'FIXED' : assignment ? assignment.allocationType : 'UNASSIGNED',
+          isLocked: Boolean(item.fixedPlacement) || (assignment?.isLocked ?? false), assignmentId: assignment?.id ?? null,
+          fixedPlacement: item.fixedPlacement,
+          writtenSourceType: source?.sourceType ?? null,
           assignmentNeedsReview: item.assignmentNeedsReview, sourceRevision: source?.revision ?? null,
         };
       }),
@@ -601,7 +628,7 @@ export class InterviewsService {
     const candidate = campaign.candidates.find(item => item.student.id === studentId);
     if (!candidate) throw fail(404, 'Student is not in the Session V campaign population.');
     if (candidate.eligibility.status !== 'QUALIFIED' || !candidate.source) {
-      throw fail(409, 'Student cannot be assigned unless a current official result confirms marks of at least 60/100.');
+      throw fail(409, 'Student cannot be assigned unless current final verified written marks are at least 60/100.');
     }
     return {
       student: {
@@ -644,7 +671,7 @@ export class InterviewsService {
         const candidate = campaign.candidates.find(item => item.student.id === studentId);
         if (!candidate) throw fail(404, 'Student is not in the Session V campaign population.');
         if (candidate.eligibility.status !== 'QUALIFIED' || !candidate.source) {
-          throw fail(409, 'Student cannot be assigned unless a current official result confirms marks of at least 60/100.');
+          throw fail(409, 'Student cannot be assigned unless current final verified written marks are at least 60/100.');
         }
         verified.push({
           student: {
