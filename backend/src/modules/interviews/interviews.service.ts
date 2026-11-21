@@ -376,11 +376,14 @@ export class InterviewsService {
   async getOverview(roundId: string) {
     const round = await this.db.interviewRound.findUnique({ where: { id: roundId } });
     if (!round) throw fail(404, 'Interview round not found.');
-    const [campaign, halls] = await Promise.all([
+    const [campaign, halls, fixedSchedule] = await Promise.all([
       this.loadCampaignSnapshot(this.db, round.sessionRef, roundId),
       this.db.interviewHall.findMany({
         where: { roundId, status: InterviewHallStatus.ACTIVE },
         select: { capacity: true, _count: { select: { assignments: true } } },
+      }),
+      this.db.interviewFixedSchedule.findUnique({
+        where: { roundId }, select: { id: true, _count: { select: { placements: true } } },
       }),
     ]);
     const assignments = campaign.assignments;
@@ -391,6 +394,8 @@ export class InterviewsService {
     return {
       round, totalQualifiedCandidates: campaign.qualifiedCount, notQualifiedCandidates: campaign.notQualifiedCount,
       campaignCandidateCount: campaign.candidates.length, allocatedCandidates: assignments.length,
+      fixedScheduleImported: Boolean(fixedSchedule),
+      fixedScheduledCandidates: fixedSchedule?._count.placements ?? 0,
       unassignedCandidates: unassignedQualified,
       pendingVerificationCandidates: campaign.missingResultCount,
       lockedCandidates: assignments.filter(item => item.isLocked).length,
