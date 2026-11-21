@@ -121,10 +121,12 @@ async function run() {
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address(); assert(address && typeof address !== 'string');
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
+  let reviewPage: Page | undefined;
   try {
     browser = await puppeteer.launch({ headless: true, executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
     const page = await browser.newPage();
+    reviewPage = page;
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(String(error.message)));
     page.on('dialog', dialog => void dialog.accept());
@@ -211,6 +213,13 @@ async function run() {
     assert.deepEqual(errors, []);
     assert.equal(rows[0].written.marks, 80);
     console.log('INTERVIEW_ASSESSMENT_BROWSER_PASS: finalized timetable access, panel names, blank/zero distinction, three-member completion, 81.75 total, saved submit, private merit, conflict preservation, save-and-next, dark desktop and mobile');
+  } catch (error) {
+    if (reviewPage && !reviewPage.isClosed()) {
+      await reviewPage.screenshot({ path: path.join(output, 'failure-state.png'), fullPage: true }).catch(() => undefined);
+      const visible = await reviewPage.evaluate(() => document.body.innerText).catch(() => 'No browser page available.');
+      console.error('SYNTHETIC_BROWSER_FAILURE_STATE:', visible.slice(0,12000));
+    }
+    throw error;
   } finally {
     await browser?.close();
     await new Promise<void>(resolve => server.close(() => resolve()));
@@ -225,7 +234,10 @@ async function field(page: Page, label: string, index = 0): Promise<ElementHandl
 }
 async function fill(page: Page, label: string, text: string, index = 0) {
   const element = await field(page, label, index);
-  await element.click(); await element.press('Control+A'); await element.press('Backspace'); await element.type(text);
+  await element.click();
+  await page.keyboard.down('Control');
+  try { await page.keyboard.press('a'); } finally { await page.keyboard.up('Control'); }
+  await element.press('Backspace'); await element.type(text);
 }
 async function clickButton(page: Page, label: string) {
   await page.evaluate(text => {
