@@ -87,7 +87,17 @@ export function validateFixedSchedule(csvBytes: Buffer, pdfSha256: string): {
   if (pdfSha256.toLowerCase() !== FINAL_SCHEDULE_PDF_SHA256) {
     throw new InvalidFixedSchedule('The PDF fingerprint does not match the approved schedule.');
   }
-  const parsed = parseCsv(csvBytes.toString('utf8'));
+  return {
+    csvSha256, pdfSha256: FINAL_SCHEDULE_PDF_SHA256,
+    ...validateFixedScheduleStructure(csvBytes.toString('utf8')),
+  };
+}
+
+export function validateFixedScheduleStructure(csvText: string): {
+  rows: FixedPlacementRow[];
+  batches: Array<{ panel: number; batch: number; count: number }>;
+} {
+  const parsed = parseCsv(csvText);
   if (parsed.length !== FINAL_SCHEDULE_ROWS + 1) {
     throw new InvalidFixedSchedule('Expected exactly 349 candidate rows.');
   }
@@ -152,7 +162,7 @@ export function validateFixedSchedule(csvBytes: Buffer, pdfSha256: string): {
       batches.push({ panel, batch, count });
     }
   }
-  return { csvSha256, pdfSha256: FINAL_SCHEDULE_PDF_SHA256, rows, batches };
+  return { rows, batches };
 }
 
 export function decodeScheduleCsvBase64(value: string): Buffer {
