@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { interviewsService } from './interviews.service';
+import { fixedScheduleService } from './fixedSchedule.service';
 import {
   AutoAllocateCommitInput, AutoAllocatePreviewInput, CandidateQuery, CreateAssignmentsInput,
   CreateHallInput, CreateRoundInput, LockAssignmentInput, RemoveAssignmentInput,
@@ -20,6 +21,13 @@ const actor = (req: Request) => req.user!;
 
 export const interviewsController = {
   listRounds: respond(200, () => interviewsService.listRounds()),
+  fixedSchedule: respond(200, req => fixedScheduleService.get(req.params.roundId)),
+  previewFixedSchedule: respond(200, req => fixedScheduleService.preview(
+    req.params.roundId, req.body, actor(req),
+  )),
+  commitFixedSchedule: respond(200, req => fixedScheduleService.commit(
+    req.params.roundId, req.body, actor(req),
+  )),
   createRound: respond(201, req => interviewsService.createRound(req.body as CreateRoundInput, actor(req))),
   overview: respond(200, req => interviewsService.getOverview(req.params.roundId)),
   candidates: respond(200, req => interviewsService.listCandidates(req.params.roundId, req.query as unknown as CandidateQuery)),
