@@ -168,7 +168,7 @@ async function run() {
     await (await field(page, 'Evidence and score reviewed', 1)).click();
     await page.waitForFunction(() => document.querySelector('[aria-label="Unsaved calculation · provisional"]')?.textContent?.includes('81.75'));
     assert.equal(await buttonDisabled(page, 'Submit assessment'), false);
-    await page.screenshot({ path: path.join(output, 'desktop-assessment.png'), fullPage: true });
+    await reviewScreenshot(page, path.join(output, 'desktop-assessment.png'));
     await clickButton(page, 'Submit assessment');
     await waitText(page, 'Assessment submitted for Synthetic Candidate One');
     assert.equal(saved.get('placement-0')?.totals.total, 81.75);
@@ -181,7 +181,7 @@ async function run() {
     const readiness = await page.$$eval('section[aria-label="Private provisional merit preview"] tbody tr', items => items.map(item => item.textContent));
     assert(readiness[0]?.includes('#1') && readiness[0]?.includes('Ready'));
     assert(readiness[1]?.includes('Unranked') && readiness[2]?.includes('Unranked'));
-    await page.screenshot({ path: path.join(output, 'desktop-merit-preview.png'), fullPage: true });
+    await reviewScreenshot(page, path.join(output, 'desktop-merit-preview.png'));
     await clickButton(page, 'Marks & assessments');
     await page.waitForSelector('[aria-label="Open assessment for Synthetic Candidate Two"]');
     await page.click('[aria-label="Open assessment for Synthetic Candidate Two"]');
@@ -204,18 +204,27 @@ async function run() {
     await page.click('[aria-label="Open assessment for Synthetic Candidate One"]');
     await page.waitForSelector('form[aria-label="Assessment for Synthetic Candidate One"]');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile assessment layout must not overflow the page');
-    await page.screenshot({ path: path.join(output, 'mobile-assessment.png'), fullPage: true });
+    const nameOverlaps = await page.evaluate(() => ['Assessor Alpha', 'Assessor Beta', 'Assessor Gamma'].filter(name => {
+      const form = document.querySelector('form[aria-label="Assessment for Synthetic Candidate One"]')!;
+      const label = Array.from(form.querySelectorAll('fieldset span')).find(el => el.textContent === name);
+      const input = form.querySelector('input[aria-label="' + name + ' interview marks out of 20"]');
+      if (!label || !input) return true;
+      const text = document.createRange(); text.selectNodeContents(label);
+      return Array.from(text.getClientRects()).some(rect => rect.right > input.getBoundingClientRect().left - 4);
+    }));
+    assert.deepEqual(nameOverlaps, [], 'Assessor names must stay readable beside their own mobile score fields');
+    await reviewScreenshot(page, path.join(output, 'mobile-assessment.png'));
     await clickButton(page, 'Merit preview');
     await page.waitForSelector('section[aria-label="Private provisional merit preview"]');
     await waitText(page, '81.75');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile merit table must scroll within its container');
-    await page.screenshot({ path: path.join(output, 'mobile-merit-preview.png'), fullPage: true });
+    await reviewScreenshot(page, path.join(output, 'mobile-merit-preview.png'));
     assert.deepEqual(errors, []);
     assert.equal(rows[0].written.marks, 80);
     console.log('INTERVIEW_ASSESSMENT_BROWSER_PASS: finalized timetable access, panel names, blank/zero distinction, three-member completion, 81.75 total, saved submit, private merit, conflict preservation, save-and-next, dark desktop and mobile');
   } catch (error) {
     if (reviewPage && !reviewPage.isClosed()) {
-      await reviewPage.screenshot({ path: path.join(output, 'failure-state.png'), fullPage: true }).catch(() => undefined);
+      await reviewScreenshot(reviewPage, path.join(output, 'failure-state.png')).catch(() => undefined);
       const visible = await reviewPage.evaluate(() => document.body.innerText).catch(() => 'No browser page available.');
       console.error('SYNTHETIC_BROWSER_FAILURE_STATE:', visible.slice(0,12000));
     }
@@ -255,5 +264,10 @@ async function buttonDisabled(page: Page, label: string) {
 }
 async function waitText(page: Page, text: string) {
   await page.waitForFunction(value => document.body.textContent?.includes(value), {}, text);
+}
+async function reviewScreenshot(page: Page, target: string) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForFunction(() => window.scrollY === 0);
+  await page.screenshot({ path: target, fullPage: true });
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });
