@@ -150,6 +150,14 @@ const root = (roundId: string) => '/api/interviews/' + encodeURIComponent(roundI
 
 export const interviewApi = {
   rounds: () => apiFetch<InterviewRound[]>('/api/interviews/rounds'),
+  fixedSchedule: (roundId: string) => apiFetch<FixedScheduleView>(root(roundId) + '/fixed-schedule'),
+  previewFixedSchedule: (roundId: string, body: FixedScheduleUpload) =>
+    apiFetch<FixedSchedulePreview>(root(roundId) + '/fixed-schedule/preview', json('POST', body)),
+  commitFixedSchedule: (roundId: string, body: FixedScheduleUpload & {
+    expectedRevision: number; planHash: string; confirmed: true;
+  }) => apiFetch<{ imported: boolean; idempotentReplay: boolean; count: number }>(
+    root(roundId) + '/fixed-schedule/commit', json('POST', body),
+  ),
   createRound: (body: { sessionRef: '2026-V'; title: string; eligibilityThreshold: 60; maximumMarks: 100 }) =>
     apiFetch<InterviewRound>('/api/interviews/rounds', json('POST', body)),
   approveResults: (roundId: string, body: { evidenceReference: string; evidenceSha256: string; reason: string }) =>
@@ -197,4 +205,39 @@ export const interviewApi = {
   audit: (roundId: string, page = 1, limit = 25) => apiFetch<AuditPage>(
     '/api/interviews/rounds/' + encodeURIComponent(roundId) + '/audit?page=' + page + '&limit=' + limit,
   ),
+};
+
+export type FixedScheduleUpload = { csvBase64: string; pdfSha256: string };
+export type FixedSchedulePreview = {
+  roundId: string;
+  expectedRevision: number;
+  planHash: string;
+  csvSha256: string;
+  pdfSha256: string;
+  candidateCount: number;
+  matchedCount: number;
+  batches: Array<{ panel: number; batch: number; count: number }>;
+  missingRollNumbers: string[];
+  resultConflicts: Array<{ rollNumber: string; reason: string }>;
+  existingAssignments: number;
+  alreadyImported: boolean;
+  canCommit: boolean;
+  sourceType: string;
+};
+export type FixedScheduleView = {
+  imported: boolean;
+  importedAt?: string;
+  csvSha256?: string;
+  pdfSha256?: string;
+  interviewDate?: string;
+  lockedCount?: number;
+  panels: Array<{
+    panel: number;
+    batches: Array<{ batch: number; count: number; start: string; end: string }>;
+  }>;
+  placements: Array<{
+    panel: number; batch: number; sequence: number; slotTime: string;
+    printedMarks: number; studentId: string; rollNumber: string | null;
+    studentName: string; currentClass: string; isLocked: boolean;
+  }>;
 };
