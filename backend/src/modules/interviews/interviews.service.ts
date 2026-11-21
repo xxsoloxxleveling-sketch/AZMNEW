@@ -619,6 +619,9 @@ export class InterviewsService {
     return this.transaction(async tx => {
       const round = await this.lockRound(tx, roundId);
       assertRoundEditable(round, actor);
+      if (await tx.interviewFixedSchedule.findUnique({ where: { roundId }, select: { id: true } })) {
+        throw fail(409, 'This round has a final locked panel schedule. Manual allocation is disabled.');
+      }
       await this.lockCampaignResults(tx, round.sessionRef);
       const hall = await tx.interviewHall.findFirst({ where: { id: input.hallId, roundId, status: InterviewHallStatus.ACTIVE } });
       if (!hall) throw fail(404, 'Active interview hall not found in this round.');
@@ -805,6 +808,9 @@ export class InterviewsService {
   private async buildPreview(db: Db, roundId: string, strategy: AllocationStrategy) {
     const round = await db.interviewRound.findUnique({ where: { id: roundId } });
     if (!round) throw fail(404, 'Interview round not found.');
+    if (await db.interviewFixedSchedule.findUnique({ where: { roundId }, select: { id: true } })) {
+      throw fail(409, 'This round has an approved fixed panel timetable. Automatic sorting is permanently disabled.');
+    }
     if (round.status === InterviewRoundStatus.FINALIZED) throw fail(409, 'A finalized interview round cannot be allocated.');
     if (round.status === InterviewRoundStatus.PUBLISHED) throw fail(409, 'Published interview allocations cannot be changed.');
     if (round.eligibilityThreshold !== SESSION_V_PASS_MARKS || round.maximumMarks !== 100) {
