@@ -5,13 +5,14 @@ export type ApprovedResultSource = {
   isFinal: boolean;
   reference: string;
   revision: string;
+  sourceType?: 'VERIFIED_OMR' | 'VERIFIED_MANUAL' | 'OFFICIAL_RESULT';
 };
 
 export type InterviewEligibility =
   | { status: 'QUALIFIED'; approvedMarks: number; sourceReference: string; sourceRevision: string }
   | { status: 'NOT_QUALIFIED'; approvedMarks: number; sourceReference: string; sourceRevision: string }
   | { status: 'PENDING_VERIFICATION'; reason: 'NO_FINAL_RESULT' | 'NOT_VERIFIED' | 'UNSUPPORTED_SCALE' | 'INVALID_SCORE' | 'PASS_MARKS_FIXED' }
-  | { status: 'EXCLUDED_PENDING_REVIEW'; reason: 'WITHHELD' | 'DUPLICATE_OFFICIAL_RESULTS' };
+  | { status: 'EXCLUDED_PENDING_REVIEW'; reason: 'WITHHELD' | 'DUPLICATE_OFFICIAL_RESULTS' | 'CONFLICTING_FINAL_SOURCES' };
 
 export const SESSION_V_CAMPAIGN_REF = '2026-V';
 export const SESSION_V_PASS_MARKS = 60;
@@ -40,6 +41,7 @@ export function getAuthoritativeApprovedResult(value: unknown): ApprovedResultSo
     return {
       marks: 0, maximumMarks: 100, verificationStatus: 'WITHHELD', isFinal: false,
       reference: String(row.resultReference ?? row.id ?? 'withheld'), revision: String(row.resultRevision ?? 'unknown'),
+      sourceType: 'OFFICIAL_RESULT',
     };
   }
 
@@ -85,6 +87,7 @@ export function getAuthoritativeApprovedResult(value: unknown): ApprovedResultSo
     isFinal: true,
     reference,
     revision: `${row.id}:r${resultRevision}:e${Number(exam.revision) || 1}`,
+    sourceType: 'OFFICIAL_RESULT',
   };
 }
 

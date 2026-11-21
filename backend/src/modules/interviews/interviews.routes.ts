@@ -4,6 +4,7 @@ import { authenticate } from '../../middleware/auth.middleware';
 import { authorizeRoles } from '../../middleware/role.middleware';
 import { validateBody, validateQuery } from '../../middleware/validate.middleware';
 import { interviewsController } from './interviews.controller';
+import assessmentRouter from './assessment.routes';
 import {
   auditQuerySchema, autoAllocateCommitSchema, autoAllocatePreviewSchema, candidateQuerySchema,
   createAssignmentsSchema, createHallSchema, createRoundSchema, finalizeRoundSchema,
@@ -18,6 +19,7 @@ router.use((_req, res, next) => {
   next();
 });
 router.use(authenticate, authorizeRoles(Role.SUPER_ADMIN, Role.ADMIN));
+router.use('/:roundId/assessment', assessmentRouter);
 
 router.get('/rounds', interviewsController.listRounds);
 router.post('/rounds', validateBody(createRoundSchema), interviewsController.createRound);

@@ -66,45 +66,6 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
   ];
 
 
-  const boardMembers = [
-    {
-      role: 'Lead Science & Math Academician',
-      focus: 'Evaluates analytical reasoning, problem-solving logic, and scientific fundamentals',
-      badge: 'Sciences & Math',
-      image: '/pictures/panelists/panelist_1_science_math.jpg'
-    },
-    {
-      role: 'Language & Humanities Specialist',
-      focus: 'Assesses English reading comprehension, articulate expression, and critical thinking',
-      badge: 'Humanities',
-      image: '/pictures/panelists/panelist_2_humanities.jpg'
-    },
-    {
-      role: 'Senior Institutional Principal',
-      focus: 'Reviews academic discipline, school track record, and co-curricular achievements',
-      badge: 'Institutional',
-      image: '/pictures/panelists/panelist_3_principal.jpg'
-    },
-    {
-      role: 'Executive Welfare Director',
-      focus: 'Verifies orphan certificates, family income declarations, and financial need criteria',
-      badge: 'Need Scrutiny',
-      image: '/pictures/panelists/panelist_4_welfare_director.jpg'
-    },
-    {
-      role: 'Independent Ethics Observer',
-      focus: 'Ensures strict scoring equity, non-conflict of interest, and transparent protocol',
-      badge: 'Integrity',
-      image: '/pictures/panelists/panelist_5_ethics_observer.jpg'
-    },
-    {
-      role: 'Academic & Career Counselor',
-      focus: 'Analyzes long-term educational vision, emotional resilience, and career ambition',
-      badge: 'Counseling',
-      image: '/pictures/panelists/panelist_6_career_counselor.jpg'
-    }
-  ];
-
   return (
     <div className="py-10 space-y-16 max-w-7xl mx-auto px-4 sm:px-6">
       
@@ -233,7 +194,7 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
         </div>
       </div>
 
-      {/* 4. The 6-Member Interview Board (6 Distinct Evaluator Portraits) */}
+      {/* 4. Three-member interview assessment */}
       <div className="p-8 sm:p-10 rounded-3xl bg-slate-50 border border-slate-200/90 space-y-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="space-y-1">
@@ -241,47 +202,40 @@ export const AboutView: React.FC<AboutViewProps> = ({ onSelectTab }) => {
               Stage 3 Scrutiny
             </span>
             <h2 className="text-2xl sm:text-3xl font-display font-extrabold text-slate-900">
-              The 6-Member Independent Interview Board
+              The 3-Member Independent Interview Panel
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl">
-              Following the written OMR test, shortlisted candidates appear before a balanced 6-member committee to evaluate understanding and verify financial background.
+              Candidates with 60 or more marks in the final verified written examination are eligible for interview. Three independent members record interview and personality scores. Each panel’s appointed assessors are recorded by AZM administration; financial need is reviewed separately for assistance.
             </p>
           </div>
 
           <div className="flex items-center gap-2 text-xs font-bold text-purple-800 bg-purple-100 px-3.5 py-1.5 rounded-xl border border-purple-200 self-start md:self-auto">
-            <span>15% Merit Weighting</span>
+            <span>20% Interview Weight</span>
           </div>
         </div>
 
-        {/* Board Panelists Grid with Distinct Evaluator Portraits */}
+        {/* Generic member roles; appointed assessor identities are managed privately */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {boardMembers.map((member, mIdx) => (
+          {[1, 2, 3].map((position) => (
             <div
-              key={mIdx}
+              key={position}
               className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-md transition-all flex items-start gap-3.5 group"
             >
-              <div className="relative w-14 h-14 rounded-2xl overflow-hidden shadow-xs border border-slate-200 flex-shrink-0 bg-slate-900 ring-2 ring-purple-500/20 group-hover:scale-105 transition-transform">
-                <img
-                  src={member.image}
-                  alt={member.role}
-                  className="w-full h-full object-cover object-top"
-                />
+              <div className="relative w-14 h-14 rounded-2xl overflow-hidden shadow-xs border border-slate-200 flex-shrink-0 bg-slate-900 ring-2 ring-purple-500/20 group-hover:scale-105 transition-transform flex items-center justify-center">
+                <Users className="w-6 h-6 text-white" aria-hidden="true" />
               </div>
 
               <div className="space-y-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100">
-                    Panel Seat #{mIdx + 1}
-                  </span>
-                  <span className="text-[10px] font-semibold text-slate-400">
-                    {member.badge}
+                    Member {position}
                   </span>
                 </div>
                 <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
-                  {member.role}
+                  Independent assessment
                 </h4>
                 <p className="text-[11px] text-slate-500 leading-snug">
-                  {member.focus}
+                  Records interview marks out of 20 and discipline, confidence and overall personality marks out of 5. Both components use the average of all three members.
                 </p>
               </div>
             </div>
