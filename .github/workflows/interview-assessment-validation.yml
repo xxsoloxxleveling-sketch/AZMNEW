@@ -1,0 +1,91 @@
+name: Interview assessments and final written marks
+
+on:
+  push:
+    branches:
+      - feature/interview-assessment-final-marks-20261121
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/modules/interviews/**'
+      - 'backend/src/modules/students/manualExamMarks.ts'
+      - 'backend/src/modules/students/provisionalOmrMarks.ts'
+      - 'backend/prisma/**'
+      - 'backend/src/security/dbRuntimeSafety.ts'
+      - 'backend/ops/postgres/runtime-grants.sql'
+      - 'backend/tests/interview*'
+      - 'src/components/admin/interviews/**'
+      - 'src/data/scholarshipData.ts'
+      - '.github/workflows/interview-assessment-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  assess:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: synthetic_interview_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:synthetic_interview_only@127.0.0.1:5432/postgres
+      DIRECT_URL: postgresql://postgres:synthetic_interview_only@127.0.0.1:5432/postgres
+      INTERVIEW_TEST_DATABASE_URL: postgresql://postgres:synthetic_interview_only@127.0.0.1:5432/postgres
+      JWT_ACCESS_SECRET: synthetic-interview-access-only
+      JWT_REFRESH_SECRET: synthetic-interview-refresh-only
+      QR_SECRET: synthetic-interview-qr-only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - name: Install unchanged dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm --prefix backend ci --ignore-scripts --no-audit --no-fund
+      - name: Validate backend schema and types
+        working-directory: backend
+        run: |
+          ./node_modules/.bin/prisma generate
+          ./node_modules/.bin/prisma validate
+          ./node_modules/.bin/tsc --noEmit --pretty false
+      - name: Interview and final-mark regressions
+        working-directory: backend
+        run: >-
+          node --import tsx --test tests/interviews-*.test.ts
+          tests/verified-omr-marks.test.ts tests/manual-mark-verification.test.ts
+          tests/manual-mark-corrections.test.ts tests/verified-edmc-freshness.test.ts
+      - name: PostgreSQL 17 assessment persistence and restricted privileges
+        working-directory: backend
+        run: node --import tsx tests/interview-assessment-postgres.ts
+      - name: Build frontend and check assessment view logic
+        run: |
+          npm run build
+          node --import tsx --test src/components/admin/interviews/*.test.ts
+      - name: Test synthetic desktop and mobile assessment flow
+        run: |
+          export PUPPETEER_EXECUTABLE_PATH="$(command -v google-chrome)"
+          node --import tsx backend/tests/interview-assessment-browser.ts
+      - name: Preserve synthetic UI review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-assessment-ui
+          path: tmp/interview-assessment-ui/*.png
+          if-no-files-found: ignore

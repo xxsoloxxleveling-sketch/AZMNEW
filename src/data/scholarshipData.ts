@@ -366,11 +366,11 @@ export const EXAM_SECTIONS: ExamSection[] = [
 ];
 
 export const EVALUATION_WEIGHTS = [
-  { label: 'Written OMR Examination', percentage: 60, color: '#185b9d' },
-  { label: 'Comprehensive 6-Member Interview', percentage: 20, color: '#299b46' },
-  { label: 'Previous Academic Record (DMC)', percentage: 10, color: '#70a9db' },
-  { label: 'Financial Assessment / Need Verification', percentage: 5, color: '#f59e0b' },
-  { label: 'Co-Curricular & Profile Assessment', percentage: 5, color: '#8b5cf6' }
+  { label: 'Written Examination', percentage: 60, color: '#185b9d' },
+  { label: 'Detailed Interview (3 Panel Members)', percentage: 20, color: '#299b46' },
+  { label: 'Extracurricular Activities', percentage: 10, color: '#70a9db' },
+  { label: 'Previous Academic Record', percentage: 5, color: '#f59e0b' },
+  { label: 'Discipline, Confidence & Overall Personality', percentage: 5, color: '#8b5cf6' }
 ];
 
 export const SESSION_V_CALENDAR: CalendarEvent[] = [
@@ -432,7 +432,7 @@ export const SESSION_V_CALENDAR: CalendarEvent[] = [
     id: 'cal-7',
     date: '2026-12-07',
     displayDate: '07 - 13 Dec 2026',
-    title: 'Comprehensive 6-Member Interviews',
+    title: 'Detailed 3-Member Panel Interviews',
     description: 'Qualitative assessment, document scrutiny, and financial verification rounds.',
     status: 'upcoming',
     badge: 'Interviews'
@@ -1302,8 +1302,8 @@ export const SIX_PILLARS = [
     icon: 'ScanLine'
   },
   {
-    title: '6-Member Panel Scrutiny',
-    description: 'Interviews conducted by independent educationists to evaluate critical thinking and verify financial need.',
+    title: '3-Member Panel Assessment',
+    description: 'Three panel members record individual interview and personality scores. Verified financial need is reviewed separately for assistance.',
     icon: 'Users'
   },
   {

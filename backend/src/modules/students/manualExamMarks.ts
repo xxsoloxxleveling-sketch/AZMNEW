@@ -16,6 +16,7 @@ export interface PublishedManualExamMark {
   recordedAt: Date;
   verified: boolean;
   verifiedAt: Date | null;
+  verificationId?: string | null;
 }
 
 export interface ManualExamMarkReceipt {
@@ -91,11 +92,12 @@ export async function addManualExamMark(
  */
 export async function findPublishedManualExamMarks(
   studentIds: string[],
+  db: Pick<Prisma.TransactionClient, '$queryRaw'> = prisma,
 ): Promise<Map<string, PublishedManualExamMark>> {
   if (!studentIds.length) return new Map();
   // Calculate the current seal from the newest immutable audit. A
   // post-verification identity change invalidates it without deleting history.
-  const records = await prisma.$queryRaw<PublishedManualExamMark[]>(Prisma.sql`
+  const records = await db.$queryRaw<PublishedManualExamMark[]>(Prisma.sql`
     SELECT m."studentId",m."sessionReference",
       m."rollNumberSnapshot",m."applicationNoSnapshot",
       COALESCE(correction."newEffectiveMarks",m."obtainedMarks") AS "obtainedMarks",
@@ -103,7 +105,7 @@ export async function findPublishedManualExamMarks(
       (correction.id IS NOT NULL) AS "manuallyCorrected",
       correction.id::TEXT AS "latestCorrectionId",
       m."maximumMarks",COALESCE(correction."occurredAt",m."publishedAt") AS "publishedAt",m."recordedAt",
-      COALESCE(seal.valid,FALSE) AS "verified",
+      COALESCE(seal.valid,FALSE) AS "verified", seal."verificationId",
       CASE WHEN seal.valid THEN seal."verifiedAt" ELSE NULL END AS "verifiedAt"
     FROM public."ManualExamMark" m
     LEFT JOIN public."Student" student ON student.id=m."studentId"
@@ -138,7 +140,7 @@ export async function findPublishedManualExamMarks(
           SELECT 1 FROM public."ExaminationResult" result
           WHERE result."studentId"=m."studentId"
         )
-      ) AS valid, audit."verifiedAt"
+      ) AS valid, audit."verifiedAt", audit.id::TEXT AS "verificationId"
       FROM public."ManualExamMarkVerificationAudit" audit
       WHERE audit."sessionReference"=m."sessionReference"
         AND audit."studentId"=m."studentId"
