@@ -550,12 +550,14 @@ export function InterviewManagementView() {
 
       {selectedRound && overview && (
         <>
-          {overview.eligibilitySourceStatus !== 'VERIFIED' && (
+          {overview.eligibilitySourceStatus !== 'VERIFIED' && !fixedImported && (
             <StateNotice kind="info">
               <AlertCircle size={18} />
               <span><strong>Session V approvals incomplete.</strong> {overview.sourceMessage} Assignment, automatic allocation and publication remain blocked until the complete campaign has current, verified and published official results.</span>
             </StateNotice>
           )}
+
+          {fixedImported && <StateNotice kind="success"><Lock size={18} /> {overview.fixedScheduledCandidates} candidates have approved fixed panel placements. This timetable is administratively locked and is not a statement that official exam marks have been verified.</StateNotice>}
 
           <nav aria-label="Interview management sections" className="flex gap-1 overflow-x-auto border-b border-slate-200">
             {tabItems.map(item => <button key={item.id} type="button" className={'whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ' + (tab === item.id ? 'border-[#185b9d] text-[#185b9d]' : 'border-transparent text-slate-600 hover:text-slate-900')} onClick={() => setTab(item.id)}>{item.label}</button>)}
@@ -571,7 +573,8 @@ export function InterviewManagementView() {
                 <Stat label="Qualified candidates" value={overview.totalQualifiedCandidates} />
                 <Stat label="Below threshold" value={overview.notQualifiedCandidates} />
                 <Stat label="Campaign candidates" value={overview.campaignCandidateCount} />
-                <Stat label="Allocated" value={overview.allocatedCandidates} />
+                <Stat label="Allocated (standard)" value={overview.allocatedCandidates} />
+                <Stat label="Final panel placements" value={overview.fixedScheduledCandidates} />
                 <Stat label="Unassigned" value={overview.unassignedCandidates} />
                 <Stat label="Locked" value={overview.lockedCandidates} />
                 <Stat label="Review required" value={overview.reviewRequiredAssignments} />
