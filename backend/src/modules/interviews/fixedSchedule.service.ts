@@ -149,11 +149,15 @@ class FixedScheduleService {
       );
       if (locked.length !== 1) throw error(404, 'Interview round not found.');
       const plan = await this.prepare(tx, roundId, input);
+      // The identical approved file is a no-op even after the round revision increments.
+      if (plan.prior && plan.prior.csvSha256 === plan.document.csvSha256 &&
+          plan.prior.pdfSha256 === plan.document.pdfSha256) {
+        return { imported: false, idempotentReplay: true, count: FINAL_SCHEDULE_ROWS };
+      }
       if (plan.round.revision !== input.expectedRevision || plan.planHash !== input.planHash) {
         throw error(409, 'The import preview is stale. Refresh and review the schedule again.');
       }
       if (!plan.canCommit) throw error(409, 'Not all 349 candidates match safely. Resolve the preview conflicts before importing.');
-      if (plan.prior) return { imported: false, idempotentReplay: true, count: FINAL_SCHEDULE_ROWS };
 
       const schedule = await tx.interviewFixedSchedule.create({
         data: {
