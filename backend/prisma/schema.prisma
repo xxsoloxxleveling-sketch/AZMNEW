@@ -122,7 +122,8 @@ model User {
   interviewAssignmentsAssigned InterviewAssignment[] @relation("InterviewAssignmentAssignedBy")
   interviewAssignmentsLocked InterviewAssignment[] @relation("InterviewAssignmentLockedBy")
   interviewResultApprovals InterviewResultApproval[] @relation("InterviewResultApprovalActor")
-  interviewAudits InterviewAllocationAudit[] @relation("InterviewAuditActor")
+  interviewAudits InterviewAllocationAudit[]
+  importedFixedInterviewSchedules InterviewFixedSchedule[] @relation("FixedScheduleImporter") @relation("InterviewAuditActor")
 }
 
 enum StudentStatus {
@@ -221,6 +222,7 @@ model Student {
   legacyExamResultHistory ExamLegacyResultHistory[]
   omrProvisionalMarks OmrProvisionalMark[]
   interviewAssignments InterviewAssignment[]
+  fixedInterviewPlacements InterviewFixedPlacement[]
 }
 
 // Dedicated append-only correction evidence; no attendance/document audit reuse.
@@ -1190,6 +1192,7 @@ enum InterviewAuditAction {
   UNASSIGNED
   AUTO_ALLOCATION_COMMITTED
   RESULTS_APPROVED
+  FIXED_SCHEDULE_IMPORTED
 }
 
 model InterviewRound {
@@ -1210,6 +1213,7 @@ model InterviewRound {
   halls                InterviewHall[]
   assignments          InterviewAssignment[]
   resultApprovals      InterviewResultApproval[]
+  fixedSchedule        InterviewFixedSchedule?
   audits               InterviewAllocationAudit[]
 
   @@index([status, createdAt])
@@ -1309,4 +1313,38 @@ model InterviewAllocationAudit {
   @@index([roundId, occurredAt])
   @@index([hallId, occurredAt])
   @@index([studentId, occurredAt])
+}
+
+
+// Official results are intentionally NOT modified by this finalized,
+// administrative interview placement record.
+model InterviewFixedSchedule {
+  id             String   @id @default(cuid())
+  roundId        String   @unique
+  round          InterviewRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  csvSha256      String   @db.VarChar(64)
+  pdfSha256      String   @db.VarChar(64)
+  interviewDate  DateTime @db.Date
+  importedById   String
+  importedBy     User     @relation("FixedScheduleImporter", fields: [importedById], references: [id], onDelete: Restrict)
+  importedAt     DateTime @default(now())
+  placements     InterviewFixedPlacement[]
+}
+
+model InterviewFixedPlacement {
+  id           String @id @default(cuid())
+  scheduleId   String
+  schedule     InterviewFixedSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  studentId    String
+  student      Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  panel        Int
+  batch        Int
+  sequence     Int
+  slotTime     String
+  printedMarks Int
+
+  @@unique([scheduleId, studentId])
+  @@unique([scheduleId, panel, batch, sequence])
+  @@unique([scheduleId, panel, batch, slotTime])
+  @@index([studentId])
 }
