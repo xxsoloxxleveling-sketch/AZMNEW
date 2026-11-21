@@ -16,6 +16,8 @@ export type InterviewOverview = {
   round: InterviewRound;
   totalQualifiedCandidates: number;
   allocatedCandidates: number;
+  fixedScheduleImported: boolean;
+  fixedScheduledCandidates: number;
   unassignedCandidates: number;
   pendingVerificationCandidates: number;
   lockedCandidates: number;
