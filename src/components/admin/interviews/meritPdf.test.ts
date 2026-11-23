@@ -60,7 +60,7 @@ describe('branded merit PDF data safeguards', () => {
   });
 
   it('preserves accented Latin names and normalises common smart punctuation', async () => {
-    const rendered = table(await buildMeritPdf(options([candidate(0, { studentName: 'José O’Neil–Zoë' })])));
+    const rendered = table(await buildMeritPdf(options([candidate(0, { studentName: 'Jose\u0301 O’Neil–Zoë' })])));
     assert(cell(rendered, 0, 1).includes("José O'Neil-Zoë"));
   });
 

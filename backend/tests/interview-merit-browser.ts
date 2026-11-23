@@ -88,7 +88,7 @@ async function run() {
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
     const page = await browser.newPage(); reviewPage = page;
     const errors: string[] = [];
-    page.on('pageerror', error => errors.push(String(error.message)));
+    page.on('pageerror', error => errors.push(error instanceof Error ? error.message : String(error)));
     const client = await page.createCDPSession();
     await client.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
     await page.setViewport({ width: 1360, height: 1000 });
@@ -283,7 +283,8 @@ function pdfContents(filename: string) {
 }
 async function field(page: Page, label: string): Promise<ElementHandle<HTMLInputElement & HTMLSelectElement>> {
   const handle = await page.evaluateHandle(name => Array.from(document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select'))
-    .find(el => el.getAttribute('aria-label') === name || Array.from(el.labels ?? []).some(item => item.textContent?.trim() === name)), label);
+    .find(el => el.getAttribute('aria-label') === name || Array.from(el.labels ?? []).some(item =>
+      item.querySelector('span')?.textContent?.trim() === name || item.textContent?.trim() === name)), label);
   const element = handle.asElement(); assert(element, 'Field missing: ' + label);
   return element as ElementHandle<HTMLInputElement & HTMLSelectElement>;
 }

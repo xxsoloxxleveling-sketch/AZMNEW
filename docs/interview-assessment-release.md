@@ -93,6 +93,11 @@ written marks retain their final status; incomplete or changed assessments do
 not acquire a total or merit rank through an export. Select **Ready** to download
 only candidates with complete, current submitted assessments.
 
+The current PDF typography supports Latin names, accents and common punctuation.
+Unsupported scripts raise a clear export error before generating a document;
+CSV preserves Unicode text. Candidate names are never silently dropped or
+replaced to force a PDF export.
+
 PDF generation and display sorting run in the browser. This incremental update
 requires only a frontend deployment, with no database migration or mark updates.
 

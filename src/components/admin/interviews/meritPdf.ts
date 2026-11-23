@@ -33,7 +33,7 @@ const score = (value: number | null | undefined) => value == null || !Number.isF
 // Normalise punctuation used by the UI for the PDF's built-in Latin font.
 // Reject unsupported scripts explicitly rather than silently corrupting a name.
 const text = (value: string) => {
-  const clean = value.replace(/[\u2010-\u2015\u2212]/g, '-')
+  const clean = value.normalize('NFC').replace(/[\u2010-\u2015\u2212]/g, '-')
     .replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
     .replace(/\u2026/g, '...').replace(/\s+/g, ' ').trim();
   if (/[^\u0020-\u007e\u00a0-\u00ff\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2020\u2021\u2022\u2030\u2039\u203a\u20ac]/u.test(clean)) {
