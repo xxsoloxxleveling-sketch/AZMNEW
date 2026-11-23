@@ -94,7 +94,14 @@ export type SaveAssessmentInput = {
   reason?: string;
 };
 export type MeritPreviewRow = Pick<AssessmentRosterRow, 'placementId' | 'studentId' | 'rollNumber' | 'studentName' | 'className' | 'panel' | 'batch' | 'written'> & {
+  /** Current registration details; optional while older API releases are in use. */
+  fatherName?: string;
+  institute?: string;
+  /** Stored registration category, not a calculated scholarship award. */
+  scholarshipCategory?: string;
   rank: number | null;
+  /** Exact competition rank across the whole round, before display filters. */
+  overallRank?: number | null;
   status: 'READY' | 'INCOMPLETE' | 'ABSENT' | 'SOURCE_CHANGED';
   assessmentStatus: 'DRAFT' | 'SUBMITTED' | 'NOT_STARTED';
   issues: string[];
@@ -105,6 +112,8 @@ export type MeritPreview = {
   publicationEnabled: false;
   policyVersion: string;
   rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS';
+  overallRankMethod?: 'SHARED_COMPETITION_ALL_CLASSES';
+  overallRankedCandidates?: number;
   rows: MeritPreviewRow[];
   summary: { total: number; ready: number; incomplete: number; absent: number };
   classOptions: string[];

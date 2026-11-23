@@ -78,11 +78,13 @@ async function run() {
         const records = rosterRows().map(row => {
           const assessment = row.assessment;
           const ready = assessment?.status === 'SUBMITTED' && assessment.attendance === 'PRESENT';
-          return { ...row, rank: ready ? 1 : null, status: ready ? 'READY' : 'INCOMPLETE',
+          return { ...row, rank: ready ? 1 : null, overallRank: ready ? 1 : null, status: ready ? 'READY' : 'INCOMPLETE',
+            fatherName: 'Synthetic Parent', institute: 'Synthetic Institute', scholarshipCategory: 'GENERAL_MERIT',
             assessmentStatus: assessment?.status ?? 'NOT_STARTED', issues: ready ? [] : ['Assessment has not been submitted.'],
             totals: assessment?.totals ?? { written: row.written.isFinal ? 48 : null, interview: null, extracurricular: null, academic: null, personality: null, total: null } };
         });
-        json({ provisional: true, publicationEnabled: false, policyVersion, rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS', classOptions: ['Class 9th'],
+        json({ provisional: true, publicationEnabled: false, policyVersion, rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS',
+          overallRankMethod: 'SHARED_COMPETITION_ALL_CLASSES', overallRankedCandidates: records.filter(row => row.status === 'READY').length, classOptions: ['Class 9th'],
           rows: records, summary: { total: 3, ready: records.filter(row => row.status === 'READY').length, incomplete: records.filter(row => row.status !== 'READY').length, absent: 0 } }); return;
       }
       if (req.method === 'PUT' && url.pathname === apiRoot + '/panels/1') {
@@ -178,6 +180,8 @@ async function run() {
     await clickButton(page, 'Merit preview');
     await page.waitForSelector('section[aria-label="Private provisional merit preview"]');
     await waitText(page, '81.75');
+    assert.equal(await (await field(page, 'Merit grouping')).evaluate(element => element.value), 'overall');
+    await waitText(page, 'Class / overall rank');
     const readiness = await page.$$eval('section[aria-label="Private provisional merit preview"] tbody tr', items => items.map(item => item.textContent));
     assert(readiness[0]?.includes('#1') && readiness[0]?.includes('Ready'));
     assert(readiness[1]?.includes('Unranked') && readiness[2]?.includes('Unranked'));

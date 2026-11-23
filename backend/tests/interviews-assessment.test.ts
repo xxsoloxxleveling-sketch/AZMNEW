@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Prisma } from '@prisma/client';
 import { assessmentPanelSchema, assessmentSaveSchema, AssessmentInput, WrittenMarkDto } from '../src/modules/interviews/assessment.schema.ts';
-import { assessmentCompletionIssues, calculateAssessmentTotals, exactMeritNumerator, rankWithinClasses, sameWrittenRevision } from '../src/modules/interviews/assessment.calculation.ts';
+import { assessmentCompletionIssues, calculateAssessmentTotals, exactMeritNumerator, rankOverall, rankWithinClasses, sameWrittenRevision } from '../src/modules/interviews/assessment.calculation.ts';
 
 const written: WrittenMarkDto = { marks: 100, maximumMarks: 100, isFinal: true, sourceType: 'VERIFIED_MANUAL', reference: 'manual:s1', revision: 'c1:v1', status: 'QUALIFIED' };
 function input(): AssessmentInput {
@@ -64,6 +64,22 @@ describe('Interview assessment policy and precision', () => {
     const ranked = rankWithinClasses([row('B', 'Class 6', '258'), row('A', 'Class 6', '258.01'), row('C', 'Class 6', '258.01'), row('D', 'Class 7', '150')]);
     assert.deepEqual(ranked.map(x => [x.placementId, x.rank]), [['A', 1], ['C', 1], ['B', 3], ['D', 1]]);
     assert.equal(new Prisma.Decimal('258.01').div(3).toFixed(2), new Prisma.Decimal('258').div(3).toFixed(2));
+  });
+
+  it('ranks exact scores across classes with shared ties and leaves source rows and class ranks intact', () => {
+    const row = (id: string, className: string, value: string) => ({
+      row: { placementId: id, studentName: id, className }, numerator: new Prisma.Decimal(value),
+    });
+    const rows = [row('D', 'Class 6', '250'), row('C', 'Class 8', '258'),
+      row('B', 'Class 7', '258.01'), row('A', 'Class 6', '258.01')];
+    assert.deepEqual(rankOverall(rows).map(candidate => [candidate.placementId, candidate.rank]),
+      [['A', 1], ['B', 1], ['C', 3], ['D', 4]]);
+    assert.deepEqual(rankWithinClasses(rows).map(candidate => [candidate.placementId, candidate.rank]),
+      [['A', 1], ['D', 2], ['B', 1], ['C', 1]]);
+    assert.equal(rows[1].numerator.div(3).toFixed(2), rows[2].numerator.div(3).toFixed(2));
+    assert.deepEqual(rows.map(candidate => candidate.row.placementId), ['D', 'C', 'B', 'A']);
+    assert.ok(rows.every(candidate => !('rank' in candidate.row)));
+    assert.deepEqual(rankOverall([]), []);
   });
 
   it('detects reverification and correction fingerprint changes, not just numerical changes', () => {

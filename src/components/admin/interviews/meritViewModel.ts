@@ -2,6 +2,10 @@ import type { MeritPreviewRow } from './assessmentApi';
 
 export type MeritSortField = 'rank' | 'total' | 'written' | 'studentName' | 'rollNumber';
 export type SortDirection = 'asc' | 'desc';
+export type MeritGrouping = 'overall' | 'class';
+
+export const meritGroupingLabel = (grouping: MeritGrouping): string =>
+  grouping === 'overall' ? 'All classes together' : 'Separate by class';
 
 export const meritSortOptions: ReadonlyArray<{ value: MeritSortField; label: string }> = [
   { value: 'rank', label: 'Merit rank' },
@@ -30,46 +34,51 @@ export function meritWrittenContribution(row: MeritPreviewRow): number | null {
   return Math.abs(contribution - mark / maximum * 60) <= .005 + 1e-9 ? contribution : null;
 }
 
-function readyRank(row: MeritPreviewRow): number | null {
-  return row.status === 'READY' && row.rank !== null && Number.isInteger(row.rank) && row.rank > 0
-    ? row.rank : null;
+/** Only the selected server-provided rank is authoritative; class rank is never an overall fallback. */
+export function meritRank(row: MeritPreviewRow, grouping: MeritGrouping): number | null {
+  const rank = grouping === 'overall' ? row.overallRank : row.rank;
+  return row.status === 'READY' && rank != null && Number.isInteger(rank) && rank > 0 ? rank : null;
 }
 
-function sortValue(row: MeritPreviewRow, field: MeritSortField): number | string | null {
+function sortValue(row: MeritPreviewRow, field: MeritSortField, grouping: MeritGrouping): number | string | null {
   switch (field) {
-    case 'rank': return readyRank(row);
-    case 'total': return readyRank(row) !== null ? finiteNumber(row.totals.total) : null;
+    case 'rank': return meritRank(row, grouping);
+    case 'total': return meritRank(row, grouping) !== null ? finiteNumber(row.totals.total) : null;
     case 'written': return row.written.isFinal ? finiteNumber(row.written.marks) : null;
     case 'studentName': return row.studentName.trim() || null;
     case 'rollNumber': return row.rollNumber?.trim() || null;
   }
 }
 
-/** Sort the entire filtered list without changing class labels or server-assigned ranks. */
+function classOrder(left: string, right: string): number {
+  return naturalOrder.compare(left, right) || (left < right ? -1 : left > right ? 1 : 0);
+}
+
+/** Display grouping and ordering never recalculate ranks or change source rows. */
 export function sortMeritRows(
   rows: readonly MeritPreviewRow[],
   field: MeritSortField,
   direction: SortDirection,
+  grouping: MeritGrouping = 'overall',
 ): MeritPreviewRow[] {
   const multiplier = direction === 'asc' ? 1 : -1;
-  return rows.map((row, index) => ({ row, index, value: sortValue(row, field) }))
+  return rows.map((row, index) => ({ row, index, value: sortValue(row, field, grouping), rank: meritRank(row, grouping) }))
     .sort((a, b) => {
+      if (grouping === 'class') {
+        const groupOrder = classOrder(a.row.className, b.row.className);
+        if (groupOrder) return groupOrder;
+      }
       // Missing values stay last even when the requested order is descending.
       if (a.value === null) return b.value === null ? a.index - b.index : 1;
       if (b.value === null) return -1;
       const comparison = typeof a.value === 'number' && typeof b.value === 'number'
         ? a.value - b.value : naturalOrder.compare(String(a.value), String(b.value));
       if (comparison) return comparison * multiplier;
-      if (field === 'total') {
-        // Class ranks are comparable only within their own class. Group equal
-        // displayed scores by exact class label first, keeping the comparator
-        // transitive when a third class has the same rounded total.
-        const classOrder = naturalOrder.compare(a.row.className, b.row.className)
-          || (a.row.className < b.row.className ? -1 : a.row.className > b.row.className ? 1 : 0);
-        if (classOrder) return classOrder;
-        // Within that class, server ranks preserve exact-score distinctions that
-        // disappeared when the displayed total was rounded to two decimals.
-        const exactScoreOrder = b.row.rank! - a.row.rank!;
+      if (field === 'total' && a.rank !== null && b.rank !== null) {
+        // The selected server rank retains exact-score distinctions lost when
+        // display totals were rounded. Class ranks are compared only inside
+        // their class group; overall ranks are compared across the full list.
+        const exactScoreOrder = b.rank - a.rank;
         if (exactScoreOrder) return exactScoreOrder * multiplier;
       }
       return a.index - b.index;
