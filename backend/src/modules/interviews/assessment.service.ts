@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Prisma, PrismaClient, InterviewPanelRevision } from '@prisma/client';
+import { Prisma, PrismaClient, InterviewPanelRevision, InterviewMeritAwardRevision } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { loadFinalWrittenMarks, FinalWrittenMarkResolution } from './finalWrittenMarks';
 import {
   AssessmentDto, AssessmentInput, AssessmentRosterQuery, INTERVIEW_ASSESSMENT_POLICY,
-  PanelDto, PanelInput, PanelMember, WrittenMarkDto, assessmentPanelSchema, assessmentSaveSchema,
+  MeritAwardCode, MeritAwardDto, MeritAwardInput, PanelDto, PanelInput, PanelMember, WrittenMarkDto,
+  assessmentPanelSchema, assessmentSaveSchema, meritAwardSaveSchema,
 } from './assessment.schema';
 import {
   assessmentCompletionIssues, calculateAssessmentTotals, exactMeritNumerator, rankOverall, rankWithinClasses, sameWrittenRevision,
@@ -26,6 +27,12 @@ function requireAdmin(actor: Actor) {
 }
 function panelDto(panel: InterviewPanelRevision): PanelDto {
   return { id: panel.id, panel: panel.panel, revision: panel.revision, members: panel.members as unknown as PanelMember[] };
+}
+function meritAwardDto(award?: InterviewMeritAwardRevision): MeritAwardDto {
+  return {
+    id: award?.id ?? null, revision: award?.revision ?? 0, awardCode: (award?.awardCode as MeritAwardCode | null) ?? null,
+    actorName: award?.actorName ?? null, createdAt: award?.createdAt.toISOString() ?? null,
+  };
 }
 export function writtenMarkDto(resolution?: FinalWrittenMarkResolution): WrittenMarkDto {
   const result = resolution?.result;
@@ -247,6 +254,10 @@ export class InterviewAssessmentService {
   async merit(roundId: string, className?: string) {
     return this.transaction(async tx => {
       const context = await this.context(tx, roundId);
+      const awards = await tx.interviewMeritAwardRevision.findMany({
+        where: { roundId }, distinct: ['placementId'], orderBy: [{ placementId: 'asc' }, { revision: 'desc' }],
+      });
+      const awardByPlacement = new Map(awards.map(award => [award.placementId, award]));
       const classOptions = [...new Set(context.placements.map(row => row.student.currentClass))].sort();
       const rows = context.placements.map(placement => {
         const row = this.rosterRow(placement, context), record = context.assessmentByPlacement.get(placement.id);
@@ -267,6 +278,7 @@ export class InterviewAssessmentService {
           studentName: row.studentName, className: row.className, panel: row.panel, batch: row.batch,
           fatherName: placement.student.fatherName, institute: placement.student.schoolName,
           scholarshipCategory: placement.student.scholarshipCategory,
+          meritAward: meritAwardDto(awardByPlacement.get(placement.id)),
           rank: null as number | null, status, assessmentStatus: record?.status ?? 'NOT_STARTED',
           written: row.written, issues, totals,
           numerator: status === 'READY' && record ? exactMeritNumerator(rowInput(record), row.written) : null,
@@ -285,7 +297,7 @@ export class InterviewAssessmentService {
         .sort((a, b) => a.className.localeCompare(b.className) || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER)
           || a.studentName.localeCompare(b.studentName) || a.placementId.localeCompare(b.placementId));
       return {
-        provisional: true, publicationEnabled: false, policyVersion: INTERVIEW_ASSESSMENT_POLICY,
+        provisional: true, publicationEnabled: false, manualAwardsEnabled: true, policyVersion: INTERVIEW_ASSESSMENT_POLICY,
         rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS', overallRankMethod: 'SHARED_COMPETITION_ALL_CLASSES',
         overallRankedCandidates: eligible.length, classOptions, rows: result,
         summary: { total: result.length, ready: result.filter(row => row.status === 'READY').length,
@@ -293,6 +305,56 @@ export class InterviewAssessmentService {
           absent: result.filter(row => row.status === 'ABSENT').length },
       };
     }, true);
+  }
+
+  async saveMeritAward(roundId: string, placementId: string, rawInput: MeritAwardInput, actor: Actor) {
+    requireAdmin(actor);
+    const input = meritAwardSaveSchema.parse(rawInput);
+    const requestHash = createHash('sha256').update(JSON.stringify({ roundId, placementId, actorId: actor.id, input })).digest('hex');
+    return this.transaction(async tx => {
+      await this.round(tx, roundId, true);
+      const replay = await tx.interviewMeritAwardRevision.findUnique({
+        where: { roundId_idempotencyKey: { roundId, idempotencyKey: input.idempotencyKey } },
+      });
+      if (replay) {
+        if (replay.requestHash !== requestHash || replay.actorId !== actor.id) {
+          throw fail(409, 'This award save key was already used for a different request.', 'INTERVIEW_MERIT_AWARD_CONFLICT');
+        }
+        return meritAwardDto(replay);
+      }
+      const placement = await tx.interviewFixedPlacement.findFirst({
+        where: { id: placementId, schedule: { roundId } },
+        include: { student: { select: { scholarshipCategory: true } } },
+      });
+      if (!placement) throw fail(404, 'Candidate is not in this round\'s fixed timetable.');
+      const current = await tx.interviewMeritAwardRevision.findFirst({
+        where: { roundId, placementId }, orderBy: { revision: 'desc' },
+      });
+      if ((current?.revision ?? 0) !== input.expectedRevision) {
+        throw fail(409, 'Another administrator saved a newer award selection. Reload before saving.', 'INTERVIEW_MERIT_AWARD_CONFLICT');
+      }
+      if (input.awardCode !== null && placement.student.scholarshipCategory !== 'GENERAL_MERIT') {
+        throw fail(400, 'Manual awards can only be assigned to General Merit candidates.', 'INTERVIEW_MERIT_AWARD_CATEGORY');
+      }
+      const saved = await tx.interviewMeritAwardRevision.create({ data: {
+        roundId, placementId, revision: input.expectedRevision + 1, awardCode: input.awardCode,
+        actorId: actor.id, actorName: actor.name ?? actor.id,
+        idempotencyKey: input.idempotencyKey, requestHash,
+      } });
+      return meritAwardDto(saved);
+    });
+  }
+
+  async meritAwardHistory(roundId: string, placementId: string) {
+    await this.round(this.db, roundId);
+    const placement = await this.db.interviewFixedPlacement.findFirst({
+      where: { id: placementId, schedule: { roundId } }, select: { id: true },
+    });
+    if (!placement) throw fail(404, 'Candidate is not in this round\'s fixed timetable.');
+    const history = await this.db.interviewMeritAwardRevision.findMany({
+      where: { roundId, placementId }, orderBy: { revision: 'desc' }, take: 100,
+    });
+    return history.map(meritAwardDto);
   }
 }
 

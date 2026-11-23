@@ -115,9 +115,10 @@ The rank uses the selected overall or class ranking. Father Name and Institute
 come from the current student record (`fatherName` and `schoolName`). Percentage
 Obtained is the completed combined merit total out of 100, displayed as a
 percentage with two decimal places. Unready candidates have no merit percentage
-or rank. Scholarship Category displays the recorded registration category;
-it does not derive an award or benefit from the score. Missing identity details
-display a dash.
+or rank. For General Merit registrations, Scholarship Category displays only an
+administrator's saved manual award, or a dash when no award has been assigned.
+Other registration categories retain their recorded labels. Missing identity
+details display a dash. Neither scores nor ranks assign an award.
 
 The PDF retains the AZM logo, concise session/grouping context, generation time
 in Pakistan, repeated table headings and page numbers. Separate-class mode uses
@@ -126,8 +127,66 @@ panel/batch information, readiness columns and policy/calculation details.
 
 **Export CSV** retains its detailed review columns and uses the same filtered
 order with the grouping and corresponding rank heading. Filenames identify the
-grouping. Both formats include every matching candidate across all pages, rather
+grouping. Its Scholarship Category field follows the same saved-award rule as
+the PDF. Both formats include the entire selected list across all pages, rather
 than only the 25 currently visible rows.
+
+### Manual General Merit awards
+
+The administrator chooses **Award** in a General Merit candidate's row and
+clicks **Save award**. The exact choices are:
+
+- Umrah Ticket
+- Laptop
+- Full Year Scholarship
+- Partial Scholarship
+- Educational Voucher
+- 3000-Cash Prize
+- 5000-Cash Prize
+
+**Not assigned** clears a previously saved award. No default award, automatic
+allocation, score-to-award rule, award sorting or bulk assignment is provided.
+The award belongs to the interview round and placement. It does not replace
+the student's registration category, change marks, alter readiness or change
+merit rank. Both Admin and Super Admin may save a choice, independently of
+assessment readiness. Only a current General Merit registration can receive a
+nonempty award. If its registration category changes later, the old selection
+remains in the audit history and can be explicitly cleared; the PDF shows its
+current non-General-Merit registration category.
+
+Every save appends the award code, administrator and time to immutable history.
+Stale revisions return a conflict; identical retries use the same idempotency
+key and do not duplicate a save. The portal retains an unsuccessful choice so
+the administrator can retry or explicitly reload current awards. Unsaved
+choices must be saved or discarded before changing list filters, pages or
+downloading. Exports always use saved decisions.
+
+### PDF title and student count
+
+**PDF title** accepts a custom heading of up to 120 characters, for example
+`Session V Part 1 Merit List`. That title appears on every PDF page, in document
+properties, and in the sanitized download filename. A blank field uses the
+standard title and filename. Long titles wrap without adding candidate columns.
+These settings apply to the current preview/download; they do not rename the
+interview round or publish a result.
+
+**Students in merit list** offers All matching candidates, Top 20, Top 50,
+Top 100, Top 200, and a custom whole number from 1 to 10,000. All preserves the
+existing readiness filter. A finite limit selects only ready ranked candidates
+matching the class and name/roll filters. It selects the highest authoritative
+overall ranks **before** display sorting or pagination. Switching to ascending
+order or separate class sections therefore keeps the same selected candidates.
+The limit is one total across the list, not a separate quota for each class.
+When fewer candidates qualify than requested, all available candidates are
+shown and the actual count is displayed.
+
+The initial selection uses the exact count. If its boundary splits a shared
+rank, the portal explains the split and offers **Include all tied candidates**.
+Only clicking that button expands the custom limit to include the entire
+cutoff tie. Ranks retain their original numbers and gaps. Equal rounded
+percentages do not create ties; authoritative server ranks determine them.
+Older APIs without overall ranks cannot supply a cross-class limit; selecting
+one class still permits a class-specific limit.
 
 These are private, provisional combined merit review copies. Existing verified
 written marks retain their final status; incomplete or changed assessments do
@@ -153,8 +212,8 @@ references, attendance, draft/submitted revision history, concurrent-edit
 protection, retry-safe saves, completeness checks and a private merit preview.
 It updates the displayed five-component weights and interview panel-size text.
 
-Public merit publication, approved final ranking pools/tie rules, scholarship
-categories or benefits, financial-need decisions, finer scoring rubrics, evidence
+Public merit publication, approved final ranking pools/tie rules, automatic award
+allocation or benefit fulfilment, financial-need decisions, finer scoring rubrics, evidence
 file uploads and individual assessor logins are separate follow-up work. Scores
 are entered as the approved component totals; no unsupported subrubric or GPA
 conversion is invented.
@@ -174,6 +233,8 @@ router, with private/no-store responses:
 | POST | `/candidates/:placementId/submit` | Validate and append a submission |
 | GET | `/candidates/:placementId/history` | Most recent 100 immutable revisions |
 | GET | `/merit` | Recalculate the private overall and class-based preview |
+| PUT | `/candidates/:placementId/merit-award` | Append an administrator's manual award selection or clear |
+| GET | `/candidates/:placementId/merit-award/history` | Most recent 100 immutable award revisions |
 
 The merit response retains `rank` and
 `rankMethod: SHARED_COMPETITION_WITHIN_CLASS` for existing clients. Each row also
@@ -186,6 +247,14 @@ counts all ranked candidates in the round; `summary` counts the returned rows.
 Merit rows also include the current `fatherName`, `institute` (from `schoolName`)
 and stored `scholarshipCategory` for the seven-column PDF. Other assessment
 responses keep their existing fields.
+
+The manual-award release adds `manualAwardsEnabled: true` and a `meritAward`
+object on each merit row: `{id, revision, awardCode, actorName, createdAt}`.
+No saved decision returns revision 0 with null fields. PUT requires
+`expectedRevision`, `idempotencyKey` and an explicitly selected `awardCode`
+(or null to clear). Codes are `UMRAH_TICKET`, `LAPTOP`,
+`FULL_YEAR_SCHOLARSHIP`, `PARTIAL_SCHOLARSHIP`, `EDUCATIONAL_VOUCHER`,
+`CASH_PRIZE_3000` and `CASH_PRIZE_5000`. This metadata is never a ranking input.
 
 Both score mutations require `expectedRevision`, the current `panelRevision`,
 and an `idempotencyKey`. Identical retries return the saved revision; key reuse
@@ -221,6 +290,38 @@ Before starting the updated backend in a target environment:
 No production migration, grants, deployment, result publication or candidate
 assessment is performed by preparing this feature branch. If a code rollback is
 needed after use, retain the additive tables and historical revisions.
+
+## Manual-award migration and rollout
+
+Unlike the earlier grouping and PDF-only updates, persistent manual awards need
+the additive migration `20261123160000_interview_merit_award_revisions`. It creates
+an empty `InterviewMeritAwardRevision` history table, validates the seven codes,
+current General Merit eligibility, round/placement relationship and active
+administrator, and prohibits UPDATE, DELETE and TRUNCATE. It assigns no awards
+and changes no examination, assessment, student or timetable records.
+
+For an authorized backend-first release:
+
+1. Verify the exact source and successful synthetic assessment/runtime checks;
+   stage and compile a separate release with its own generated Prisma client.
+2. Take a protected database backup and verify its archive before applying the
+   one reviewed pending migration through the maintenance migration workflow.
+3. Use `backend/ops/postgres/interview-merit-award-grants.sql` for the existing
+   runtime login and privilege group. Supply the verified database, role names,
+   release ticket and `accept_action=APPLY-AZM-MERIT-AWARD-GRANTS`. The script
+   changes permissions on the new table only to SELECT and INSERT. Do not run a
+   blanket grant reconciliation for this update.
+4. Start the staged backend under the existing restricted application identity.
+   Confirm the immutable and insert-validation triggers, healthy database
+   connection, authenticated route boundary and preserved upload directory.
+5. Activate the backend, then publish the matching frontend. Verify the live
+   manual-award controls, title/count selection and PDF download without making
+   test award decisions for real candidates.
+
+The previous application release remains available for code rollback. Preserve
+the additive table and all historical award selections if rolling code back.
+Runtime credentials, existing table privileges, verification seals, written
+marks and current assessment revisions are not changed by this rollout.
 
 ## Validation
 

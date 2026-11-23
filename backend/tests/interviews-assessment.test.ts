@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Prisma } from '@prisma/client';
-import { assessmentPanelSchema, assessmentSaveSchema, AssessmentInput, WrittenMarkDto } from '../src/modules/interviews/assessment.schema.ts';
+import { assessmentPanelSchema, assessmentSaveSchema, AssessmentInput, WrittenMarkDto, MERIT_AWARD_CODES, meritAwardSaveSchema } from '../src/modules/interviews/assessment.schema.ts';
 import { assessmentCompletionIssues, calculateAssessmentTotals, exactMeritNumerator, rankOverall, rankWithinClasses, sameWrittenRevision } from '../src/modules/interviews/assessment.calculation.ts';
 
 const written: WrittenMarkDto = { marks: 100, maximumMarks: 100, isFinal: true, sourceType: 'VERIFIED_MANUAL', reference: 'manual:s1', revision: 'c1:v1', status: 'QUALIFIED' };
@@ -86,5 +86,18 @@ describe('Interview assessment policy and precision', () => {
     assert.equal(sameWrittenRevision(written, { ...written }), true);
     assert.equal(sameWrittenRevision(written, { ...written, revision: 'c1:v2' }), false);
     assert.equal(sameWrittenRevision(written, { ...written, marks: 99 }), false);
+  });
+
+  it('accepts only explicit approved manual awards or clear with a valid revision and replay key', () => {
+    const request = { expectedRevision: 0, idempotencyKey: 'synthetic-award-selection', awardCode: null };
+    for (const awardCode of [...MERIT_AWARD_CODES, null]) {
+      assert.equal(meritAwardSaveSchema.safeParse({ ...request, awardCode }).success, true);
+    }
+    for (const invalid of [
+      { ...request, awardCode: 'GENERAL_MERIT' }, { ...request, awardCode: 'AUTOMATIC' },
+      { ...request, awardCode: undefined }, { ...request, expectedRevision: -1 },
+      { ...request, expectedRevision: 1.5 }, { ...request, idempotencyKey: 'short' },
+      { ...request, idempotencyKey: 'contains a space' }, { ...request, rank: 1 },
+    ]) assert.equal(meritAwardSaveSchema.safeParse(invalid).success, false);
   });
 });

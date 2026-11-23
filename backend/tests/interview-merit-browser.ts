@@ -7,6 +7,15 @@ import { build } from 'esbuild';
 import puppeteer, { ElementHandle, Page } from 'puppeteer';
 import type { MeritPreview, MeritPreviewRow } from '../../src/components/admin/interviews/assessmentApi';
 
+const awardOptions = [
+  ['UMRAH_TICKET', 'Umrah Ticket'], ['LAPTOP', 'Laptop'], ['FULL_YEAR_SCHOLARSHIP', 'Full Year Scholarship'],
+  ['PARTIAL_SCHOLARSHIP', 'Partial Scholarship'], ['EDUCATIONAL_VOUCHER', 'Educational Voucher'],
+  ['CASH_PRIZE_3000', '3000-Cash Prize'], ['CASH_PRIZE_5000', '5000-Cash Prize'],
+] as const;
+type AwardCode = typeof awardOptions[number][0];
+type SyntheticAward = { id: string | null; revision: number; awardCode: AwardCode | null; actorName: string | null; createdAt: string | null };
+const unassignedAward = (): SyntheticAward => ({ id: null, revision: 0, awardCode: null, actorName: null, createdAt: null });
+
 // Synthetic candidates only. Exercise the actual React controls and download
 // bytes, including rows beyond the visible page, without a production database.
 async function run() {
@@ -30,6 +39,7 @@ async function run() {
     { ...candidate(34), className: 'Class 10th', studentName: 'Synthetic Other Class One', rank: 1, overallRank: 1,
       totals: { ...candidate(34).totals, total: 99.75 } },
     { ...candidate(35), className: 'Class 10th', studentName: 'Synthetic Other Class Two', rank: 2, overallRank: 16,
+      scholarshipCategory: 'FINANCIALLY_NEEDY',
       totals: { ...candidate(35).totals, total: 82.5 } },
   );
   const originalRecords = JSON.stringify(records);
@@ -48,6 +58,10 @@ async function run() {
     define: { 'import.meta.env.PROD': 'true', 'import.meta.env.VITE_API_URL': 'window.location.origin' },
   });
   const methods: string[] = [];
+  const awards = new Map<string, SyntheticAward>();
+  const awardRequests: Array<{ placementId: string; expectedRevision: number; idempotencyKey: string; awardCode: AwardCode | null }> = [];
+  const awardReplays = new Map<string, { body: string; saved: SyntheticAward }>();
+  let loseNextAwardResponse = false;
   let nextMeritReply: 'normal' | 'hold' | 'fail' = 'normal';
   let legacyBackend = false;
   let releaseHeldReply: (() => void) | undefined;
@@ -64,19 +78,48 @@ async function run() {
       res.setHeader('Content-Type', 'image/png'); res.end(fs.readFileSync(path.join(root, 'public/logo_cropped.png'))); return;
     }
     if (url.pathname === '/api/auth/me') { json({ user }); return; }
+    const awardPlacement = url.pathname.match(/^\/api\/interviews\/synthetic-merit-round\/assessment\/candidates\/([^/]+)\/merit-award$/)?.[1];
+    if (awardPlacement && req.method === 'PUT') {
+      let body = '';
+      req.on('data', chunk => { body += chunk.toString(); });
+      req.on('end', () => {
+        const input = JSON.parse(body) as Omit<typeof awardRequests[number], 'placementId'>;
+        awardRequests.push({ placementId: awardPlacement, ...input });
+        const record = records.find(row => row.placementId === awardPlacement);
+        if (!record) { json('Synthetic candidate not found.', 404); return; }
+        if (input.awardCode !== null && !awardOptions.some(([code]) => code === input.awardCode)) { json('Invalid synthetic award.', 400); return; }
+        if (input.awardCode !== null && record.scholarshipCategory !== 'GENERAL_MERIT') { json('Awards require General Merit.', 400); return; }
+        const replay = awardReplays.get(input.idempotencyKey);
+        if (replay) { json(replay.body === body ? replay.saved : 'Synthetic idempotency conflict.', replay.body === body ? 200 : 409); return; }
+        const current = awards.get(awardPlacement) ?? unassignedAward();
+        if (input.expectedRevision !== current.revision) { json('Another administrator saved a newer award. Reload current awards before saving.', 409); return; }
+        const saved: SyntheticAward = { id: awardPlacement + '-award-' + (current.revision + 1),
+          revision: current.revision + 1, awardCode: input.awardCode, actorName: user.name, createdAt: new Date().toISOString() };
+        awards.set(awardPlacement, saved);
+        awardReplays.set(input.idempotencyKey, { body, saved });
+        if (loseNextAwardResponse) {
+          loseNextAwardResponse = false;
+          json('Synthetic response lost after award saved. Retry saving.', 503); return;
+        }
+        json(saved);
+      });
+      return;
+    }
     if (url.pathname === '/api/interviews/synthetic-merit-round/assessment/merit') {
-      const rows = records.filter(row => !url.searchParams.get('className') || row.className === url.searchParams.get('className'));
+      const rows = records.filter(row => !url.searchParams.get('className') || row.className === url.searchParams.get('className'))
+        .map(row => ({ ...row, meritAward: awards.get(row.placementId) ?? unassignedAward() }));
       const data: MeritPreview = {
         provisional: true, publicationEnabled: false, policyVersion: 'SESSION_V_2026_60_20_10_5_5_V1',
+        manualAwardsEnabled: true,
         rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS', overallRankMethod: 'SHARED_COMPETITION_ALL_CLASSES',
         overallRankedCandidates: 32, classOptions: ['Class 9th', 'Class 10th'], rows,
         summary: { total: rows.length, ready: rows.filter(row => row.status === 'READY').length,
           incomplete: rows.filter(row => row.status === 'INCOMPLETE' || row.status === 'SOURCE_CHANGED').length,
           absent: rows.filter(row => row.status === 'ABSENT').length },
       };
-      const response = legacyBackend ? { ...data, overallRankMethod: undefined, overallRankedCandidates: undefined,
+      const response = legacyBackend ? { ...data, overallRankMethod: undefined, overallRankedCandidates: undefined, manualAwardsEnabled: undefined,
         rows: rows.map(({ overallRank: _overallRank, fatherName: _fatherName, institute: _institute,
-          scholarshipCategory: _scholarshipCategory, ...row }) => row) } : data;
+          scholarshipCategory: _scholarshipCategory, meritAward: _meritAward, ...row }) => row) } : data;
       const behavior = nextMeritReply; nextMeritReply = 'normal';
       if (behavior === 'hold') { releaseHeldReply = () => { releaseHeldReply = undefined; json(response); }; onReplyHeld?.(); return; }
       if (behavior === 'fail') { json('Synthetic class fetch failed. Please retry.', 503); return; }
@@ -134,7 +177,8 @@ async function run() {
     assert.match(globalPdfText, /Merit grouping:\s*All classes together/);
     const globalPdfRaw = pdfContents(globalPdf, 'raw');
     assertSevenColumnPdf(globalPdfRaw);
-    assertPdfCandidate(globalPdfRaw, ['2', 'SYN-M-1', 'Synthetic Candidate 001', 'Synthetic Father 001', 'Synthetic Institute 001', '96.00%', 'General Merit']);
+    assertPdfCandidate(globalPdfRaw, ['2', 'SYN-M-1', 'Synthetic Candidate 001', 'Synthetic Father 001', 'Synthetic Institute 001', '96.00%', '-']);
+    assertPdfCandidate(globalPdfRaw, ['16', 'SYN-M-35', 'Synthetic Other Class Two', 'Synthetic Father 035', 'Synthetic Institute 035', '82.50%', 'Financially Needy']);
     await (await field(page, 'Order')).select('asc');
     await waitText(page, 'page 1 of 2');
     shown = await visibleRows(page);
@@ -168,7 +212,85 @@ async function run() {
     assert.match(classPdfText, /Merit grouping:\s*Separate by class/);
     const classPdfRaw = pdfContents(classPdf, 'raw');
     assertSevenColumnPdf(classPdfRaw);
-    assertPdfCandidate(classPdfRaw, ['1', 'SYN-M-1', 'Synthetic Candidate 001', 'Synthetic Father 001', 'Synthetic Institute 001', '96.00%', 'General Merit']);
+    assertPdfCandidate(classPdfRaw, ['1', 'SYN-M-1', 'Synthetic Candidate 001', 'Synthetic Father 001', 'Synthetic Institute 001', '96.00%', '-']);
+
+    // A list size selects top ready candidates before presentation sorting or
+    // grouping. It is a total count, not a count repeated for every class.
+    await (await field(page, 'Merit grouping')).select('overall');
+    assert.equal(await (await field(page, 'Students in merit list')).evaluate(element => element.value), 'all');
+    assert.deepEqual(await (await field(page, 'Students in merit list')).evaluate(element =>
+      Array.from(element.querySelectorAll('option')).map(option => option.value)), ['all', '20', '50', '100', '200', 'custom']);
+    await (await field(page, 'Students in merit list')).select('20');
+    await waitText(page, 'page 1 of 1');
+    const top20 = globalDescending.slice(0, 20);
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')), top20);
+    await (await field(page, 'Order')).select('asc');
+    const top20Ascending = globalAscending.filter(number => top20.includes(number));
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')), top20Ascending, 'Ascending keeps the same top twenty candidates');
+    await (await field(page, 'Merit grouping')).select('class');
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')), [
+      ...top20Ascending.filter(number => number !== 34 && number !== 35), 35, 34,
+    ], 'Class grouping preserves total membership and applies display sorting inside each class');
+    await (await field(page, 'Sort by')).select('studentName');
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')).sort((a, b) => a - b), [...top20].sort((a, b) => a - b), 'Name sorting cannot change a limited merit selection');
+    await (await field(page, 'Merit grouping')).select('overall');
+    await (await field(page, 'Sort by')).select('total');
+    await (await field(page, 'Order')).select('desc');
+    for (const preset of ['50', '100', '200']) {
+      await (await field(page, 'Students in merit list')).select(preset);
+      await waitText(page, 'page 1 of 2');
+      const firstPage = await visibleRows(page);
+      assert.equal(firstPage.length, 25);
+      await clickButton(page, 'Next');
+      const selected = [...firstPage, ...await visibleRows(page)];
+      assert.deepEqual(rolls(selected.map(row => row[1]).join('\n')), globalDescending.slice(0, 32), 'A larger preset includes every ready candidate and excludes all unranked records');
+    }
+    const customTitle = 'Synthetic Merit: Session V / Scholarship Review - Verified Examination and Interview Candidates Across All Classes';
+    await fill(page, 'PDF title', customTitle);
+    const titledPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'custom-title-ready-list.pdf'), /^AZM-Synthetic-Merit-Session-V-.*\.pdf$/);
+    const titledCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'limited-ready-list.csv'));
+    assert.deepEqual(rolls(pdfContents(titledPdf)), globalDescending.slice(0, 32));
+    assert.deepEqual(rolls(fs.readFileSync(titledCsv, 'utf8')), globalDescending.slice(0, 32), 'A finite selection exports every selected page');
+    assertSevenColumnPdf(pdfContents(titledPdf, 'raw'));
+    for (const pdfPage of pdfContents(titledPdf, 'raw').split('\f').filter(value => value.trim())) {
+      assert(pdfPage.replace(/\s+/g, ' ').includes(customTitle), 'The custom title repeats on each exported page');
+      assert.match(pdfPage, /PRIVATE PROVISIONAL REVIEW/);
+    }
+    assert.match(execFileSync('pdfinfo', [titledPdf], { encoding: 'utf8' }), /Title:\s+Synthetic Merit: Session V \/ Scholarship Review/, 'The PDF metadata uses the custom title');
+    await fill(page, 'PDF title', '');
+    await (await field(page, 'Students in merit list')).select('custom');
+    await fill(page, 'Custom student limit', '26');
+    await waitText(page, 'page 1 of 2');
+    assert.equal((await visibleRows(page)).length, 25);
+    await clickButton(page, 'Next');
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')), [globalDescending[25]], 'A custom limit is applied before pagination');
+    for (const invalid of ['0', '-1', '2.5', '']) {
+      await fill(page, 'Custom student limit', invalid);
+      assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'), 'Invalid custom counts cannot be exported');
+    }
+    await fill(page, 'Custom student limit', '2');
+    await waitText(page, 'page 1 of 1');
+    shown = await visibleRows(page);
+    assert.deepEqual(rolls(shown.map(row => row[1]).join('\n')), [34, 1], 'Exact count does not silently add the tied candidate');
+    assert(shown[1][0].endsWith('#2'), 'The retained member keeps its shared rank');
+    await clickButton(page, 'Include all tied candidates');
+    assert.equal(await (await field(page, 'Custom student limit')).evaluate(element => element.value), '3');
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')), [34, 1, 2], 'Only an explicit action extends the list through the cutoff tie');
+    await fill(page, 'Custom student limit', '1');
+    await fill(page, 'Name or roll number', 'Candidate 003');
+    shown = await visibleRows(page);
+    assert.equal(shown.length, 1);
+    assert(shown[0][1].includes('SYN-M-3') && shown[0][0].endsWith('#4'), 'Search filters define the pool before the limit without renumbering overall ranks');
+    await fill(page, 'Name or roll number', '');
+    assert(await (await field(page, 'Readiness')).evaluate(element => element.disabled && element.value === 'READY'), 'Finite lists explicitly select and lock ready candidates');
+    await (await field(page, 'Students in merit list')).select('all');
+    await (await field(page, 'Readiness')).select('INCOMPLETE');
+    assert((await visibleRows(page))[0][1].includes('Synthetic Pending Candidate'));
+    await (await field(page, 'Students in merit list')).select('20');
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')), top20, 'Finite selection never fills places with a previous incomplete filter');
+    await (await field(page, 'Students in merit list')).select('all');
+    await (await field(page, 'Readiness')).select('');
+    assert.equal(awardRequests.length, 0, 'Filtering, limiting, sorting and downloads never assign awards');
 
     await (await field(page, 'Merit grouping')).select('overall');
     await (await field(page, 'Class filter')).select('Class 9th');
@@ -181,7 +303,7 @@ async function run() {
     const searchedCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'overall-filtered-rank.csv'), /Overall/);
     const searchedPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'overall-filtered-rank.pdf'), /Overall/);
     assert.equal(csvRow(fs.readFileSync(searchedCsv, 'utf8'), 3)[2], '4');
-    assertPdfCandidate(pdfContents(searchedPdf, 'raw'), ['4', 'SYN-M-3', 'Synthetic Candidate 003', 'Synthetic Father 003', 'Synthetic Institute 003', '94.00%', 'General Merit']);
+    assertPdfCandidate(pdfContents(searchedPdf, 'raw'), ['4', 'SYN-M-3', 'Synthetic Candidate 003', 'Synthetic Father 003', 'Synthetic Institute 003', '94.00%', '-']);
     await fill(page, 'Name or roll number', '');
     await (await field(page, 'Merit grouping')).select('class');
     await (await field(page, 'Sort by')).select('rank');
@@ -272,9 +394,9 @@ async function run() {
     assert(!reviewText.includes('93.87') && !reviewText.includes('99.97'), 'Old source-changed and absent totals cannot appear as merit scores');
     const reviewRaw = pdfContents(reviewPdf, 'raw');
     assertSevenColumnPdf(reviewRaw);
-    assertPdfCandidate(reviewRaw, ['-', 'SYN-M-31', 'Synthetic Pending Candidate', 'Synthetic Father 031', 'Synthetic Institute 031', '-', 'General Merit']);
-    assertPdfCandidate(reviewRaw, ['-', 'SYN-M-32', 'Synthetic Source Changed Candidate', 'Synthetic Father 032', 'Synthetic Institute 032', '-', 'General Merit']);
-    assertPdfCandidate(reviewRaw, ['-', 'SYN-M-33', 'Synthetic Absent Candidate', 'Synthetic Father 033', 'Synthetic Institute 033', '-', 'General Merit']);
+    assertPdfCandidate(reviewRaw, ['-', 'SYN-M-31', 'Synthetic Pending Candidate', 'Synthetic Father 031', 'Synthetic Institute 031', '-', '-']);
+    assertPdfCandidate(reviewRaw, ['-', 'SYN-M-32', 'Synthetic Source Changed Candidate', 'Synthetic Father 032', 'Synthetic Institute 032', '-', '-']);
+    assertPdfCandidate(reviewRaw, ['-', 'SYN-M-33', 'Synthetic Absent Candidate', 'Synthetic Father 033', 'Synthetic Institute 033', '-', '-']);
     const reviewCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'all-readiness-descending.csv'));
     const reviewCsvText = fs.readFileSync(reviewCsv, 'utf8');
     assert.equal(csvRow(reviewCsvText, 31)[7], '', 'An unverified raw mark is omitted from the CSV final-written column');
@@ -292,7 +414,7 @@ async function run() {
     await (await field(page, 'Order')).select('asc');
     await waitText(page, 'page 1 of 2');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile merit controls and table remain inside the page');
-    for (const label of ['Merit grouping', 'Class filter', 'Sort by', 'Order']) {
+    for (const label of ['Merit grouping', 'Class filter', 'Sort by', 'Order', 'Students in merit list', 'PDF title']) {
       const bounds = await (await field(page, label)).boundingBox();
       assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 390, label + ' remains visible on a narrow screen');
     }
@@ -348,16 +470,139 @@ async function run() {
     assertSevenColumnPdf(legacyPdfRaw);
     assertPdfCandidate(legacyPdfRaw, ['1', 'SYN-M-34', 'Synthetic Other Class One', '-', '-', '99.75%', '-']);
     assertPdfCandidate(legacyPdfRaw, ['2', 'SYN-M-35', 'Synthetic Other Class Two', '-', '-', '82.50%', '-']);
+    await (await field(page, 'Students in merit list')).select('custom');
+    await fill(page, 'Custom student limit', '1');
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')), [34], 'A legacy backend can limit an explicitly selected class using its real class ranks');
+    await (await field(page, 'Class filter')).select('');
+    await waitText(page, 'Combined merit is currently unavailable.');
+    await page.waitForFunction(() => !document.body.textContent?.includes('Calculating current merit preview'));
+    assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'), 'A legacy all-class response cannot invent a global limited selection');
+    assert(await (await field(page, 'Students in merit list')).evaluate(element =>
+      Array.from(element.querySelectorAll('option')).filter(option => option.value !== 'all').every(option => option.disabled)));
+    await (await field(page, 'Students in merit list')).select('all');
+    await (await field(page, 'Class filter')).select('Class 10th');
+    await waitExportsEnabled(page);
     legacyBackend = false;
     await clickButton(page, 'Recalculate preview');
     await waitExportsEnabled(page);
     assert(!await (await field(page, 'Merit grouping')).evaluate(element => element.querySelector<HTMLOptionElement>('option[value="overall"]')?.disabled));
     await (await field(page, 'Merit grouping')).select('overall');
     assert((await visibleRows(page))[1][0].endsWith('#16'), 'Overall ranking becomes available again when the server supports it');
+    assert.equal(awardRequests.length, 0, 'The complete read, filter, sort, limit and export flow has made no award writes');
+
+    // Explicit manual saves are the only mutations. An ambiguous response is
+    // retried with the same key, while a genuine 409 requires a fresh decision.
+    await page.setViewport({ width: 1760, height: 1000 });
+    const awardLabel = 'Award for Synthetic Other Class One';
+    const saveAwardLabel = 'Save award for Synthetic Other Class One';
+    assert.deepEqual(await (await field(page, awardLabel)).evaluate(element =>
+      Array.from(element.querySelectorAll('option')).filter(option => option.value).map(option => [option.value, option.textContent?.trim()])), awardOptions);
+    assert.equal(await (await field(page, awardLabel)).evaluate(element => element.value), '');
+    assert(await page.evaluate(() => !Array.from(document.querySelectorAll('select')).some(element =>
+      element.getAttribute('aria-label') === 'Award for Synthetic Other Class Two')), 'A non-General-Merit registration has no award assignment control');
+    const scoresBeforeAward = (await visibleRows(page)).map(row => row.slice(0, 9));
+    await (await field(page, awardLabel)).select('LAPTOP');
+    assert.equal(awardRequests.length, 0, 'Choosing an award does not save it');
+    assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'), 'Unsaved award choices cannot appear in a download');
+    for (const label of ['Merit grouping', 'Class filter', 'Readiness', 'Name or roll number', 'Sort by', 'Order', 'Students in merit list']) {
+      assert(await (await field(page, label)).evaluate(element => element.disabled), 'Unsaved awards lock ' + label);
+    }
+    await clickButton(page, 'Discard unsaved awards');
+    assert.equal(await (await field(page, awardLabel)).evaluate(element => element.value), '');
+    assert.equal(awardRequests.length, 0, 'Discarding a choice is also read-only');
+    await (await field(page, awardLabel)).select('LAPTOP');
+    loseNextAwardResponse = true;
+    await clickButton(page, saveAwardLabel);
+    await waitText(page, 'Synthetic response lost after award saved. Retry saving.');
+    assert.equal(awardRequests.length, 1, 'A failed response does not cause an automatic write retry');
+    assert.equal(awards.get('synthetic-merit-placement-34')?.revision, 1);
+    assert.equal(await (await field(page, awardLabel)).evaluate(element => element.value), 'LAPTOP');
+    assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'));
+    await (await field(page, awardLabel)).select('');
+    assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'), 'Reverting to the old dropdown value cannot export a stale award after an unconfirmed save');
+    assert(await (await field(page, 'Class filter')).evaluate(element => element.disabled), 'An unconfirmed save keeps view controls locked even after its draft is reverted');
+    assert(!await buttonDisabled(page, 'Reload current awards'), 'Reload remains available after the draft no longer differs from the old saved value');
+    await clickButton(page, 'Reload current awards');
+    await waitExportsEnabled(page);
+    assert.equal(await (await field(page, awardLabel)).evaluate(element => element.value), 'LAPTOP', 'Explicit reload recovers the server-committed award after a reverted draft');
+    assert.equal(awardRequests.length, 1);
+
+    await (await field(page, awardLabel)).select('PARTIAL_SCHOLARSHIP');
+    loseNextAwardResponse = true;
+    await clickButton(page, saveAwardLabel);
+    await waitText(page, 'Synthetic response lost after award saved. Retry saving.');
+    assert.equal(awardRequests.length, 2);
+    assert.equal(awards.get('synthetic-merit-placement-34')?.revision, 2);
+    const discardReplyHeld = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Discard did not refetch the unconfirmed award')), 5000);
+      onReplyHeld = () => { clearTimeout(timeout); resolve(); };
+    });
+    nextMeritReply = 'hold';
+    const discardReload = page.waitForResponse(response => response.url().includes('/assessment/merit?') && response.status() === 200);
+    await clickButton(page, 'Discard unsaved awards');
+    await discardReplyHeld;
+    assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'), 'Discard cannot unlock stale exports while its corrective refetch is pending');
+    assert(releaseHeldReply); releaseHeldReply();
+    await (await discardReload).text();
+    await waitExportsEnabled(page);
+    assert.equal(await (await field(page, awardLabel)).evaluate(element => element.value), 'PARTIAL_SCHOLARSHIP', 'Discard after an unconfirmed save refetches the committed award instead of exposing the stale previous value');
+    assert.equal(awardRequests.length, 2, 'Discard resolves uncertainty through a read, not another save');
+
+    await (await field(page, awardLabel)).select('LAPTOP');
+    loseNextAwardResponse = true;
+    await clickButton(page, saveAwardLabel);
+    await waitText(page, 'Synthetic response lost after award saved. Retry saving.');
+    assert.equal(awardRequests.length, 3);
+    await clickButton(page, saveAwardLabel);
+    await waitExportsEnabled(page);
+    assert.equal(awardRequests.length, 4);
+    assert.equal(awardRequests[3].idempotencyKey, awardRequests[2].idempotencyKey, 'An explicit retry reuses the idempotency key after an ambiguous response');
+    assert.equal(awardRequests[3].expectedRevision, 2);
+    assert.equal(awards.get('synthetic-merit-placement-34')?.revision, 3, 'A retry cannot create a duplicate award revision');
+    assert.deepEqual((await visibleRows(page)).map(row => row.slice(0, 9)), scoresBeforeAward, 'Saving an award leaves visible ranks, scores and row order unchanged');
+    await page.reload({ waitUntil: 'networkidle0' });
+    await waitExportsEnabled(page);
+    assert.equal(await (await field(page, awardLabel)).evaluate(element => element.value), 'LAPTOP', 'A saved award survives a full page reload');
+    await fill(page, 'Name or roll number', 'Other Class');
+    const awardedPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'saved-manual-awards.pdf'));
+    const awardedCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'saved-manual-awards.csv'));
+    const awardedRaw = pdfContents(awardedPdf, 'raw');
+    assertSevenColumnPdf(awardedRaw);
+    assertPdfCandidate(awardedRaw, ['1', 'SYN-M-34', 'Synthetic Other Class One', 'Synthetic Father 034', 'Synthetic Institute 034', '99.75%', 'Laptop']);
+    assertPdfCandidate(awardedRaw, ['16', 'SYN-M-35', 'Synthetic Other Class Two', 'Synthetic Father 035', 'Synthetic Institute 035', '82.50%', 'Financially Needy']);
+    assert.equal(csvRow(fs.readFileSync(awardedCsv, 'utf8'), 34).at(-2), 'Laptop');
+    assert.equal(csvRow(fs.readFileSync(awardedCsv, 'utf8'), 35).at(-2), 'Financially Needy');
+    assert.equal(awardRequests.length, 4, 'Reloading, searching and exporting a saved decision make no additional writes');
+    await screenshot(page, path.join(output, 'desktop-saved-manual-award.png'));
+    const saved = awards.get('synthetic-merit-placement-34')!;
+    awards.set('synthetic-merit-placement-34', { ...saved, id: 'synthetic-external-award-4', revision: 4,
+      awardCode: 'CASH_PRIZE_5000', actorName: 'Synthetic Concurrent Administrator' });
+    await (await field(page, awardLabel)).select('PARTIAL_SCHOLARSHIP');
+    await clickButton(page, saveAwardLabel);
+    await waitText(page, 'Another administrator saved a newer award. Reload current awards before saving.');
+    assert.equal(awardRequests.length, 5);
+    assert.equal(awardRequests[4].expectedRevision, 3);
+    assert.equal(await (await field(page, awardLabel)).evaluate(element => element.value), 'PARTIAL_SCHOLARSHIP', 'A 409 keeps the unsaved choice available for review');
+    assert.equal(awards.get('synthetic-merit-placement-34')?.awardCode, 'CASH_PRIZE_5000', 'A stale save never overwrites the other administrator');
+    assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'));
+    await clickButton(page, 'Reload current awards');
+    await waitExportsEnabled(page);
+    assert.equal(await (await field(page, awardLabel)).evaluate(element => element.value), 'CASH_PRIZE_5000');
+    assert.equal(awardRequests.length, 5, 'Reloading current awards discards the draft without a write');
+    assert((await visibleRows(page))[0][0].endsWith('#1') && (await visibleRows(page))[0][7] === '99.75');
+    await (await field(page, awardLabel)).select('');
+    await clickButton(page, saveAwardLabel);
+    await waitExportsEnabled(page);
+    assert.equal(awardRequests.length, 6);
+    assert.equal(awardRequests[5].expectedRevision, 4);
+    assert.equal(awardRequests[5].awardCode, null);
+    assert.equal(awards.get('synthetic-merit-placement-34')?.revision, 5);
+    const clearedPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'cleared-manual-award.pdf'));
+    assertPdfCandidate(pdfContents(clearedPdf, 'raw'), ['1', 'SYN-M-34', 'Synthetic Other Class One', 'Synthetic Father 034', 'Synthetic Institute 034', '99.75%', '-']);
     assert.deepEqual(errors, []);
     assert.equal(JSON.stringify(records), originalRecords, 'Read-only sorting and downloads do not mutate source marks or ranks');
-    assert(methods.every(method => method === 'GET'), 'Merit review and export use read-only requests');
-    console.log('INTERVIEW_MERIT_BROWSER_PASS: server overall and separate-class ranks, shared ties, grouping switches, class/search rank preservation, grouped/global sorts across pagination and PDF/CSV, exact seven-column PDF with father/institute/category and combined percentage, missing-field dashes, full-score CSV, grouping filenames/headers, legacy-backend fallback/recovery, all-row downloads, PDF branding/page counters, hidden stale scores, desktop/mobile, delayed/failed/retried class requests');
+    assert(methods.every(method => method === 'GET' || method === 'PUT') && methods.filter(method => method === 'PUT').length === awardRequests.length, 'Only explicit award saves issue mutation requests');
+    console.log('INTERVIEW_MERIT_BROWSER_PASS: server overall and separate-class ranks, shared ties, grouping switches, class/search rank preservation, grouped/global sorts across pagination and PDF/CSV, exact seven-column PDF with identity and combined percentage, custom repeated title and filename, finite top-ranked membership before sorting, custom/preset counts and explicit cutoff-tie inclusion, full-score CSV, legacy fallback, all-row downloads, manual award save/retry/reload/409/discard/clear, unconfirmed-save revert/discard refetch safeguards, no automatic awards or score changes, desktop/mobile, delayed/failed/retried class requests');
   } catch (error) {
     if (reviewPage && !reviewPage.isClosed()) {
       await screenshot(reviewPage, path.join(output, 'failure-state.png')).catch(() => undefined);
@@ -425,14 +670,14 @@ async function fill(page: Page, label: string, value: string) {
 }
 async function clickButton(page: Page, label: string) {
   await page.evaluate(text => {
-    const button = Array.from(document.querySelectorAll('button')).find(el => el.textContent?.trim() === text);
+    const button = Array.from(document.querySelectorAll('button')).find(el => el.getAttribute('aria-label') === text || el.textContent?.trim() === text);
     if (!button || button.disabled) throw new Error('Button unavailable: ' + text);
     button.click();
   }, label);
 }
 async function buttonDisabled(page: Page, label: string) {
   return page.evaluate(text => {
-    const button = Array.from(document.querySelectorAll('button')).find(el => el.textContent?.trim() === text);
+    const button = Array.from(document.querySelectorAll('button')).find(el => el.getAttribute('aria-label') === text || el.textContent?.trim() === text);
     if (!button) throw new Error('Button missing: ' + text);
     return button.disabled;
   }, label);
@@ -466,6 +711,8 @@ async function download(page: Page, button: string, extension: string, directory
       const source = path.join(directory, filename);
       if (fs.statSync(source).size > 0) {
         fs.renameSync(source, target);
+        if (extension === '.pdf') await page.waitForFunction(() => Array.from(document.querySelectorAll('button')).some(item =>
+          item.textContent?.trim() === 'Download PDF' && !item.disabled && item.getAttribute('aria-busy') !== 'true'));
         return target;
       }
     }

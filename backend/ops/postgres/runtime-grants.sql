@@ -120,7 +120,7 @@ GRANT USAGE ON SCHEMA public TO :"grant_role";
 -- supplies a forged cancellation-audit context. Other application tables
 -- retain their existing DML surface. Database triggers remain mandatory.
 SELECT format('GRANT %s ON TABLE %I.%I TO %I',
-  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent','ExamLegacyResultHistory','OfficialResultAttemptBinding') THEN 'SELECT' WHEN c.relname IN ('DmcReplacement','DmcIssuance','DmcIssuanceEvent','AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','StudentStudyGroupCorrection','InterviewAllocationAudit','InterviewFixedSchedule','InterviewFixedPlacement','InterviewPanelRevision','InterviewAssessmentRevision')
+  CASE WHEN c.relname IN ('ExamControlOperation','ExamPlacementControl','ExamAttemptSequence','ExamLifecycleEvent','ExamLegacyResultHistory','OfficialResultAttemptBinding') THEN 'SELECT' WHEN c.relname IN ('DmcReplacement','DmcIssuance','DmcIssuanceEvent','AttendanceResetOperation','AttendanceSessionCancellation','AttendanceSessionReopening','StudentStudyGroupCorrection','InterviewAllocationAudit','InterviewFixedSchedule','InterviewFixedPlacement','InterviewPanelRevision','InterviewAssessmentRevision','InterviewMeritAwardRevision')
     THEN 'SELECT, INSERT'
     WHEN c.relname IN ('Attendance','AttendanceSession','AttendanceSessionCandidate') THEN 'SELECT, INSERT, UPDATE'
     ELSE 'SELECT, INSERT, UPDATE, DELETE'
@@ -198,14 +198,16 @@ SELECT (
   AND has_table_privilege(:'login_role','public."OfficialResultAttemptBinding"','SELECT')
   AND NOT has_table_privilege(:'login_role','public."OfficialResultAttemptBinding"','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
   AND has_function_privilege(:'login_role','public.azm_bind_official_result_attempt(text,text)','EXECUTE')
-  AND 2 = (
+  AND 3 = (
     SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-    WHERE n.nspname='public' AND c.relname IN ('InterviewPanelRevision','InterviewAssessmentRevision')
+    WHERE n.nspname='public' AND c.relname IN ('InterviewPanelRevision','InterviewAssessmentRevision','InterviewMeritAwardRevision')
       AND has_table_privilege(:'login_role',c.oid,'SELECT')
       AND has_table_privilege(:'login_role',c.oid,'INSERT')
       AND NOT has_table_privilege(:'login_role',c.oid,'UPDATE,DELETE,TRUNCATE,TRIGGER')
       AND EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid
         AND t.tgname=c.relname || '_immutable' AND t.tgenabled IN ('O','A') AND t.tgtype=58)
+      AND EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid
+        AND t.tgname=c.relname || '_validate' AND t.tgenabled IN ('O','A') AND t.tgtype=7)
   )
   AND NOT EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace

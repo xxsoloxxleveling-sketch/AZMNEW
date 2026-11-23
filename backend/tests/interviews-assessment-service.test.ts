@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { InterviewAssessmentService } from '../src/modules/interviews/assessment.service.ts';
-import { AssessmentInput } from '../src/modules/interviews/assessment.schema.ts';
+import { AssessmentInput, MERIT_AWARD_CODES, MeritAwardInput } from '../src/modules/interviews/assessment.schema.ts';
 
 const admin = { id: 'admin-1', name: 'Data Entry Admin', role: 'ADMIN' };
 const superAdmin = { id: 'super-1', name: 'Review Admin', role: 'SUPER_ADMIN' };
@@ -14,7 +14,7 @@ function fixture(count = 2) {
       rollNumber: `ROLL-${index + 1}`, currentClass: 'Class 10', fatherName: `Parent ${index + 1}`,
       schoolName: `Institute ${index + 1}`, scholarshipCategory: 'GENERAL_MERIT' },
   }));
-  const state: any = { panels: [], assessments: [], placements, nextId: 0, sourceRevision: 'manual-c1-v1', marks: 80, final: true, roundStatus: 'SETUP' };
+  const state: any = { panels: [], assessments: [], awards: [], placements, nextId: 0, sourceRevision: 'manual-c1-v1', marks: 80, final: true, roundStatus: 'SETUP' };
   const matchesAssessment = (row: any, where: any = {}) => (!where.roundId || where.roundId === row.roundId)
     && (!where.placementId || where.placementId === row.placementId)
     && (!where.status || where.status === row.status)
@@ -49,6 +49,19 @@ function fixture(count = 2) {
         const row = { id: `assessment-${++state.nextId}`, ...data,
           panelRevision: state.panels.find((panel: any) => panel.id === data.panelRevisionId), createdAt: new Date('2026-11-21T16:05:00Z') };
         state.assessments.push(row); return row;
+      },
+    },
+    interviewMeritAwardRevision: {
+      findFirst: async ({ where }: any) => [...state.awards].reverse().find((row: any) => matchesAssessment(row, where)) ?? null,
+      findUnique: async ({ where }: any) => state.awards.find((row: any) =>
+        row.roundId === where.roundId_idempotencyKey.roundId && row.idempotencyKey === where.roundId_idempotencyKey.idempotencyKey) ?? null,
+      findMany: async ({ where, distinct }: any) => {
+        const rows = state.awards.filter((row: any) => matchesAssessment(row, where));
+        return distinct ? [...new Map(rows.map((row: any) => [row.placementId, row])).values()] : [...rows].reverse();
+      },
+      create: async ({ data }: any) => {
+        const row = { id: `award-${++state.nextId}`, ...data, createdAt: new Date('2026-11-23T16:00:00Z') };
+        state.awards.push(row); return row;
       },
     },
   };
@@ -216,5 +229,92 @@ describe('Interview assessment service boundaries', () => {
     assert.equal(merit.overallRankedCandidates, 0);
     await assert.rejects(service.save('round-v', 'outside-placement', complete(panel, 'other-place-save'), admin), /not in this round/);
     await assert.rejects(service.save('round-v', 'place-2', complete(panel, 'teacher-write-save'), { id: 'teacher-1', role: 'TEACHER' }), /Only an administrator/);
+  });
+});
+
+describe('Manual interview merit award selections', () => {
+  const input = (awardCode: MeritAwardInput['awardCode'] = 'LAPTOP', expectedRevision = 0,
+    idempotencyKey = 'manual-award-request-1'): MeritAwardInput => ({ awardCode, expectedRevision, idempotencyKey });
+
+  it('starts unassigned without writing records or deriving awards from marks', async () => {
+    const { service, state } = fixture(); const panel = await configure(service);
+    await service.save('round-v', 'place-1', complete(panel), admin, true);
+    const beforeRead = JSON.stringify(state);
+    const merit = await service.merit('round-v');
+    assert.equal(merit.manualAwardsEnabled, true);
+    assert.ok(merit.rows.every(row => row.meritAward.revision === 0 && row.meritAward.awardCode === null
+      && row.meritAward.id === null && row.meritAward.actorName === null && row.meritAward.createdAt === null));
+    assert.deepEqual(await service.meritAwardHistory('round-v', 'place-1'), []);
+    assert.equal(JSON.stringify(state), beforeRead);
+  });
+
+  it('persists every explicit choice independently of readiness and keeps a complete ordered audit', async () => {
+    const { service, state } = fixture();
+    const before = (await service.merit('round-v')).rows;
+    const stripAward = (rows: typeof before) => rows.map(({ meritAward: _award, ...row }) => row);
+    for (const [index, awardCode] of MERIT_AWARD_CODES.entries()) {
+      const actor = index % 2 ? superAdmin : admin;
+      const saved = await service.saveMeritAward('round-v', 'place-1', input(awardCode, index, `award-selection-${index}`), actor);
+      assert.equal(saved.awardCode, awardCode); assert.equal(saved.revision, index + 1);
+      assert.equal(saved.actorName, actor.name); assert.equal(saved.createdAt, '2026-11-23T16:00:00.000Z');
+      assert.ok(saved.id);
+    }
+    const after = (await service.merit('round-v')).rows;
+    assert.deepEqual(stripAward(after), stripAward(before));
+    assert.equal(after.find(row => row.placementId === 'place-1')!.meritAward.awardCode, 'CASH_PRIZE_5000');
+    assert.deepEqual((await service.meritAwardHistory('round-v', 'place-1')).map(row => row.awardCode), [...MERIT_AWARD_CODES].reverse());
+    assert.equal(state.assessments.length, 0);
+  });
+
+  it('replays identical saves and rejects conflicting keys, actors, candidates and stale revisions', async () => {
+    const { service, state } = fixture();
+    const request = input();
+    const saved = await service.saveMeritAward('round-v', 'place-1', request, admin);
+    assert.deepEqual(await service.saveMeritAward('round-v', 'place-1', request, admin), saved);
+    await assert.rejects(service.saveMeritAward('round-v', 'place-1', { ...request, awardCode: 'UMRAH_TICKET' }, admin), /different request/);
+    await assert.rejects(service.saveMeritAward('round-v', 'place-1', request, superAdmin), /different request/);
+    await assert.rejects(service.saveMeritAward('round-v', 'place-2', request, admin), /different request/);
+    await assert.rejects(service.saveMeritAward('round-v', 'place-1', input('UMRAH_TICKET', 0, 'stale-award-request'), admin), /newer award/);
+    assert.equal(state.awards.length, 1);
+  });
+
+  it('allows only one concurrent writer for an award revision', async () => {
+    const { service, state } = fixture();
+    const results = await Promise.allSettled([
+      service.saveMeritAward('round-v', 'place-1', input('LAPTOP', 0, 'concurrent-award-one'), admin),
+      service.saveMeritAward('round-v', 'place-1', input('UMRAH_TICKET', 0, 'concurrent-award-two'), superAdmin),
+    ]);
+    assert.equal(results.filter(row => row.status === 'fulfilled').length, 1);
+    const rejected = results.find(row => row.status === 'rejected');
+    assert.ok(rejected?.status === 'rejected' && rejected.reason.statusCode === 409);
+    assert.equal(state.awards.length, 1);
+  });
+
+  it('rejects other registration categories but lets administrators clear a previous choice after a category change', async () => {
+    const { service, state } = fixture();
+    await service.saveMeritAward('round-v', 'place-1', input(), admin);
+    for (const category of ['FINANCIALLY_NEEDY', 'ORPHAN', 'PERSON_WITH_DISABILITY']) {
+      state.placements[0].student.scholarshipCategory = category;
+      await assert.rejects(service.saveMeritAward('round-v', 'place-1', input('UMRAH_TICKET', 1, `category-${category}`), admin),
+        (error: any) => error.statusCode === 400 && /General Merit/.test(error.message));
+    }
+    assert.equal((await service.merit('round-v')).rows[0].meritAward.awardCode, 'LAPTOP');
+    const clear = await service.saveMeritAward('round-v', 'place-1', input(null, 1, 'clear-manual-award'), admin);
+    assert.equal(clear.revision, 2); assert.equal(clear.awardCode, null);
+    assert.deepEqual((await service.meritAwardHistory('round-v', 'place-1')).map(row => row.awardCode), [null, 'LAPTOP']);
+    assert.equal((await service.merit('round-v')).rows[0].meritAward.revision, 2);
+  });
+
+  it('rejects non-admin writes, unknown codes and candidates outside the round without altering scores or awards', async () => {
+    const { service, state } = fixture();
+    const before = JSON.stringify(state);
+    for (const role of ['TEACHER', 'ACCOUNTANT']) {
+      await assert.rejects(service.saveMeritAward('round-v', 'place-1', input(), { id: 'other-user', role }), /Only an administrator/);
+    }
+    await assert.rejects(service.saveMeritAward('round-v', 'place-1', { ...input(), awardCode: 'AUTOMATIC' } as any, admin));
+    await assert.rejects(service.saveMeritAward('round-v', 'outside-placement', input(), admin), /not in this round/);
+    await assert.rejects(service.meritAwardHistory('round-v', 'outside-placement'), /not in this round/);
+    await assert.rejects(service.saveMeritAward('outside-round', 'place-1', input(), admin), /round not found/);
+    assert.equal(JSON.stringify(state), before);
   });
 });

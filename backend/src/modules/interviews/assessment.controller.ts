@@ -16,4 +16,6 @@ export const interviewAssessmentController = {
   save: respond(req => interviewAssessmentService.save(req.params.roundId, req.params.placementId, req.body, req.user!)),
   submit: respond(req => interviewAssessmentService.save(req.params.roundId, req.params.placementId, req.body, req.user!, true)),
   merit: respond(req => interviewAssessmentService.merit(req.params.roundId, req.query.className as string | undefined)),
+  saveMeritAward: respond(req => interviewAssessmentService.saveMeritAward(req.params.roundId, req.params.placementId, req.body, req.user!)),
+  meritAwardHistory: respond(req => interviewAssessmentService.meritAwardHistory(req.params.roundId, req.params.placementId)),
 };
