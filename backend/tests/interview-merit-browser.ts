@@ -27,8 +27,10 @@ async function run() {
       totals: { written: 48, interview: 17, extracurricular: 8, academic: 4, personality: 4, total: 93.87 }, issues: ['Written source changed after assessment.'] },
     { ...candidate(33), studentName: 'Synthetic Absent Candidate', rank: null, status: 'ABSENT',
       totals: { written: 40.2, interview: null, extracurricular: null, academic: null, personality: null, total: 99.97 }, issues: ['Candidate was absent.'] },
-    { ...candidate(34), className: 'Class 10th', studentName: 'Synthetic Other Class One', rank: 1 },
-    { ...candidate(35), className: 'Class 10th', studentName: 'Synthetic Other Class Two', rank: 2 },
+    { ...candidate(34), className: 'Class 10th', studentName: 'Synthetic Other Class One', rank: 1,
+      totals: { ...candidate(34).totals, total: 99.75 } },
+    { ...candidate(35), className: 'Class 10th', studentName: 'Synthetic Other Class Two', rank: 2,
+      totals: { ...candidate(35).totals, total: 82.5 } },
   );
   const originalRecords = JSON.stringify(records);
   const bundle = await build({
@@ -94,12 +96,48 @@ async function run() {
     await page.setViewport({ width: 1360, height: 1000 });
     await page.goto('http://127.0.0.1:' + address.port, { waitUntil: 'networkidle0' });
     await waitText(page, 'Synthetic Candidate 001');
+    assert.equal(await (await field(page, 'Sort by')).evaluate(element => element.value), 'total');
+    assert.equal(await (await field(page, 'Order')).evaluate(element => element.value), 'desc');
+    const globalDescending = [34, ...Array.from({ length: 14 }, (_, index) => index + 1), 35,
+      ...Array.from({ length: 16 }, (_, index) => index + 15), 31, 32, 33];
+    let shown = await visibleRows(page);
+    assert(shown[0][1].includes('Synthetic Other Class One') && shown[0][7] === '99.75', 'All classes starts with the highest total across the entire list');
+    assert(shown[0][0].includes('Class 10th') && shown[0][0].includes('#1'));
+    assert(shown[1][0].includes('Class 9th') && shown[1][0].includes('#1'), 'Class ranks remain unchanged when different classes are interleaved');
+    await screenshot(page, path.join(output, 'desktop-merit-global-descending.png'));
+    await clickButton(page, 'Next');
+    await waitText(page, 'page 2 of 2');
+    const descendingRows = [...shown, ...await visibleRows(page)];
+    assert.deepEqual(rolls(descendingRows.map(row => row[1]).join('\n')), globalDescending, 'Descending total sorting applies globally before pagination, with unranked rows last');
+    for (const row of descendingRows) {
+      const source = records.find(record => record.rollNumber === 'SYN-M-' + rolls(row[1])[0]);
+      assert(source);
+      assert(row[0].includes(source.className) && row[0].endsWith(source.rank === null ? 'Unranked' : '#' + source.rank), 'Global sorting preserves every class rank and shared tie');
+    }
+    const globalCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'all-classes-total-descending.csv'));
+    const globalPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'all-classes-total-descending.pdf'));
+    assert.deepEqual(rolls(fs.readFileSync(globalCsv, 'utf8')), globalDescending, 'All-class CSV follows global score order across all pages');
+    assert.deepEqual(rolls(pdfContents(globalPdf)), globalDescending, 'All-class PDF follows the same global score order');
+    await (await field(page, 'Order')).select('asc');
+    await waitText(page, 'page 1 of 2');
+    shown = await visibleRows(page);
+    await clickButton(page, 'Next');
+    await waitText(page, 'page 2 of 2');
+    const globalAscending = [...descending(30).filter(value => value >= 15), 35,
+      ...descending(14).filter(value => value > 2), 1, 2, 34, 31, 32, 33];
+    assert.deepEqual(rolls([...shown, ...await visibleRows(page)].map(row => row[1]).join('\n')), globalAscending, 'Ascending total sorting reverses the global score order while retaining tied-row stability and nulls last');
+    const ascendingCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'all-classes-total-ascending.csv'));
+    const ascendingPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'all-classes-total-ascending.pdf'));
+    assert.deepEqual(rolls(fs.readFileSync(ascendingCsv, 'utf8')), globalAscending);
+    assert.deepEqual(rolls(pdfContents(ascendingPdf)), globalAscending);
     await (await field(page, 'Class ranking')).select('Class 9th');
     await waitText(page, '33 candidates');
+    await (await field(page, 'Sort by')).select('rank');
+    await (await field(page, 'Order')).select('asc');
     await (await field(page, 'Readiness')).select('READY');
     await waitText(page, '30 candidates');
     assert.equal((await visibleRows(page)).length, 25);
-    let shown = await visibleRows(page);
+    shown = await visibleRows(page);
     assert(shown[0][0].includes('#1') && shown[1][0].includes('#1') && shown[2][0].includes('#3'), 'Shared server ranks remain 1, 1, 3');
     await clickButton(page, 'Next');
     await waitText(page, 'page 2 of 2');
@@ -238,7 +276,7 @@ async function run() {
     assert.deepEqual(errors, []);
     assert.equal(JSON.stringify(records), originalRecords, 'Read-only sorting and downloads do not mutate source marks or ranks');
     assert(methods.every(method => method === 'GET'), 'Merit review and export use read-only requests');
-    console.log('INTERVIEW_MERIT_BROWSER_PASS: class/readiness/search filters, numeric and natural ascending/descending sorts, shared ranks, page reset, all-row PDF/CSV downloads, repeated PDF branding and page counters, missing/zero separation, hidden unverified and stale written scores, non-ready totals, desktop/mobile, delayed/failed/retried class requests');
+    console.log('INTERVIEW_MERIT_BROWSER_PASS: global all-class totals ascending/descending across pagination and PDF/CSV, class/readiness/search filters, numeric and natural sorts, unchanged shared class ranks, page reset, all-row downloads, repeated PDF branding and page counters, missing/zero separation, hidden unverified and stale written scores, non-ready totals, desktop/mobile, delayed/failed/retried class requests');
   } catch (error) {
     if (reviewPage && !reviewPage.isClosed()) {
       await screenshot(reviewPage, path.join(output, 'failure-state.png')).catch(() => undefined);
@@ -320,6 +358,11 @@ async function waitExportsEnabled(page: Page) {
 }
 async function screenshot(page: Page, filename: string) {
   await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(async () => {
+    const animations = document.getAnimations().filter(animation => animation.playState === 'running' &&
+      Number.isFinite(Number(animation.effect?.getComputedTiming().endTime)));
+    await Promise.allSettled(animations.map(animation => animation.finished));
+  });
   await page.screenshot({ path: filename, fullPage: true });
 }
 async function download(page: Page, button: string, extension: string, directory: string, target: string) {

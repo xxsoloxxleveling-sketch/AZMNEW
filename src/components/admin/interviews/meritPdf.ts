@@ -108,7 +108,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const filterLines = [
     `Session: ${metadata(options.sessionRef || '-')} | ${metadata(options.roundTitle || 'Interview assessment')}`,
     `Class: ${metadata(options.filters.className || 'All classes (ranked separately)')} | Readiness: ${metadata(readiness)}`,
-    `Sort: ${metadata(options.filters.sortLabel)} - ${options.filters.direction === 'asc' ? 'Ascending' : 'Descending'} within each class | Search: ${metadata(options.filters.search || 'None')}`,
+    `Sort: ${metadata(options.filters.sortLabel)} - ${options.filters.direction === 'asc' ? 'Ascending' : 'Descending'} across matching candidates | Search: ${metadata(options.filters.search || 'None')}`,
   ];
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.4);

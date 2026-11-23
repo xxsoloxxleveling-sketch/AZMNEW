@@ -76,11 +76,17 @@ policy or an award allocation. PDF and CSV exports carry the same provisional la
 In **Merit preview**, choose the class, readiness and name/roll filters, then use
 **Sort by** and **Order** to arrange candidates in ascending or descending order.
 Available fields are merit rank, total marks, final written marks, student name
-and roll number. Classes remain separate and sorting applies within each class.
+and roll number. Sorting applies across the entire filtered list, including when
+**All classes** is selected. The default is **Total marks → Descending**. Class
+names never take priority over the selected sort field, and missing values stay
+at the bottom of the full list in both directions.
+
 Sorting and filtering retain the server's original class ranks and shared ties;
-they never renumber a filtered list. Total-mark sorting follows the server's exact
-score ranking even when two displayed totals round to the same two decimals.
-Missing values remain last for the selected field in either direction.
+they never assign an overall rank or renumber a filtered list. Total-mark sorting
+compares the displayed numeric totals across classes. If displayed totals are
+equal, candidates from the same class retain the server's exact-score ordering
+in the selected direction. Class ranks are never compared as substitutes for
+total marks between different classes.
 
 **Download PDF** produces an AZM-branded landscape A4 merit report with the logo,
 round/session, filters, sort order, generation time in Pakistan, score components,

@@ -20,8 +20,8 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
   const [className, setClassName] = useState('');
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<MeritSortField>('rank');
-  const [direction, setDirection] = useState<SortDirection>('asc');
+  const [sortBy, setSortBy] = useState<MeritSortField>('total');
+  const [direction, setDirection] = useState<SortDirection>('desc');
   const [page, setPage] = useState(1);
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -118,7 +118,7 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
           <button className={ui.primary} type="button" disabled={cannotExport || exportingPdf} aria-busy={exportingPdf} onClick={() => void downloadPdf()}>{exportingPdf ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}{exportingPdf ? 'Preparing PDF…' : 'Download PDF'}</button>
         </div>
       </div>
-      <p className="text-xs text-slate-500">Sorting applies within each class. Original class ranks and shared ties stay unchanged.</p>
+      <p className="text-xs text-slate-500">Sorting applies across all matching candidates. Original class ranks and shared ties stay unchanged.</p>
     </div>
     {pdfError && <div role="alert" className={ui.error}>{pdfError}</div>}
     {loading && <p role="status" className="flex items-center gap-2 text-sm text-slate-500"><Loader2 size={16} className="animate-spin" />Calculating current merit preview…</p>}
