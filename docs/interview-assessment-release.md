@@ -69,7 +69,37 @@ candidate. Absentees and drafts are unranked.
 
 The preview ranks independently within each class. Exact ties share competition
 ranks (1, 1, 3). This is a private provisional ordering, not an approved final tie
-policy or an award allocation. The CSV export carries the same provisional label.
+policy or an award allocation. PDF and CSV exports carry the same provisional label.
+
+## Merit PDFs and sort order
+
+In **Merit preview**, choose the class, readiness and name/roll filters, then use
+**Sort by** and **Order** to arrange candidates in ascending or descending order.
+Available fields are merit rank, total marks, final written marks, student name
+and roll number. Classes remain separate and sorting applies within each class.
+Sorting and filtering retain the server's original class ranks and shared ties;
+they never renumber a filtered list. Total-mark sorting follows the server's exact
+score ranking even when two displayed totals round to the same two decimals.
+Missing values remain last for the selected field in either direction.
+
+**Download PDF** produces an AZM-branded landscape A4 merit report with the logo,
+round/session, filters, sort order, generation time in Pakistan, score components,
+readiness, original class ranks, repeated table headings and page numbers.
+**Export CSV** uses the same filtered order. Both include every matching candidate
+across all pages, rather than only the 25 currently visible rows.
+
+These are private, provisional combined merit review copies. Existing verified
+written marks retain their final status; incomplete or changed assessments do
+not acquire a total or merit rank through an export. Select **Ready** to download
+only candidates with complete, current submitted assessments.
+
+The current PDF typography supports Latin names, accents and common punctuation.
+Unsupported scripts raise a clear export error before generating a document;
+CSV preserves Unicode text. Candidate names are never silently dropped or
+replaced to force a PDF export.
+
+PDF generation and display sorting run in the browser. This incremental update
+requires only a frontend deployment, with no database migration or mark updates.
 
 ## Scope of this release
 
@@ -135,7 +165,7 @@ needed after use, retain the additive tables and historical revisions.
 
 The dedicated `interview-assessment-validation.yml` workflow checks the Prisma
 schema and backend types, interview and existing mark/DMC regressions, the
-frontend production build and view-model tests. It also runs two integration
+frontend production build and view-model tests. It also runs three integration
 fixtures using synthetic data only:
 
 - A disposable PostgreSQL 17 database exercises the real service, canonical
@@ -144,6 +174,10 @@ fixtures using synthetic data only:
 - A Puppeteer fixture mounts the production admin views, configures the panel,
   enters scores, verifies the 81.75 example, tests missing/zero scores and conflict
   handling, and captures desktop/mobile review screenshots.
+- A merit-download fixture checks ascending/descending display order, unchanged
+  ranks, pagination reset, filtered PDF/CSV parity, all-page exports, and mobile
+  controls with synthetic candidates. PDF text is checked using Poppler and the
+  generated report is rendered for visual layout review before release.
 
 The CI run reports execution results when run. The PostgreSQL 17 and browser
 checks are required before rollout. Local tests use Node's `--import tsx` entry

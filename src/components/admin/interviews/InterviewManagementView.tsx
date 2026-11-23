@@ -580,7 +580,7 @@ export function InterviewManagementView() {
           )}
 
           {tab === 'assessments' && <InterviewAssessmentView key={selectedRoundId} roundId={selectedRoundId} canEdit={isAdmin} isSuperAdmin={isSuperAdmin} onDirtyChange={setAssessmentDirty} />}
-          {tab === 'merit' && <InterviewMeritPreviewView key={selectedRoundId} roundId={selectedRoundId} />}
+          {tab === 'merit' && <InterviewMeritPreviewView key={selectedRoundId} roundId={selectedRoundId} roundTitle={selectedRound.title} sessionRef={selectedRound.sessionRef} />}
 
           {tab === 'overview' && (
             <section className="space-y-4">

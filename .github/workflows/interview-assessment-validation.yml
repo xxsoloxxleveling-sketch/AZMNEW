@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/interview-assessment-final-marks-20261121
+      - feature/merit-pdf-sorting-20261123
   pull_request:
     branches: [main]
     paths:
@@ -82,10 +83,21 @@ jobs:
         run: |
           export PUPPETEER_EXECUTABLE_PATH="$(command -v google-chrome)"
           node --import tsx backend/tests/interview-assessment-browser.ts
-      - name: Preserve synthetic UI review evidence
+      - name: Test merit sorting and branded PDF downloads
+        run: |
+          if ! command -v pdftotext >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes poppler-utils
+          fi
+          export PUPPETEER_EXECUTABLE_PATH="$(command -v google-chrome)"
+          node --import tsx backend/tests/interview-merit-browser.ts
+      - name: Preserve synthetic UI and PDF review evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: interview-assessment-ui
-          path: tmp/interview-assessment-ui/*.png
+          path: |
+            tmp/interview-assessment-ui/*.png
+            tmp/interview-merit-ui/*.png
+            tmp/interview-merit-ui/*.pdf
           if-no-files-found: ignore
