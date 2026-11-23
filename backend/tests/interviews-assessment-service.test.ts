@@ -10,7 +10,9 @@ function fixture(count = 2) {
     id: `place-${index + 1}`, scheduleId: 'schedule-v', studentId: `student-${index + 1}`,
     panel: Math.min(6, Math.floor(index / 60) + 1), batch: index % 60 < 30 ? 1 : 2,
     sequence: index % 30 + 1, slotTime: '09:00 AM', printedMarks: 80,
-    student: { id: `student-${index + 1}`, fullName: `Student ${String(index + 1).padStart(3, '0')}`, rollNumber: `ROLL-${index + 1}`, currentClass: 'Class 10' },
+    student: { id: `student-${index + 1}`, fullName: `Student ${String(index + 1).padStart(3, '0')}`,
+      rollNumber: `ROLL-${index + 1}`, currentClass: 'Class 10', fatherName: `Parent ${index + 1}`,
+      schoolName: `Institute ${index + 1}`, scholarshipCategory: 'GENERAL_MERIT' },
   }));
   const state: any = { panels: [], assessments: [], placements, nextId: 0, sourceRevision: 'manual-c1-v1', marks: 80, final: true, roundStatus: 'SETUP' };
   const matchesAssessment = (row: any, where: any = {}) => (!where.roundId || where.roundId === row.roundId)
@@ -182,6 +184,24 @@ describe('Interview assessment service boundaries', () => {
     assert.deepEqual(filtered.classOptions, merit.classOptions);
     const empty = await service.merit('round-v', 'No matching class');
     assert.deepEqual(empty.rows, []); assert.equal(empty.overallRankedCandidates, 4);
+    assert.equal(JSON.stringify(state), beforeRead);
+  });
+
+  it('projects current registration details into merit without deriving a scholarship award', async () => {
+    const { service, state } = fixture();
+    Object.assign(state.placements[0].student, {
+      fatherName: 'Synthetic Parent One', schoolName: 'Synthetic Institute One', scholarshipCategory: 'FINANCIALLY_NEEDY',
+    });
+    Object.assign(state.placements[1].student, { fatherName: '', schoolName: '', scholarshipCategory: 'ORPHAN' });
+    const beforeRead = JSON.stringify(state);
+    const merit = await service.merit('round-v');
+    assert.deepEqual(merit.rows.map(row => [row.placementId, row.fatherName, row.institute, row.scholarshipCategory]), [
+      ['place-1', 'Synthetic Parent One', 'Synthetic Institute One', 'FINANCIALLY_NEEDY'],
+      ['place-2', '', '', 'ORPHAN'],
+    ]);
+    assert.ok(merit.rows.every(row => row.overallRank === null && row.totals.total === null));
+    const roster = await service.roster('round-v', { page: 1, limit: 25 });
+    assert.ok(roster.rows.every(row => !('fatherName' in row) && !('institute' in row) && !('scholarshipCategory' in row)));
     assert.equal(JSON.stringify(state), beforeRead);
   });
 

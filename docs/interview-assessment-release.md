@@ -100,13 +100,34 @@ totals and uses the selected server rank to preserve exact-score distinctions
 when displayed totals round to the same two-decimal value. True ties retain
 stable order. Class ranks are never used as substitutes for overall ranks.
 
-**Download PDF** produces an AZM-branded landscape A4 merit report with the logo,
-round/session, selected grouping, filters, sort order, generation time in
-Pakistan, score components, readiness, selected overall or class ranks,
-repeated table headings and page numbers. **Export CSV** uses the same filtered
-order and includes the grouping and corresponding rank heading. Filenames
-identify the grouping. Both include every matching candidate across all pages,
-rather than only the 25 currently visible rows.
+**Download PDF** produces an AZM-branded landscape A4 merit report with exactly
+these seven candidate columns, in this order:
+
+1. Merit Rank
+2. Roll No
+3. Name
+4. Father Name
+5. Institute
+6. Percentage Obtained
+7. Scholarship Category
+
+The rank uses the selected overall or class ranking. Father Name and Institute
+come from the current student record (`fatherName` and `schoolName`). Percentage
+Obtained is the completed combined merit total out of 100, displayed as a
+percentage with two decimal places. Unready candidates have no merit percentage
+or rank. Scholarship Category displays the recorded registration category;
+it does not derive an award or benefit from the score. Missing identity details
+display a dash.
+
+The PDF retains the AZM logo, concise session/grouping context, generation time
+in Pakistan, repeated table headings and page numbers. Separate-class mode uses
+class section headings without adding a Class column. It omits component scores,
+panel/batch information, readiness columns and policy/calculation details.
+
+**Export CSV** retains its detailed review columns and uses the same filtered
+order with the grouping and corresponding rank heading. Filenames identify the
+grouping. Both formats include every matching candidate across all pages, rather
+than only the 25 currently visible rows.
 
 These are private, provisional combined merit review copies. Existing verified
 written marks retain their final status; incomplete or changed assessments do
@@ -162,6 +183,9 @@ includes `overallRank`, with
 unready candidates. The server assigns both ranks across the complete round
 before applying an optional class filter. `overallRankedCandidates` always
 counts all ranked candidates in the round; `summary` counts the returned rows.
+Merit rows also include the current `fatherName`, `institute` (from `schoolName`)
+and stored `scholarshipCategory` for the seven-column PDF. Other assessment
+responses keep their existing fields.
 
 Both score mutations require `expectedRevision`, the current `panelRevision`,
 and an `idempotencyKey`. Identical retries return the saved revision; key reuse

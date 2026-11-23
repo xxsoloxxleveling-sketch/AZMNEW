@@ -13,7 +13,10 @@ import {
 type Db = PrismaClient | Prisma.TransactionClient;
 type Actor = { id: string; role: string; name?: string };
 type AssessmentRow = Prisma.InterviewAssessmentRevisionGetPayload<{ include: { panelRevision: true } }>;
-const studentSelect = { id: true, rollNumber: true, fullName: true, currentClass: true } as const;
+const studentSelect = {
+  id: true, rollNumber: true, fullName: true, currentClass: true,
+  fatherName: true, schoolName: true, scholarshipCategory: true,
+} as const;
 type Placement = Prisma.InterviewFixedPlacementGetPayload<{ include: { student: { select: typeof studentSelect } } }>;
 const fail = (statusCode: number, message: string, code = 'INTERVIEW_ASSESSMENT_CONFLICT') =>
   Object.assign(new Error(message), { statusCode, code });
@@ -262,6 +265,8 @@ export class InterviewAssessmentService {
         return {
           placementId: row.placementId, studentId: row.studentId, rollNumber: row.rollNumber,
           studentName: row.studentName, className: row.className, panel: row.panel, batch: row.batch,
+          fatherName: placement.student.fatherName, institute: placement.student.schoolName,
+          scholarshipCategory: placement.student.scholarshipCategory,
           rank: null as number | null, status, assessmentStatus: record?.status ?? 'NOT_STARTED',
           written: row.written, issues, totals,
           numerator: status === 'READY' && record ? exactMeritNumerator(rowInput(record), row.written) : null,

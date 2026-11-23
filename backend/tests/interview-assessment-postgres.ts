@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, ScholarshipCategory } from '@prisma/client';
 import type { AssessmentInput, PanelDto } from '../src/modules/interviews/assessment.schema';
 
 /** Real PostgreSQL 17 integration, deliberately separate from unit fixtures.
@@ -112,14 +112,15 @@ async function run() {
       id: actor.id, name: actor.name, email: `${actor.id}@test.invalid`, passwordHash: 'synthetic-not-a-login',
       role: actor.role as 'SUPER_ADMIN' | 'ADMIN', status: 'ACTIVE',
     } });
-    const seedCandidate = async (id: string, marks: number, sequence: number, currentClass = 'Class 10') => {
+    const seedCandidate = async (id: string, marks: number, sequence: number, currentClass = 'Class 10',
+      scholarshipCategory: ScholarshipCategory = 'GENERAL_MERIT') => {
       await ownerDb!.student.create({ data: {
         id, applicationNo: `APP-${id}`, rollNumber: `ROLL-${id}`, qrToken: `synthetic-qr-${id}`,
         fullName: `Synthetic ${id}`, fatherName: 'Synthetic Parent', gender: 'FEMALE',
         dateOfBirth: new Date('2008-01-01T00:00:00.000Z'), cnicOrBForm: `synthetic-identity-${id}`,
         address: 'Synthetic Address', district: 'Synthetic District', province: 'Synthetic Province',
         parentMobile: 'synthetic-contact', currentClass, schoolName: 'Synthetic School',
-        boardOrUniversity: 'Synthetic Board', scholarshipCategory: 'GENERAL_MERIT',
+        boardOrUniversity: 'Synthetic Board', scholarshipCategory,
         emergencyContact: 'synthetic-emergency', emergencyRelation: 'Synthetic Guardian',
       } });
       await admin!.query(`SELECT * FROM public.azm_record_manual_exam_mark(
@@ -350,7 +351,8 @@ async function run() {
     await check('overall merit compares exact scores across classes before filters and performs no writes', async () => {
       const classes = ['Class 6', 'Class 7', 'Class 8', 'Class 6', 'Class 10', 'Class 10', 'Class 10'];
       for (let index = 0; index < classes.length; index += 1) {
-        await seedCandidate(`synthetic-overall-${index + 1}`, 80, index + 10, classes[index]);
+        await seedCandidate(`synthetic-overall-${index + 1}`, 80, index + 10, classes[index],
+          index === 0 ? 'FINANCIALLY_NEEDY' : 'GENERAL_MERIT');
       }
       // A session has exactly one round. Extend its synthetic timetable on a
       // separate panel so the earlier candidate and reviewed panel stay valid.
@@ -379,6 +381,11 @@ async function run() {
       const writtenBefore = await sourceSnapshot();
       const merit = await service.merit(roundId);
       const byId = new Map(merit.rows.map(row => [row.placementId, row]));
+      assert.deepEqual([1, 2].map(index => {
+        const row = byId.get(`synthetic-overall-placement-${index}`)!;
+        return [row.fatherName, row.institute, row.scholarshipCategory];
+      }), [['Synthetic Parent', 'Synthetic School', 'FINANCIALLY_NEEDY'],
+        ['Synthetic Parent', 'Synthetic School', 'GENERAL_MERIT']]);
       assert.equal(merit.rankMethod, 'SHARED_COMPETITION_WITHIN_CLASS');
       assert.equal(merit.overallRankMethod, 'SHARED_COMPETITION_ALL_CLASSES');
       assert.equal(byId.get(placementId)!.totals.total, 85);

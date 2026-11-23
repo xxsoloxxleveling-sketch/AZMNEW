@@ -75,7 +75,8 @@ async function run() {
           absent: rows.filter(row => row.status === 'ABSENT').length },
       };
       const response = legacyBackend ? { ...data, overallRankMethod: undefined, overallRankedCandidates: undefined,
-        rows: rows.map(({ overallRank: _overallRank, ...row }) => row) } : data;
+        rows: rows.map(({ overallRank: _overallRank, fatherName: _fatherName, institute: _institute,
+          scholarshipCategory: _scholarshipCategory, ...row }) => row) } : data;
       const behavior = nextMeritReply; nextMeritReply = 'normal';
       if (behavior === 'hold') { releaseHeldReply = () => { releaseHeldReply = undefined; json(response); }; onReplyHeld?.(); return; }
       if (behavior === 'fail') { json('Synthetic class fetch failed. Please retry.', 503); return; }
@@ -131,7 +132,9 @@ async function run() {
     assert.equal(csvRow(globalCsvText, 35)[2], '16');
     assert.equal(csvRow(globalCsvText, 1).at(-1), 'All classes together');
     assert.match(globalPdfText, /Merit grouping:\s*All classes together/);
-    assert.match(pdfRow(globalPdfText, 'Synthetic Candidate 001', 'Synthetic Candidate 002'), /#2\b/);
+    const globalPdfRaw = pdfContents(globalPdf, 'raw');
+    assertSevenColumnPdf(globalPdfRaw);
+    assertPdfCandidate(globalPdfRaw, ['2', 'SYN-M-1', 'Synthetic Candidate 001', 'Synthetic Father 001', 'Synthetic Institute 001', '96.00%', 'General Merit']);
     await (await field(page, 'Order')).select('asc');
     await waitText(page, 'page 1 of 2');
     shown = await visibleRows(page);
@@ -163,7 +166,9 @@ async function run() {
     assert.equal(csvRow(classCsvText, 35)[2], '2');
     assert.equal(csvRow(classCsvText, 1).at(-1), 'Separate by class');
     assert.match(classPdfText, /Merit grouping:\s*Separate by class/);
-    assert.match(pdfRow(classPdfText, 'Synthetic Candidate 001', 'Synthetic Candidate 002'), /#1\b/);
+    const classPdfRaw = pdfContents(classPdf, 'raw');
+    assertSevenColumnPdf(classPdfRaw);
+    assertPdfCandidate(classPdfRaw, ['1', 'SYN-M-1', 'Synthetic Candidate 001', 'Synthetic Father 001', 'Synthetic Institute 001', '96.00%', 'General Merit']);
 
     await (await field(page, 'Merit grouping')).select('overall');
     await (await field(page, 'Class filter')).select('Class 9th');
@@ -176,7 +181,7 @@ async function run() {
     const searchedCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'overall-filtered-rank.csv'), /Overall/);
     const searchedPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'overall-filtered-rank.pdf'), /Overall/);
     assert.equal(csvRow(fs.readFileSync(searchedCsv, 'utf8'), 3)[2], '4');
-    assert.match(pdfContents(searchedPdf), /#4\b/);
+    assertPdfCandidate(pdfContents(searchedPdf, 'raw'), ['4', 'SYN-M-3', 'Synthetic Candidate 003', 'Synthetic Father 003', 'Synthetic Institute 003', '94.00%', 'General Merit']);
     await fill(page, 'Name or roll number', '');
     await (await field(page, 'Merit grouping')).select('class');
     await (await field(page, 'Sort by')).select('rank');
@@ -207,7 +212,8 @@ async function run() {
     assert.match(pdfText, /PROVISIONAL/i);
     assert.match(pdfText, /Synthetic Session V Merit Review/);
     assert.match(pdfText, /2026-V/);
-    assert.match(pdfText, /0\.00/, 'An explicit zero score is printed');
+    assert.match(pdfText, /67\.00%/, 'The PDF prints combined total as a percentage instead of individual component scores');
+    assert.equal(csvRow(csvText, 30)[10], '0', 'CSV retains the full score breakdown, including an explicit zero activity score');
     assert(!pdfText.includes('Synthetic Pending Candidate') && !pdfText.includes('Synthetic Other Class'));
     const pages = pdfText.split('\f').filter(value => value.trim());
     assert(pages.length >= 2, 'The complete list spans multiple PDF pages');
@@ -264,11 +270,11 @@ async function run() {
     const reviewText = pdfContents(reviewPdf);
     assert.deepEqual(rolls(reviewText), [...meritDescending, 31, 32, 33]);
     assert(!reviewText.includes('93.87') && !reviewText.includes('99.97'), 'Old source-changed and absent totals cannot appear as merit scores');
-    assert.match(reviewText, /Unranked/i);
-    const changedPdfRow = pdfRow(reviewText, 'Synthetic Source Changed Candidate', 'Synthetic Absent Candidate');
-    assert.match(changedPdfRow, /90\.00/, 'The current final written mark remains visible');
-    assert(!changedPdfRow.includes('48.00'), 'The obsolete weighted written contribution is omitted');
-    assert(!pdfRow(reviewText, 'Synthetic Pending Candidate', 'Synthetic Source Changed Candidate').includes('99.00'), 'An unverified raw mark is omitted from the PDF final-written column');
+    const reviewRaw = pdfContents(reviewPdf, 'raw');
+    assertSevenColumnPdf(reviewRaw);
+    assertPdfCandidate(reviewRaw, ['-', 'SYN-M-31', 'Synthetic Pending Candidate', 'Synthetic Father 031', 'Synthetic Institute 031', '-', 'General Merit']);
+    assertPdfCandidate(reviewRaw, ['-', 'SYN-M-32', 'Synthetic Source Changed Candidate', 'Synthetic Father 032', 'Synthetic Institute 032', '-', 'General Merit']);
+    assertPdfCandidate(reviewRaw, ['-', 'SYN-M-33', 'Synthetic Absent Candidate', 'Synthetic Father 033', 'Synthetic Institute 033', '-', 'General Merit']);
     const reviewCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'all-readiness-descending.csv'));
     const reviewCsvText = fs.readFileSync(reviewCsv, 'utf8');
     assert.equal(csvRow(reviewCsvText, 31)[7], '', 'An unverified raw mark is omitted from the CSV final-written column');
@@ -337,6 +343,11 @@ async function run() {
     assert.match(legacyCsvText.split('\r\n')[0], /"Class merit rank"/);
     assert.equal(csvRow(legacyCsvText, 35)[2], '2');
     assert.equal(csvRow(legacyCsvText, 35).at(-1), 'Separate by class');
+    const legacyPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'legacy-missing-identity-fields.pdf'), /By-Class/);
+    const legacyPdfRaw = pdfContents(legacyPdf, 'raw');
+    assertSevenColumnPdf(legacyPdfRaw);
+    assertPdfCandidate(legacyPdfRaw, ['1', 'SYN-M-34', 'Synthetic Other Class One', '-', '-', '99.75%', '-']);
+    assertPdfCandidate(legacyPdfRaw, ['2', 'SYN-M-35', 'Synthetic Other Class Two', '-', '-', '82.50%', '-']);
     legacyBackend = false;
     await clickButton(page, 'Recalculate preview');
     await waitExportsEnabled(page);
@@ -346,7 +357,7 @@ async function run() {
     assert.deepEqual(errors, []);
     assert.equal(JSON.stringify(records), originalRecords, 'Read-only sorting and downloads do not mutate source marks or ranks');
     assert(methods.every(method => method === 'GET'), 'Merit review and export use read-only requests');
-    console.log('INTERVIEW_MERIT_BROWSER_PASS: server overall and separate-class ranks, shared ties, grouping switches, class/search rank preservation, grouped and global ascending/descending order across pagination and PDF/CSV, grouping filenames/headers, legacy-backend fallback/recovery, numeric/natural sorts, all-row downloads, PDF branding/page counters, missing/zero separation, hidden unverified/stale scores, desktop/mobile, delayed/failed/retried class requests');
+    console.log('INTERVIEW_MERIT_BROWSER_PASS: server overall and separate-class ranks, shared ties, grouping switches, class/search rank preservation, grouped/global sorts across pagination and PDF/CSV, exact seven-column PDF with father/institute/category and combined percentage, missing-field dashes, full-score CSV, grouping filenames/headers, legacy-backend fallback/recovery, all-row downloads, PDF branding/page counters, hidden stale scores, desktop/mobile, delayed/failed/retried class requests');
   } catch (error) {
     if (reviewPage && !reviewPage.isClosed()) {
       await screenshot(reviewPage, path.join(output, 'failure-state.png')).catch(() => undefined);
@@ -365,6 +376,8 @@ function candidate(number: number): MeritPreviewRow {
   return {
     placementId: 'synthetic-merit-placement-' + number, studentId: 'synthetic-merit-student-' + number,
     rollNumber: 'SYN-M-' + number, studentName: 'Synthetic Candidate ' + String(number).padStart(3, '0'),
+    fatherName: 'Synthetic Father ' + String(number).padStart(3, '0'),
+    institute: 'Synthetic Institute ' + String(number).padStart(3, '0'), scholarshipCategory: 'GENERAL_MERIT',
     className: 'Class 9th', panel: 1, batch: 1, rank: number <= 2 ? 1 : number,
     overallRank: number <= 2 ? 2 : number <= 14 ? number + 1 : number + 2,
     status: 'READY', assessmentStatus: 'SUBMITTED', issues: [],
@@ -381,14 +394,21 @@ function csvRow(text: string, roll: number) {
   assert(line, 'CSV row is present');
   return [...line.matchAll(/"((?:[^"]|"")*)"(?:,|$)/g)].map(match => match[1].replaceAll('""', '"'));
 }
-function pdfRow(text: string, name: string, nextName: string) {
-  const start = text.indexOf(name), end = text.indexOf(nextName, start + name.length);
-  assert(start >= 0 && end > start, 'PDF review rows can be located');
-  return text.slice(start, end);
+function assertSevenColumnPdf(raw: string) {
+  const text = raw.replace(/\s+/g, ' ');
+  assert.match(text, /Merit Rank Roll No Name Father Name Institute Percentage Obtained Scholarship Category (?:#?\d+|Unranked|-) SYN-M-\d+\b/, 'Exactly seven table headings are followed by the first candidate row');
+  assert.doesNotMatch(text, /Final written|Written\s*\/60|Interview\s*\/20|Activities\s*\/10|Academics\s*\/5|Personality\s*\/5|Total\s*\/100|Class\s*\/\s*(?:overall\s*)?rank/i, 'No additional score, readiness or class column appears');
+  assert.doesNotMatch(text, /Readiness|Scoring:|written exam 60\s*\+|P\d+\s*\/\s*B\d+|P = panel|B = batch/i, 'The compact PDF omits readiness, component formulas and panel/batch metadata');
 }
-function pdfContents(filename: string) {
+function assertPdfCandidate(raw: string, fields: [string, string, string, string, string, string, string]) {
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rank = fields[0] === '-' ? '(?:Unranked|-)' : '#?' + escape(fields[0]);
+  const expected = new RegExp('(?:^|\\s)' + rank + '\\s+' + fields.slice(1).map(escape).join('\\s+') + '(?:\\s|$)');
+  assert.match(raw.replace(/\s+/g, ' ').trim(), expected, 'PDF row contains exactly the requested rank, identity, percentage and scholarship values');
+}
+function pdfContents(filename: string, mode: 'layout' | 'raw' = 'layout') {
   assert.equal(fs.readFileSync(filename).subarray(0, 5).toString('ascii'), '%PDF-');
-  return execFileSync('pdftotext', ['-layout', filename, '-'], { encoding: 'utf8' });
+  return execFileSync('pdftotext', ['-' + mode, filename, '-'], { encoding: 'utf8' });
 }
 async function field(page: Page, label: string): Promise<ElementHandle<HTMLInputElement & HTMLSelectElement>> {
   const handle = await page.evaluateHandle(name => Array.from(document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select'))

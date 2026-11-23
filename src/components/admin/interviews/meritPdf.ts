@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
 import type { MeritPreviewRow } from './assessmentApi';
-import { meritGroupingLabel, meritRank, meritWrittenContribution } from './meritViewModel';
+import { meritGroupingLabel, meritRank } from './meritViewModel';
 import type { MeritGrouping } from './meritViewModel';
 
 export type MeritPdfOptions = {
@@ -27,10 +27,13 @@ export type MeritPdfOptions = {
 const brand: [number, number, number] = [24, 91, 157];
 const ink: [number, number, number] = [30, 41, 59];
 const muted: [number, number, number] = [71, 85, 105];
-const statusLabels: Record<MeritPreviewRow['status'], string> = {
-  READY: 'Ready', INCOMPLETE: 'Incomplete', ABSENT: 'Absent', SOURCE_CHANGED: 'Source changed',
+const categoryLabels: Record<string, string> = {
+  GENERAL_MERIT: 'General Merit',
+  FINANCIALLY_NEEDY: 'Financially Needy',
+  ORPHAN: 'Orphan',
+  PERSON_WITH_DISABILITY: 'Person with Disability',
 };
-const score = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? '-' : value.toFixed(2);
+const columnHeadings = ['Merit Rank', 'Roll No', 'Name', 'Father Name', 'Institute', 'Percentage Obtained', 'Scholarship Category'];
 
 // Normalise punctuation used by the UI for the PDF's built-in Latin font.
 // Reject unsupported scripts explicitly rather than silently corrupting a name.
@@ -39,7 +42,7 @@ const text = (value: string) => {
     .replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
     .replace(/\u2026/g, '...').replace(/\s+/g, ' ').trim();
   if (/[^\u0020-\u007e\u00a0-\u00ff\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2020\u2021\u2022\u2030\u2039\u203a\u20ac]/u.test(clean)) {
-    throw new Error('PDF export cannot render some characters in the selected names or filters with the current font. Download CSV to preserve those characters, or select a narrower filter.');
+    throw new Error('PDF export cannot render some characters in the selected records with the current font. Select a narrower filter.');
   }
   return clean;
 };
@@ -47,6 +50,13 @@ const metadata = (value: string, max = 240) => {
   const clean = text(value);
   return clean.length > max ? clean.slice(0, max - 3) + '...' : clean;
 };
+const identity = (value: string | null | undefined) => text(value ?? '') || '-';
+const category = (value: string | null | undefined) => {
+  const stored = value?.trim();
+  return stored ? identity(categoryLabels[stored] ?? stored.replace(/_/g, ' ')) : '-';
+};
+const percentage = (row: MeritPreviewRow) => row.status === 'READY' && row.totals.total != null && Number.isFinite(row.totals.total)
+  ? row.totals.total.toFixed(2) + '%' : '-';
 
 let logoPromise: Promise<string | undefined> | undefined;
 async function brandLogo(): Promise<string | undefined> {
@@ -85,15 +95,15 @@ function pakistanDate(date: Date): string {
 export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const generatedAt = options.generatedAt ?? new Date();
   if (!Number.isFinite(generatedAt.getTime())) throw new Error('Unable to export PDF: the generation date is invalid.');
-  [options.policyVersion, options.roundTitle, options.sessionRef, options.filters.className,
-    options.filters.readiness, options.filters.search, options.filters.sortLabel,
-    ...options.rows.flatMap(row => [row.studentName, row.className, row.rollNumber ?? '']),
+  [options.roundTitle, options.sessionRef, options.filters.className,
+    ...options.rows.flatMap(row => [row.studentName, row.rollNumber ?? '', row.fatherName ?? '', row.institute ?? '', row.scholarshipCategory ?? '',
+      ...(options.grouping === 'class' ? [row.className] : [])]),
   ].forEach(text);
   const logo = options.logoDataUrl ?? await brandLogo();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
   doc.setProperties({
     title: 'AZM.AIO Merit List - Private Provisional Review',
-    subject: `${meritGroupingLabel(options.grouping)}; written exam marks are final and verified.`,
+    subject: `${meritGroupingLabel(options.grouping)} - private provisional merit review.`,
     author: 'AZM.AIO Scholarship & Examination Authority',
     creator: 'AZM.AIO Interview Management',
   });
@@ -101,24 +111,25 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const height = doc.internal.pageSize.getHeight();
   const margin = 12;
   const contentWidth = width - margin * 2;
-  const readyCount = options.rows.filter(row => row.status === 'READY').length;
   const generatedLabel = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Karachi', day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(generatedAt) + ' PKT';
-  const readiness = statusLabels[options.filters.readiness as MeritPreviewRow['status']] || options.filters.readiness || 'All candidates';
   const filterLines = [
     `Session: ${metadata(options.sessionRef || '-')} | ${metadata(options.roundTitle || 'Interview assessment')}`,
-    `Merit grouping: ${meritGroupingLabel(options.grouping)} | Class filter: ${metadata(options.filters.className || 'All classes')} | Readiness: ${metadata(readiness)}`,
-    `Sort: ${metadata(options.filters.sortLabel)} - ${options.filters.direction === 'asc' ? 'Ascending' : 'Descending'} ${options.grouping === 'overall' ? 'across matching candidates' : 'within each class'} | Search: ${metadata(options.filters.search || 'None')}`,
+    `Merit grouping: ${meritGroupingLabel(options.grouping)}` + (options.filters.className ? ` | Class: ${metadata(options.filters.className)}` : ''),
   ];
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.4);
   const contextLines = filterLines.flatMap(line => doc.splitTextToSize(line, contentWidth - 8) as string[]);
   const ribbonHeight = contextLines.length * 3.5 + 5;
-  const tableTop = 34 + ribbonHeight + 10;
+  const tableTop = 34 + ribbonHeight + 5;
+  const headerPages = new Set<number>();
 
   const drawHeader = () => {
+    const page = doc.getCurrentPageInfo().pageNumber;
+    if (headerPages.has(page)) return;
+    headerPages.add(page);
     if (logo) {
       try {
         const image = doc.getImageProperties(logo);
@@ -135,18 +146,13 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.setTextColor(...muted);
     doc.setFontSize(8.2);
     doc.text('PRIVATE PROVISIONAL REVIEW - NOT PUBLISHED', 35, 24.5);
-    doc.setDrawColor(203, 213, 225);
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(width - margin - 55, 7, 55, 22, 1.5, 1.5, 'FD');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(...muted);
-    doc.text('Generated (Pakistan time)', width - margin - 52, 12);
+    doc.text('Generated (Pakistan time)', width - margin, 12, { align: 'right' });
     doc.setTextColor(...ink);
     doc.setFont('helvetica', 'bold');
-    doc.text(generatedLabel, width - margin - 52, 17);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Candidates: ${options.rows.length} | Ready: ${readyCount}`, width - margin - 52, 23);
+    doc.text(generatedLabel, width - margin, 17, { align: 'right' });
     doc.setDrawColor(...brand);
     doc.setLineWidth(.5);
     doc.line(margin, 31, width - margin, 31);
@@ -156,74 +162,71 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.4);
     doc.text(contextLines, margin + 4, 38, { lineHeightFactor: 1.34 });
-    doc.setFontSize(7.1);
-    doc.text('Scoring: written exam 60 + interview 20 + activities 10 + previous academics 5 + personality 5 = 100.', margin, tableTop - 3.5);
   };
 
-  const body: RowInput[] = options.rows.map(row => {
-    const writtenFinal = row.written.isFinal && row.written.marks !== null && Number.isFinite(row.written.marks);
+  const candidateRow = (row: MeritPreviewRow): RowInput => {
     const rank = meritRank(row, options.grouping);
     return [
-      `${text(row.className)}\n${rank === null ? 'Unranked' : '#' + rank}`,
-      `${text(row.studentName)}\n${text(row.rollNumber || 'No roll number')} | P${row.panel} / B${row.batch}`,
-      writtenFinal ? score(row.written.marks) : '-',
-      score(meritWrittenContribution(row)),
-      score(row.totals.interview), score(row.totals.extracurricular),
-      score(row.totals.academic), score(row.totals.personality),
-      row.status === 'READY' ? score(row.totals.total) : '-',
-      statusLabels[row.status] + (!writtenFinal ? '\nWritten unverified' : ''),
+      rank === null ? '-' : String(rank), identity(row.rollNumber), identity(row.studentName),
+      identity(row.fatherName), identity(row.institute), percentage(row), category(row.scholarshipCategory),
     ];
-  });
-  if (!body.length) body.push([{ content: 'No candidates match the selected filters.', colSpan: 10, styles: { halign: 'center', cellPadding: 6 } }]);
+  };
+  const sections: Array<{ className?: string; rows: MeritPreviewRow[] }> = [];
+  if (options.grouping === 'class') {
+    // The caller supplies its selected order. Consecutive groups preserve that
+    // order, including distinct class aliases, without sorting or renumbering.
+    for (const row of options.rows) {
+      const previous = sections.at(-1);
+      if (previous?.className === row.className) previous.rows.push(row);
+      else sections.push({ className: row.className, rows: [row] });
+    }
+  } else sections.push({ rows: [...options.rows] });
+  if (!sections.length) sections.push({ rows: [] });
 
-  autoTable(doc, {
-    startY: tableTop,
-    margin: { top: tableTop, right: margin, bottom: 24, left: margin },
-    head: [[
-      options.grouping === 'overall' ? 'Class / overall rank' : 'Class / rank', 'Candidate / roll number\n(P = panel, B = batch)', 'Final written\n/100', 'Written\n/60', 'Interview\n/20',
-      'Activities\n/10', 'Academics\n/5', 'Personality\n/5', 'Total\n/100', 'Readiness',
-    ]],
-    body,
-    theme: 'grid',
-    rowPageBreak: 'avoid',
-    showHead: 'everyPage',
-    styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 1.8, textColor: ink, valign: 'middle', lineColor: [219, 226, 234], lineWidth: .12, overflow: 'linebreak' },
-    headStyles: { fillColor: brand, textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', fontSize: 7.2, cellPadding: 2 },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles: {
-      0: { cellWidth: 28 }, 1: { cellWidth: 66 },
-      2: { cellWidth: 21, halign: 'center' }, 3: { cellWidth: 21, halign: 'center' },
-      4: { cellWidth: 23, halign: 'center' }, 5: { cellWidth: 20, halign: 'center' },
-      6: { cellWidth: 20, halign: 'center' }, 7: { cellWidth: 23, halign: 'center' },
-      8: { cellWidth: 21, halign: 'center', fontStyle: 'bold' },
-      9: { cellWidth: contentWidth - 243, fontSize: 7 },
-    },
-    willDrawPage: drawHeader,
-    didParseCell: cell => {
-      if (cell.section === 'body' && cell.column.index === 9 && options.rows[cell.row.index]) {
-        cell.cell.styles.textColor = options.rows[cell.row.index].status === 'READY' ? [4, 120, 87] : [146, 64, 14];
-      }
-    },
-  });
+  let startY = tableTop;
+  for (const section of sections) {
+    const head: RowInput[] = [];
+    if (section.className !== undefined) head.push([{
+      content: `Class: ${identity(section.className)}`, colSpan: 7,
+      styles: { fillColor: [226, 237, 249], textColor: brand, fontSize: 8.7, halign: 'left', cellPadding: 2.5 },
+    }]);
+    head.push(columnHeadings);
+    const body: RowInput[] = section.rows.map(candidateRow);
+    if (!body.length) body.push([{ content: 'No candidates match the selected filters.', colSpan: 7, styles: { halign: 'center', cellPadding: 6 } }]);
+    autoTable(doc, {
+      startY,
+      margin: { top: tableTop, right: margin, bottom: 18, left: margin },
+      head, body,
+      theme: 'grid',
+      rowPageBreak: 'avoid',
+      showHead: 'everyPage',
+      styles: { font: 'helvetica', fontSize: 8.1, cellPadding: 2, textColor: ink, valign: 'middle', lineColor: [219, 226, 234], lineWidth: .12, overflow: 'linebreak' },
+      headStyles: { fillColor: brand, textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', fontSize: 7.8, cellPadding: 2.2 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 20, halign: 'center', fontStyle: 'bold', textColor: brand },
+        1: { cellWidth: 32, fontSize: 7.6 }, 2: { cellWidth: 45 }, 3: { cellWidth: 43 },
+        4: { cellWidth: 65 }, 5: { cellWidth: 32, halign: 'center', fontStyle: 'bold' },
+        6: { cellWidth: contentWidth - 237 },
+      },
+      willDrawPage: drawHeader,
+    });
+    startY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
+  }
 
   const pages = doc.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
     doc.setPage(page);
     doc.setDrawColor(203, 213, 225);
     doc.setLineWidth(.2);
-    doc.line(margin, height - 21, width - margin, height - 21);
+    doc.line(margin, height - 14, width - margin, height - 14);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...muted);
     doc.setFontSize(6.6);
-    doc.text('Written exam marks shown are final and verified. Combined merit remains provisional; this review copy does not publish results or award scholarships.', margin, height - 17);
-    doc.text(options.grouping === 'overall'
-      ? 'Overall ranks compare all ready candidates across this round. Filters and display order preserve ranks and shared ties. A dash means unavailable, not zero.'
-      : 'Ranks belong to each class and retain server-assigned ties. Filters and display order do not change merit ranks. A dash means unavailable, not zero.', margin, height - 13);
-    doc.setFontSize(6.2);
-    doc.text(`Policy: ${metadata(options.policyVersion, 120)} | Confidential administrative review`, margin, height - 7);
+    doc.text('Private provisional review', margin, height - 8);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...brand);
-    doc.text(`Page ${page} of ${pages}`, width - margin, height - 7, { align: 'right' });
+    doc.text(`Page ${page} of ${pages}`, width - margin, height - 8, { align: 'right' });
   }
   return doc;
 }

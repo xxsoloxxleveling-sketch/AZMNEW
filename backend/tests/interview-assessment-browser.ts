@@ -79,6 +79,7 @@ async function run() {
           const assessment = row.assessment;
           const ready = assessment?.status === 'SUBMITTED' && assessment.attendance === 'PRESENT';
           return { ...row, rank: ready ? 1 : null, overallRank: ready ? 1 : null, status: ready ? 'READY' : 'INCOMPLETE',
+            fatherName: 'Synthetic Parent', institute: 'Synthetic Institute', scholarshipCategory: 'GENERAL_MERIT',
             assessmentStatus: assessment?.status ?? 'NOT_STARTED', issues: ready ? [] : ['Assessment has not been submitted.'],
             totals: assessment?.totals ?? { written: row.written.isFinal ? 48 : null, interview: null, extracurricular: null, academic: null, personality: null, total: null } };
         });
