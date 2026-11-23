@@ -135,15 +135,54 @@ describe('Interview assessment service boundaries', () => {
     await service.save('round-v', 'place-1', complete(panel), admin, true);
     assert.equal((await service.merit('round-v')).summary.ready, 1);
     state.sourceRevision = 'manual-c2-v2';
-    assert.equal((await service.merit('round-v')).rows.find(row => row.placementId === 'place-1')?.status, 'SOURCE_CHANGED');
+    const sourceChanged = (await service.merit('round-v')).rows.find(row => row.placementId === 'place-1')!;
+    assert.equal(sourceChanged.status, 'SOURCE_CHANGED');
+    assert.equal(sourceChanged.rank, null); assert.equal(sourceChanged.overallRank, null);
     state.sourceRevision = 'manual-c1-v1';
     await assert.rejects(service.savePanel('round-v', 1, { expectedRevision: 1, members: [{ name: 'New One' }, { name: 'New Two' }, { name: 'New Three' }], reason: 'Replacement panel' }, admin), /Only a Super Admin/);
     await service.savePanel('round-v', 1, { expectedRevision: 1, members: [{ name: 'New One' }, { name: 'New Two' }, { name: 'New Three' }], reason: 'Replacement panel' }, superAdmin);
     const merit = await service.merit('round-v'); assert.equal(merit.summary.ready, 0);
+    assert.equal(merit.overallRankedCandidates, 0);
+    assert.ok(merit.rows.every(row => row.rank === null && row.overallRank === null));
     const candidate = await service.candidate('round-v', 'place-1');
     assert.equal(candidate.assessment?.members[0].name, 'Member One');
     assert.equal(candidate.panelConfiguration?.members[0].name, 'New One');
     assert.equal(candidate.assessment?.totals.total, 82);
+  });
+
+  it('calculates overall ranks before class filtering without rounding ties or writing records', async () => {
+    const { service, state } = fixture(7);
+    ['Class 6', 'Class 7', 'Class 8', 'Class 6', 'Class 10', 'Class 10', 'Class 10']
+      .forEach((className, index) => { state.placements[index].student.currentClass = className; });
+    const panel = await configure(service);
+    for (let index = 1; index <= 6; index += 1) {
+      const input = complete(panel, `combined-ranking-${index}`);
+      if (index <= 2) input.scores[0].interview = 18.01;
+      if (index === 4) input.academic = 3;
+      if (index === 6) input.attendance = 'ABSENT';
+      await service.save('round-v', `place-${index}`, input, admin, index !== 5);
+    }
+    const beforeRead = JSON.stringify(state);
+    const merit = await service.merit('round-v');
+    const byId = new Map(merit.rows.map(row => [row.placementId, row]));
+    assert.equal(merit.rankMethod, 'SHARED_COMPETITION_WITHIN_CLASS');
+    assert.equal(merit.overallRankMethod, 'SHARED_COMPETITION_ALL_CLASSES');
+    assert.equal(merit.overallRankedCandidates, 4);
+    assert.deepEqual(merit.summary, { total: 7, ready: 4, incomplete: 2, absent: 1 });
+    assert.deepEqual(['place-1', 'place-2', 'place-3', 'place-4'].map(id => [
+      byId.get(id)!.rank, byId.get(id)!.overallRank,
+    ]), [[1, 1], [1, 1], [1, 3], [2, 4]]);
+    assert.equal(byId.get('place-1')!.totals.total, byId.get('place-3')!.totals.total);
+    assert.ok(merit.rows.filter(row => row.status !== 'READY').every(row => row.rank === null && row.overallRank === null));
+    assert.ok(merit.rows.every(row => !('numerator' in row)));
+    const filtered = await service.merit('round-v', 'Class 8');
+    assert.equal(filtered.overallRankedCandidates, 4);
+    assert.deepEqual(filtered.rows.map(row => [row.placementId, row.rank, row.overallRank]), [['place-3', 1, 3]]);
+    assert.deepEqual(filtered.summary, { total: 1, ready: 1, incomplete: 0, absent: 0 });
+    assert.deepEqual(filtered.classOptions, merit.classOptions);
+    const empty = await service.merit('round-v', 'No matching class');
+    assert.deepEqual(empty.rows, []); assert.equal(empty.overallRankedCandidates, 4);
+    assert.equal(JSON.stringify(state), beforeRead);
   });
 
   it('keeps absent and unsaved candidates unranked and rejects cross-round/non-admin access', async () => {
@@ -153,7 +192,8 @@ describe('Interview assessment service boundaries', () => {
     const merit = await service.merit('round-v');
     assert.equal(merit.publicationEnabled, false); assert.equal(merit.provisional, true);
     assert.equal(merit.summary.absent, 1); assert.equal(merit.summary.incomplete, 1);
-    assert.ok(merit.rows.every(row => row.rank === null));
+    assert.ok(merit.rows.every(row => row.rank === null && row.overallRank === null));
+    assert.equal(merit.overallRankedCandidates, 0);
     await assert.rejects(service.save('round-v', 'outside-placement', complete(panel, 'other-place-save'), admin), /not in this round/);
     await assert.rejects(service.save('round-v', 'place-2', complete(panel, 'teacher-write-save'), { id: 'teacher-1', role: 'TEACHER' }), /Only an administrator/);
   });

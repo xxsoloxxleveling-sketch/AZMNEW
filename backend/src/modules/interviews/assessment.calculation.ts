@@ -70,3 +70,17 @@ export function rankWithinClasses<T extends { className: string; studentName: st
     return { ...row, rank };
   });
 }
+
+/** Competition ranking (1,1,3) across the whole round, using unrounded scores. */
+export function rankOverall<T extends { studentName: string; placementId: string }>(
+  rows: Array<{ row: T; numerator: Prisma.Decimal }>,
+): Array<T & { rank: number }> {
+  const sorted = [...rows].sort((a, b) => b.numerator.comparedTo(a.numerator)
+    || a.row.studentName.localeCompare(b.row.studentName) || a.row.placementId.localeCompare(b.row.placementId));
+  let rank = 0, previous: Prisma.Decimal | null = null;
+  return sorted.map(({ row, numerator }, index) => {
+    if (previous === null || !numerator.equals(previous)) rank = index + 1;
+    previous = numerator;
+    return { ...row, rank };
+  });
+}

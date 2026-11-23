@@ -19,17 +19,17 @@ async function run() {
   const user = { id: 'synthetic-merit-admin', name: 'Synthetic Administrator', email: 'fixture@test.invalid', role: 'SUPER_ADMIN' };
   const records: MeritPreviewRow[] = Array.from({ length: 30 }, (_, index) => candidate(index + 1));
   records.push(
-    { ...candidate(31), studentName: 'Synthetic Pending Candidate', rank: null, status: 'INCOMPLETE', assessmentStatus: 'NOT_STARTED',
+    { ...candidate(31), studentName: 'Synthetic Pending Candidate', rank: null, overallRank: null, status: 'INCOMPLETE', assessmentStatus: 'NOT_STARTED',
       written: { marks: 99, maximumMarks: 100, isFinal: false, sourceType: null, reference: null, revision: null, status: 'PENDING_VERIFICATION' },
       totals: { written: null, interview: null, extracurricular: null, academic: null, personality: null, total: null }, issues: ['Written mark is not verified.'] },
-    { ...candidate(32), studentName: 'Synthetic Source Changed Candidate', rank: null, status: 'SOURCE_CHANGED',
+    { ...candidate(32), studentName: 'Synthetic Source Changed Candidate', rank: null, overallRank: null, status: 'SOURCE_CHANGED',
       written: { ...candidate(32).written, marks: 90 },
       totals: { written: 48, interview: 17, extracurricular: 8, academic: 4, personality: 4, total: 93.87 }, issues: ['Written source changed after assessment.'] },
-    { ...candidate(33), studentName: 'Synthetic Absent Candidate', rank: null, status: 'ABSENT',
+    { ...candidate(33), studentName: 'Synthetic Absent Candidate', rank: null, overallRank: null, status: 'ABSENT',
       totals: { written: 40.2, interview: null, extracurricular: null, academic: null, personality: null, total: 99.97 }, issues: ['Candidate was absent.'] },
-    { ...candidate(34), className: 'Class 10th', studentName: 'Synthetic Other Class One', rank: 1,
+    { ...candidate(34), className: 'Class 10th', studentName: 'Synthetic Other Class One', rank: 1, overallRank: 1,
       totals: { ...candidate(34).totals, total: 99.75 } },
-    { ...candidate(35), className: 'Class 10th', studentName: 'Synthetic Other Class Two', rank: 2,
+    { ...candidate(35), className: 'Class 10th', studentName: 'Synthetic Other Class Two', rank: 2, overallRank: 16,
       totals: { ...candidate(35).totals, total: 82.5 } },
   );
   const originalRecords = JSON.stringify(records);
@@ -49,6 +49,7 @@ async function run() {
   });
   const methods: string[] = [];
   let nextMeritReply: 'normal' | 'hold' | 'fail' = 'normal';
+  let legacyBackend = false;
   let releaseHeldReply: (() => void) | undefined;
   let onReplyHeld: (() => void) | undefined;
   const server = createServer((req, res) => {
@@ -67,15 +68,18 @@ async function run() {
       const rows = records.filter(row => !url.searchParams.get('className') || row.className === url.searchParams.get('className'));
       const data: MeritPreview = {
         provisional: true, publicationEnabled: false, policyVersion: 'SESSION_V_2026_60_20_10_5_5_V1',
-        rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS', classOptions: ['Class 9th', 'Class 10th'], rows,
+        rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS', overallRankMethod: 'SHARED_COMPETITION_ALL_CLASSES',
+        overallRankedCandidates: 32, classOptions: ['Class 9th', 'Class 10th'], rows,
         summary: { total: rows.length, ready: rows.filter(row => row.status === 'READY').length,
           incomplete: rows.filter(row => row.status === 'INCOMPLETE' || row.status === 'SOURCE_CHANGED').length,
           absent: rows.filter(row => row.status === 'ABSENT').length },
       };
+      const response = legacyBackend ? { ...data, overallRankMethod: undefined, overallRankedCandidates: undefined,
+        rows: rows.map(({ overallRank: _overallRank, ...row }) => row) } : data;
       const behavior = nextMeritReply; nextMeritReply = 'normal';
-      if (behavior === 'hold') { releaseHeldReply = () => { releaseHeldReply = undefined; json(data); }; onReplyHeld?.(); return; }
+      if (behavior === 'hold') { releaseHeldReply = () => { releaseHeldReply = undefined; json(response); }; onReplyHeld?.(); return; }
       if (behavior === 'fail') { json('Synthetic class fetch failed. Please retry.', 503); return; }
-      json(data); return;
+      json(response); return;
     }
     if (url.pathname.startsWith('/api/')) { json('Unexpected synthetic API route: ' + url.pathname, 404); return; }
     res.setHeader('Content-Type', 'text/html');
@@ -96,6 +100,8 @@ async function run() {
     await page.setViewport({ width: 1360, height: 1000 });
     await page.goto('http://127.0.0.1:' + address.port, { waitUntil: 'networkidle0' });
     await waitText(page, 'Synthetic Candidate 001');
+    assert.equal(await (await field(page, 'Merit grouping')).evaluate(element => element.value), 'overall');
+    await waitText(page, 'Class / overall rank');
     assert.equal(await (await field(page, 'Sort by')).evaluate(element => element.value), 'total');
     assert.equal(await (await field(page, 'Order')).evaluate(element => element.value), 'desc');
     const globalDescending = [34, ...Array.from({ length: 14 }, (_, index) => index + 1), 35,
@@ -103,7 +109,7 @@ async function run() {
     let shown = await visibleRows(page);
     assert(shown[0][1].includes('Synthetic Other Class One') && shown[0][7] === '99.75', 'All classes starts with the highest total across the entire list');
     assert(shown[0][0].includes('Class 10th') && shown[0][0].includes('#1'));
-    assert(shown[1][0].includes('Class 9th') && shown[1][0].includes('#1'), 'Class ranks remain unchanged when different classes are interleaved');
+    assert(shown[1][0].includes('Class 9th') && shown[1][0].endsWith('#2') && shown[2][0].endsWith('#2'), 'The server overall ranks preserve a shared tie across the combined list');
     await screenshot(page, path.join(output, 'desktop-merit-global-descending.png'));
     await clickButton(page, 'Next');
     await waitText(page, 'page 2 of 2');
@@ -112,12 +118,20 @@ async function run() {
     for (const row of descendingRows) {
       const source = records.find(record => record.rollNumber === 'SYN-M-' + rolls(row[1])[0]);
       assert(source);
-      assert(row[0].includes(source.className) && row[0].endsWith(source.rank === null ? 'Unranked' : '#' + source.rank), 'Global sorting preserves every class rank and shared tie');
+      assert(row[0].includes(source.className) && row[0].endsWith(source.overallRank === null ? 'Unranked' : '#' + source.overallRank), 'Combined sorting preserves every server overall rank and shared tie');
     }
-    const globalCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'all-classes-total-descending.csv'));
-    const globalPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'all-classes-total-descending.pdf'));
-    assert.deepEqual(rolls(fs.readFileSync(globalCsv, 'utf8')), globalDescending, 'All-class CSV follows global score order across all pages');
-    assert.deepEqual(rolls(pdfContents(globalPdf)), globalDescending, 'All-class PDF follows the same global score order');
+    const globalCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'all-classes-total-descending.csv'), /Overall/);
+    const globalPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'all-classes-total-descending.pdf'), /Overall/);
+    const globalCsvText = fs.readFileSync(globalCsv, 'utf8'), globalPdfText = pdfContents(globalPdf);
+    assert.deepEqual(rolls(globalCsvText), globalDescending, 'All-class CSV follows global score order across all pages');
+    assert.deepEqual(rolls(globalPdfText), globalDescending, 'All-class PDF follows the same global score order');
+    assert.match(globalCsvText.split('\r\n')[0], /"Overall merit rank"/);
+    assert.match(globalCsvText.split('\r\n')[0], /"Merit grouping"$/);
+    assert.equal(csvRow(globalCsvText, 1)[2], '2');
+    assert.equal(csvRow(globalCsvText, 35)[2], '16');
+    assert.equal(csvRow(globalCsvText, 1).at(-1), 'All classes together');
+    assert.match(globalPdfText, /Merit grouping:\s*All classes together/);
+    assert.match(pdfRow(globalPdfText, 'Synthetic Candidate 001', 'Synthetic Candidate 002'), /#2\b/);
     await (await field(page, 'Order')).select('asc');
     await waitText(page, 'page 1 of 2');
     shown = await visibleRows(page);
@@ -130,8 +144,41 @@ async function run() {
     const ascendingPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'all-classes-total-ascending.pdf'));
     assert.deepEqual(rolls(fs.readFileSync(ascendingCsv, 'utf8')), globalAscending);
     assert.deepEqual(rolls(pdfContents(ascendingPdf)), globalAscending);
-    await (await field(page, 'Class ranking')).select('Class 9th');
+    await (await field(page, 'Merit grouping')).select('class');
+    await (await field(page, 'Order')).select('desc');
+    await waitText(page, 'page 1 of 2');
+    shown = await visibleRows(page);
+    assert(shown[0][0].includes('Class 9th') && shown[0][0].endsWith('#1'), 'Separate-by-class restores the original class ranking');
+    await clickButton(page, 'Next');
+    const byClassRows = [...shown, ...await visibleRows(page)];
+    const byClassOrder = Array.from({ length: 35 }, (_, index) => index + 1);
+    assert.deepEqual(rolls(byClassRows.map(row => row[1]).join('\n')), byClassOrder, 'Separate-by-class keeps class groups intact and sorts inside each group');
+    const classCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'by-class-total-descending.csv'), /By-Class/);
+    const classPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'by-class-total-descending.pdf'), /By-Class/);
+    const classCsvText = fs.readFileSync(classCsv, 'utf8'), classPdfText = pdfContents(classPdf);
+    assert.deepEqual(rolls(classCsvText), byClassOrder);
+    assert.deepEqual(rolls(classPdfText), byClassOrder);
+    assert.match(classCsvText.split('\r\n')[0], /"Class merit rank"/);
+    assert.equal(csvRow(classCsvText, 1)[2], '1');
+    assert.equal(csvRow(classCsvText, 35)[2], '2');
+    assert.equal(csvRow(classCsvText, 1).at(-1), 'Separate by class');
+    assert.match(classPdfText, /Merit grouping:\s*Separate by class/);
+    assert.match(pdfRow(classPdfText, 'Synthetic Candidate 001', 'Synthetic Candidate 002'), /#1\b/);
+
+    await (await field(page, 'Merit grouping')).select('overall');
+    await (await field(page, 'Class filter')).select('Class 9th');
     await waitText(page, '33 candidates');
+    shown = await visibleRows(page);
+    assert(shown[0][0].endsWith('#2') && shown[1][0].endsWith('#2') && shown[2][0].endsWith('#4'), 'A class filter does not renumber overall merit');
+    await fill(page, 'Name or roll number', 'Candidate 003');
+    await waitText(page, '1 candidates');
+    assert((await visibleRows(page))[0][0].endsWith('#4'), 'A search filter preserves the server overall rank');
+    const searchedCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'overall-filtered-rank.csv'), /Overall/);
+    const searchedPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'overall-filtered-rank.pdf'), /Overall/);
+    assert.equal(csvRow(fs.readFileSync(searchedCsv, 'utf8'), 3)[2], '4');
+    assert.match(pdfContents(searchedPdf), /#4\b/);
+    await fill(page, 'Name or roll number', '');
+    await (await field(page, 'Merit grouping')).select('class');
     await (await field(page, 'Sort by')).select('rank');
     await (await field(page, 'Order')).select('asc');
     await (await field(page, 'Readiness')).select('READY');
@@ -239,7 +286,7 @@ async function run() {
     await (await field(page, 'Order')).select('asc');
     await waitText(page, 'page 1 of 2');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile merit controls and table remain inside the page');
-    for (const label of ['Sort by', 'Order']) {
+    for (const label of ['Merit grouping', 'Class filter', 'Sort by', 'Order']) {
       const bounds = await (await field(page, label)).boundingBox();
       assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 390, label + ' remains visible on a narrow screen');
     }
@@ -252,11 +299,11 @@ async function run() {
       onReplyHeld = () => { clearTimeout(timeout); resolve(); };
     });
     nextMeritReply = 'hold';
-    await (await field(page, 'Class ranking')).select('Class 10th');
+    await (await field(page, 'Class filter')).select('Class 10th');
     await replyHeld;
     assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'));
     assert(!(await visibleRows(page)).some(row => row[1]?.includes('Synthetic Candidate')), 'A pending class filter hides the previous class rows');
-    await (await field(page, 'Class ranking')).select('Class 9th');
+    await (await field(page, 'Class filter')).select('Class 9th');
     await waitExportsEnabled(page);
     const obsoleteResponse = page.waitForResponse(response => response.url().includes('className=Class+10th') && response.status() === 200);
     assert(releaseHeldReply); releaseHeldReply();
@@ -264,7 +311,7 @@ async function run() {
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     assert((await visibleRows(page)).every(row => row[0]?.includes('Class 9th')), 'A late response cannot overwrite the currently selected class');
     nextMeritReply = 'fail';
-    await (await field(page, 'Class ranking')).select('Class 10th');
+    await (await field(page, 'Class filter')).select('Class 10th');
     await waitText(page, 'Synthetic class fetch failed. Please retry.');
     assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'));
     assert(!(await visibleRows(page)).some(row => row[1]?.includes('Synthetic Candidate')), 'A failed class fetch hides stale candidate rows');
@@ -273,10 +320,33 @@ async function run() {
     assert((await visibleRows(page)).every(row => row[0]?.includes('Class 10th')));
     const recoveredCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'class-fetch-recovered.csv'));
     assert.deepEqual(rolls(fs.readFileSync(recoveredCsv, 'utf8')), [34, 35], 'Retry exports only the newly selected class');
+
+    await (await field(page, 'Merit grouping')).select('overall');
+    shown = await visibleRows(page);
+    assert(shown[0][0].endsWith('#1') && shown[1][0].endsWith('#16'), 'Filtered classes retain their positions in the overall merit list');
+    legacyBackend = true;
+    await clickButton(page, 'Recalculate preview');
+    await waitText(page, 'Combined merit is currently unavailable.');
+    const groupingField = await field(page, 'Merit grouping');
+    assert.equal(await groupingField.evaluate(element => element.value), 'class');
+    assert(await groupingField.evaluate(element => element.querySelector<HTMLOptionElement>('option[value="overall"]')?.disabled), 'An older backend cannot enable fabricated overall ranks');
+    shown = await visibleRows(page);
+    assert(shown[0][0].endsWith('#1') && shown[1][0].endsWith('#2'), 'Legacy responses fall back to real class ranks');
+    const legacyCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'legacy-class-ranks.csv'), /By-Class/);
+    const legacyCsvText = fs.readFileSync(legacyCsv, 'utf8');
+    assert.match(legacyCsvText.split('\r\n')[0], /"Class merit rank"/);
+    assert.equal(csvRow(legacyCsvText, 35)[2], '2');
+    assert.equal(csvRow(legacyCsvText, 35).at(-1), 'Separate by class');
+    legacyBackend = false;
+    await clickButton(page, 'Recalculate preview');
+    await waitExportsEnabled(page);
+    assert(!await (await field(page, 'Merit grouping')).evaluate(element => element.querySelector<HTMLOptionElement>('option[value="overall"]')?.disabled));
+    await (await field(page, 'Merit grouping')).select('overall');
+    assert((await visibleRows(page))[1][0].endsWith('#16'), 'Overall ranking becomes available again when the server supports it');
     assert.deepEqual(errors, []);
     assert.equal(JSON.stringify(records), originalRecords, 'Read-only sorting and downloads do not mutate source marks or ranks');
     assert(methods.every(method => method === 'GET'), 'Merit review and export use read-only requests');
-    console.log('INTERVIEW_MERIT_BROWSER_PASS: global all-class totals ascending/descending across pagination and PDF/CSV, class/readiness/search filters, numeric and natural sorts, unchanged shared class ranks, page reset, all-row downloads, repeated PDF branding and page counters, missing/zero separation, hidden unverified and stale written scores, non-ready totals, desktop/mobile, delayed/failed/retried class requests');
+    console.log('INTERVIEW_MERIT_BROWSER_PASS: server overall and separate-class ranks, shared ties, grouping switches, class/search rank preservation, grouped and global ascending/descending order across pagination and PDF/CSV, grouping filenames/headers, legacy-backend fallback/recovery, numeric/natural sorts, all-row downloads, PDF branding/page counters, missing/zero separation, hidden unverified/stale scores, desktop/mobile, delayed/failed/retried class requests');
   } catch (error) {
     if (reviewPage && !reviewPage.isClosed()) {
       await screenshot(reviewPage, path.join(output, 'failure-state.png')).catch(() => undefined);
@@ -296,6 +366,7 @@ function candidate(number: number): MeritPreviewRow {
     placementId: 'synthetic-merit-placement-' + number, studentId: 'synthetic-merit-student-' + number,
     rollNumber: 'SYN-M-' + number, studentName: 'Synthetic Candidate ' + String(number).padStart(3, '0'),
     className: 'Class 9th', panel: 1, batch: 1, rank: number <= 2 ? 1 : number,
+    overallRank: number <= 2 ? 2 : number <= 14 ? number + 1 : number + 2,
     status: 'READY', assessmentStatus: 'SUBMITTED', issues: [],
     written: { marks: 100 - number, maximumMarks: 100, isFinal: true, sourceType: 'VERIFIED_MANUAL',
       reference: 'synthetic-final-' + number, revision: 'synthetic-final-revision', status: 'QUALIFIED' },
@@ -365,12 +436,13 @@ async function screenshot(page: Page, filename: string) {
   });
   await page.screenshot({ path: filename, fullPage: true });
 }
-async function download(page: Page, button: string, extension: string, directory: string, target: string) {
+async function download(page: Page, button: string, extension: string, directory: string, target: string, expectedFilename?: RegExp) {
   await clickButton(page, button);
   const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
     const filename = fs.readdirSync(directory).find(value => value.endsWith(extension));
     if (filename) {
+      if (expectedFilename) assert.match(filename, expectedFilename, 'The download filename identifies its merit grouping');
       const source = path.join(directory, filename);
       if (fs.statSync(source).size > 0) {
         fs.renameSync(source, target);

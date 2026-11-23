@@ -2,7 +2,8 @@ import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
 import type { MeritPreviewRow } from './assessmentApi';
-import { meritWrittenContribution } from './meritViewModel';
+import { meritGroupingLabel, meritRank, meritWrittenContribution } from './meritViewModel';
+import type { MeritGrouping } from './meritViewModel';
 
 export type MeritPdfOptions = {
   /** All filtered rows, in their selected display order, before pagination. */
@@ -10,6 +11,7 @@ export type MeritPdfOptions = {
   policyVersion: string;
   roundTitle: string;
   sessionRef: string;
+  grouping: MeritGrouping;
   filters: {
     className: string;
     readiness: string;
@@ -91,7 +93,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
   doc.setProperties({
     title: 'AZM.AIO Merit List - Private Provisional Review',
-    subject: 'Filtered interview merit preview; written exam marks are final and verified.',
+    subject: `${meritGroupingLabel(options.grouping)}; written exam marks are final and verified.`,
     author: 'AZM.AIO Scholarship & Examination Authority',
     creator: 'AZM.AIO Interview Management',
   });
@@ -107,8 +109,8 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const readiness = statusLabels[options.filters.readiness as MeritPreviewRow['status']] || options.filters.readiness || 'All candidates';
   const filterLines = [
     `Session: ${metadata(options.sessionRef || '-')} | ${metadata(options.roundTitle || 'Interview assessment')}`,
-    `Class: ${metadata(options.filters.className || 'All classes (ranked separately)')} | Readiness: ${metadata(readiness)}`,
-    `Sort: ${metadata(options.filters.sortLabel)} - ${options.filters.direction === 'asc' ? 'Ascending' : 'Descending'} across matching candidates | Search: ${metadata(options.filters.search || 'None')}`,
+    `Merit grouping: ${meritGroupingLabel(options.grouping)} | Class filter: ${metadata(options.filters.className || 'All classes')} | Readiness: ${metadata(readiness)}`,
+    `Sort: ${metadata(options.filters.sortLabel)} - ${options.filters.direction === 'asc' ? 'Ascending' : 'Descending'} ${options.grouping === 'overall' ? 'across matching candidates' : 'within each class'} | Search: ${metadata(options.filters.search || 'None')}`,
   ];
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.4);
@@ -160,8 +162,9 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
 
   const body: RowInput[] = options.rows.map(row => {
     const writtenFinal = row.written.isFinal && row.written.marks !== null && Number.isFinite(row.written.marks);
+    const rank = meritRank(row, options.grouping);
     return [
-      `${text(row.className)}\n${row.rank === null ? 'Unranked' : '#' + row.rank}`,
+      `${text(row.className)}\n${rank === null ? 'Unranked' : '#' + rank}`,
       `${text(row.studentName)}\n${text(row.rollNumber || 'No roll number')} | P${row.panel} / B${row.batch}`,
       writtenFinal ? score(row.written.marks) : '-',
       score(meritWrittenContribution(row)),
@@ -177,7 +180,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     startY: tableTop,
     margin: { top: tableTop, right: margin, bottom: 24, left: margin },
     head: [[
-      'Class / rank', 'Candidate / roll number\n(P = panel, B = batch)', 'Final written\n/100', 'Written\n/60', 'Interview\n/20',
+      options.grouping === 'overall' ? 'Class / overall rank' : 'Class / rank', 'Candidate / roll number\n(P = panel, B = batch)', 'Final written\n/100', 'Written\n/60', 'Interview\n/20',
       'Activities\n/10', 'Academics\n/5', 'Personality\n/5', 'Total\n/100', 'Readiness',
     ]],
     body,
@@ -213,7 +216,9 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.setTextColor(...muted);
     doc.setFontSize(6.6);
     doc.text('Written exam marks shown are final and verified. Combined merit remains provisional; this review copy does not publish results or award scholarships.', margin, height - 17);
-    doc.text('Ranks belong to each class and retain server-assigned ties. Filters and display order do not change merit ranks. A dash means unavailable, not zero.', margin, height - 13);
+    doc.text(options.grouping === 'overall'
+      ? 'Overall ranks compare all ready candidates across this round. Filters and display order preserve ranks and shared ties. A dash means unavailable, not zero.'
+      : 'Ranks belong to each class and retain server-assigned ties. Filters and display order do not change merit ranks. A dash means unavailable, not zero.', margin, height - 13);
     doc.setFontSize(6.2);
     doc.text(`Policy: ${metadata(options.policyVersion, 120)} | Confidential administrative review`, margin, height - 7);
     doc.setFont('helvetica', 'bold');
@@ -227,6 +232,6 @@ export async function exportMeritPdf(options: MeritPdfOptions): Promise<void> {
   const generatedAt = options.generatedAt ?? new Date();
   const doc = await buildMeritPdf({ ...options, generatedAt });
   const filenamePart = (value: string) => value.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 45);
-  const parts = ['AZM', filenamePart(options.sessionRef), 'Provisional-Merit', filenamePart(options.filters.className), pakistanDate(generatedAt)].filter(Boolean);
+  const parts = ['AZM', filenamePart(options.sessionRef), 'Provisional-Merit', options.grouping === 'overall' ? 'Overall' : 'By-Class', filenamePart(options.filters.className), pakistanDate(generatedAt)].filter(Boolean);
   doc.save(parts.join('-') + '.pdf');
 }

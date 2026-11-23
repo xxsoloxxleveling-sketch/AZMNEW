@@ -112,27 +112,28 @@ async function run() {
       id: actor.id, name: actor.name, email: `${actor.id}@test.invalid`, passwordHash: 'synthetic-not-a-login',
       role: actor.role as 'SUPER_ADMIN' | 'ADMIN', status: 'ACTIVE',
     } });
-    for (const [id, marks, sequence] of [
-      [candidateId, 80, 1], ['synthetic-incomplete', 64, 2], ['synthetic-below-threshold', 31, 3],
-    ] as const) {
-      await ownerDb.student.create({ data: {
+    const seedCandidate = async (id: string, marks: number, sequence: number, currentClass = 'Class 10') => {
+      await ownerDb!.student.create({ data: {
         id, applicationNo: `APP-${id}`, rollNumber: `ROLL-${id}`, qrToken: `synthetic-qr-${id}`,
         fullName: `Synthetic ${id}`, fatherName: 'Synthetic Parent', gender: 'FEMALE',
         dateOfBirth: new Date('2008-01-01T00:00:00.000Z'), cnicOrBForm: `synthetic-identity-${id}`,
         address: 'Synthetic Address', district: 'Synthetic District', province: 'Synthetic Province',
-        parentMobile: 'synthetic-contact', currentClass: 'Class 10', schoolName: 'Synthetic School',
+        parentMobile: 'synthetic-contact', currentClass, schoolName: 'Synthetic School',
         boardOrUniversity: 'Synthetic Board', scholarshipCategory: 'GENERAL_MERIT',
         emergencyContact: 'synthetic-emergency', emergencyRelation: 'Synthetic Guardian',
       } });
-      await admin.query(`SELECT * FROM public.azm_record_manual_exam_mark(
+      await admin!.query(`SELECT * FROM public.azm_record_manual_exam_mark(
         $1::text,$2::integer,$3::text,$4::text,true,true,$5::text)`, [
         id, marks, `SYNTHETIC-REGISTER-${sequence}`, 'Synthetic signed examination register and student identity independently reviewed.', superAdmin.id,
       ]);
-      await admin.query(`SELECT * FROM public.azm_verify_manual_exam_mark(
+      await admin!.query(`SELECT * FROM public.azm_verify_manual_exam_mark(
         $1::text,$2::integer,$3::text,$4::text,true,true,true,$5::text)`, [
         id, marks, `SYNTHETIC-VERIFICATION-${sequence}`, 'Synthetic original written mark, identity and attendance evidence independently verified.', superAdmin.id,
       ]);
-    }
+    };
+    for (const [id, marks, sequence] of [
+      [candidateId, 80, 1], ['synthetic-incomplete', 64, 2], ['synthetic-below-threshold', 31, 3],
+    ] as const) await seedCandidate(id, marks, sequence);
     await ownerDb.interviewRound.create({ data: {
       id: roundId, sessionRef: '2026-V', title: 'Synthetic finalized allocation timetable',
       status: 'FINALIZED', eligibilityThreshold: 60, maximumMarks: 100, createdById: superAdmin.id,
@@ -209,6 +210,7 @@ async function run() {
       assert.equal(draft.totals.total, 81.75);
       const beforeSubmission = (await service.merit(roundId)).rows.find(row => row.placementId === placementId)!;
       assert.equal(beforeSubmission.rank, null);
+      assert.equal(beforeSubmission.overallRank, null);
       assert.equal(beforeSubmission.status, 'INCOMPLETE');
       submitRequest = scoreInput(panel, 1, 'synthetic-submit-0002');
       submitted = await service.save(roundId, placementId, submitRequest, adminActor, true);
@@ -218,6 +220,8 @@ async function run() {
       const merit = await service.merit(roundId);
       assert.equal(merit.publicationEnabled, false);
       assert.equal(merit.rows.find(row => row.placementId === placementId)?.rank, 1);
+      assert.equal(merit.rows.find(row => row.placementId === placementId)?.overallRank, 1);
+      assert.equal(merit.overallRankedCandidates, 1);
       assert.equal((await runtime!.interviewRound.findUniqueOrThrow({ where: { id: roundId } })).status, 'FINALIZED');
     });
 
@@ -290,6 +294,7 @@ async function run() {
       const row = (await service.merit(roundId)).rows.find(item => item.placementId === placementId)!;
       assert.equal(row.status, 'SOURCE_CHANGED');
       assert.equal(row.rank, null);
+      assert.equal(row.overallRank, null);
       assert.equal((await ownerDb!.manualExamMark.findUniqueOrThrow({
         where: { sessionReference_studentId: { sessionReference: '2026-V', studentId: candidateId } },
       })).obtainedMarks, 80);
@@ -320,6 +325,7 @@ async function run() {
       const changed = (await service.merit(roundId)).rows.find(row => row.placementId === placementId)!;
       assert.equal(changed.status, 'SOURCE_CHANGED');
       assert.equal(changed.rank, null);
+      assert.equal(changed.overallRank, null);
       await rejectsStatus(() => service.save(roundId, placementId, {
         ...scoreInput(panel!, 4, 'synthetic-old-panel-0005'), reason: 'Synthetic stale membership rejection.',
       }, superAdmin, true), 409);
@@ -339,6 +345,63 @@ async function run() {
       assert.equal(await runtime!.interviewPanelRevision.count(), 2);
       assert.equal((await service.history(roundId, placementId)).length, 5);
       await assertInterviewAssessmentRuntime(runtime!);
+    });
+
+    await check('overall merit compares exact scores across classes before filters and performs no writes', async () => {
+      const combinedRoundId = 'synthetic-overall-round';
+      const classes = ['Class 6', 'Class 7', 'Class 8', 'Class 6', 'Class 10', 'Class 10', 'Class 10'];
+      for (let index = 0; index < classes.length; index += 1) {
+        await seedCandidate(`synthetic-overall-${index + 1}`, 80, index + 10, classes[index]);
+      }
+      await ownerDb!.interviewRound.create({ data: {
+        id: combinedRoundId, sessionRef: '2026-V', title: 'Synthetic overall merit round',
+        status: 'FINALIZED', eligibilityThreshold: 60, maximumMarks: 100, createdById: superAdmin.id,
+      } });
+      await ownerDb!.interviewFixedSchedule.create({ data: {
+        id: 'synthetic-overall-schedule', roundId: combinedRoundId, csvSha256: 'c'.repeat(64), pdfSha256: 'd'.repeat(64),
+        interviewDate: new Date('2026-11-22T00:00:00.000Z'), importedById: superAdmin.id,
+        placements: { create: classes.map((_className, index) => ({
+          id: `synthetic-overall-placement-${index + 1}`, studentId: `synthetic-overall-${index + 1}`,
+          panel: 1, batch: 1, sequence: index + 1, slotTime: '10:00', printedMarks: 80,
+        })) },
+      } });
+      const combinedPanel = await service.savePanel(combinedRoundId, 1, {
+        expectedRevision: 0,
+        members: [{ name: 'Synthetic Overall One' }, { name: 'Synthetic Overall Two' }, { name: 'Synthetic Overall Three' }],
+        reason: 'Synthetic overall merit comparison panel.',
+      }, adminActor);
+      for (let index = 1; index <= 6; index += 1) {
+        const input = scoreInput(combinedPanel, 0, `synthetic-overall-submit-${index}`);
+        if (index <= 2) input.scores[0].interview = 16.01;
+        if (index === 4) input.academic = 3;
+        if (index === 6) input.attendance = 'ABSENT';
+        await service.save(combinedRoundId, `synthetic-overall-placement-${index}`, input, adminActor, index !== 5);
+      }
+      const assessmentBefore = await ownerDb!.interviewAssessmentRevision.findMany({ orderBy: { id: 'asc' } });
+      const panelsBefore = await ownerDb!.interviewPanelRevision.findMany({ orderBy: { id: 'asc' } });
+      const placementsBefore = await ownerDb!.interviewFixedPlacement.findMany({ orderBy: { id: 'asc' } });
+      const writtenBefore = await sourceSnapshot();
+      const merit = await service.merit(combinedRoundId);
+      const byId = new Map(merit.rows.map(row => [row.placementId, row]));
+      assert.equal(merit.rankMethod, 'SHARED_COMPETITION_WITHIN_CLASS');
+      assert.equal(merit.overallRankMethod, 'SHARED_COMPETITION_ALL_CLASSES');
+      assert.equal(merit.overallRankedCandidates, 4);
+      assert.deepEqual(merit.summary, { total: 7, ready: 4, incomplete: 2, absent: 1 });
+      assert.deepEqual([1, 2, 3, 4].map(index => {
+        const row = byId.get(`synthetic-overall-placement-${index}`)!;
+        return [row.rank, row.overallRank];
+      }), [[1, 1], [1, 1], [1, 3], [2, 4]]);
+      assert.equal(byId.get('synthetic-overall-placement-1')!.totals.total,
+        byId.get('synthetic-overall-placement-3')!.totals.total);
+      assert.ok(merit.rows.filter(row => row.status !== 'READY').every(row => row.rank === null && row.overallRank === null));
+      const filtered = await service.merit(combinedRoundId, 'Class 8');
+      assert.equal(filtered.overallRankedCandidates, 4);
+      assert.deepEqual(filtered.rows.map(row => [row.rank, row.overallRank]), [[1, 3]]);
+      assert.deepEqual(filtered.summary, { total: 1, ready: 1, incomplete: 0, absent: 0 });
+      assert.deepEqual(await ownerDb!.interviewAssessmentRevision.findMany({ orderBy: { id: 'asc' } }), assessmentBefore);
+      assert.deepEqual(await ownerDb!.interviewPanelRevision.findMany({ orderBy: { id: 'asc' } }), panelsBefore);
+      assert.deepEqual(await ownerDb!.interviewFixedPlacement.findMany({ orderBy: { id: 'asc' } }), placementsBefore);
+      assert.deepEqual(await sourceSnapshot(), writtenBefore);
     });
     console.log(`PASS ${passed} real PostgreSQL 17 interview assessment integration checks`);
   } finally {

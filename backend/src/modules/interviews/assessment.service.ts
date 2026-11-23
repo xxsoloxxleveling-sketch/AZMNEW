@@ -7,7 +7,7 @@ import {
   PanelDto, PanelInput, PanelMember, WrittenMarkDto, assessmentPanelSchema, assessmentSaveSchema,
 } from './assessment.schema';
 import {
-  assessmentCompletionIssues, calculateAssessmentTotals, exactMeritNumerator, rankWithinClasses, sameWrittenRevision,
+  assessmentCompletionIssues, calculateAssessmentTotals, exactMeritNumerator, rankOverall, rankWithinClasses, sameWrittenRevision,
 } from './assessment.calculation';
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -245,7 +245,7 @@ export class InterviewAssessmentService {
     return this.transaction(async tx => {
       const context = await this.context(tx, roundId);
       const classOptions = [...new Set(context.placements.map(row => row.student.currentClass))].sort();
-      const rows = context.placements.filter(row => !className || row.student.currentClass === className).map(placement => {
+      const rows = context.placements.map(placement => {
         const row = this.rosterRow(placement, context), record = context.assessmentByPlacement.get(placement.id);
         const issues = [...(row.assessment?.issues ?? ['No assessment has been saved.'])];
         let status: 'READY' | 'INCOMPLETE' | 'ABSENT' | 'SOURCE_CHANGED' = 'INCOMPLETE';
@@ -267,14 +267,22 @@ export class InterviewAssessmentService {
           numerator: status === 'READY' && record ? exactMeritNumerator(rowInput(record), row.written) : null,
         };
       });
-      const ranked = rankWithinClasses(rows.filter(row => row.numerator !== null).map(row => ({ row, numerator: row.numerator! })));
-      const rankByPlacement = new Map(ranked.map(row => [row.placementId, row.rank]));
-      const result = rows.map(({ numerator: _numerator, ...row }) => ({ ...row, rank: rankByPlacement.get(row.placementId) ?? null }))
+      const eligible = rows.filter(row => row.numerator !== null).map(row => ({ row, numerator: row.numerator! }));
+      const rankByPlacement = new Map(rankWithinClasses(eligible).map(row => [row.placementId, row.rank]));
+      const overallRankByPlacement = new Map(rankOverall(eligible).map(row => [row.placementId, row.rank]));
+      // Rank the complete round before applying view filters, preserving rank gaps
+      // when an administrator inspects only one class of the overall merit list.
+      const result = rows.filter(row => !className || row.className === className)
+        .map(({ numerator: _numerator, ...row }) => ({ ...row,
+          rank: rankByPlacement.get(row.placementId) ?? null,
+          overallRank: overallRankByPlacement.get(row.placementId) ?? null,
+        }))
         .sort((a, b) => a.className.localeCompare(b.className) || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER)
           || a.studentName.localeCompare(b.studentName) || a.placementId.localeCompare(b.placementId));
       return {
         provisional: true, publicationEnabled: false, policyVersion: INTERVIEW_ASSESSMENT_POLICY,
-        rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS', classOptions, rows: result,
+        rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS', overallRankMethod: 'SHARED_COMPETITION_ALL_CLASSES',
+        overallRankedCandidates: eligible.length, classOptions, rows: result,
         summary: { total: result.length, ready: result.filter(row => row.status === 'READY').length,
           incomplete: result.filter(row => row.status === 'INCOMPLETE' || row.status === 'SOURCE_CHANGED').length,
           absent: result.filter(row => row.status === 'ABSENT').length },

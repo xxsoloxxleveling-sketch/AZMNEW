@@ -32,7 +32,8 @@ Open **Interview management → Marks & assessments** for the Session V round.
 4. Record extracurricular activities out of 10 and previous academics out of 5,
    with a document or assessment-sheet reference and a review acknowledgement.
 5. Save a draft, save and open the next candidate, or submit the complete record.
-6. Use **Merit preview** to review class ranks and incomplete or changed records.
+6. Use **Merit preview** to review overall or separate class ranks and incomplete
+   or changed records.
 
 Admin and Super Admin can enter initial assessments. Any correction after a
 submission requires a Super Admin and a reason, including a later draft of that
@@ -67,32 +68,45 @@ so displaying two decimal places does not create false ties. An explicit zero is
 a score; a blank is missing. All three scorecards are required for a present
 candidate. Absentees and drafts are unranked.
 
-The preview ranks independently within each class. Exact ties share competition
-ranks (1, 1, 3). This is a private provisional ordering, not an approved final tie
-policy or an award allocation. PDF and CSV exports carry the same provisional label.
+The preview supports one overall ranking across all classes and independent
+rankings within each class. Both use the exact server-calculated scores. Exact
+ties share competition ranks (1, 1, 3). This is a private provisional ordering,
+not an approved final tie policy or an award allocation. PDF and CSV exports
+carry the same provisional label.
 
-## Merit PDFs and sort order
+## Merit grouping, PDFs and sort order
 
-In **Merit preview**, choose the class, readiness and name/roll filters, then use
-**Sort by** and **Order** to arrange candidates in ascending or descending order.
-Available fields are merit rank, total marks, final written marks, student name
-and roll number. Sorting applies across the entire filtered list, including when
-**All classes** is selected. The default is **Total marks → Descending**. Class
-names never take priority over the selected sort field, and missing values stay
-at the bottom of the full list in both directions.
+In **Merit preview**, choose **Merit grouping**:
 
-Sorting and filtering retain the server's original class ranks and shared ties;
-they never assign an overall rank or renumber a filtered list. Total-mark sorting
-compares the displayed numeric totals across classes. If displayed totals are
-equal, candidates from the same class retain the server's exact-score ordering
-in the selected direction. Class ranks are never compared as substitutes for
-total marks between different classes.
+- **All classes together** (the default) gives every ready candidate one overall
+  rank across the entire round, irrespective of class. Sorting applies across
+  the full filtered list.
+- **Separate by class** groups candidates by class, displays the existing class
+  ranks and applies sorting within each class.
+
+**Class filter** controls which candidates are visible. It does not change the
+ranking population: selecting one class in the overall view retains each
+candidate's rank among all ready candidates in the round. Readiness and
+name/roll filters likewise preserve the original ranks and any gaps.
+
+Use **Sort by** and **Order** to arrange candidates in ascending or descending
+order. Available fields are merit rank, total marks, final written marks,
+student name and roll number. The default is **Total marks → Descending**.
+Missing values stay at the bottom in both directions, within their class when
+separate grouping is selected.
+
+Sorting and filtering never renumber candidates. Total sorting compares numeric
+totals and uses the selected server rank to preserve exact-score distinctions
+when displayed totals round to the same two-decimal value. True ties retain
+stable order. Class ranks are never used as substitutes for overall ranks.
 
 **Download PDF** produces an AZM-branded landscape A4 merit report with the logo,
-round/session, filters, sort order, generation time in Pakistan, score components,
-readiness, original class ranks, repeated table headings and page numbers.
-**Export CSV** uses the same filtered order. Both include every matching candidate
-across all pages, rather than only the 25 currently visible rows.
+round/session, selected grouping, filters, sort order, generation time in
+Pakistan, score components, readiness, selected overall or class ranks,
+repeated table headings and page numbers. **Export CSV** uses the same filtered
+order and includes the grouping and corresponding rank heading. Filenames
+identify the grouping. Both include every matching candidate across all pages,
+rather than only the 25 currently visible rows.
 
 These are private, provisional combined merit review copies. Existing verified
 written marks retain their final status; incomplete or changed assessments do
@@ -104,8 +118,12 @@ Unsupported scripts raise a clear export error before generating a document;
 CSV preserves Unicode text. Candidate names are never silently dropped or
 replaced to force a PDF export.
 
-PDF generation and display sorting run in the browser. This incremental update
-requires only a frontend deployment, with no database migration or mark updates.
+PDF generation and display sorting run in the browser; both ranking scopes are
+calculated on the server using exact decimal values. Deploy the backend before
+the frontend for the grouping update. It needs no new database migration,
+permission changes or mark updates. If an older backend is active, the frontend
+shows separate class ranks, disables the combined option and explains that
+combined merit is unavailable. It never invents overall ranks from row order.
 
 ## Scope of this release
 
@@ -134,14 +152,27 @@ router, with private/no-store responses:
 | POST | `/candidates/:placementId/save` | Append a draft revision |
 | POST | `/candidates/:placementId/submit` | Validate and append a submission |
 | GET | `/candidates/:placementId/history` | Most recent 100 immutable revisions |
-| GET | `/merit` | Recalculate the private, class-based preview |
+| GET | `/merit` | Recalculate the private overall and class-based preview |
+
+The merit response retains `rank` and
+`rankMethod: SHARED_COMPETITION_WITHIN_CLASS` for existing clients. Each row also
+includes `overallRank`, with
+`overallRankMethod: SHARED_COMPETITION_ALL_CLASSES` and
+`overallRankedCandidates` at the response level. Both ranks are null for
+unready candidates. The server assigns both ranks across the complete round
+before applying an optional class filter. `overallRankedCandidates` always
+counts all ranked candidates in the round; `summary` counts the returned rows.
 
 Both score mutations require `expectedRevision`, the current `panelRevision`,
 and an `idempotencyKey`. Identical retries return the saved revision; key reuse
 with different data and stale concurrent edits return 409. The frontend preserves
 unsaved values after such conflicts and requires an explicit reload.
 
-## Migration and rollout order
+## Initial assessment migration and rollout order
+
+These steps describe the initial assessment release. The later merit-grouping
+update uses the existing schema and privileges; do not repeat migrations or
+grant changes solely to add overall ranks.
 
 The additive migration
 `20261121160000_interview_assessment_revisions` creates
@@ -180,9 +211,10 @@ fixtures using synthetic data only:
 - A Puppeteer fixture mounts the production admin views, configures the panel,
   enters scores, verifies the 81.75 example, tests missing/zero scores and conflict
   handling, and captures desktop/mobile review screenshots.
-- A merit-download fixture checks ascending/descending display order, unchanged
-  ranks, pagination reset, filtered PDF/CSV parity, all-page exports, and mobile
-  controls with synthetic candidates. PDF text is checked using Poppler and the
+- A merit-download fixture checks both grouping choices, exact server-rank
+  preservation, ascending/descending display order, pagination reset, filtered
+  PDF/CSV parity, all-page exports, legacy-server fallback and mobile controls
+  with synthetic candidates. PDF text is checked using Poppler and the
   generated report is rendered for visual layout review before release.
 
 The CI run reports execution results when run. The PostgreSQL 17 and browser
