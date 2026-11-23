@@ -3,6 +3,40 @@ import type { MeritPreviewRow } from './assessmentApi';
 export type MeritSortField = 'rank' | 'total' | 'written' | 'studentName' | 'rollNumber';
 export type SortDirection = 'asc' | 'desc';
 export type MeritGrouping = 'overall' | 'class';
+export const maximumMeritListSize = 10000;
+
+export function parseMeritListLimit(mode: string, customValue: string): { limit: number | null; error: string } {
+  if (mode === 'all') return { limit: null, error: '' };
+  const value = mode === 'custom' ? customValue.trim() : mode;
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < 1 || Number(value) > maximumMeritListSize) {
+    return { limit: null, error: `Enter a whole number from 1 to ${maximumMeritListSize.toLocaleString('en')}.` };
+  }
+  return { limit: Number(value), error: '' };
+}
+
+/** Select membership by authoritative rank before applying any display ordering. */
+export function selectMeritRows(
+  rows: readonly MeritPreviewRow[], limit: number | null, supportsOverall: boolean, singleClass: boolean,
+): { rows: MeritPreviewRow[]; available: number; cutoffRank: number | null; includeTiesCount: number | null; error: string } {
+  if (limit === null) return { rows: [...rows], available: rows.length, cutoffRank: null, includeTiesCount: null, error: '' };
+  if (!Number.isInteger(limit) || limit < 1 || limit > maximumMeritListSize) {
+    return { rows: [], available: 0, cutoffRank: null, includeTiesCount: null, error: 'Choose a valid student limit.' };
+  }
+  if (!supportsOverall && !singleClass) {
+    return { rows: [], available: 0, cutoffRank: null, includeTiesCount: null,
+      error: 'A combined student limit is unavailable. Select one class or choose all matching candidates.' };
+  }
+  const ranking: MeritGrouping = supportsOverall ? 'overall' : 'class';
+  // Stable incoming order resolves only the report boundary within a shared rank;
+  // the rank itself is never broken, changed, or used to assign an award.
+  const ranked = sortMeritRows(rows.filter(row => meritRank(row, ranking) !== null), 'rank', 'asc', ranking);
+  const selected = ranked.slice(0, limit);
+  const cutoffRank = selected.length ? meritRank(selected[selected.length - 1], ranking) : null;
+  let end = selected.length;
+  while (cutoffRank !== null && end < ranked.length && meritRank(ranked[end], ranking) === cutoffRank) end++;
+  return { rows: selected, available: ranked.length, cutoffRank,
+    includeTiesCount: end > selected.length ? end : null, error: '' };
+}
 
 export const meritGroupingLabel = (grouping: MeritGrouping): string =>
   grouping === 'overall' ? 'All classes together' : 'Separate by class';

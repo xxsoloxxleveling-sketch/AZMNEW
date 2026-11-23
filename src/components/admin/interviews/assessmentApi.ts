@@ -93,12 +93,23 @@ export type SaveAssessmentInput = {
   notes: string;
   reason?: string;
 };
+export type MeritAwardCode = 'UMRAH_TICKET' | 'LAPTOP' | 'FULL_YEAR_SCHOLARSHIP' | 'PARTIAL_SCHOLARSHIP'
+  | 'EDUCATIONAL_VOUCHER' | 'CASH_PRIZE_3000' | 'CASH_PRIZE_5000';
+export type MeritAward = {
+  id: string | null;
+  revision: number;
+  awardCode: MeritAwardCode | null;
+  actorName: string | null;
+  createdAt: string | null;
+};
 export type MeritPreviewRow = Pick<AssessmentRosterRow, 'placementId' | 'studentId' | 'rollNumber' | 'studentName' | 'className' | 'panel' | 'batch' | 'written'> & {
   /** Current registration details; optional while older API releases are in use. */
   fatherName?: string;
   institute?: string;
   /** Stored registration category, not a calculated scholarship award. */
   scholarshipCategory?: string;
+  /** An administrator's saved award decision, independent of marks and registration category. */
+  meritAward?: MeritAward;
   rank: number | null;
   /** Exact competition rank across the whole round, before display filters. */
   overallRank?: number | null;
@@ -114,6 +125,7 @@ export type MeritPreview = {
   rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS';
   overallRankMethod?: 'SHARED_COMPETITION_ALL_CLASSES';
   overallRankedCandidates?: number;
+  manualAwardsEnabled?: boolean;
   rows: MeritPreviewRow[];
   summary: { total: number; ready: number; incomplete: number; absent: number };
   classOptions: string[];
@@ -145,4 +157,7 @@ export const assessmentApi = {
     apiFetch<CandidateAssessment>(root(roundId) + '/candidates/' + encodeURIComponent(placementId) + '/submit', json('POST', body)),
   merit: (roundId: string, className = '') =>
     apiFetch<MeritPreview>(root(roundId) + '/merit?' + query({ className })),
+  saveMeritAward: (roundId: string, placementId: string, body: {
+    expectedRevision: number; idempotencyKey: string; awardCode: MeritAwardCode | null;
+  }) => apiFetch<MeritAward>(root(roundId) + '/candidates/' + encodeURIComponent(placementId) + '/merit-award', json('PUT', body)),
 };

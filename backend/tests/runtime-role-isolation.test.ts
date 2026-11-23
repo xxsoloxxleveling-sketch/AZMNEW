@@ -108,6 +108,40 @@ async function run() {
         (result.stderr||result.stdout).slice(-1800));
     console.log('Isolated least-privilege grants applied in disposable PostgreSQL 17.');
 
+    const awardGrantSql=fs.readFileSync(path.resolve(__dirname,'../ops/postgres/interview-merit-award-grants.sql'),'utf8');
+    const runAwardGrant=(target=database)=>spawnSync('docker',[
+      'exec','-i','-u','postgres',serviceContainer,'psql','-X',
+      '-v','ON_ERROR_STOP=1','-U','postgres','-d',database,
+      '-v','target_db='+target,'-v','login_role='+login,'-v','grant_role='+group,
+      '-v','approved_ticket=SYNTHETIC-MERIT-AWARD-TEST',
+      '-v','accept_action=APPLY-AZM-MERIT-AWARD-GRANTS'
+    ],{input:awardGrantSql,encoding:'utf8',timeout:30000});
+    await check('narrow manual-award grants reject a wrong database without changing access',async()=>{
+      const before=await fixture!.query('SELECT relacl::text AS acl FROM pg_class WHERE oid=$1::regclass',['"InterviewMeritAwardRevision"']);
+      assert.notEqual(runAwardGrant('incorrect_fixture_database').status,0);
+      assert.deepEqual((await fixture!.query('SELECT relacl::text AS acl FROM pg_class WHERE oid=$1::regclass',['"InterviewMeritAwardRevision"'])).rows,before.rows);
+    });
+    await check('narrow manual-award grants add only SELECT/INSERT and preserve every other table ACL',async()=>{
+      await fixture!.query('REVOKE INSERT ON TABLE "InterviewMeritAwardRevision" FROM '+escapeName(group));
+      assert.equal((await fixture!.query('SELECT has_table_privilege($1,$2,\'INSERT\') AS writable',[login,'"InterviewMeritAwardRevision"'])).rows[0].writable,false);
+      const otherAcls=()=>fixture!.query(`SELECT c.relname,c.relacl::text AS acl FROM pg_class c
+        JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public'
+        AND c.relkind IN ('r','p') AND c.relname<>'InterviewMeritAwardRevision' ORDER BY c.relname`);
+      const before=await otherAcls();
+      const grantResult=runAwardGrant();
+      assert.equal(grantResult.status,0,(grantResult.stderr||grantResult.stdout).slice(-1800));
+      assert.deepEqual((await otherAcls()).rows,before.rows);
+      const access=await fixture!.query(`SELECT has_table_privilege($1,$2,'SELECT') AS readable,
+        has_table_privilege($1,$2,'INSERT') AS insertable,
+        has_table_privilege($1,$2,'UPDATE,DELETE,TRUNCATE,TRIGGER') AS mutable`,[login,'"InterviewMeritAwardRevision"']);
+      assert.deepEqual(access.rows[0],{readable:true,insertable:true,mutable:false});
+    });
+    await check('narrow manual-award grants reject a disabled insertion validator',async()=>{
+      await fixture!.query('ALTER TABLE "InterviewMeritAwardRevision" DISABLE TRIGGER "InterviewMeritAwardRevision_validate"');
+      try { assert.notEqual(runAwardGrant().status,0); }
+      finally { await fixture!.query('ALTER TABLE "InterviewMeritAwardRevision" ENABLE TRIGGER "InterviewMeritAwardRevision_validate"'); }
+    });
+
     await check('grant operator rejects inherited TRUNCATE on immutable evidence and migration history',async()=>{
       for (const table of ['"AttendanceResetOperation"','"AttendanceSessionCancellation"','"AttendanceSessionReopening"','"ExamLegacyResultHistory"','"_prisma_migrations"']) {
         // PUBLIC grants represent effective privileges bypassing direct role REVOKEs.

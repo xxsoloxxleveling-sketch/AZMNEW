@@ -129,6 +129,7 @@ model User {
   importedFixedInterviewSchedules InterviewFixedSchedule[] @relation("FixedScheduleImporter")
   interviewPanelRevisions InterviewPanelRevision[] @relation("InterviewPanelRevisionActor")
   interviewAssessmentRevisions InterviewAssessmentRevision[] @relation("InterviewAssessmentRevisionActor")
+  interviewMeritAwardRevisions InterviewMeritAwardRevision[] @relation("InterviewMeritAwardRevisionActor")
 }
 
 enum StudentStatus {
@@ -1300,6 +1301,7 @@ model InterviewRound {
   audits               InterviewAllocationAudit[]
   panelRevisions       InterviewPanelRevision[]
   assessmentRevisions  InterviewAssessmentRevision[]
+  meritAwardRevisions  InterviewMeritAwardRevision[]
 
   @@index([status, createdAt])
 }
@@ -1428,6 +1430,7 @@ model InterviewFixedPlacement {
   slotTime     String
   printedMarks Int
   assessmentRevisions InterviewAssessmentRevision[]
+  meritAwardRevisions InterviewMeritAwardRevision[]
 
   @@unique([scheduleId, studentId])
   @@unique([scheduleId, panel, batch, sequence])
@@ -1488,6 +1491,28 @@ model InterviewAssessmentRevision {
   @@unique([roundId, idempotencyKey])
   @@index([roundId, placementId, createdAt])
   @@index([panelRevisionId])
+}
+
+// Explicit administrator selections, independent of registration category and scores.
+// Clearing an award appends a null revision; historical choices are never overwritten.
+model InterviewMeritAwardRevision {
+  id             String   @id @default(cuid())
+  roundId        String
+  placementId    String
+  revision       Int
+  awardCode      String?  @db.VarChar(40)
+  actorId        String
+  actorName      String
+  idempotencyKey String   @db.VarChar(100)
+  requestHash    String   @db.VarChar(64)
+  createdAt      DateTime @default(now())
+  round          InterviewRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  placement      InterviewFixedPlacement @relation(fields: [placementId], references: [id], onDelete: Restrict)
+  actor          User @relation("InterviewMeritAwardRevisionActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@unique([placementId, revision])
+  @@unique([roundId, idempotencyKey])
+  @@index([roundId, placementId, createdAt])
 }
 
 // Append-only Super Admin review attestations for final overall Session V

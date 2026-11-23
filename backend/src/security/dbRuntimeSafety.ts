@@ -289,22 +289,24 @@ export async function assertFixedInterviewScheduleRuntime(db: PrismaClient): Pro
   }
 }
 
-/** Score and panel revisions are append-only even for the restricted API login. */
+/** Score, panel and manual award revisions are append-only for the restricted API login. */
 export async function assertInterviewAssessmentRuntime(db: PrismaClient): Promise<void> {
   const rows = await db.$queryRawUnsafe<Array<{
-    tableName: string; readable: boolean; insertable: boolean; mutable: boolean; immutable: boolean;
+    tableName: string; readable: boolean; insertable: boolean; mutable: boolean; immutable: boolean; validated: boolean;
   }>>(`SELECT c.relname AS "tableName",
     has_table_privilege(current_user,c.oid,'SELECT') AS readable,
     has_table_privilege(current_user,c.oid,'INSERT') AS insertable,
     has_table_privilege(current_user,c.oid,'UPDATE,DELETE,TRUNCATE,TRIGGER') AS mutable,
     EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid
-      AND t.tgname=c.relname || '_immutable' AND t.tgenabled IN ('O','A') AND t.tgtype=58) AS immutable
+      AND t.tgname=c.relname || '_immutable' AND t.tgenabled IN ('O','A') AND t.tgtype=58) AS immutable,
+    EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid
+      AND t.tgname=c.relname || '_validate' AND t.tgenabled IN ('O','A') AND t.tgtype=7) AS validated
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-    WHERE n.nspname='public' AND c.relname IN ('InterviewPanelRevision','InterviewAssessmentRevision')`);
-  const expected = ['InterviewPanelRevision', 'InterviewAssessmentRevision'];
+    WHERE n.nspname='public' AND c.relname IN ('InterviewPanelRevision','InterviewAssessmentRevision','InterviewMeritAwardRevision')`);
+  const expected = ['InterviewPanelRevision', 'InterviewAssessmentRevision', 'InterviewMeritAwardRevision'];
   if (rows.length !== expected.length || expected.some(tableName => {
     const row = rows.find(item => item.tableName === tableName);
-    return !row?.readable || !row.insertable || row.mutable || !row.immutable;
+    return !row?.readable || !row.insertable || row.mutable || !row.immutable || !row.validated;
   })) {
     blocked('interview assessment revision access/protection is missing or unsafe');
   }

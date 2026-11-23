@@ -60,8 +60,9 @@ async function run() {
         if (fs.existsSync(file)) await admin!.query(fs.readFileSync(file, 'utf8'));
       }
       const tables = await admin!.query(`SELECT to_regclass('public."InterviewPanelRevision"') AS panel,
-        to_regclass('public."InterviewAssessmentRevision"') AS assessment`);
-      assert(tables.rows[0].panel && tables.rows[0].assessment);
+        to_regclass('public."InterviewAssessmentRevision"') AS assessment,
+        to_regclass('public."InterviewMeritAwardRevision"') AS merit_award`);
+      assert(tables.rows[0].panel && tables.rows[0].assessment && tables.rows[0].merit_award);
     });
 
     await owner.query(`CREATE ROLE ${quote(runtimeRole)} LOGIN NOINHERIT NOSUPERUSER NOCREATEDB
@@ -71,7 +72,7 @@ async function run() {
       GRANT USAGE ON SCHEMA public TO ${quote(runtimeRole)};
       GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${quote(runtimeRole)};
       GRANT UPDATE ON public."InterviewRound" TO ${quote(runtimeRole)};
-      GRANT INSERT ON public."InterviewPanelRevision", public."InterviewAssessmentRevision" TO ${quote(runtimeRole)};`);
+      GRANT INSERT ON public."InterviewPanelRevision", public."InterviewAssessmentRevision", public."InterviewMeritAwardRevision" TO ${quote(runtimeRole)};`);
     // Only SELECT policies are added for the existing read sources. These are
     // disposable fixture policies, not changes to the production grant scripts.
     const readSources = [
@@ -154,7 +155,7 @@ async function run() {
       marks: await ownerDb!.manualExamMark.findMany({ orderBy: { studentId: 'asc' } }),
       corrections: await ownerDb!.manualExamMarkCorrectionAudit.findMany({ orderBy: { id: 'asc' } }),
       verifications: await ownerDb!.manualExamMarkVerificationAudit.findMany({ orderBy: { id: 'asc' } }),
-      students: await ownerDb!.student.findMany({ select: { id: true, testScore: true, overallRank: true }, orderBy: { id: 'asc' } }),
+      students: await ownerDb!.student.findMany({ select: { id: true, testScore: true, overallRank: true, scholarshipCategory: true }, orderBy: { id: 'asc' } }),
     });
     const marksBefore = await sourceSnapshot();
 
@@ -165,8 +166,8 @@ async function run() {
         has_table_privilege(current_user,'public."ManualExamMark"','UPDATE,INSERT,DELETE,TRUNCATE,TRIGGER') AS mark_write,
         has_schema_privilege(current_user,'public','CREATE') AS schema_create`);
       assert.deepEqual(privileges.rows[0], { student_write: false, mark_write: false, schema_create: false });
-      for (const table of ['InterviewPanelRevision', 'InterviewAssessmentRevision']) {
-        await rejectsSql(runtimeSql!, `UPDATE public.${quote(table)} SET "reason"='synthetic forbidden update'`, '42501');
+      for (const table of ['InterviewPanelRevision', 'InterviewAssessmentRevision', 'InterviewMeritAwardRevision']) {
+        await rejectsSql(runtimeSql!, `UPDATE public.${quote(table)} SET "actorName"='synthetic forbidden update'`, '42501');
         await rejectsSql(runtimeSql!, `DELETE FROM public.${quote(table)}`, '42501');
         await rejectsSql(runtimeSql!, `TRUNCATE public.${quote(table)} CASCADE`, '42501');
         await rejectsSql(runtimeSql!, `CREATE TRIGGER synthetic_forbidden_trigger BEFORE INSERT ON public.${quote(table)}
@@ -407,6 +408,96 @@ async function run() {
       assert.deepEqual(await ownerDb!.interviewPanelRevision.findMany({ orderBy: { id: 'asc' } }), panelsBefore);
       assert.deepEqual(await ownerDb!.interviewFixedPlacement.findMany({ orderBy: { id: 'asc' } }), placementsBefore);
       assert.deepEqual(await sourceSnapshot(), writtenBefore);
+    });
+
+    const meritWithoutAwards = async () => {
+      const merit = await service.merit(roundId);
+      return { ...merit, rows: merit.rows.map(({ meritAward: _award, ...row }) => row) };
+    };
+    const meritBeforeAwards = await meritWithoutAwards();
+    const sourcesBeforeAwards = await sourceSnapshot();
+    const assessmentsBeforeAwards = await ownerDb.interviewAssessmentRevision.findMany({ orderBy: { id: 'asc' } });
+    const placementsBeforeAwards = await ownerDb.interviewFixedPlacement.findMany({ orderBy: { id: 'asc' } });
+    const awardRequest = { expectedRevision: 0, idempotencyKey: 'synthetic-award-save-0001', awardCode: 'LAPTOP' as const };
+    let savedAward: Awaited<ReturnType<typeof service.saveMeritAward>>;
+    await check('manual awards start unassigned and persist across fresh service reads without changing merit', async () => {
+      const initial = await service.merit(roundId);
+      assert.equal(initial.manualAwardsEnabled, true);
+      assert(initial.rows.every(row => row.meritAward.revision === 0 && row.meritAward.awardCode === null));
+      assert.equal(await runtime!.interviewMeritAwardRevision.count(), 0, 'Reading merit cannot assign awards');
+      savedAward = await service.saveMeritAward(roundId, placementId, awardRequest, adminActor);
+      assert.equal(savedAward.revision, 1);
+      assert.equal(savedAward.awardCode, 'LAPTOP');
+      assert.equal(savedAward.actorName, adminActor.name);
+      assert(savedAward.id && savedAward.createdAt && Number.isFinite(Date.parse(savedAward.createdAt)));
+      const fresh = new InterviewAssessmentService(runtime!);
+      const stored = (await fresh.merit(roundId, 'Class 10')).rows.find(row => row.placementId === placementId)!;
+      assert.deepEqual(stored.meritAward, savedAward);
+      assert.deepEqual(await meritWithoutAwards(), meritBeforeAwards);
+    });
+
+    await check('manual award retries are idempotent and conflicting keys or revisions reject with 409', async () => {
+      assert.deepEqual(await service.saveMeritAward(roundId, placementId, awardRequest, adminActor), savedAward!);
+      await rejectsStatus(() => service.saveMeritAward(roundId, placementId,
+        { ...awardRequest, awardCode: 'UMRAH_TICKET' }, adminActor), 409);
+      await rejectsStatus(() => service.saveMeritAward(roundId, placementId,
+        { expectedRevision: 0, idempotencyKey: 'synthetic-award-stale-0002', awardCode: 'CASH_PRIZE_3000' }, adminActor), 409);
+      assert.equal(await runtime!.interviewMeritAwardRevision.count({ where: { placementId } }), 1);
+      const cleared = await service.saveMeritAward(roundId, placementId,
+        { expectedRevision: 1, idempotencyKey: 'synthetic-award-clear-0002', awardCode: null }, adminActor);
+      assert.equal(cleared.revision, 2);
+      assert.equal(cleared.awardCode, null);
+      const history = await service.meritAwardHistory(roundId, placementId);
+      assert.deepEqual(history.map(row => [row.revision, row.awardCode]), [[2, null], [1, 'LAPTOP']]);
+    });
+
+    await check('concurrent manual award saves append one revision and reject the stale writer', async () => {
+      const outcomes = await Promise.allSettled([
+        service.saveMeritAward(roundId, placementId,
+          { expectedRevision: 2, idempotencyKey: 'synthetic-award-race-one', awardCode: 'FULL_YEAR_SCHOLARSHIP' }, adminActor),
+        service.saveMeritAward(roundId, placementId,
+          { expectedRevision: 2, idempotencyKey: 'synthetic-award-race-two', awardCode: 'EDUCATIONAL_VOUCHER' }, superAdmin),
+      ]);
+      assert.equal(outcomes.filter(result => result.status === 'fulfilled').length, 1);
+      const rejected = outcomes.find(result => result.status === 'rejected');
+      assert(rejected?.status === 'rejected' && rejected.reason?.statusCode === 409);
+      const winner = outcomes.find(result => result.status === 'fulfilled');
+      assert(winner?.status === 'fulfilled');
+      const stored = (await service.merit(roundId)).rows.find(row => row.placementId === placementId)!.meritAward;
+      assert.deepEqual(stored, winner.value);
+      assert.equal(stored.revision, 3);
+      assert.equal(await runtime!.interviewMeritAwardRevision.count({ where: { placementId } }), 3);
+    });
+
+    await check('manual awards enforce General Merit and allow clearing after a registration-category change', async () => {
+      await rejectsStatus(() => service.saveMeritAward(roundId, 'synthetic-overall-placement-1',
+        { expectedRevision: 0, idempotencyKey: 'synthetic-award-non-general', awardCode: 'LAPTOP' }, adminActor), 400);
+      assert.equal(await runtime!.interviewMeritAwardRevision.count({ where: { placementId: 'synthetic-overall-placement-1' } }), 0);
+      await ownerDb!.student.update({ where: { id: candidateId }, data: { scholarshipCategory: 'ORPHAN' } });
+      try {
+        await rejectsStatus(() => service.saveMeritAward(roundId, placementId,
+          { expectedRevision: 3, idempotencyKey: 'synthetic-award-changed-category', awardCode: 'CASH_PRIZE_5000' }, adminActor), 400);
+        const cleared = await service.saveMeritAward(roundId, placementId,
+          { expectedRevision: 3, idempotencyKey: 'synthetic-award-clear-changed', awardCode: null }, adminActor);
+        assert.equal(cleared.revision, 4);
+        assert.equal(cleared.awardCode, null);
+      } finally {
+        await ownerDb!.student.update({ where: { id: candidateId }, data: { scholarshipCategory: 'GENERAL_MERIT' } });
+      }
+    });
+
+    await check('manual award history is append-only and awards leave ranks, marks, categories and placements unchanged', async () => {
+      await rejectsSql(admin!, 'UPDATE public."InterviewMeritAwardRevision" SET "actorName"=\'synthetic forbidden update\'', '23514', /append-only/);
+      await rejectsSql(admin!, 'DELETE FROM public."InterviewMeritAwardRevision"', '23514', /append-only/);
+      await rejectsSql(admin!, 'TRUNCATE public."InterviewMeritAwardRevision"', '23514', /append-only/);
+      assert.equal((await service.meritAwardHistory(roundId, placementId)).length, 4);
+      assert.deepEqual(await meritWithoutAwards(), meritBeforeAwards);
+      assert.deepEqual(await sourceSnapshot(), sourcesBeforeAwards);
+      assert.deepEqual(await ownerDb!.interviewAssessmentRevision.findMany({ orderBy: { id: 'asc' } }), assessmentsBeforeAwards);
+      assert.deepEqual(await ownerDb!.interviewFixedPlacement.findMany({ orderBy: { id: 'asc' } }), placementsBeforeAwards);
+      assert.equal(await ownerDb!.examinationResult.count(), 0);
+      assert.equal(await ownerDb!.interviewResultApproval.count(), 0);
+      await assertInterviewAssessmentRuntime(runtime!);
     });
     console.log(`PASS ${passed} real PostgreSQL 17 interview assessment integration checks`);
   } finally {

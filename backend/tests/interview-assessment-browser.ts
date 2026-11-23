@@ -80,10 +80,11 @@ async function run() {
           const ready = assessment?.status === 'SUBMITTED' && assessment.attendance === 'PRESENT';
           return { ...row, rank: ready ? 1 : null, overallRank: ready ? 1 : null, status: ready ? 'READY' : 'INCOMPLETE',
             fatherName: 'Synthetic Parent', institute: 'Synthetic Institute', scholarshipCategory: 'GENERAL_MERIT',
+            meritAward: { id: null, revision: 0, awardCode: null, actorName: null, createdAt: null },
             assessmentStatus: assessment?.status ?? 'NOT_STARTED', issues: ready ? [] : ['Assessment has not been submitted.'],
             totals: assessment?.totals ?? { written: row.written.isFinal ? 48 : null, interview: null, extracurricular: null, academic: null, personality: null, total: null } };
         });
-        json({ provisional: true, publicationEnabled: false, policyVersion, rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS',
+        json({ provisional: true, publicationEnabled: false, manualAwardsEnabled: true, policyVersion, rankMethod: 'SHARED_COMPETITION_WITHIN_CLASS',
           overallRankMethod: 'SHARED_COMPETITION_ALL_CLASSES', overallRankedCandidates: records.filter(row => row.status === 'READY').length, classOptions: ['Class 9th'],
           rows: records, summary: { total: 3, ready: records.filter(row => row.status === 'READY').length, incomplete: records.filter(row => row.status !== 'READY').length, absent: 0 } }); return;
       }

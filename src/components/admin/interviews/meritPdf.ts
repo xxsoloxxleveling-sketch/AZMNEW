@@ -4,6 +4,7 @@ import type { RowInput } from 'jspdf-autotable';
 import type { MeritPreviewRow } from './assessmentApi';
 import { meritGroupingLabel, meritRank } from './meritViewModel';
 import type { MeritGrouping } from './meritViewModel';
+import { meritScholarshipLabel } from './meritAwards';
 
 export type MeritPdfOptions = {
   /** All filtered rows, in their selected display order, before pagination. */
@@ -12,6 +13,8 @@ export type MeritPdfOptions = {
   roundTitle: string;
   sessionRef: string;
   grouping: MeritGrouping;
+  /** Custom report title; blank uses Merit List. Maximum 120 normalised characters. */
+  documentTitle?: string;
   filters: {
     className: string;
     readiness: string;
@@ -27,12 +30,6 @@ export type MeritPdfOptions = {
 const brand: [number, number, number] = [24, 91, 157];
 const ink: [number, number, number] = [30, 41, 59];
 const muted: [number, number, number] = [71, 85, 105];
-const categoryLabels: Record<string, string> = {
-  GENERAL_MERIT: 'General Merit',
-  FINANCIALLY_NEEDY: 'Financially Needy',
-  ORPHAN: 'Orphan',
-  PERSON_WITH_DISABILITY: 'Person with Disability',
-};
 const columnHeadings = ['Merit Rank', 'Roll No', 'Name', 'Father Name', 'Institute', 'Percentage Obtained', 'Scholarship Category'];
 
 // Normalise punctuation used by the UI for the PDF's built-in Latin font.
@@ -51,12 +48,18 @@ const metadata = (value: string, max = 240) => {
   return clean.length > max ? clean.slice(0, max - 3) + '...' : clean;
 };
 const identity = (value: string | null | undefined) => text(value ?? '') || '-';
-const category = (value: string | null | undefined) => {
-  const stored = value?.trim();
-  return stored ? identity(categoryLabels[stored] ?? stored.replace(/_/g, ' ')) : '-';
-};
 const percentage = (row: MeritPreviewRow) => row.status === 'READY' && row.totals.total != null && Number.isFinite(row.totals.total)
   ? row.totals.total.toFixed(2) + '%' : '-';
+
+function resolveDocumentTitle(value?: string): { title: string; custom: boolean } {
+  const normalised = (value ?? '').normalize('NFC').replace(/\s+/g, ' ').trim();
+  if (normalised.length > 120) throw new Error('PDF title must be 120 characters or fewer.');
+  try {
+    return { title: text(normalised || 'Merit List'), custom: normalised.length > 0 };
+  } catch {
+    throw new Error('PDF title contains characters that the current font cannot render. Use supported characters.');
+  }
+}
 
 let logoPromise: Promise<string | undefined> | undefined;
 async function brandLogo(): Promise<string | undefined> {
@@ -95,14 +98,15 @@ function pakistanDate(date: Date): string {
 export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const generatedAt = options.generatedAt ?? new Date();
   if (!Number.isFinite(generatedAt.getTime())) throw new Error('Unable to export PDF: the generation date is invalid.');
+  const { title } = resolveDocumentTitle(options.documentTitle);
   [options.roundTitle, options.sessionRef, options.filters.className,
-    ...options.rows.flatMap(row => [row.studentName, row.rollNumber ?? '', row.fatherName ?? '', row.institute ?? '', row.scholarshipCategory ?? '',
+    ...options.rows.flatMap(row => [row.studentName, row.rollNumber ?? '', row.fatherName ?? '', row.institute ?? '', meritScholarshipLabel(row),
       ...(options.grouping === 'class' ? [row.className] : [])]),
   ].forEach(text);
   const logo = options.logoDataUrl ?? await brandLogo();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
   doc.setProperties({
-    title: 'AZM.AIO Merit List - Private Provisional Review',
+    title,
     subject: `${meritGroupingLabel(options.grouping)} - private provisional merit review.`,
     author: 'AZM.AIO Scholarship & Examination Authority',
     creator: 'AZM.AIO Interview Management',
@@ -119,11 +123,20 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     `Session: ${metadata(options.sessionRef || '-')} | ${metadata(options.roundTitle || 'Interview assessment')}`,
     `Merit grouping: ${meritGroupingLabel(options.grouping)}` + (options.filters.className ? ` | Class: ${metadata(options.filters.className)}` : ''),
   ];
+  const titleFontSize = 11.6;
+  const titleLineHeight = 5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(titleFontSize);
+  // Leave the generated-time block its own space, including for an unbroken title.
+  const titleLines = doc.splitTextToSize(title, width - margin - 35 - 60) as string[];
+  const statusY = 24.5 + (titleLines.length - 1) * titleLineHeight;
+  const separatorY = statusY + 6.5;
+  const ribbonY = separatorY + 3;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.4);
   const contextLines = filterLines.flatMap(line => doc.splitTextToSize(line, contentWidth - 8) as string[]);
   const ribbonHeight = contextLines.length * 3.5 + 5;
-  const tableTop = 34 + ribbonHeight + 5;
+  const tableTop = ribbonY + ribbonHeight + 5;
   const headerPages = new Set<number>();
 
   const drawHeader = () => {
@@ -141,11 +154,11 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10.3);
     doc.text('AZM.AIO SCHOLARSHIP & EXAMINATION AUTHORITY', 35, 12.5);
-    doc.setFontSize(11.6);
-    doc.text('MERIT LIST', 35, 19);
+    doc.setFontSize(titleFontSize);
+    doc.text(titleLines, 35, 19, { lineHeightFactor: titleLineHeight / (titleFontSize * 25.4 / 72) });
     doc.setTextColor(...muted);
     doc.setFontSize(8.2);
-    doc.text('PRIVATE PROVISIONAL REVIEW - NOT PUBLISHED', 35, 24.5);
+    doc.text('PRIVATE PROVISIONAL REVIEW - NOT PUBLISHED', 35, statusY);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(...muted);
@@ -155,20 +168,20 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.text(generatedLabel, width - margin, 17, { align: 'right' });
     doc.setDrawColor(...brand);
     doc.setLineWidth(.5);
-    doc.line(margin, 31, width - margin, 31);
+    doc.line(margin, separatorY, width - margin, separatorY);
     doc.setFillColor(239, 246, 255);
-    doc.rect(margin, 34, contentWidth, ribbonHeight, 'F');
+    doc.rect(margin, ribbonY, contentWidth, ribbonHeight, 'F');
     doc.setTextColor(...ink);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.4);
-    doc.text(contextLines, margin + 4, 38, { lineHeightFactor: 1.34 });
+    doc.text(contextLines, margin + 4, ribbonY + 4, { lineHeightFactor: 1.34 });
   };
 
   const candidateRow = (row: MeritPreviewRow): RowInput => {
     const rank = meritRank(row, options.grouping);
     return [
       rank === null ? '-' : String(rank), identity(row.rollNumber), identity(row.studentName),
-      identity(row.fatherName), identity(row.institute), percentage(row), category(row.scholarshipCategory),
+      identity(row.fatherName), identity(row.institute), percentage(row), identity(meritScholarshipLabel(row)),
     ];
   };
   const sections: Array<{ className?: string; rows: MeritPreviewRow[] }> = [];
@@ -209,7 +222,17 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
         4: { cellWidth: 65 }, 5: { cellWidth: 32, halign: 'center', fontStyle: 'bold' },
         6: { cellWidth: contentWidth - 237 },
       },
-      willDrawPage: drawHeader,
+      willDrawPage: data => {
+        // Keep a new class section's heading with its first candidate. The
+        // library checks the heading alone before starting a separate table.
+        const firstRowHeight = data.table.body[0]?.height ?? 0;
+        if (data.pageNumber === 1 && data.cursor && data.cursor.y > tableTop &&
+          data.cursor.y + data.table.getHeadHeight(data.table.columns) + firstRowHeight > height - 18) {
+          doc.addPage();
+          data.cursor.y = tableTop;
+        }
+        drawHeader();
+      },
     });
     startY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
   }
@@ -231,10 +254,20 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   return doc;
 }
 
+export function meritPdfFilename(options: MeritPdfOptions): string {
+  const generatedAt = options.generatedAt ?? new Date();
+  if (!Number.isFinite(generatedAt.getTime())) throw new Error('Unable to export PDF: the generation date is invalid.');
+  const { title, custom } = resolveDocumentTitle(options.documentTitle);
+  const filenamePart = (value: string, maximum = 45) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, maximum).replace(/-+$/g, '');
+  const prefix = custom ? ['AZM', filenamePart(title, 90) || 'Merit-List']
+    : ['AZM', filenamePart(options.sessionRef), 'Provisional-Merit'];
+  return [...prefix, options.grouping === 'overall' ? 'Overall' : 'By-Class', filenamePart(options.filters.className), pakistanDate(generatedAt)]
+    .filter(Boolean).join('-') + '.pdf';
+}
+
 export async function exportMeritPdf(options: MeritPdfOptions): Promise<void> {
   const generatedAt = options.generatedAt ?? new Date();
   const doc = await buildMeritPdf({ ...options, generatedAt });
-  const filenamePart = (value: string) => value.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 45);
-  const parts = ['AZM', filenamePart(options.sessionRef), 'Provisional-Merit', options.grouping === 'overall' ? 'Overall' : 'By-Class', filenamePart(options.filters.className), pakistanDate(generatedAt)].filter(Boolean);
-  doc.save(parts.join('-') + '.pdf');
+  doc.save(meritPdfFilename({ ...options, generatedAt }));
 }

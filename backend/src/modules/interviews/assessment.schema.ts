@@ -45,6 +45,22 @@ export const assessmentRosterQuerySchema = z.object({
 }).strict();
 export const assessmentMeritQuerySchema = z.object({ className: z.string().trim().max(120).optional() }).strict();
 
+export const MERIT_AWARD_CODES = [
+  'UMRAH_TICKET', 'LAPTOP', 'FULL_YEAR_SCHOLARSHIP', 'PARTIAL_SCHOLARSHIP',
+  'EDUCATIONAL_VOUCHER', 'CASH_PRIZE_3000', 'CASH_PRIZE_5000',
+] as const;
+export const meritAwardSaveSchema = z.object({
+  expectedRevision: z.number().int().min(0),
+  idempotencyKey: z.string().trim().min(8).max(100).regex(/^[A-Za-z0-9_-]+$/),
+  awardCode: z.enum(MERIT_AWARD_CODES).nullable(),
+}).strict();
+export type MeritAwardCode = typeof MERIT_AWARD_CODES[number];
+export type MeritAwardInput = z.infer<typeof meritAwardSaveSchema>;
+export type MeritAwardDto = {
+  id: string | null; revision: number; awardCode: MeritAwardCode | null;
+  actorName: string | null; createdAt: string | null;
+};
+
 export type AssessmentInput = z.infer<typeof assessmentSaveSchema>;
 export type PanelInput = z.infer<typeof assessmentPanelSchema>;
 export type AssessmentRosterQuery = z.infer<typeof assessmentRosterQuerySchema>;

@@ -1,8 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Table } from 'jspdf-autotable';
-import type { MeritPreviewRow } from './assessmentApi';
-import { buildMeritPdf } from './meritPdf';
+import type { MeritAwardCode, MeritPreviewRow } from './assessmentApi';
+import { buildMeritPdf, meritPdfFilename } from './meritPdf';
 import type { MeritPdfOptions } from './meritPdf';
 
 const headings = ['Merit Rank', 'Roll No', 'Name', 'Father Name', 'Institute', 'Percentage Obtained', 'Scholarship Category'];
@@ -36,7 +36,7 @@ describe('seven-column branded merit PDF', () => {
     assert.deepEqual(header(rendered), headings);
     assert.deepEqual(Array.from({ length: 7 }, (_, index) => cell(rendered, 0, index)), [
       '1', 'PDF-TEST-0', 'Synthetic Candidate 0', 'Synthetic Parent Exact Name',
-      'Synthetic Exact School Name', '81.75%', 'General Merit',
+      'Synthetic Exact School Name', '81.75%', '-',
     ]);
     assert.equal(Object.keys(rendered.body[0].cells).length, 7);
   });
@@ -91,7 +91,7 @@ describe('seven-column branded merit PDF', () => {
     const rows = categories.map((scholarshipCategory, index) => candidate(index, { scholarshipCategory }));
     rows.push(candidate(4, { fatherName: undefined, institute: '', scholarshipCategory: undefined, rollNumber: null }));
     const rendered = table(await buildMeritPdf(options(rows)));
-    assert.deepEqual(rows.map((_, index) => cell(rendered, index, 6)), ['General Merit', 'Financially Needy', 'Orphan', 'Person with Disability', '-']);
+    assert.deepEqual(rows.map((_, index) => cell(rendered, index, 6)), ['-', 'Financially Needy', 'Orphan', 'Person with Disability', '-']);
     for (const column of [1, 3, 4, 6]) assert.equal(cell(rendered, 4, column), '-');
   });
 
@@ -118,5 +118,82 @@ describe('seven-column branded merit PDF', () => {
     assert.deepEqual(header(table(doc)), headings);
     assert.match(cell(table(doc), 0, 0), /No candidates match/);
     assert.equal(table(doc).body[0].cells[0].colSpan, 7);
+  });
+
+  it('prints each manually chosen General Merit award in the existing scholarship column', async () => {
+    const choices: Array<[MeritAwardCode, string]> = [
+      ['UMRAH_TICKET', 'Umrah Ticket'], ['LAPTOP', 'Laptop'], ['FULL_YEAR_SCHOLARSHIP', 'Full Year Scholarship'],
+      ['PARTIAL_SCHOLARSHIP', 'Partial Scholarship'], ['EDUCATIONAL_VOUCHER', 'Educational Voucher'],
+      ['CASH_PRIZE_3000', '3000-Cash Prize'], ['CASH_PRIZE_5000', '5000-Cash Prize'],
+    ];
+    const rows = choices.map(([awardCode], index) => candidate(index, {
+      meritAward: { id: 'synthetic-award-' + index, revision: 1, awardCode, actorName: 'Synthetic Admin', createdAt: '2026-11-23T10:00:00Z' },
+    }));
+    const before = structuredClone(rows);
+    const rendered = table(await buildMeritPdf(options(rows)));
+    assert.deepEqual(header(rendered), headings);
+    assert.equal(rendered.columns.length, 7);
+    assert.deepEqual(rows.map((_, index) => cell(rendered, index, 6)), choices.map(([, label]) => label));
+    assert.deepEqual(rows, before);
+  });
+
+  it('never infers an unassigned award or replaces another registration category with an award', async () => {
+    const chosen = { id: 'synthetic-award', revision: 1, awardCode: 'LAPTOP' as const, actorName: 'Synthetic Admin', createdAt: '2026-11-23T10:00:00Z' };
+    const topCandidate = candidate(0, { overallRank: 1, rank: 1 }); topCandidate.totals.total = 99.99;
+    const rows = [topCandidate,
+      candidate(1, { meritAward: { ...chosen, revision: 2, awardCode: null } }),
+      candidate(2, { meritAward: { ...chosen, awardCode: 'UNKNOWN_AWARD' as MeritAwardCode } }),
+      ...['FINANCIALLY_NEEDY', 'ORPHAN', 'PERSON_WITH_DISABILITY'].map((scholarshipCategory, index) => candidate(index + 3, { scholarshipCategory, meritAward: chosen })),
+    ];
+    const rendered = table(await buildMeritPdf(options(rows)));
+    assert.deepEqual(rows.map((_, index) => cell(rendered, index, 6)), ['-', '-', '-', 'Financially Needy', 'Orphan', 'Person with Disability']);
+    assert.equal(cell(rendered, 0, 5), '99.99%');
+  });
+
+  it('uses the normalised custom title in PDF metadata and the download filename', async () => {
+    const selected = { ...options([candidate(0)]), documentTitle: '  Session V\n  Part 1   Merit List\t ' };
+    const doc = await buildMeritPdf(selected);
+    assert(doc.output().includes('/Title (Session V Part 1 Merit List)'));
+    assert.equal(meritPdfFilename(selected), 'AZM-Session-V-Part-1-Merit-List-Overall-2026-11-23.pdf');
+    assert.deepEqual(header(table(doc)), headings);
+  });
+
+  it('keeps a blank title compatible and makes filename text safe for download', async () => {
+    const blank = { ...options([]), documentTitle: '\n \t' };
+    assert((await buildMeritPdf(blank)).output().includes('/Title (Merit List)'));
+    assert.equal(meritPdfFilename(blank), 'AZM-2026-V-Provisional-Merit-Overall-2026-11-23.pdf');
+    const unsafe = { ...options([]), documentTitle: '../CON: Part/1\\<Merit>*? "List" .pdf' };
+    const filename = meritPdfFilename(unsafe);
+    assert.match(filename, /^AZM-[A-Za-z0-9-]+-Overall-2026-11-23\.pdf$/);
+    assert(!filename.includes('..'));
+    assert(filename.length < 200);
+    assert.equal(meritPdfFilename({ ...options([]), documentTitle: '?!<>:"/\\|' }), 'AZM-Merit-List-Overall-2026-11-23.pdf');
+    assert.match(meritPdfFilename({ ...options([]), documentTitle: 'José Merit List' }), /AZM-Jose-Merit-List-/);
+  });
+
+  it('wraps a maximum-length title by moving the table down and rejects invalid titles', async () => {
+    const short = await buildMeritPdf(options([candidate(0)]));
+    const fullTitle = 'W'.repeat(120);
+    const long = await buildMeritPdf({ ...options([candidate(0)]), documentTitle: fullTitle });
+    assert(long.output().includes('/Title (' + fullTitle + ')'));
+    assert(table(long).head[0].cells[0].y > table(short).head[0].cells[0].y);
+    assert.equal(long.getNumberOfPages(), 1);
+    await assert.rejects(buildMeritPdf({ ...options([]), documentTitle: 'W'.repeat(121) }), /120 characters/);
+    await assert.rejects(buildMeritPdf({ ...options([]), documentTitle: 'نام' }), /PDF title contains characters/);
+  });
+
+  it('keeps each class heading with its first candidate when a wrapped title reduces page space', async () => {
+    const rows = Array.from({ length: 6 }, (_, index) => candidate(index, {
+      className: index < 5 ? 'Class 9th' : 'Class 10th',
+      institute: 'Synthetic College of Science and Applied Technology - Higher Secondary and Undergraduate Campus for Academic Excellence 001',
+    }));
+    const doc = await buildMeritPdf({ ...options(rows), grouping: 'class',
+      documentTitle: 'Session V Part 1 Merit List - Manually Selected Awards and Registered Scholarship Categories for Candidate Review',
+    });
+    const lastSection = table(doc);
+    assert.equal(doc.getNumberOfPages(), 2);
+    assert.equal(lastSection.startPageNumber, 2, 'The last class heading must start on its candidate page');
+    assert.equal(lastSection.pageNumber, 1, 'The last section must not have a header-only page');
+    assert.equal(cell(lastSection, 0, 1), 'PDF-TEST-5');
   });
 });

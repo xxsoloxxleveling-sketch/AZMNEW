@@ -2,8 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertInterviewAssessmentRuntime } from '../src/security/dbRuntimeSafety.ts';
 
-const protectedRows = () => ['InterviewPanelRevision', 'InterviewAssessmentRevision'].map(tableName => ({
-  tableName, readable: true, insertable: true, mutable: false, immutable: true,
+const protectedRows = () => ['InterviewPanelRevision', 'InterviewAssessmentRevision', 'InterviewMeritAwardRevision'].map(tableName => ({
+  tableName, readable: true, insertable: true, mutable: false, immutable: true, validated: true,
 }));
 
 describe('interview assessment startup protection', () => {
@@ -11,8 +11,8 @@ describe('interview assessment startup protection', () => {
     await assertInterviewAssessmentRuntime({ $queryRawUnsafe: async () => protectedRows() } as any);
   });
 
-  for (const tableName of ['InterviewPanelRevision', 'InterviewAssessmentRevision']) {
-    for (const [field, value] of [['readable', false], ['insertable', false], ['mutable', true], ['immutable', false]] as const) {
+  for (const tableName of ['InterviewPanelRevision', 'InterviewAssessmentRevision', 'InterviewMeritAwardRevision']) {
+    for (const [field, value] of [['readable', false], ['insertable', false], ['mutable', true], ['immutable', false], ['validated', false]] as const) {
       it(`rejects ${tableName} when ${field} is ${value}`, async () => {
         const rows = protectedRows();
         const row = rows.find(item => item.tableName === tableName)!;
@@ -25,9 +25,9 @@ describe('interview assessment startup protection', () => {
     }
   }
 
-  it('rejects a release before both assessment tables exist', async () => {
+  it('rejects a release before all assessment and award tables exist', async () => {
     await assert.rejects(
-      assertInterviewAssessmentRuntime({ $queryRawUnsafe: async () => protectedRows().slice(0, 1) } as any),
+      assertInterviewAssessmentRuntime({ $queryRawUnsafe: async () => protectedRows().slice(0, 2) } as any),
       /interview assessment revision access\/protection/,
     );
   });
