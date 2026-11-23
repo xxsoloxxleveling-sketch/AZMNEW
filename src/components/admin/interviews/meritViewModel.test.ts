@@ -67,6 +67,36 @@ describe('merit preview display ordering', () => {
     assert.deepEqual(ids(sortMeritRows(rows, 'total', 'asc')), ['lower', 'higher']);
   });
 
+  it('orders the reported all-class totals globally and keeps the missing total last', () => {
+    const firstYear = candidate('first-year', { className: '1st Year', rank: 1 });
+    firstYear.totals.total = 69.13;
+    const secondYear = candidate('second-year', { className: '2nd Year', rank: null, status: 'INCOMPLETE' });
+    secondYear.totals.total = null;
+    const highest = candidate('bs-highest', { className: 'BS', rank: 1 }); highest.totals.total = 84.33;
+    const second = candidate('bs-second', { className: 'BS', rank: 2 }); second.totals.total = 78.27;
+    const rows = [firstYear, secondYear, highest, second];
+    const descending = sortMeritRows(rows, 'total', 'desc');
+    const ascending = sortMeritRows(rows, 'total', 'asc');
+    assert.deepEqual(descending.map(row => row.totals.total), [84.33, 78.27, 69.13, null]);
+    assert.deepEqual(ascending.map(row => row.totals.total), [69.13, 78.27, 84.33, null]);
+    assert.deepEqual(descending.map(row => row.rank), [1, 2, 1, null], 'A class rank 2 with higher marks precedes another class rank 1');
+    assert.deepEqual(descending.map(row => row.className), ['BS', 'BS', '1st Year', '2nd Year']);
+  });
+
+  it('keeps equal rounded totals consistently ordered across every permutation of different classes', () => {
+    const lower = candidate('class-nine-lower', { className: 'Class 9th', rank: 2 });
+    const higher = candidate('class-nine-higher', { className: 'Class 9th', rank: 1 });
+    const otherClass = candidate('other-class', { className: 'Class 10th', rank: 1 });
+    const permutations = [
+      [lower, otherClass, higher], [lower, higher, otherClass], [otherClass, lower, higher],
+      [otherClass, higher, lower], [higher, lower, otherClass], [higher, otherClass, lower],
+    ];
+    for (const rows of permutations) {
+      assert.deepEqual(ids(sortMeritRows(rows, 'total', 'desc')), ['class-nine-higher', 'class-nine-lower', 'other-class']);
+      assert.deepEqual(ids(sortMeritRows(rows, 'total', 'asc')), ['class-nine-lower', 'class-nine-higher', 'other-class']);
+    }
+  });
+
   it('preserves shared competition ranks and the incoming order of true ties', () => {
     const rows = [candidate('tie-b', { rank: 1 }), candidate('third', { rank: 3 }), candidate('tie-a', { rank: 1 })];
     for (const field of ['rank', 'total'] as const) {
@@ -111,24 +141,39 @@ describe('merit preview display ordering', () => {
     assert.deepEqual(ids(sortMeritRows(rows, 'rank', 'asc')), ['z', 'a', 'a2']);
   });
 
-  it('keeps classes separate in natural ascending order regardless of within-class direction', () => {
+  it('sorts class rank numbers globally while preserving equal-rank input order and class labels', () => {
     const rows = [candidate('eleven-first', { className: 'Class 11th', rank: 1 }),
       candidate('seven-first', { className: 'Class 7th', rank: 1 }),
       candidate('eleven-third', { className: 'Class 11th', rank: 3 }),
       candidate('seven-third', { className: 'Class 7th', rank: 3 })];
     const sorted = sortMeritRows(rows, 'rank', 'desc');
-    assert.deepEqual(ids(sorted), ['seven-third', 'seven-first', 'eleven-third', 'eleven-first']);
-    assert.deepEqual(sorted.map(row => row.rank), [3, 1, 3, 1]);
+    assert.deepEqual(ids(sorted), ['eleven-third', 'seven-third', 'eleven-first', 'seven-first']);
+    assert.deepEqual(sorted.map(row => row.rank), [3, 3, 1, 1]);
+    assert.deepEqual(sorted.map(row => row.className), ['Class 11th', 'Class 7th', 'Class 11th', 'Class 7th']);
   });
 
-  it('does not combine class labels that compare equal under case-insensitive or numeric collation', () => {
+  it('does not combine class labels when refining equal totals with within-class exact ranks', () => {
     const rows = [candidate('alias-second', { className: 'class 9th', rank: 2 }),
       candidate('original-first', { className: 'Class 9th', rank: 1 }),
       candidate('alias-first', { className: 'class 9th', rank: 1 }),
       candidate('original-second', { className: 'Class 9th', rank: 2 })];
-    const sorted = sortMeritRows(rows, 'rank', 'asc');
+    const sorted = sortMeritRows(rows, 'total', 'desc');
     assert.deepEqual(ids(sorted), ['original-first', 'original-second', 'alias-first', 'alias-second']);
     assert.deepEqual(sorted.map(row => row.rank), [1, 2, 1, 2]);
+  });
+
+  it('sorts written marks, names and roll numbers across class boundaries', () => {
+    const laterClass = candidate('later-class', { className: 'BS', studentName: 'Ali', rollNumber: 'AZM-2' });
+    laterClass.written.marks = 90;
+    const earlierClass = candidate('earlier-class', { className: '1st Year', studentName: 'Zara', rollNumber: 'AZM-10' });
+    earlierClass.written.marks = 70;
+    const rows = [earlierClass, laterClass];
+    assert.deepEqual(ids(sortMeritRows(rows, 'written', 'desc')), ['later-class', 'earlier-class']);
+    assert.deepEqual(ids(sortMeritRows(rows, 'written', 'asc')), ['earlier-class', 'later-class']);
+    for (const field of ['studentName', 'rollNumber'] as const) {
+      assert.deepEqual(ids(sortMeritRows(rows, field, 'asc')), ['later-class', 'earlier-class']);
+      assert.deepEqual(ids(sortMeritRows(rows, field, 'desc')), ['earlier-class', 'later-class']);
+    }
   });
 
   it('preserves the original row objects and never mutates input order or rank after filtering', () => {
