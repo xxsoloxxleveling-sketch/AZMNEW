@@ -31,10 +31,10 @@ export type MeritPdfOptions = {
 const brand: [number, number, number] = [24, 91, 157];
 const ink: [number, number, number] = [30, 41, 59];
 const muted: [number, number, number] = [71, 85, 105];
-const noticeHeading = 'IMPORTANT SCHOLARSHIP CONDITIONS';
+const noticeHeading = 'IMPORTANT DISCLAIMER & SCHOLARSHIP CONDITIONS';
 const scholarshipNotice = [
   "Inclusion or merit rank does not guarantee an award. AZM.AIO (Private) Limited's self-funded awards remain subject to eligibility, document verification, approved policy, available funds and formal award notification.",
-  'AZM may correct verified errors, revise decisions, or suspend or withdraw awards for fraud, misrepresentation, misconduct, non-compliance or resource constraints, under applicable policy and law. Awards are non-transferable unless authorised in writing.',
+  'AZM may correct verified errors, revise decisions, or suspend or withdraw awards for fraud, misrepresentation, misconduct, non-compliance or resource constraints, under applicable policy and law. Awards cannot be transferred, exchanged or converted to cash without written approval.',
   'Candidates and guardians must provide requested academic records, sign required undertakings, maintain active contact details and respond to official communications.',
   'Umrah awards: unless otherwise notified, acceptance and travel arrangements must be completed within three months from the specified award or ticket date, subject to documentation, visa and travel requirements. Expired awards carry no automatic cash substitute.',
   'Use official AZM channels only. Impersonation, brand misuse and unlawful misconduct may lead to action. Submit written review requests with name, roll number, grounds and evidence within the announced review period. Lawful complaints and statutory rights remain protected.',
