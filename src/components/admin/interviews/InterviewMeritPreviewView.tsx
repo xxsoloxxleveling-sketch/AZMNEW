@@ -163,7 +163,7 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
       'PROVISIONAL - NOT PUBLISHED', row.className, meritRank(row, effectiveGrouping), row.rollNumber, row.studentName, row.panel, row.batch,
       row.written.isFinal ? row.written.marks : null, meritWrittenContribution(row), row.totals.interview, row.totals.extracurricular,
       row.totals.academic, row.totals.personality, row.status === 'READY' ? row.totals.total : null,
-      row.assessmentStatus ?? 'Not entered', statusLabels[row.status], row.issues.join('; '), data.policyVersion, meritScholarshipLabel(row), meritGroupingLabel(effectiveGrouping),
+      row.assessmentStatus ?? 'Not entered', statusLabels[row.status], row.issues.join('; '), data.policyVersion, meritScholarshipLabel(row) === '-' ? '' : meritScholarshipLabel(row), meritGroupingLabel(effectiveGrouping),
     ]);
     const csv = '\uFEFF' + [headings, ...csvRows].map(row => row.map(safeCsvCell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));

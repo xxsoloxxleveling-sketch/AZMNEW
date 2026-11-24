@@ -573,7 +573,7 @@ async function run() {
     assertPdfCandidate(awardedRaw, ['1', 'SYN-M-34', 'Synthetic Other Class One', 'Synthetic Father 034', 'Synthetic Institute 034', '99.75%', 'Laptop']);
     assertPdfCandidate(awardedRaw, ['16', 'SYN-M-35', 'Synthetic Other Class Two', 'Synthetic Father 035', 'Synthetic Institute 035', '82.50%', '-']);
     assert.equal(csvRow(fs.readFileSync(awardedCsv, 'utf8'), 34).at(-2), 'Laptop');
-    assert.equal(csvRow(fs.readFileSync(awardedCsv, 'utf8'), 35).at(-2), '-');
+    assert.equal(csvRow(fs.readFileSync(awardedCsv, 'utf8'), 35).at(-2), '');
     assert.equal(awardRequests.length, 4, 'Reloading, searching and exporting a saved decision make no additional writes');
     await screenshot(page, path.join(output, 'desktop-saved-manual-award.png'));
     const saved = awards.get('synthetic-merit-placement-34')!;
