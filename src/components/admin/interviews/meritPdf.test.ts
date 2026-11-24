@@ -75,6 +75,15 @@ describe('seven-column branded merit PDF', () => {
     assert.deepEqual(rows.map((_, index) => cell(rendered, index, 0)), ['4', '10', '-']);
   });
 
+  it('identifies the school filter in the filename and preserves the supplied overall rank and institute', async () => {
+    const selected = options([candidate(0, { overallRank: 19, institute: 'Hazara Convent School' })]);
+    selected.filters.schoolName = 'Hazara Convent';
+    const rendered = table(await buildMeritPdf(selected));
+    assert.equal(cell(rendered, 0, 0), '19');
+    assert.equal(cell(rendered, 0, 4), 'Hazara Convent School');
+    assert.equal(meritPdfFilename(selected), 'AZM-2026-V-Provisional-Merit-Overall-Hazara-Convent-2026-11-23.pdf');
+  });
+
   it('uses only ready combined totals as percentages and preserves zero distinctly from unavailable values', async () => {
     const rows = [candidate(0), candidate(1, { status: 'SOURCE_CHANGED' }), candidate(2, { status: 'ABSENT' }), candidate(3, { status: 'INCOMPLETE' }), candidate(4), candidate(5)];
     rows[1].totals.total = 93.87; rows[2].totals.total = 99.97; rows[3].totals.total = 82.5;
