@@ -53,12 +53,12 @@ describe('seven-column branded merit PDF', () => {
       assert.match(page, /AWARDS SUBJECT TO VERIFICATION & FORMAL APPROVAL/);
       assert.doesNotMatch(page, /PRIVATE PROVISIONAL REVIEW|NOT PUBLISHED/i);
     }
-    assert.match(pages[0], /IMPORTANT SCHOLARSHIP CONDITIONS/);
+    assert.match(pages[0], /IMPORTANT DISCLAIMER & SCHOLARSHIP CONDITIONS/);
     assert.match(pages[0], /does not guarantee an award/);
     assert.match(pages[0], /three months/);
     assert.match(pages[0], /statutory rights remain protected/);
     assert.match(pages[0], /SYNTHETIC|Synthetic Candidate|PDF-TEST-0/);
-    for (const page of pages.slice(1)) assert.doesNotMatch(page, /IMPORTANT SCHOLARSHIP CONDITIONS|does not guarantee an award/);
+    for (const page of pages.slice(1)) assert.doesNotMatch(page, /IMPORTANT DISCLAIMER & SCHOLARSHIP CONDITIONS|does not guarantee an award/);
     assert.deepEqual(rows, before);
   });
 
