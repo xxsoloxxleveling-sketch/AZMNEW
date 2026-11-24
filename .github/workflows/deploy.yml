@@ -2,21 +2,41 @@ name: Build and Deploy Frontend to Deploy Branch
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_source_sha:
+        description: 'Exact reviewed main commit SHA'
+        required: true
+        type: string
+      backend_verified:
+        description: 'Operator has verified the matching backend and migrations in production'
+        required: true
+        type: boolean
+        default: false
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy.yml'
   push:
     branches:
       - main
 
 permissions:
-  contents: write
-
-concurrency:
-  group: frontend-deploy
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate manual release target
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_SOURCE_SHA" == "$GITHUB_SHA" ]]
+
       - name: Checkout Source
         uses: actions/checkout@v4
 
@@ -64,6 +84,66 @@ jobs:
           (cd deploy-output/downloads && sha256sum ExamScan-Android-Beta-v1.1.apk > ExamScan-Android-Beta-v1.1.apk.sha256)
           test -s deploy-output/downloads/ExamScan-Android-Beta-v1.1.apk
           printf '%s\n' "$GITHUB_SHA" > deploy-output/deployment-version.txt
+
+      - name: Prepare verified frontend artifact
+        run: |
+          tar -czf frontend-release.tar.gz -C deploy-output .
+          sha256sum frontend-release.tar.gz > frontend-release.sha256
+
+      - name: Upload build artifact (no production publication)
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-release
+          path: |
+            frontend-release.tar.gz
+            frontend-release.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish approved frontend
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.backend_verified == true
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+    concurrency:
+      group: production-frontend-publish
+      cancel-in-progress: false
+    steps:
+      - name: Verify release is still current and API is healthy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SOURCE_SHA" == "$GITHUB_SHA" ]]
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          [[ "$latest" == "$GITHUB_SHA" ]] || { echo 'Release superseded; start a new reviewed run.' >&2; exit 1; }
+          curl --fail --silent --show-error --max-time 15 https://azmaio.com/api/health | jq -e '.status == "ok" and .database.status == "connected"' >/dev/null
+
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download tested build from this run
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-release
+
+      - name: Verify artifact and source identity
+        run: |
+          set -euo pipefail
+          sha256sum --check frontend-release.sha256
+          mkdir -p deploy-output
+          tar -xzf frontend-release.tar.gz -C deploy-output
+          [[ "$(cat deploy-output/deployment-version.txt)" == "$GITHUB_SHA" ]]
+          test -s deploy-output/index.html
+          test -d deploy-output/assets
+          test -s deploy-output/downloads/ExamScan-Android-Beta-v1.1.apk
 
       - name: Publish built files to deploy branch
         uses: peaceiris/actions-gh-pages@v4
