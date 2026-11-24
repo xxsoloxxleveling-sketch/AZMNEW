@@ -41,6 +41,27 @@ describe('seven-column branded merit PDF', () => {
     assert.equal(Object.keys(rendered.body[0].cells).length, 7);
   });
 
+  it('prints the finalized heading and scholarship conditions on page one only', async () => {
+    const rows = Array.from({ length: 42 }, (_, index) => candidate(index));
+    const before = structuredClone(rows);
+    const doc = await buildMeritPdf(options(rows));
+    const pages = (doc.internal as unknown as { pages: string[][] }).pages.slice(1).map(page => page.join('\n'));
+    assert(pages.length > 1);
+    assert(doc.output().includes('/Title (Finalized Merit List)'));
+    for (const page of pages) {
+      assert.match(page, /Finalized Merit List/);
+      assert.match(page, /AWARDS SUBJECT TO VERIFICATION & FORMAL APPROVAL/);
+      assert.doesNotMatch(page, /PRIVATE PROVISIONAL REVIEW|NOT PUBLISHED/i);
+    }
+    assert.match(pages[0], /IMPORTANT SCHOLARSHIP CONDITIONS/);
+    assert.match(pages[0], /does not guarantee an award/);
+    assert.match(pages[0], /three months/);
+    assert.match(pages[0], /statutory rights remain protected/);
+    assert.match(pages[0], /SYNTHETIC|Synthetic Candidate|PDF-TEST-0/);
+    for (const page of pages.slice(1)) assert.doesNotMatch(page, /IMPORTANT SCHOLARSHIP CONDITIONS|does not guarantee an award/);
+    assert.deepEqual(rows, before);
+  });
+
   it('exports all supplied rows across pages without changing order, selected overall ranks, or ties', async () => {
     const rows = Array.from({ length: 42 }, (_, index) => candidate(index));
     rows[0].overallRank = 3; rows[1].overallRank = 1; rows[2].overallRank = 1;
@@ -81,7 +102,7 @@ describe('seven-column branded merit PDF', () => {
     const rendered = table(await buildMeritPdf(selected));
     assert.equal(cell(rendered, 0, 0), '19');
     assert.equal(cell(rendered, 0, 4), 'Hazara Convent School');
-    assert.equal(meritPdfFilename(selected), 'AZM-2026-V-Provisional-Merit-Overall-Hazara-Convent-2026-11-23.pdf');
+    assert.equal(meritPdfFilename(selected), 'AZM-2026-V-Finalized-Merit-Overall-Hazara-Convent-2026-11-23.pdf');
   });
 
   it('uses only ready combined totals as percentages and preserves zero distinctly from unavailable values', async () => {
@@ -169,14 +190,14 @@ describe('seven-column branded merit PDF', () => {
 
   it('keeps a blank title compatible and makes filename text safe for download', async () => {
     const blank = { ...options([]), documentTitle: '\n \t' };
-    assert((await buildMeritPdf(blank)).output().includes('/Title (Merit List)'));
-    assert.equal(meritPdfFilename(blank), 'AZM-2026-V-Provisional-Merit-Overall-2026-11-23.pdf');
+    assert((await buildMeritPdf(blank)).output().includes('/Title (Finalized Merit List)'));
+    assert.equal(meritPdfFilename(blank), 'AZM-2026-V-Finalized-Merit-Overall-2026-11-23.pdf');
     const unsafe = { ...options([]), documentTitle: '../CON: Part/1\\<Merit>*? "List" .pdf' };
     const filename = meritPdfFilename(unsafe);
     assert.match(filename, /^AZM-[A-Za-z0-9-]+-Overall-2026-11-23\.pdf$/);
     assert(!filename.includes('..'));
     assert(filename.length < 200);
-    assert.equal(meritPdfFilename({ ...options([]), documentTitle: '?!<>:"/\\|' }), 'AZM-Merit-List-Overall-2026-11-23.pdf');
+    assert.equal(meritPdfFilename({ ...options([]), documentTitle: '?!<>:"/\\|' }), 'AZM-Finalized-Merit-List-Overall-2026-11-23.pdf');
     assert.match(meritPdfFilename({ ...options([]), documentTitle: 'José Merit List' }), /AZM-Jose-Merit-List-/);
   });
 
