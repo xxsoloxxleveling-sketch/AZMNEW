@@ -11,7 +11,7 @@ async function insert(overrides: Record<string, unknown> = {}) {
   const index = ++serial;
   const data: Record<string, unknown> = {
     id: `award-${index}`, roundId: 'round-v', placementId: 'place-1', revision: index,
-    awardCode: 'LAPTOP', actorId: 'admin-1', actorName: 'Synthetic Administrator',
+    awardCode: 'LAPTOP', actorId: 'super-1', actorName: 'Synthetic Super Admin',
     idempotencyKey: `award-request-${index}`, requestHash: 'a'.repeat(64), ...overrides,
   };
   const keys = Object.keys(data);
@@ -31,7 +31,7 @@ describe('Append-only manual merit award database boundaries', () => {
       CREATE TABLE "InterviewFixedPlacement" (id TEXT PRIMARY KEY, "scheduleId" TEXT NOT NULL REFERENCES "InterviewFixedSchedule"(id),
         "studentId" TEXT NOT NULL REFERENCES "Student"(id), panel INTEGER NOT NULL);
       INSERT INTO "User" VALUES ('admin-1','ADMIN','ACTIVE'), ('super-1','SUPER_ADMIN','ACTIVE'),
-        ('teacher-1','TEACHER','ACTIVE'), ('inactive-admin','ADMIN','INACTIVE');
+        ('teacher-1','TEACHER','ACTIVE'), ('inactive-admin','ADMIN','INACTIVE'), ('inactive-super','SUPER_ADMIN','INACTIVE');
       INSERT INTO "Student" VALUES ('student-1','GENERAL_MERIT',80), ('student-2','GENERAL_MERIT',85),
         ('student-3','FINANCIALLY_NEEDY',95);
       INSERT INTO "InterviewRound" VALUES ('round-v'), ('round-other');
@@ -39,7 +39,7 @@ describe('Append-only manual merit award database boundaries', () => {
       INSERT INTO "InterviewFixedPlacement" VALUES ('place-1','schedule-v','student-1',1),
         ('place-2','schedule-v','student-2',1), ('place-3','schedule-v','student-3',1);
     `);
-    for (const migration of ['20261121160000_interview_assessment_revisions', '20261123160000_interview_merit_award_revisions']) {
+    for (const migration of ['20261121160000_interview_assessment_revisions', '20261123160000_interview_merit_award_revisions', '20261124120000_super_admin_manual_awards_all_candidates']) {
       await db.exec(readFileSync(fileURLToPath(new URL(`../prisma/migrations/${migration}/migration.sql`, import.meta.url)), 'utf8'));
     }
   });
@@ -60,24 +60,28 @@ describe('Append-only manual merit award database boundaries', () => {
     ]) await assert.rejects(insert(overrides), /check constraint/);
   });
 
-  it('requires an active administrator and the candidate fixed placement in the same round', async () => {
+  it('requires an active Super Admin and the candidate fixed placement in the same round', async () => {
     await insert({ actorId: 'super-1' });
-    for (const actorId of ['teacher-1', 'inactive-admin']) {
-      await assert.rejects(insert({ actorId }), /active administrator/);
+    for (const actorId of ['admin-1', 'teacher-1', 'inactive-admin', 'inactive-super']) {
+      await assert.rejects(insert({ actorId }), /active Super Admin/);
     }
     await assert.rejects(insert({ roundId: 'round-other' }), /fixed placement and round/);
     await assert.rejects(insert({ placementId: 'missing' }), /fixed placement and round/);
   });
 
-  it('restricts awards to General Merit but preserves history when a changed category requires clearing', async () => {
-    await assert.rejects(insert({ placementId: 'place-3' }), /General Merit/);
+  it('allows every registration category to receive an explicit award and never changes the application category', async () => {
+    await insert({ placementId: 'place-3' });
     await insert({ placementId: 'place-2' });
-    await db.exec(`UPDATE "Student" SET "scholarshipCategory"='ORPHAN' WHERE id='student-2'`);
-    await assert.rejects(insert({ placementId: 'place-2', awardCode: 'UMRAH_TICKET' }), /General Merit/);
+    await db.exec('UPDATE "Student" SET "scholarshipCategory"=\'ORPHAN\' WHERE id=\'student-2\'');
+    await insert({ placementId: 'place-2', awardCode: 'UMRAH_TICKET' });
+    await db.exec('UPDATE "Student" SET "scholarshipCategory"=\'PERSON_WITH_DISABILITY\' WHERE id=\'student-2\'');
+    await insert({ placementId: 'place-2', awardCode: 'EDUCATIONAL_VOUCHER' });
     await insert({ placementId: 'place-2', awardCode: null });
     assert.deepEqual((await db.query<{ awardCode: string | null }>(
       'SELECT "awardCode" FROM "InterviewMeritAwardRevision" WHERE "placementId"=$1 ORDER BY revision', ['place-2'],
-    )).rows.map(row => row.awardCode), ['LAPTOP', null]);
+    )).rows.map(row => row.awardCode), ['LAPTOP', 'UMRAH_TICKET', 'EDUCATIONAL_VOUCHER', null]);
+    assert.deepEqual((await db.query('SELECT "scholarshipCategory" FROM "Student" WHERE id=$1', ['student-2'])).rows,
+      [{ scholarshipCategory: 'PERSON_WITH_DISABILITY' }]);
   });
 
   it('rejects duplicate revisions and replay keys and all history mutations including owner truncation', async () => {

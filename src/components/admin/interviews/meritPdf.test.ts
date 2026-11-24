@@ -86,12 +86,12 @@ describe('seven-column branded merit PDF', () => {
     assert.notEqual(cell(rendered, 0, 5), '48.00%', 'The weighted written contribution is not the combined percentage');
   });
 
-  it('displays stored category labels and missing source fields without inventing identities or awards', async () => {
+  it('never uses registration categories as awards and preserves missing source fields', async () => {
     const categories = ['GENERAL_MERIT', 'FINANCIALLY_NEEDY', 'ORPHAN', 'PERSON_WITH_DISABILITY'];
     const rows = categories.map((scholarshipCategory, index) => candidate(index, { scholarshipCategory }));
     rows.push(candidate(4, { fatherName: undefined, institute: '', scholarshipCategory: undefined, rollNumber: null }));
     const rendered = table(await buildMeritPdf(options(rows)));
-    assert.deepEqual(rows.map((_, index) => cell(rendered, index, 6)), ['-', 'Financially Needy', 'Orphan', 'Person with Disability', '-']);
+    assert.deepEqual(rows.map((_, index) => cell(rendered, index, 6)), ['-', '-', '-', '-', '-']);
     for (const column of [1, 3, 4, 6]) assert.equal(cell(rendered, 4, column), '-');
   });
 
@@ -104,7 +104,7 @@ describe('seven-column branded merit PDF', () => {
   });
 
   it('reports unsupported text in every identity field instead of producing corrupted characters', async () => {
-    for (const field of ['studentName', 'fatherName', 'institute', 'scholarshipCategory'] as const) {
+    for (const field of ['studentName', 'fatherName', 'institute'] as const) {
       await assert.rejects(buildMeritPdf(options([candidate(0, { [field]: 'نام' })])), /cannot render some characters/);
     }
   });
@@ -120,7 +120,7 @@ describe('seven-column branded merit PDF', () => {
     assert.equal(table(doc).body[0].cells[0].colSpan, 7);
   });
 
-  it('prints each manually chosen General Merit award in the existing scholarship column', async () => {
+  it('prints each manually chosen award in the existing scholarship column', async () => {
     const choices: Array<[MeritAwardCode, string]> = [
       ['UMRAH_TICKET', 'Umrah Ticket'], ['LAPTOP', 'Laptop'], ['FULL_YEAR_SCHOLARSHIP', 'Full Year Scholarship'],
       ['PARTIAL_SCHOLARSHIP', 'Partial Scholarship'], ['EDUCATIONAL_VOUCHER', 'Educational Voucher'],
@@ -137,7 +137,7 @@ describe('seven-column branded merit PDF', () => {
     assert.deepEqual(rows, before);
   });
 
-  it('never infers an unassigned award or replaces another registration category with an award', async () => {
+  it('shows only explicit awards, even for non-General-Merit candidates', async () => {
     const chosen = { id: 'synthetic-award', revision: 1, awardCode: 'LAPTOP' as const, actorName: 'Synthetic Admin', createdAt: '2026-11-23T10:00:00Z' };
     const topCandidate = candidate(0, { overallRank: 1, rank: 1 }); topCandidate.totals.total = 99.99;
     const rows = [topCandidate,
@@ -146,7 +146,7 @@ describe('seven-column branded merit PDF', () => {
       ...['FINANCIALLY_NEEDY', 'ORPHAN', 'PERSON_WITH_DISABILITY'].map((scholarshipCategory, index) => candidate(index + 3, { scholarshipCategory, meritAward: chosen })),
     ];
     const rendered = table(await buildMeritPdf(options(rows)));
-    assert.deepEqual(rows.map((_, index) => cell(rendered, index, 6)), ['-', '-', '-', 'Financially Needy', 'Orphan', 'Person with Disability']);
+    assert.deepEqual(rows.map((_, index) => cell(rendered, index, 6)), ['-', '-', '-', 'Laptop', 'Laptop', 'Laptop']);
     assert.equal(cell(rendered, 0, 5), '99.99%');
   });
 

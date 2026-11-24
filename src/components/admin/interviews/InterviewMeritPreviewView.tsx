@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Loader2, RefreshCw } from 'lucide-react';
 import { assessmentApi } from './assessmentApi';
+import { useAuth } from '../../../lib/authContext';
 import type { MeritAwardCode, MeritPreview, MeritPreviewRow } from './assessmentApi';
 import { formatAssessmentScore, safeCsvCell } from './assessmentViewModel';
 import { assessmentUi as ui, writtenMarkLabel } from './assessmentUi';
 import { maximumMeritListSize, meritGroupingLabel, meritRank, meritSortOptions, meritWrittenContribution, parseMeritListLimit, selectMeritRows, sortMeritRows } from './meritViewModel';
 import type { MeritGrouping, MeritSortField, SortDirection } from './meritViewModel';
-import { meritAwardLabel, meritAwardOptions, meritRegistrationLabel, meritScholarshipLabel } from './meritAwards';
+import { meritAwardLabel, meritAwardOptions, meritScholarshipLabel } from './meritAwards';
 
 const statusLabels: Record<MeritPreviewRow['status'], string> = {
   READY: 'Ready', INCOMPLETE: 'Incomplete', ABSENT: 'Absent', SOURCE_CHANGED: 'Source changed',
@@ -18,6 +19,7 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
   roundTitle?: string;
   sessionRef?: string;
 }) {
+  const { role } = useAuth();
   const [data, setData] = useState<MeritPreview | null>(null);
   const [grouping, setGrouping] = useState<MeritGrouping>('overall');
   const [className, setClassName] = useState('');
@@ -52,6 +54,7 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
 
   const supportsOverall = data?.overallRankMethod === 'SHARED_COMPETITION_ALL_CLASSES';
   const supportsAwards = data?.manualAwardsEnabled === true;
+  const canAssignAwards = supportsAwards && role === 'SUPER_ADMIN';
   // An older server can still provide class ranks. Never present those as overall ranks.
   const effectiveGrouping: MeritGrouping = data && !supportsOverall ? 'class' : grouping;
   const limit = parseMeritListLimit(limitMode, customLimit);
@@ -81,6 +84,7 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
   }
 
   function changeAward(row: MeritPreviewRow, code: string) {
+    if (!canAssignAwards) return;
     const awardCode = (code || null) as MeritAwardCode | null;
     setAwardNotice('');
     if (!unconfirmedSaves[row.placementId]) setAwardErrors(current => { const next = { ...current }; delete next[row.placementId]; return next; });
@@ -94,7 +98,7 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
 
   async function saveAward(row: MeritPreviewRow) {
     const draft = awardDrafts[row.placementId];
-    if (!draft || savingAwardRef.current || loading || !supportsAwards) return;
+    if (!draft || savingAwardRef.current || loading || !canAssignAwards) return;
     savingAwardRef.current = true;
     setSavingAward(row.placementId); setAwardNotice('');
     setAwardErrors(current => { const next = { ...current }; delete next[row.placementId]; return next; });
@@ -170,7 +174,7 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
   }
 
   return <section className="space-y-4" aria-label="Private provisional merit preview">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">Merit preview</h3><p className="mt-1 text-sm text-slate-600">{effectiveGrouping === 'overall' ? 'One private, provisional merit ranking across all classes.' : 'Private, provisional merit rankings within each class.'} Equal exact totals share a rank. Administrators choose and save General Merit awards manually.</p></div><button className={ui.button} type="button" disabled={loading || controlsLocked} onClick={recalculatePreview}><RefreshCw size={15} />Recalculate preview</button></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">Merit preview</h3><p className="mt-1 text-sm text-slate-600">{effectiveGrouping === 'overall' ? 'One private, provisional merit ranking across all classes.' : 'Private, provisional merit rankings within each class.'} Equal exact totals share a rank. Only Super Admins choose and save awards manually for any candidate.</p></div><button className={ui.button} type="button" disabled={loading || controlsLocked} onClick={recalculatePreview}><RefreshCw size={15} />Recalculate preview</button></div>
     <div className="border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">Written exam 60 + interview 20 + activities 10 + previous academics 5 + personality 5 = 100. Only complete, submitted assessments with current verified sources receive a rank.</div>
     {error && <div role="alert" className={ui.error}>{error}<button className={ui.button + ' ml-3'} type="button" disabled={loading} onClick={recalculatePreview}>Retry</button></div>}
     {data && !loading && !error && <dl className="grid grid-cols-2 gap-4 border-y border-slate-200 py-3 sm:grid-cols-4">{[
@@ -194,7 +198,8 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
       {limited && <p className="text-xs text-slate-500">Selects the top ready candidates matching your filters before display sorting. This is one total limit across the list, including when classes are shown separately.</p>}
       {!!selectionError && !loading && !error && <p role="alert" className={ui.error}>{selectionError}</p>}
       {selection.includeTiesCount !== null && !selectionError && !loading && <div role="status" className="flex flex-wrap items-center gap-2 border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"><span>The {filtered.length}-student limit splits shared rank #{selection.cutoffRank}. Include all tied candidates to make a {selection.includeTiesCount}-student list.</span><button type="button" className={ui.button} disabled={controlsLocked} onClick={() => { setCustomLimit(String(selection.includeTiesCount)); setLimitMode('custom'); setPage(1); }}>Include all tied candidates</button></div>}
-      {data && !loading && !error && !supportsAwards && <p role="status" className="text-sm text-amber-800">Manual awards are currently unavailable. General Merit awards remain unassigned in downloads.</p>}
+      {data && !loading && !error && !supportsAwards && <p role="status" className="text-sm text-amber-800">Manual awards are currently unavailable. No registration category is treated as an award in downloads.</p>}
+      {supportsAwards && role !== 'SUPER_ADMIN' && <p role="status" className="text-sm text-slate-600">Awards are read-only. Only a Super Admin may assign or clear awards.</p>}
       {draftCount > 0 && <div role="status" className="flex flex-wrap items-center gap-2 border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"><span>{draftCount} unsaved award {draftCount === 1 ? 'choice' : 'choices'}. Save or discard these choices before changing filters or downloading.</span><button className={ui.button} type="button" disabled={savingAward !== null} onClick={() => discardAwardChanges()}>Discard unsaved awards</button></div>}
       {requiresAwardReload && <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500"><span>A save could not be confirmed. Reloading current awards discards unsaved choices and retrieves the latest saved decisions before downloading.</span><button className={ui.button} type="button" disabled={savingAward !== null || loading} onClick={() => discardAwardChanges(true)}>Reload current awards</button></div>}
       {awardNotice && <p role="status" className={ui.notice}>{awardNotice}</p>}
@@ -221,23 +226,21 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
           <td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(meritWrittenContribution(row))}</td><td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(row.totals.interview)}</td><td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(row.totals.extracurricular)}</td><td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(row.totals.academic)}</td><td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(row.totals.personality)}</td><td className={ui.td + ' font-semibold tabular-nums'}>{row.status === 'READY' ? formatAssessmentScore(row.totals.total) : '—'}</td>
           <td className={ui.td}><span className={row.status === 'READY' ? 'font-medium text-emerald-700' : 'text-amber-800'}>{statusLabels[row.status]}</span>{row.issues.length > 0 && <details className="mt-1 max-w-64 text-xs text-slate-500"><summary className="cursor-pointer">Review details</summary><ul className="mt-1 list-disc pl-4">{row.issues.map(issue => <li key={issue}>{issue}</li>)}</ul></details>}</td>
           <td className={ui.td + ' min-w-64'}>
-            <span className="mb-1 block text-xs text-slate-500">{meritRegistrationLabel(row.scholarshipCategory)}</span>
-            {supportsAwards && (row.scholarshipCategory === 'GENERAL_MERIT' || row.meritAward?.awardCode) ? <div className="space-y-2">
+            {canAssignAwards ? <div className="space-y-2">
               <select aria-label={`Award for ${row.studentName}`} className={ui.input} value={awardDrafts[row.placementId] ? awardDrafts[row.placementId].awardCode ?? '' : row.meritAward?.awardCode ?? ''} disabled={savingAward !== null || loading || exportingPdf} onChange={event => changeAward(row, event.target.value)}>
                 <option value="">Not assigned</option>
-                {(row.scholarshipCategory === 'GENERAL_MERIT' ? meritAwardOptions : meritAwardOptions.filter(option => option.value === row.meritAward?.awardCode)).map(option => <option key={option.value} value={option.value} disabled={row.scholarshipCategory !== 'GENERAL_MERIT'}>{option.label}</option>)}
+                {meritAwardOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
-              {row.scholarshipCategory !== 'GENERAL_MERIT' && <p className="text-xs text-amber-800">Registration category changed. Clear the previous General Merit award.</p>}
               <button aria-label={`Save award for ${row.studentName}`} type="button" className={ui.button} disabled={!awardDrafts[row.placementId] || savingAward !== null || loading || exportingPdf} onClick={() => void saveAward(row)}>{savingAward === row.placementId ? <><Loader2 size={13} className="animate-spin" />Saving…</> : 'Save award'}</button>
               {row.meritAward?.actorName && <span className="block text-xs text-slate-500">Saved by {row.meritAward.actorName}</span>}
               {awardErrors[row.placementId] && <p role="alert" className="max-w-72 text-xs text-red-700">{awardErrors[row.placementId]}</p>}
-            </div> : row.scholarshipCategory === 'GENERAL_MERIT' ? <span className="text-xs text-slate-500">Not assigned</span> : null}
+            </div> : <span className="text-sm text-slate-700">{row.meritAward?.awardCode ? meritAwardLabel(row.meritAward.awardCode) : 'Not assigned'}</span>}
           </td>
         </tr>; })}
         {data && !loading && !error && rows.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-sm text-slate-500">No candidates match these filters.</td></tr>}
       </tbody></table></div>
       <div className="flex flex-wrap items-center justify-between gap-2 p-3"><span className="text-xs text-slate-500">{filtered.length} candidates · page {currentPage} of {totalPages} · {effectiveGrouping === 'overall' ? 'overall ranks across all classes' : 'rankings are within each class'}</span><div className="flex gap-2"><button className={ui.button} type="button" disabled={currentPage <= 1 || loading || controlsLocked} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={15} />Previous</button><button className={ui.button} type="button" disabled={currentPage >= totalPages || loading || controlsLocked} onClick={() => setPage(currentPage + 1)}>Next<ChevronRight size={15} /></button></div></div>
     </div>
-    <p className="text-xs text-slate-500">General Merit awards are assigned only when an administrator saves a choice. Sorting, student limits and downloads never assign or change awards. PDF and CSV downloads remain private provisional review copies. Written exam marks remain final and verified.</p>
+    <p className="text-xs text-slate-500">No candidate receives an award automatically. Only a Super Admin can save or clear an award, regardless of registration category. Sorting, student limits and downloads never assign or change awards. PDF and CSV downloads remain private provisional review copies. Written exam marks remain final and verified.</p>
   </section>;
 }

@@ -308,7 +308,7 @@ export class InterviewAssessmentService {
   }
 
   async saveMeritAward(roundId: string, placementId: string, rawInput: MeritAwardInput, actor: Actor) {
-    requireAdmin(actor);
+    if (actor.role !== 'SUPER_ADMIN') throw fail(403, 'Only a Super Admin may assign or clear merit awards.', 'INTERVIEW_MERIT_AWARD_FORBIDDEN');
     const input = meritAwardSaveSchema.parse(rawInput);
     const requestHash = createHash('sha256').update(JSON.stringify({ roundId, placementId, actorId: actor.id, input })).digest('hex');
     return this.transaction(async tx => {
@@ -324,7 +324,7 @@ export class InterviewAssessmentService {
       }
       const placement = await tx.interviewFixedPlacement.findFirst({
         where: { id: placementId, schedule: { roundId } },
-        include: { student: { select: { scholarshipCategory: true } } },
+        select: { id: true },
       });
       if (!placement) throw fail(404, 'Candidate is not in this round\'s fixed timetable.');
       const current = await tx.interviewMeritAwardRevision.findFirst({
@@ -332,9 +332,6 @@ export class InterviewAssessmentService {
       });
       if ((current?.revision ?? 0) !== input.expectedRevision) {
         throw fail(409, 'Another administrator saved a newer award selection. Reload before saving.', 'INTERVIEW_MERIT_AWARD_CONFLICT');
-      }
-      if (input.awardCode !== null && placement.student.scholarshipCategory !== 'GENERAL_MERIT') {
-        throw fail(400, 'Manual awards can only be assigned to General Merit candidates.', 'INTERVIEW_MERIT_AWARD_CATEGORY');
       }
       const saved = await tx.interviewMeritAwardRevision.create({ data: {
         roundId, placementId, revision: input.expectedRevision + 1, awardCode: input.awardCode,

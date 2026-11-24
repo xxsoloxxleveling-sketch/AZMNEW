@@ -88,7 +88,7 @@ async function run() {
         const record = records.find(row => row.placementId === awardPlacement);
         if (!record) { json('Synthetic candidate not found.', 404); return; }
         if (input.awardCode !== null && !awardOptions.some(([code]) => code === input.awardCode)) { json('Invalid synthetic award.', 400); return; }
-        if (input.awardCode !== null && record.scholarshipCategory !== 'GENERAL_MERIT') { json('Awards require General Merit.', 400); return; }
+        if (user.role !== 'SUPER_ADMIN') { json('Only a Super Admin may assign or clear merit awards.', 403); return; }
         const replay = awardReplays.get(input.idempotencyKey);
         if (replay) { json(replay.body === body ? replay.saved : 'Synthetic idempotency conflict.', replay.body === body ? 200 : 409); return; }
         const current = awards.get(awardPlacement) ?? unassignedAward();
@@ -178,7 +178,7 @@ async function run() {
     const globalPdfRaw = pdfContents(globalPdf, 'raw');
     assertSevenColumnPdf(globalPdfRaw);
     assertPdfCandidate(globalPdfRaw, ['2', 'SYN-M-1', 'Synthetic Candidate 001', 'Synthetic Father 001', 'Synthetic Institute 001', '96.00%', '-']);
-    assertPdfCandidate(globalPdfRaw, ['16', 'SYN-M-35', 'Synthetic Other Class Two', 'Synthetic Father 035', 'Synthetic Institute 035', '82.50%', 'Financially Needy']);
+    assertPdfCandidate(globalPdfRaw, ['16', 'SYN-M-35', 'Synthetic Other Class Two', 'Synthetic Father 035', 'Synthetic Institute 035', '82.50%', '-']);
     await (await field(page, 'Order')).select('asc');
     await waitText(page, 'page 1 of 2');
     shown = await visibleRows(page);
@@ -498,8 +498,10 @@ async function run() {
     assert.deepEqual(await (await field(page, awardLabel)).evaluate(element =>
       Array.from(element.querySelectorAll('option')).filter(option => option.value).map(option => [option.value, option.textContent?.trim()])), awardOptions);
     assert.equal(await (await field(page, awardLabel)).evaluate(element => element.value), '');
-    assert(await page.evaluate(() => !Array.from(document.querySelectorAll('select')).some(element =>
-      element.getAttribute('aria-label') === 'Award for Synthetic Other Class Two')), 'A non-General-Merit registration has no award assignment control');
+    assert.equal(await (await field(page, 'Award for Synthetic Other Class Two')).evaluate(element => element.value), '',
+      'Non-General-Merit candidates have all seven award options and no preselected award');
+    assert.deepEqual(await (await field(page, 'Award for Synthetic Other Class Two')).evaluate(element =>
+      Array.from(element.querySelectorAll('option')).filter(option => option.value).map(option => [option.value, option.textContent?.trim()])), awardOptions);
     const scoresBeforeAward = (await visibleRows(page)).map(row => row.slice(0, 9));
     await (await field(page, awardLabel)).select('LAPTOP');
     assert.equal(awardRequests.length, 0, 'Choosing an award does not save it');
@@ -569,9 +571,9 @@ async function run() {
     const awardedRaw = pdfContents(awardedPdf, 'raw');
     assertSevenColumnPdf(awardedRaw);
     assertPdfCandidate(awardedRaw, ['1', 'SYN-M-34', 'Synthetic Other Class One', 'Synthetic Father 034', 'Synthetic Institute 034', '99.75%', 'Laptop']);
-    assertPdfCandidate(awardedRaw, ['16', 'SYN-M-35', 'Synthetic Other Class Two', 'Synthetic Father 035', 'Synthetic Institute 035', '82.50%', 'Financially Needy']);
+    assertPdfCandidate(awardedRaw, ['16', 'SYN-M-35', 'Synthetic Other Class Two', 'Synthetic Father 035', 'Synthetic Institute 035', '82.50%', '-']);
     assert.equal(csvRow(fs.readFileSync(awardedCsv, 'utf8'), 34).at(-2), 'Laptop');
-    assert.equal(csvRow(fs.readFileSync(awardedCsv, 'utf8'), 35).at(-2), 'Financially Needy');
+    assert.equal(csvRow(fs.readFileSync(awardedCsv, 'utf8'), 35).at(-2), '-');
     assert.equal(awardRequests.length, 4, 'Reloading, searching and exporting a saved decision make no additional writes');
     await screenshot(page, path.join(output, 'desktop-saved-manual-award.png'));
     const saved = awards.get('synthetic-merit-placement-34')!;
@@ -599,6 +601,20 @@ async function run() {
     assert.equal(awards.get('synthetic-merit-placement-34')?.revision, 5);
     const clearedPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'cleared-manual-award.pdf'));
     assertPdfCandidate(pdfContents(clearedPdf, 'raw'), ['1', 'SYN-M-34', 'Synthetic Other Class One', 'Synthetic Father 034', 'Synthetic Institute 034', '99.75%', '-']);
+    await (await field(page, 'Award for Synthetic Other Class Two')).select('EDUCATIONAL_VOUCHER');
+    await clickButton(page, 'Save award for Synthetic Other Class Two');
+    await waitExportsEnabled(page);
+    assert.equal(awards.get('synthetic-merit-placement-35')?.awardCode, 'EDUCATIONAL_VOUCHER');
+    const assistancePdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'manual-award-any-category.pdf'));
+    assertPdfCandidate(pdfContents(assistancePdf, 'raw'), ['16', 'SYN-M-35', 'Synthetic Other Class Two', 'Synthetic Father 035', 'Synthetic Institute 035', '82.50%', 'Educational Voucher']);
+    user.role = 'ADMIN';
+    await page.reload({ waitUntil: 'networkidle0' });
+    await waitText(page, 'Only a Super Admin may assign or clear awards.');
+    assert(await page.evaluate(() => !Array.from(document.querySelectorAll('select,button')).some(element => {
+      const label = element.getAttribute('aria-label') ?? '';
+      return label.startsWith('Award for ') || label.startsWith('Save award for ');
+    })), 'Ordinary admins cannot edit awards');
+    assert.equal(awardRequests.length, 7);
     assert.deepEqual(errors, []);
     assert.equal(JSON.stringify(records), originalRecords, 'Read-only sorting and downloads do not mutate source marks or ranks');
     assert(methods.every(method => method === 'GET' || method === 'PUT') && methods.filter(method => method === 'PUT').length === awardRequests.length, 'Only explicit award saves issue mutation requests');
