@@ -64,6 +64,11 @@ class ReleaseBundleTests(unittest.TestCase):
             "sha256": digest(b"SELECT 3;\n"),
         }])
 
+    def test_windows_autocrlf_does_not_change_archive(self):
+        self.git("config", "core.autocrlf", "true")
+        sha = self.package()
+        self.assertEqual(self.verify(sha)["files"]["backend/package.json"], digest(b"{}\n"))
+
     def test_no_change_release(self):
         sha = self.package(self.base)
         self.assertEqual(self.verify(sha, source=self.base)["added_migrations"], [])
