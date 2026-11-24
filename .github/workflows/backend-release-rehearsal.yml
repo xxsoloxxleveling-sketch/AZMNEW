@@ -1,0 +1,73 @@
+name: Backend release rehearsal (synthetic only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'scripts/release/**'
+      - '.github/workflows/backend-release-rehearsal.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  release-rehearsal:
+    name: Verify release bundle and restore synthetic PostgreSQL 17
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: synthetic_release_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      SOURCE_SHA: ${{ github.sha }}
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Test release verification and tamper rejection
+        run: python3 -m unittest discover -s scripts/release -p 'test_*.py' -v
+      - name: Verify exact candidate source and immutable migration chain
+        run: |
+          set -euo pipefail
+          mkdir -p tmp
+          manifest_sha=$(python3 scripts/release/backend_bundle.py package --base "$BASE_SHA" --source "$SOURCE_SHA" --directory tmp/backend-release)
+          python3 scripts/release/backend_bundle.py verify --base "$BASE_SHA" --source "$SOURCE_SHA" --directory tmp/backend-release --expected-manifest-sha256 "$manifest_sha"
+          printf '%s\n' "$manifest_sha" > tmp/backend-release/manifest.sha256
+      - name: Compile candidate backend with synthetic environment
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://postgres:synthetic_release_only@127.0.0.1:5432/postgres
+          DIRECT_URL: postgresql://postgres:synthetic_release_only@127.0.0.1:5432/postgres
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          ./node_modules/.bin/prisma generate
+          ./node_modules/.bin/prisma validate
+          ./node_modules/.bin/tsc --pretty false
+      - name: Rehearse backup, restore and additive migration
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: bash scripts/release/rehearse_pg17.sh
+      - name: Preserve verified source bundle (not a deployment authorization)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-rehearsal
+          path: tmp/backend-release/
+          if-no-files-found: error
+          retention-days: 7
