@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { MeritPreviewRow } from './assessmentApi';
-import { parseMeritListLimit, selectMeritRows, sortMeritRows } from './meritViewModel';
+import { matchesMeritSchool, meritSchoolOptions, meritSchoolFilenamePart, parseMeritListLimit, selectMeritRows, sortMeritRows } from './meritViewModel';
 import { meritAwardOptions, meritScholarshipLabel } from './meritAwards';
 
 function candidate(id: number, overrides: Partial<MeritPreviewRow> = {}): MeritPreviewRow {
@@ -104,5 +104,50 @@ describe('manual award presentation', () => {
       row.meritAward.awardCode = null;
       assert.equal(meritScholarshipLabel(row), '-');
     }
+  });
+});
+
+
+describe('school-filtered merit selection', () => {
+  const candidates = [
+    candidate(1, { institute: 'Hazara Convent School' }),
+    candidate(4, { institute: '  HAZARA   CONVENT-school ' }),
+    candidate(6, { institute: 'Hazara Convent School - Campus II' }),
+    candidate(3, { institute: 'Hazara Public School' }),
+    candidate(8, { institute: '' }),
+    candidate(9, { institute: undefined }),
+    candidate(11, { institute: 'St. Mary’s Academy' }),
+  ];
+
+  it('matches partial school names case-insensitively and handles whitespace and punctuation variants', () => {
+    assert.deepEqual(ids(candidates.filter(row => matchesMeritSchool(row, ' hazara--CONVENT '))), ['1', '4', '6']);
+    assert.deepEqual(ids(candidates.filter(row => matchesMeritSchool(row, 'campus ii'))), ['6']);
+    assert.deepEqual(ids(candidates.filter(row => matchesMeritSchool(row, 'st marys'))), ['11']);
+    assert.deepEqual(ids(candidates.filter(row => matchesMeritSchool(row, 'different school'))), []);
+    assert.deepEqual(ids(candidates.filter(row => matchesMeritSchool(row, '***'))), []);
+    assert.deepEqual(ids(candidates.filter(row => matchesMeritSchool(row, '  '))), ids(candidates));
+  });
+
+  it('lists distinct recorded schools, deduplicating formatting variants without inventing spelling aliases', () => {
+    assert.deepEqual(meritSchoolOptions(candidates), [
+      'Hazara Convent School', 'Hazara Convent School - Campus II', 'Hazara Public School', 'St. Mary’s Academy',
+    ]);
+    assert.deepEqual(meritSchoolOptions([candidate(1, { institute: 'مدرسہ' }), candidate(2, { institute: 'مدرسہ' })]), ['مدرسہ']);
+  });
+
+  it('filters before the top-student limit and preserves source ranks, awards and all original records', () => {
+    const before = structuredClone(candidates);
+    const matching = candidates.filter(row => matchesMeritSchool(row, 'Hazara Convent'));
+    const selected = selectMeritRows(matching, 2, true, false);
+    assert.equal(selected.available, 3);
+    assert.deepEqual(ids(selected.rows), ['1', '4']);
+    assert.deepEqual(sortMeritRows(selected.rows, 'rank', 'desc').map(row => row.overallRank), [4, 1]);
+    assert.deepEqual(candidates, before);
+  });
+
+  it('uses safe bounded school components for filtered download filenames', () => {
+    assert.equal(meritSchoolFilenamePart('  ../Hazara: Convent / School?  '), 'Hazara-Convent-School');
+    assert.equal(meritSchoolFilenamePart('W'.repeat(100)).length, 45);
+    assert.equal(meritSchoolFilenamePart(''), '');
   });
 });
