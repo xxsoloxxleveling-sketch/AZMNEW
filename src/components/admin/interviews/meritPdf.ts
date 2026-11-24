@@ -5,6 +5,8 @@ import type { MeritPreviewRow } from './assessmentApi';
 import { meritGroupingLabel, meritRank, meritSchoolFilenamePart } from './meritViewModel';
 import type { MeritGrouping } from './meritViewModel';
 import { meritScholarshipLabel } from './meritAwards';
+import { meritPolicyNotice } from './meritPolicyNotice';
+import { drawMeritAwardIcon } from './meritAwardIcons';
 
 export type MeritPdfOptions = {
   /** All filtered rows, in their selected display order, before pagination. */
@@ -31,14 +33,6 @@ export type MeritPdfOptions = {
 const brand: [number, number, number] = [24, 91, 157];
 const ink: [number, number, number] = [30, 41, 59];
 const muted: [number, number, number] = [71, 85, 105];
-const noticeHeading = 'IMPORTANT DISCLAIMER & SCHOLARSHIP CONDITIONS';
-const scholarshipNotice = [
-  "Inclusion or merit rank does not guarantee an award. AZM.AIO (Private) Limited's self-funded awards remain subject to eligibility, document verification, approved policy, available funds and formal award notification.",
-  'AZM may correct verified errors, revise decisions, or suspend or withdraw awards for fraud, misrepresentation, misconduct, non-compliance or resource constraints, under applicable policy and law. Awards cannot be transferred, exchanged or converted to cash without written approval.',
-  'Candidates and guardians must provide requested academic records, sign required undertakings, maintain active contact details and respond to official communications.',
-  'Umrah awards: unless otherwise notified, acceptance and travel arrangements must be completed within three months from the specified award or ticket date, subject to documentation, visa and travel requirements. Expired awards carry no automatic cash substitute.',
-  'Use official AZM channels only. Impersonation, brand misuse and unlawful misconduct may lead to action. Submit written review requests with name, roll number, grounds and evidence within the announced review period. Lawful complaints and statutory rights remain protected.',
-] as const;
 const columnHeadings = ['Merit Rank', 'Roll No', 'Name', 'Father Name', 'Institute', 'Percentage Obtained', 'Scholarship Category'];
 
 // Normalise punctuation used by the UI for the PDF's built-in Latin font.
@@ -116,7 +110,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
   doc.setProperties({
     title,
-    subject: `${meritGroupingLabel(options.grouping)} - finalized merit list; awards subject to formal approval.`,
+    subject: `${meritGroupingLabel(options.grouping)} - finalized merit list; scholarship conditions and merit records.`,
     author: 'AZM.AIO Scholarship & Examination Authority',
     creator: 'AZM.AIO Interview Management',
   });
@@ -147,18 +141,6 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const contextLines = filterLines.flatMap(line => doc.splitTextToSize(line, contentWidth - 8) as string[]);
   const ribbonHeight = contextLines.length * 3.5 + 5;
   const tableTop = ribbonY + ribbonHeight + 5;
-  // Reserve extra space only on the first page; continuation tables keep
-  // the original compact header, so the notice does not repeat or waste pages.
-  const noticeY = ribbonY + ribbonHeight + 4;
-  const noticeFontSize = 8.2;
-  const noticeLineHeight = 3.65;
-  const noticeParagraphGap = 1.35;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(noticeFontSize);
-  const noticeLines = scholarshipNotice.map(paragraph => doc.splitTextToSize(paragraph, contentWidth - 10) as string[]);
-  const noticeHeight = 12 + noticeLines.reduce((sum, lines) => sum + lines.length * noticeLineHeight, 0)
-    + (noticeLines.length - 1) * noticeParagraphGap;
-  const firstTableTop = noticeY + noticeHeight + 5;
   const headerPages = new Set<number>();
 
   const drawHeader = () => {
@@ -180,7 +162,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.text(titleLines, 35, 19, { lineHeightFactor: titleLineHeight / (titleFontSize * 25.4 / 72) });
     doc.setTextColor(...muted);
     doc.setFontSize(8.2);
-    doc.text('AWARDS SUBJECT TO VERIFICATION & FORMAL APPROVAL', 35, statusY);
+    doc.text('FINALIZED MERIT LIST - SESSION V, PART 1 (2026)', 35, statusY);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(...muted);
@@ -197,26 +179,6 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.4);
     doc.text(contextLines, margin + 4, ribbonY + 4, { lineHeightFactor: 1.34 });
-    if (page === 1) {
-      doc.setFillColor(248, 250, 252);
-      doc.setDrawColor(203, 213, 225);
-      doc.setLineWidth(.2);
-      doc.rect(margin, noticeY, contentWidth, noticeHeight, 'FD');
-      doc.setFillColor(...brand);
-      doc.rect(margin, noticeY, 1.1, noticeHeight, 'F');
-      doc.setTextColor(...brand);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text(noticeHeading, margin + 5, noticeY + 5.5);
-      doc.setTextColor(...ink);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(noticeFontSize);
-      let y = noticeY + 11;
-      for (const lines of noticeLines) {
-        doc.text(lines, margin + 5, y, { lineHeightFactor: noticeLineHeight / (noticeFontSize * 25.4 / 72) });
-        y += lines.length * noticeLineHeight + noticeParagraphGap;
-      }
-    }
   };
 
   const candidateRow = (row: MeritPreviewRow): RowInput => {
@@ -238,9 +200,74 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   } else sections.push({ rows: [...options.rows] });
   if (!sections.length) sections.push({ rows: [] });
 
-  // Draw page one's notice even if an unusually tall first row moves to page two.
-  drawHeader();
-  let startY = firstTableTop;
+  // Complete policy precedes the merit table. Keep clauses and headings together,
+  // flow through two readable columns, and begin the merit table on a fresh page.
+  const policyLines = meritPolicyNotice.split(/\r?\n/).map(line => line.trim()).filter(line => line && line !== '---');
+  const policyTitle = text(policyLines[0].replace(/^#\s+/, ''));
+  const policySubtitle = text(policyLines[1].replace(/\*/g, ''));
+  const blocks = policyLines.slice(2).map(raw => ({
+    heading: raw.startsWith('### '),
+    bold: raw.startsWith('**') && raw.endsWith('**'),
+    value: text(raw.replace(/^###\s+/, '').replace(/\*/g, '')),
+  }));
+  const gutter = 8;
+  const colWidth = (contentWidth - gutter) / 2;
+  const bodySize = 9.4;
+  const lineHeight = 4.25;
+  const policyBottom = height - 20;
+  let col = 0;
+  let y = 0;
+  let colTop = 0;
+  let policyPage = 0;
+
+  const drawPolicyPage = () => {
+    drawHeader();
+    policyPage++;
+    doc.setFillColor(239, 246, 255);
+    doc.rect(margin, tableTop, contentWidth, 13, 'F');
+    doc.setTextColor(...brand);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.4);
+    doc.text(policyPage === 1 ? policyTitle : 'SCHOLARSHIP POLICY NOTICE (CONTINUED)', margin + 3, tableTop + 5);
+    doc.setFontSize(8.3);
+    doc.text(policySubtitle, margin + 3, tableTop + 10);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(.15);
+    doc.line(margin + colWidth + gutter / 2, tableTop + 17, margin + colWidth + gutter / 2, policyBottom);
+    col = 0;
+    colTop = tableTop + 18;
+    y = colTop;
+  };
+  const nextColumn = () => {
+    if (col === 0) { col = 1; y = colTop; }
+    else { doc.addPage(); drawPolicyPage(); }
+  };
+  const wrapBlock = (block: typeof blocks[number]) => {
+    doc.setFont('helvetica', block.heading || block.bold ? 'bold' : 'normal');
+    doc.setFontSize(block.heading ? 9.8 : bodySize);
+    return doc.splitTextToSize(block.value, colWidth - 3) as string[];
+  };
+  drawPolicyPage();
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index];
+    const lines = wrapBlock(block);
+    const gap = block.heading ? 3 : 1.6;
+    const blockHeight = lines.length * lineHeight + gap;
+    const nextHeight = block.heading && blocks[index + 1] ? wrapBlock(blocks[index + 1]).length * lineHeight + 1.6 : 0;
+    if (y > colTop && y + blockHeight + nextHeight > policyBottom) nextColumn();
+    // Source clauses are short enough to fit an entire column. Fail explicitly
+    // if future policy changes exceed that limit rather than silently clip them.
+    if (y + blockHeight > policyBottom) throw new Error('A scholarship policy paragraph is too long for the PDF layout.');
+    doc.setFont('helvetica', block.heading || block.bold ? 'bold' : 'normal');
+    doc.setFontSize(block.heading ? 9.8 : bodySize);
+    doc.setTextColor(...(block.heading ? brand : ink));
+    const x = margin + col * (colWidth + gutter);
+    doc.text(lines, x, y + 3.2, { lineHeightFactor: lineHeight / ((block.heading ? 9.8 : bodySize) * 25.4 / 72) });
+    y += blockHeight;
+  }
+
+  doc.addPage();
+  let startY = tableTop;
   for (const section of sections) {
     const head: RowInput[] = [];
     if (section.className !== undefined) head.push([{
@@ -266,11 +293,26 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
         4: { cellWidth: 65 }, 5: { cellWidth: 32, halign: 'center', fontStyle: 'bold' },
         6: { cellWidth: contentWidth - 237 },
       },
+      didParseCell: data => {
+        if (data.section !== 'body' || data.column.index !== 6) return;
+        const row = section.rows[data.row.index];
+        if (!row?.meritAward?.awardCode || meritScholarshipLabel(row) === '-') return;
+        data.cell.styles.cellPadding = { left: 9, right: 2, top: 2, bottom: 2 };
+        data.cell.styles.minCellHeight = 9;
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.textColor = brand;
+      },
+      didDrawCell: data => {
+        if (data.section !== 'body' || data.column.index !== 6) return;
+        const row = section.rows[data.row.index];
+        const code = row?.meritAward?.awardCode;
+        if (code && meritScholarshipLabel(row) !== '-') drawMeritAwardIcon(doc, code, data.cell.x + 1.6, data.cell.y + (data.cell.height - 6.2) / 2, 6.2);
+      },
       willDrawPage: data => {
         // Keep a new class section's heading with its first candidate. The
         // library checks the heading alone before starting a separate table.
         const firstRowHeight = data.table.body[0]?.height ?? 0;
-        if (data.pageNumber === 1 && data.cursor && data.cursor.y > (doc.getCurrentPageInfo().pageNumber === 1 ? firstTableTop : tableTop) &&
+        if (data.pageNumber === 1 && data.cursor && data.cursor.y > tableTop &&
           data.cursor.y + data.table.getHeadHeight(data.table.columns) + firstRowHeight > height - 18) {
           doc.addPage();
           data.cursor.y = tableTop;

@@ -4,6 +4,7 @@ import type { Table } from 'jspdf-autotable';
 import type { MeritAwardCode, MeritPreviewRow } from './assessmentApi';
 import { buildMeritPdf, meritPdfFilename } from './meritPdf';
 import type { MeritPdfOptions } from './meritPdf';
+import { meritPolicyNotice } from './meritPolicyNotice';
 
 const headings = ['Merit Rank', 'Roll No', 'Name', 'Father Name', 'Institute', 'Percentage Obtained', 'Scholarship Category'];
 function candidate(index: number, overrides: Partial<MeritPreviewRow> = {}): MeritPreviewRow {
@@ -41,24 +42,28 @@ describe('seven-column branded merit PDF', () => {
     assert.equal(Object.keys(rendered.body[0].cells).length, 7);
   });
 
-  it('prints the finalized heading and scholarship conditions on page one only', async () => {
+  it('prints the complete 11-section policy before candidates, without pending approval wording', async () => {
     const rows = Array.from({ length: 42 }, (_, index) => candidate(index));
     const before = structuredClone(rows);
     const doc = await buildMeritPdf(options(rows));
     const pages = (doc.internal as unknown as { pages: string[][] }).pages.slice(1).map(page => page.join('\n'));
-    assert(pages.length > 1);
+    const firstTablePage = pages.findIndex(page => page.includes('PDF-TEST-0'));
+    assert(firstTablePage >= 1);
     assert(doc.output().includes('/Title (Finalized Merit List)'));
     for (const page of pages) {
-      assert.match(page, /Finalized Merit List/);
-      assert.match(page, /AWARDS SUBJECT TO VERIFICATION & FORMAL APPROVAL/);
-      assert.doesNotMatch(page, /PRIVATE PROVISIONAL REVIEW|NOT PUBLISHED/i);
+      assert.match(page, /FINALIZED MERIT LIST - SESSION V, PART 1/);
+      assert.doesNotMatch(page, /PRIVATE PROVISIONAL REVIEW|NOT PUBLISHED|AWARDS SUBJECT TO VERIFICATION & FORMAL APPROVAL/i);
     }
-    assert.match(pages[0], /IMPORTANT DISCLAIMER & SCHOLARSHIP CONDITIONS/);
-    assert.match(pages[0], /does not guarantee an award/);
-    assert.match(pages[0], /three months/);
-    assert.match(pages[0], /statutory rights remain protected/);
-    assert.match(pages[0], /SYNTHETIC|Synthetic Candidate|PDF-TEST-0/);
-    for (const page of pages.slice(1)) assert.doesNotMatch(page, /IMPORTANT DISCLAIMER & SCHOLARSHIP CONDITIONS|does not guarantee an award/);
+    assert.match(pages[0], /IMPORTANT INSTRUCTIONS, CONDITIONS & SCHOLARSHIP POLICY NOTICE/);
+    const policy = pages.slice(0, firstTablePage).join('\n');
+    const clauses = [...meritPolicyNotice.matchAll(/^(\d+\.\d+\.) /gm)].map(match => match[1]);
+    assert.equal(clauses.length, 47);
+    assert.equal(meritPolicyNotice.match(/^### \d+\./gm)?.length, 11);
+    for (const clause of clauses) assert(policy.includes('(' + clause + ' '), 'Missing policy clause ' + clause);
+    assert.match(policy, /ISSUED BY/);
+    assert.match(policy, /Powering Progress Through Care/);
+    assert.match(policy, /three/);
+    for (const page of pages.slice(firstTablePage)) assert.doesNotMatch(page, /SCHOLARSHIP POLICY NOTICE|ISSUED BY/);
     assert.deepEqual(rows, before);
   });
 
@@ -144,7 +149,7 @@ describe('seven-column branded merit PDF', () => {
     long.roundTitle = 'Synthetic long round title '.repeat(30);
     long.filters.className = 'Synthetic class '.repeat(20);
     const doc = await buildMeritPdf(long);
-    assert.equal(doc.getNumberOfPages(), 1);
+    assert(doc.getNumberOfPages() > 1);
     assert.deepEqual(header(table(doc)), headings);
     assert.match(cell(table(doc), 0, 0), /No candidates match/);
     assert.equal(table(doc).body[0].cells[0].colSpan, 7);
@@ -164,6 +169,10 @@ describe('seven-column branded merit PDF', () => {
     assert.deepEqual(header(rendered), headings);
     assert.equal(rendered.columns.length, 7);
     assert.deepEqual(rows.map((_, index) => cell(rendered, index, 6)), choices.map(([, label]) => label));
+    for (const row of rendered.body) {
+      assert.equal(row.cells[6].padding('left'), 9);
+      assert(row.cells[6].height >= 9, 'Award cell reserves icon space');
+    }
     assert.deepEqual(rows, before);
   });
 
@@ -207,7 +216,7 @@ describe('seven-column branded merit PDF', () => {
     const long = await buildMeritPdf({ ...options([candidate(0)]), documentTitle: fullTitle });
     assert(long.output().includes('/Title (' + fullTitle + ')'));
     assert(table(long).head[0].cells[0].y > table(short).head[0].cells[0].y);
-    assert.equal(long.getNumberOfPages(), 1);
+    assert(long.getNumberOfPages() > 1);
     await assert.rejects(buildMeritPdf({ ...options([]), documentTitle: 'W'.repeat(121) }), /120 characters/);
     await assert.rejects(buildMeritPdf({ ...options([]), documentTitle: 'نام' }), /PDF title contains characters/);
   });
@@ -221,8 +230,10 @@ describe('seven-column branded merit PDF', () => {
       documentTitle: 'Session V Part 1 Merit List - Manually Selected Awards and Registered Scholarship Categories for Candidate Review',
     });
     const lastSection = table(doc);
-    assert.equal(doc.getNumberOfPages(), 2);
-    assert.equal(lastSection.startPageNumber, 2, 'The last class heading must start on its candidate page');
+    assert(doc.getNumberOfPages() > 1);
+    assert(lastSection.startPageNumber > 1, 'Class sections follow policy pages');
+    const page = (doc.internal as unknown as { pages: string[][] }).pages[lastSection.startPageNumber].join('\n');
+    assert(page.includes('Class: Class 10th') && page.includes('PDF-TEST-5'), 'Class heading and its first candidate share a page');
     assert.equal(lastSection.pageNumber, 1, 'The last section must not have a header-only page');
     assert.equal(cell(lastSection, 0, 1), 'PDF-TEST-5');
   });
