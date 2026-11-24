@@ -143,7 +143,8 @@ def create_bundle(root, base, source, out):
     require(bool(source_tree), "Backend tree missing")
     out.mkdir(parents=True, exist_ok=False)
     archive = out / ARCHIVE
-    subprocess.check_call(["git", "-C", str(root), "archive", "--format=tar.gz",
+    subprocess.check_call(["git", "-C", str(root), "-c", "core.autocrlf=false", "-c", "core.eol=lf",
+                           "archive", "--format=tar.gz",
                            "--output=" + str(archive.resolve()), source, "backend"])
     files, blobs = archive_inventory(archive)
     require(blobs == source_tree, "Archive does not exactly match committed backend blobs")
