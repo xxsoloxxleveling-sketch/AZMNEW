@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Loader2, RefreshCw } from 'lucide-react';
 import { assessmentApi } from './assessmentApi';
 import { useAuth } from '../../../lib/authContext';
 import type { MeritAwardCode, MeritPreview, MeritPreviewRow } from './assessmentApi';
 import { formatAssessmentScore, safeCsvCell } from './assessmentViewModel';
 import { assessmentUi as ui, writtenMarkLabel } from './assessmentUi';
-import { maximumMeritListSize, meritGroupingLabel, meritRank, meritSortOptions, meritWrittenContribution, parseMeritListLimit, selectMeritRows, sortMeritRows } from './meritViewModel';
+import { matchesMeritSchool, maximumMeritListSize, meritGroupingLabel, meritRank, meritSchoolFilenamePart, meritSchoolOptions, meritSortOptions, meritWrittenContribution, parseMeritListLimit, selectMeritRows, sortMeritRows } from './meritViewModel';
 import type { MeritGrouping, MeritSortField, SortDirection } from './meritViewModel';
 import { meritAwardLabel, meritAwardOptions, meritScholarshipLabel } from './meritAwards';
 
@@ -23,6 +23,8 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
   const [data, setData] = useState<MeritPreview | null>(null);
   const [grouping, setGrouping] = useState<MeritGrouping>('overall');
   const [className, setClassName] = useState('');
+  const [schoolSearch, setSchoolSearch] = useState('');
+  const schoolOptionsId = useId();
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<MeritSortField>('total');
@@ -60,11 +62,13 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
   const limit = parseMeritListLimit(limitMode, customLimit);
   const limited = limitMode !== 'all';
   const effectiveStatus = limited ? 'READY' : status;
+  const schoolOptions = useMemo(() => meritSchoolOptions(data?.rows ?? []), [data]);
   const matches = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (loading || error ? [] : data?.rows ?? []).filter(row => (!effectiveStatus || row.status === effectiveStatus) &&
+      matchesMeritSchool(row, schoolSearch) &&
       (!term || row.studentName.toLowerCase().includes(term) || (row.rollNumber ?? '').toLowerCase().includes(term)));
-  }, [data, effectiveStatus, search, loading, error]);
+  }, [data, effectiveStatus, search, schoolSearch, loading, error]);
   const selection = useMemo(() => selectMeritRows(matches, limit.limit, supportsOverall, !!className),
     [matches, limit.limit, supportsOverall, className]);
   const selectionError = limit.error || selection.error;
@@ -143,6 +147,7 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
         documentTitle,
         filters: {
           className,
+          schoolName: schoolSearch.trim(),
           readiness: effectiveStatus ? statusLabels[effectiveStatus as MeritPreviewRow['status']] : 'All candidates',
           search: search.trim(),
           sortLabel: meritSortOptions.find(option => option.value === sortBy)!.label,
@@ -158,17 +163,18 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
 
   function exportCsv() {
     if (!data || cannotExport) return;
-    const headings = ['Preview status', 'Class', effectiveGrouping === 'overall' ? 'Overall merit rank' : 'Class merit rank', 'Roll number', 'Student', 'Panel', 'Batch', 'Final written /100', 'Written /60', 'Interview average /20', 'Activities /10', 'Academic /5', 'Personality average /5', 'Total /100', 'Assessment status', 'Readiness', 'Review required', 'Policy version', 'Scholarship Category', 'Merit grouping'];
+    const headings = ['Preview status', 'Class', effectiveGrouping === 'overall' ? 'Overall merit rank' : 'Class merit rank', 'Roll number', 'Student', 'Panel', 'Batch', 'Final written /100', 'Written /60', 'Interview average /20', 'Activities /10', 'Academic /5', 'Personality average /5', 'Total /100', 'Assessment status', 'Readiness', 'Review required', 'Policy version', 'School / institute', 'Scholarship Category', 'Merit grouping'];
     const csvRows = filtered.map(row => [
       'PROVISIONAL - NOT PUBLISHED', row.className, meritRank(row, effectiveGrouping), row.rollNumber, row.studentName, row.panel, row.batch,
       row.written.isFinal ? row.written.marks : null, meritWrittenContribution(row), row.totals.interview, row.totals.extracurricular,
       row.totals.academic, row.totals.personality, row.status === 'READY' ? row.totals.total : null,
-      row.assessmentStatus ?? 'Not entered', statusLabels[row.status], row.issues.join('; '), data.policyVersion, meritScholarshipLabel(row) === '-' ? '' : meritScholarshipLabel(row), meritGroupingLabel(effectiveGrouping),
+      row.assessmentStatus ?? 'Not entered', statusLabels[row.status], row.issues.join('; '), data.policyVersion, row.institute ?? '', meritScholarshipLabel(row) === '-' ? '' : meritScholarshipLabel(row), meritGroupingLabel(effectiveGrouping),
     ]);
     const csv = '\uFEFF' + [headings, ...csvRows].map(row => row.map(safeCsvCell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
-    link.href = url; link.download = `AZM_Session_V_Provisional_Merit_${effectiveGrouping === 'overall' ? 'Overall' : 'By-Class'}_Preview.csv`;
+    const schoolSuffix = meritSchoolFilenamePart(schoolSearch);
+    link.href = url; link.download = `AZM_Session_V_Provisional_Merit_${effectiveGrouping === 'overall' ? 'Overall' : 'By-Class'}${schoolSuffix ? '_' + schoolSuffix : ''}_Preview.csv`;
     document.body.appendChild(link); link.click(); link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -184,6 +190,11 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <label className="min-w-0"><span className={ui.label}>Merit grouping</span><select aria-label="Merit grouping" className={ui.input} value={effectiveGrouping} disabled={loading || controlsLocked} onChange={event => { setGrouping(event.target.value as MeritGrouping); setPage(1); }}><option value="overall" disabled={!!data && !supportsOverall}>All classes together</option><option value="class">Separate by class</option></select></label>
         <label className="min-w-0"><span className={ui.label}>Class filter</span><select aria-label="Class filter" className={ui.input} value={className} disabled={controlsLocked} onChange={event => { setLoading(true); setClassName(event.target.value); setPage(1); }}><option value="">All classes</option>{data?.classOptions.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+        <div className="min-w-0">
+          <label><span className={ui.label}>School filter</span><input aria-label="School filter" className={ui.input} list={schoolOptionsId} value={schoolSearch} disabled={loading || controlsLocked} placeholder="All schools - type a name" onChange={event => { setSchoolSearch(event.target.value); setPage(1); }} /></label>
+          <datalist id={schoolOptionsId}>{schoolOptions.map(school => <option key={school} value={school} />)}</datalist>
+          {schoolSearch && <button type="button" className="mt-1 text-xs text-blue-700 underline disabled:opacity-50" disabled={loading || controlsLocked} onClick={() => { setSchoolSearch(''); setPage(1); }}>Clear school filter</button>}
+        </div>
         <label className="min-w-0"><span className={ui.label}>Readiness</span><select aria-label="Readiness" className={ui.input} value={effectiveStatus} disabled={limited || loading || controlsLocked} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="">All candidates</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="min-w-0"><span className={ui.label}>Name or roll number</span><input aria-label="Name or roll number" className={ui.input} value={search} disabled={controlsLocked} onChange={event => { setSearch(event.target.value); setPage(1); }} /></label>
         <label className="min-w-0"><span className={ui.label}>Sort by</span><select aria-label="Sort by" className={ui.input} value={sortBy} disabled={loading || controlsLocked} onChange={event => { setSortBy(event.target.value as MeritSortField); setPage(1); }}>{meritSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
@@ -222,7 +233,7 @@ export function InterviewMeritPreviewView({ roundId, roundTitle = 'Interview mer
           const rank = meritRank(row, effectiveGrouping);
           return <tr key={row.placementId}>
           <td className={ui.td}><span className="block text-xs text-slate-500">{row.className}</span><span className="font-semibold tabular-nums text-slate-900">{rank === null ? 'Unranked' : '#' + rank}</span></td>
-          <td className={ui.td}><span className="block font-medium text-slate-900">{row.studentName}</span><span className="block text-xs text-slate-500">{row.rollNumber ?? 'No roll number'} · Panel {row.panel} / {row.batch}</span><span className="block text-xs text-slate-500">{writtenMarkLabel(row.written)}</span></td>
+          <td className={ui.td}><span className="block font-medium text-slate-900">{row.studentName}</span><span className="block text-xs text-slate-500">{row.rollNumber ?? 'No roll number'} · Panel {row.panel} / {row.batch}</span><span className="block text-xs text-slate-500">{writtenMarkLabel(row.written)}</span><span className="block text-xs text-slate-500">{row.institute?.trim() || 'School not recorded'}</span></td>
           <td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(meritWrittenContribution(row))}</td><td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(row.totals.interview)}</td><td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(row.totals.extracurricular)}</td><td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(row.totals.academic)}</td><td className={ui.td + ' tabular-nums'}>{formatAssessmentScore(row.totals.personality)}</td><td className={ui.td + ' font-semibold tabular-nums'}>{row.status === 'READY' ? formatAssessmentScore(row.totals.total) : '—'}</td>
           <td className={ui.td}><span className={row.status === 'READY' ? 'font-medium text-emerald-700' : 'text-amber-800'}>{statusLabels[row.status]}</span>{row.issues.length > 0 && <details className="mt-1 max-w-64 text-xs text-slate-500"><summary className="cursor-pointer">Review details</summary><ul className="mt-1 list-disc pl-4">{row.issues.map(issue => <li key={issue}>{issue}</li>)}</ul></details>}</td>
           <td className={ui.td + ' min-w-64'}>

@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
 import type { MeritPreviewRow } from './assessmentApi';
-import { meritGroupingLabel, meritRank } from './meritViewModel';
+import { meritGroupingLabel, meritRank, meritSchoolFilenamePart } from './meritViewModel';
 import type { MeritGrouping } from './meritViewModel';
 import { meritScholarshipLabel } from './meritAwards';
 
@@ -17,6 +17,7 @@ export type MeritPdfOptions = {
   documentTitle?: string;
   filters: {
     className: string;
+    schoolName?: string;
     readiness: string;
     search: string;
     sortLabel: string;
@@ -99,7 +100,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const generatedAt = options.generatedAt ?? new Date();
   if (!Number.isFinite(generatedAt.getTime())) throw new Error('Unable to export PDF: the generation date is invalid.');
   const { title } = resolveDocumentTitle(options.documentTitle);
-  [options.roundTitle, options.sessionRef, options.filters.className,
+  [options.roundTitle, options.sessionRef, options.filters.className, options.filters.schoolName ?? '',
     ...options.rows.flatMap(row => [row.studentName, row.rollNumber ?? '', row.fatherName ?? '', row.institute ?? '', meritScholarshipLabel(row),
       ...(options.grouping === 'class' ? [row.className] : [])]),
   ].forEach(text);
@@ -122,6 +123,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const filterLines = [
     `Session: ${metadata(options.sessionRef || '-')} | ${metadata(options.roundTitle || 'Interview assessment')}`,
     `Merit grouping: ${meritGroupingLabel(options.grouping)}` + (options.filters.className ? ` | Class: ${metadata(options.filters.className)}` : ''),
+    ...(options.filters.schoolName?.trim() ? [`School filter: ${metadata(options.filters.schoolName)}`] : []),
   ];
   const titleFontSize = 11.6;
   const titleLineHeight = 5;
@@ -262,7 +264,7 @@ export function meritPdfFilename(options: MeritPdfOptions): string {
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, maximum).replace(/-+$/g, '');
   const prefix = custom ? ['AZM', filenamePart(title, 90) || 'Merit-List']
     : ['AZM', filenamePart(options.sessionRef), 'Provisional-Merit'];
-  return [...prefix, options.grouping === 'overall' ? 'Overall' : 'By-Class', filenamePart(options.filters.className), pakistanDate(generatedAt)]
+  return [...prefix, options.grouping === 'overall' ? 'Overall' : 'By-Class', filenamePart(options.filters.className), meritSchoolFilenamePart(options.filters.schoolName ?? ''), pakistanDate(generatedAt)]
     .filter(Boolean).join('-') + '.pdf';
 }
 
