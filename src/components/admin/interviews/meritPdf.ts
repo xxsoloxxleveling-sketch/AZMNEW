@@ -13,7 +13,7 @@ export type MeritPdfOptions = {
   roundTitle: string;
   sessionRef: string;
   grouping: MeritGrouping;
-  /** Custom report title; blank uses Merit List. Maximum 120 normalised characters. */
+  /** Custom report title; blank uses Finalized Merit List. Maximum 120 normalised characters. */
   documentTitle?: string;
   filters: {
     className: string;
@@ -31,6 +31,14 @@ export type MeritPdfOptions = {
 const brand: [number, number, number] = [24, 91, 157];
 const ink: [number, number, number] = [30, 41, 59];
 const muted: [number, number, number] = [71, 85, 105];
+const noticeHeading = 'IMPORTANT SCHOLARSHIP CONDITIONS';
+const scholarshipNotice = [
+  "Inclusion or merit rank does not guarantee an award. AZM.AIO (Private) Limited's self-funded awards remain subject to eligibility, document verification, approved policy, available funds and formal award notification.",
+  'AZM may correct verified errors, revise decisions, or suspend or withdraw awards for fraud, misrepresentation, misconduct, non-compliance or resource constraints, under applicable policy and law. Awards are non-transferable unless authorised in writing.',
+  'Candidates and guardians must provide requested academic records, sign required undertakings, maintain active contact details and respond to official communications.',
+  'Umrah awards: unless otherwise notified, acceptance and travel arrangements must be completed within three months from the specified award or ticket date, subject to documentation, visa and travel requirements. Expired awards carry no automatic cash substitute.',
+  'Use official AZM channels only. Impersonation, brand misuse and unlawful misconduct may lead to action. Submit written review requests with name, roll number, grounds and evidence within the announced review period. Lawful complaints and statutory rights remain protected.',
+] as const;
 const columnHeadings = ['Merit Rank', 'Roll No', 'Name', 'Father Name', 'Institute', 'Percentage Obtained', 'Scholarship Category'];
 
 // Normalise punctuation used by the UI for the PDF's built-in Latin font.
@@ -56,7 +64,7 @@ function resolveDocumentTitle(value?: string): { title: string; custom: boolean 
   const normalised = (value ?? '').normalize('NFC').replace(/\s+/g, ' ').trim();
   if (normalised.length > 120) throw new Error('PDF title must be 120 characters or fewer.');
   try {
-    return { title: text(normalised || 'Merit List'), custom: normalised.length > 0 };
+    return { title: text(normalised || 'Finalized Merit List'), custom: normalised.length > 0 };
   } catch {
     throw new Error('PDF title contains characters that the current font cannot render. Use supported characters.');
   }
@@ -108,7 +116,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
   doc.setProperties({
     title,
-    subject: `${meritGroupingLabel(options.grouping)} - private provisional merit review.`,
+    subject: `${meritGroupingLabel(options.grouping)} - finalized merit list; awards subject to formal approval.`,
     author: 'AZM.AIO Scholarship & Examination Authority',
     creator: 'AZM.AIO Interview Management',
   });
@@ -139,6 +147,18 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   const contextLines = filterLines.flatMap(line => doc.splitTextToSize(line, contentWidth - 8) as string[]);
   const ribbonHeight = contextLines.length * 3.5 + 5;
   const tableTop = ribbonY + ribbonHeight + 5;
+  // Reserve extra space only on the first page; continuation tables keep
+  // the original compact header, so the notice does not repeat or waste pages.
+  const noticeY = ribbonY + ribbonHeight + 4;
+  const noticeFontSize = 8.2;
+  const noticeLineHeight = 3.65;
+  const noticeParagraphGap = 1.35;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(noticeFontSize);
+  const noticeLines = scholarshipNotice.map(paragraph => doc.splitTextToSize(paragraph, contentWidth - 10) as string[]);
+  const noticeHeight = 12 + noticeLines.reduce((sum, lines) => sum + lines.length * noticeLineHeight, 0)
+    + (noticeLines.length - 1) * noticeParagraphGap;
+  const firstTableTop = noticeY + noticeHeight + 5;
   const headerPages = new Set<number>();
 
   const drawHeader = () => {
@@ -160,7 +180,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.text(titleLines, 35, 19, { lineHeightFactor: titleLineHeight / (titleFontSize * 25.4 / 72) });
     doc.setTextColor(...muted);
     doc.setFontSize(8.2);
-    doc.text('PRIVATE PROVISIONAL REVIEW - NOT PUBLISHED', 35, statusY);
+    doc.text('AWARDS SUBJECT TO VERIFICATION & FORMAL APPROVAL', 35, statusY);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(...muted);
@@ -177,6 +197,26 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.4);
     doc.text(contextLines, margin + 4, ribbonY + 4, { lineHeightFactor: 1.34 });
+    if (page === 1) {
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(.2);
+      doc.rect(margin, noticeY, contentWidth, noticeHeight, 'FD');
+      doc.setFillColor(...brand);
+      doc.rect(margin, noticeY, 1.1, noticeHeight, 'F');
+      doc.setTextColor(...brand);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(noticeHeading, margin + 5, noticeY + 5.5);
+      doc.setTextColor(...ink);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(noticeFontSize);
+      let y = noticeY + 11;
+      for (const lines of noticeLines) {
+        doc.text(lines, margin + 5, y, { lineHeightFactor: noticeLineHeight / (noticeFontSize * 25.4 / 72) });
+        y += lines.length * noticeLineHeight + noticeParagraphGap;
+      }
+    }
   };
 
   const candidateRow = (row: MeritPreviewRow): RowInput => {
@@ -198,7 +238,9 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
   } else sections.push({ rows: [...options.rows] });
   if (!sections.length) sections.push({ rows: [] });
 
-  let startY = tableTop;
+  // Draw page one's notice even if an unusually tall first row moves to page two.
+  drawHeader();
+  let startY = firstTableTop;
   for (const section of sections) {
     const head: RowInput[] = [];
     if (section.className !== undefined) head.push([{
@@ -228,7 +270,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
         // Keep a new class section's heading with its first candidate. The
         // library checks the heading alone before starting a separate table.
         const firstRowHeight = data.table.body[0]?.height ?? 0;
-        if (data.pageNumber === 1 && data.cursor && data.cursor.y > tableTop &&
+        if (data.pageNumber === 1 && data.cursor && data.cursor.y > (doc.getCurrentPageInfo().pageNumber === 1 ? firstTableTop : tableTop) &&
           data.cursor.y + data.table.getHeadHeight(data.table.columns) + firstRowHeight > height - 18) {
           doc.addPage();
           data.cursor.y = tableTop;
@@ -248,7 +290,7 @@ export async function buildMeritPdf(options: MeritPdfOptions): Promise<jsPDF> {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...muted);
     doc.setFontSize(6.6);
-    doc.text('Private provisional review', margin, height - 8);
+    doc.text('AZM.AIO (Private) Limited | Finalized Merit List', margin, height - 8);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...brand);
     doc.text(`Page ${page} of ${pages}`, width - margin, height - 8, { align: 'right' });
@@ -262,8 +304,8 @@ export function meritPdfFilename(options: MeritPdfOptions): string {
   const { title, custom } = resolveDocumentTitle(options.documentTitle);
   const filenamePart = (value: string, maximum = 45) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, maximum).replace(/-+$/g, '');
-  const prefix = custom ? ['AZM', filenamePart(title, 90) || 'Merit-List']
-    : ['AZM', filenamePart(options.sessionRef), 'Provisional-Merit'];
+  const prefix = custom ? ['AZM', filenamePart(title, 90) || 'Finalized-Merit-List']
+    : ['AZM', filenamePart(options.sessionRef), 'Finalized-Merit'];
   return [...prefix, options.grouping === 'overall' ? 'Overall' : 'By-Class', filenamePart(options.filters.className), meritSchoolFilenamePart(options.filters.schoolName ?? ''), pakistanDate(generatedAt)]
     .filter(Boolean).join('-') + '.pdf';
 }
