@@ -51,6 +51,33 @@ export const meritSortOptions: ReadonlyArray<{ value: MeritSortField; label: str
 
 const naturalOrder = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
 
+/** Search the current registered school name without rewriting school identities. */
+export function normalizeMeritSchool(value: string | null | undefined): string {
+  return (value ?? '').normalize('NFKC').toLocaleLowerCase('en')
+    .replace(/[’']/g, '').replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();
+}
+
+export function matchesMeritSchool(row: Pick<MeritPreviewRow, 'institute'>, search: string): boolean {
+  const term = normalizeMeritSchool(search);
+  return !search.trim() || (!!term && normalizeMeritSchool(row.institute).includes(term));
+}
+
+/** Suggestions come from the current class/round, not from the filtered page. */
+export function meritSchoolOptions(rows: readonly MeritPreviewRow[]): string[] {
+  const unique = new Map<string, string>();
+  for (const row of rows) {
+    const label = (row.institute ?? '').normalize('NFC').replace(/\s+/g, ' ').trim();
+    const key = normalizeMeritSchool(label);
+    if (key && !unique.has(key)) unique.set(key, label);
+  }
+  return [...unique.values()].sort((a, b) => naturalOrder.compare(a, b));
+}
+
+export function meritSchoolFilenamePart(value: string): string {
+  return value.normalize('NFKD').replace(/\p{M}/gu, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 45).replace(/-+$/g, '');
+}
+
 function finiteNumber(value: number | null): number | null {
   return value !== null && Number.isFinite(value) ? value : null;
 }
