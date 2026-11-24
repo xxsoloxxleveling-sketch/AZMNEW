@@ -287,7 +287,8 @@ async function run() {
     assertSevenColumnPdf(pdfContents(titledPdf, 'raw'));
     for (const pdfPage of pdfContents(titledPdf, 'raw').split('\f').filter(value => value.trim())) {
       assert(pdfPage.replace(/\s+/g, ' ').includes(customTitle), 'The custom title repeats on each exported page');
-      assert.match(pdfPage, /PRIVATE PROVISIONAL REVIEW/);
+      assert.match(pdfPage, /AWARDS SUBJECT TO VERIFICATION & FORMAL APPROVAL/);
+      assert.doesNotMatch(pdfPage, /PRIVATE PROVISIONAL REVIEW|NOT PUBLISHED/i);
     }
     assert.match(execFileSync('pdfinfo', [titledPdf], { encoding: 'utf8' }), /Title:\s+Synthetic Merit: Session V \/ Scholarship Review/, 'The PDF metadata uses the custom title');
     await fill(page, 'PDF title', '');
@@ -364,7 +365,8 @@ async function run() {
     const pdfText = pdfContents(pdf);
     assert.deepEqual(rolls(pdfText), meritDescending, 'PDF matches the all-row CSV order and filters');
     assert.match(pdfText, /AZM\.AIO/);
-    assert.match(pdfText, /PROVISIONAL/i);
+    assert.match(pdfText, /Finalized Merit List/);
+    assert.doesNotMatch(pdfText, /PRIVATE PROVISIONAL REVIEW|NOT PUBLISHED/i);
     assert.match(pdfText, /Synthetic Session V Merit Review/);
     assert.match(pdfText, /2026-V/);
     assert.match(pdfText, /67\.00%/, 'The PDF prints combined total as a percentage instead of individual component scores');
@@ -372,9 +374,14 @@ async function run() {
     assert(!pdfText.includes('Synthetic Pending Candidate') && !pdfText.includes('Synthetic Other Class'));
     const pages = pdfText.split('\f').filter(value => value.trim());
     assert(pages.length >= 2, 'The complete list spans multiple PDF pages');
+    assert.match(pages[0], /IMPORTANT DISCLAIMER & SCHOLARSHIP CONDITIONS/);
+    assert.match(pages[0].replace(/\s+/g, ' '), /does not guarantee an award/);
+    assert.match(pages[0].replace(/\s+/g, ' '), /three months/);
+    assert(rolls(pages[0]).length > 0, 'The first page includes candidates below the disclaimer');
+    for (const continuation of pages.slice(1)) assert.doesNotMatch(continuation, /IMPORTANT DISCLAIMER & SCHOLARSHIP CONDITIONS/);
     for (const text of pages) {
       assert.match(text, /AZM\.AIO/);
-      assert.match(text, /PROVISIONAL/i);
+      assert.match(text, /Finalized Merit List/);
       assert.match(text, /Page\s+\d+\s+of\s+\d+/i, 'Each page has a page counter');
     }
     await screenshot(page, path.join(output, 'desktop-merit-sorted.png'));
