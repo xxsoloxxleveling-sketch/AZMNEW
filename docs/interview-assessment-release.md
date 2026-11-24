@@ -131,9 +131,9 @@ grouping. Its Scholarship Category field follows the same saved-award rule as
 the PDF. Both formats include the entire selected list across all pages, rather
 than only the 25 currently visible rows.
 
-### Manual General Merit awards
+### Manual Super Admin awards for all candidates
 
-The administrator chooses **Award** in a General Merit candidate's row and
+The Super Admin chooses **Award** in any candidate's row and
 clicks **Save award**. The exact choices are:
 
 - Umrah Ticket
@@ -148,11 +148,12 @@ clicks **Save award**. The exact choices are:
 allocation, score-to-award rule, award sorting or bulk assignment is provided.
 The award belongs to the interview round and placement. It does not replace
 the student's registration category, change marks, alter readiness or change
-merit rank. Both Admin and Super Admin may save a choice, independently of
-assessment readiness. Only a current General Merit registration can receive a
-nonempty award. If its registration category changes later, the old selection
-remains in the audit history and can be explicitly cleared; the PDF shows its
-current non-General-Merit registration category.
+merit rank. Only an active Super Admin may save or clear a choice, regardless
+of readiness or registration category. Ordinary Admins can view the saved award
+but cannot edit it. An unassigned award remains blank (dash) in PDF and CSV;
+General Merit, Orphan, Financially Needy and Disability registration labels are
+never treated as awards. The additive validation-function migration preserves
+all previously explicitly saved award revisions and existing table privileges.
 
 Every save appends the award code, administrator and time to immutable history.
 Stale revisions return a conflict; identical retries use the same idempotency

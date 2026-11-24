@@ -24,9 +24,7 @@ export function meritAwardLabel(value: MeritAwardCode | null | undefined): strin
   return meritAwardOptions.find(option => option.value === value)?.label ?? '-';
 }
 
-/** General Merit never acquires an award from its score, rank, or position in a list. */
+/** A registration category never constitutes an awarded scholarship. */
 export function meritScholarshipLabel(row: Pick<MeritPreviewRow, 'scholarshipCategory' | 'meritAward'>): string {
-  return row.scholarshipCategory === 'GENERAL_MERIT'
-    ? meritAwardLabel(row.meritAward?.awardCode)
-    : meritRegistrationLabel(row.scholarshipCategory);
+  return meritAwardLabel(row.meritAward?.awardCode);
 }

@@ -95,14 +95,14 @@ describe('manual award presentation', () => {
     assert.equal(meritScholarshipLabel(row), '-');
   });
 
-  it('preserves non-General-Merit categories and hides an old general award after a category change', () => {
-    const row = candidate(1, { scholarshipCategory: 'ORPHAN', meritAward: {
-      id: 'synthetic-award', revision: 1, awardCode: 'LAPTOP', actorName: 'Synthetic Admin', createdAt: null,
-    } });
-    assert.equal(meritScholarshipLabel(row), 'Orphan');
-    row.scholarshipCategory = 'FINANCIALLY_NEEDY';
-    assert.equal(meritScholarshipLabel(row), 'Financially Needy');
-    row.scholarshipCategory = undefined;
-    assert.equal(meritScholarshipLabel(row), '-');
+  it('never prints registration labels as awards and preserves explicit choices across all categories', () => {
+    for (const scholarshipCategory of ['GENERAL_MERIT', 'ORPHAN', 'FINANCIALLY_NEEDY', 'PERSON_WITH_DISABILITY', undefined]) {
+      const row = candidate(1, { scholarshipCategory });
+      assert.equal(meritScholarshipLabel(row), '-');
+      row.meritAward = { id: 'synthetic-award', revision: 1, awardCode: 'LAPTOP', actorName: 'Synthetic Super Admin', createdAt: null };
+      assert.equal(meritScholarshipLabel(row), 'Laptop');
+      row.meritAward.awardCode = null;
+      assert.equal(meritScholarshipLabel(row), '-');
+    }
   });
 });

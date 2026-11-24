@@ -425,10 +425,10 @@ async function run() {
       assert.equal(initial.manualAwardsEnabled, true);
       assert(initial.rows.every(row => row.meritAward.revision === 0 && row.meritAward.awardCode === null));
       assert.equal(await runtime!.interviewMeritAwardRevision.count(), 0, 'Reading merit cannot assign awards');
-      savedAward = await service.saveMeritAward(roundId, placementId, awardRequest, adminActor);
+      savedAward = await service.saveMeritAward(roundId, placementId, awardRequest, superAdmin);
       assert.equal(savedAward.revision, 1);
       assert.equal(savedAward.awardCode, 'LAPTOP');
-      assert.equal(savedAward.actorName, adminActor.name);
+      assert.equal(savedAward.actorName, superAdmin.name);
       assert(savedAward.id && savedAward.createdAt && Number.isFinite(Date.parse(savedAward.createdAt)));
       const fresh = new InterviewAssessmentService(runtime!);
       const stored = (await fresh.merit(roundId, 'Class 10')).rows.find(row => row.placementId === placementId)!;
@@ -437,14 +437,14 @@ async function run() {
     });
 
     await check('manual award retries are idempotent and conflicting keys or revisions reject with 409', async () => {
-      assert.deepEqual(await service.saveMeritAward(roundId, placementId, awardRequest, adminActor), savedAward!);
+      assert.deepEqual(await service.saveMeritAward(roundId, placementId, awardRequest, superAdmin), savedAward!);
       await rejectsStatus(() => service.saveMeritAward(roundId, placementId,
-        { ...awardRequest, awardCode: 'UMRAH_TICKET' }, adminActor), 409);
+        { ...awardRequest, awardCode: 'UMRAH_TICKET' }, superAdmin), 409);
       await rejectsStatus(() => service.saveMeritAward(roundId, placementId,
-        { expectedRevision: 0, idempotencyKey: 'synthetic-award-stale-0002', awardCode: 'CASH_PRIZE_3000' }, adminActor), 409);
+        { expectedRevision: 0, idempotencyKey: 'synthetic-award-stale-0002', awardCode: 'CASH_PRIZE_3000' }, superAdmin), 409);
       assert.equal(await runtime!.interviewMeritAwardRevision.count({ where: { placementId } }), 1);
       const cleared = await service.saveMeritAward(roundId, placementId,
-        { expectedRevision: 1, idempotencyKey: 'synthetic-award-clear-0002', awardCode: null }, adminActor);
+        { expectedRevision: 1, idempotencyKey: 'synthetic-award-clear-0002', awardCode: null }, superAdmin);
       assert.equal(cleared.revision, 2);
       assert.equal(cleared.awardCode, null);
       const history = await service.meritAwardHistory(roundId, placementId);
@@ -454,7 +454,7 @@ async function run() {
     await check('concurrent manual award saves append one revision and reject the stale writer', async () => {
       const outcomes = await Promise.allSettled([
         service.saveMeritAward(roundId, placementId,
-          { expectedRevision: 2, idempotencyKey: 'synthetic-award-race-one', awardCode: 'FULL_YEAR_SCHOLARSHIP' }, adminActor),
+          { expectedRevision: 2, idempotencyKey: 'synthetic-award-race-one', awardCode: 'FULL_YEAR_SCHOLARSHIP' }, superAdmin),
         service.saveMeritAward(roundId, placementId,
           { expectedRevision: 2, idempotencyKey: 'synthetic-award-race-two', awardCode: 'EDUCATIONAL_VOUCHER' }, superAdmin),
       ]);
@@ -469,17 +469,24 @@ async function run() {
       assert.equal(await runtime!.interviewMeritAwardRevision.count({ where: { placementId } }), 3);
     });
 
-    await check('manual awards enforce General Merit and allow clearing after a registration-category change', async () => {
-      await rejectsStatus(() => service.saveMeritAward(roundId, 'synthetic-overall-placement-1',
-        { expectedRevision: 0, idempotencyKey: 'synthetic-award-non-general', awardCode: 'LAPTOP' }, adminActor), 400);
-      assert.equal(await runtime!.interviewMeritAwardRevision.count({ where: { placementId: 'synthetic-overall-placement-1' } }), 0);
+    await check('only Super Admins may save or clear awards, regardless of registration category', async () => {
+      const otherPlacement = 'synthetic-overall-placement-1';
+      const request = { expectedRevision: 0, idempotencyKey: 'synthetic-award-non-general', awardCode: 'LAPTOP' as const };
+      await rejectsStatus(() => service.saveMeritAward(roundId, otherPlacement, request, adminActor), 403);
+      assert.equal(await runtime!.interviewMeritAwardRevision.count({ where: { placementId: otherPlacement } }), 0);
+      const awarded = await service.saveMeritAward(roundId, otherPlacement, request, superAdmin);
+      assert.equal(awarded.awardCode, 'LAPTOP');
+      assert.equal((await service.merit(roundId)).rows.find(row => row.placementId === otherPlacement)!.meritAward.awardCode, 'LAPTOP');
+      await rejectsStatus(() => service.saveMeritAward(roundId, otherPlacement,
+        { expectedRevision: 1, idempotencyKey: 'synthetic-award-admin-clear', awardCode: null }, adminActor), 403);
       await ownerDb!.student.update({ where: { id: candidateId }, data: { scholarshipCategory: 'ORPHAN' } });
       try {
-        await rejectsStatus(() => service.saveMeritAward(roundId, placementId,
-          { expectedRevision: 3, idempotencyKey: 'synthetic-award-changed-category', awardCode: 'CASH_PRIZE_5000' }, adminActor), 400);
+        const changed = await service.saveMeritAward(roundId, placementId,
+          { expectedRevision: 3, idempotencyKey: 'synthetic-award-changed-category', awardCode: 'CASH_PRIZE_5000' }, superAdmin);
+        assert.equal(changed.awardCode, 'CASH_PRIZE_5000');
         const cleared = await service.saveMeritAward(roundId, placementId,
-          { expectedRevision: 3, idempotencyKey: 'synthetic-award-clear-changed', awardCode: null }, adminActor);
-        assert.equal(cleared.revision, 4);
+          { expectedRevision: 4, idempotencyKey: 'synthetic-award-clear-changed', awardCode: null }, superAdmin);
+        assert.equal(cleared.revision, 5);
         assert.equal(cleared.awardCode, null);
       } finally {
         await ownerDb!.student.update({ where: { id: candidateId }, data: { scholarshipCategory: 'GENERAL_MERIT' } });
@@ -490,7 +497,7 @@ async function run() {
       await rejectsSql(admin!, 'UPDATE public."InterviewMeritAwardRevision" SET "actorName"=\'synthetic forbidden update\'', '23514', /append-only/);
       await rejectsSql(admin!, 'DELETE FROM public."InterviewMeritAwardRevision"', '23514', /append-only/);
       await rejectsSql(admin!, 'TRUNCATE public."InterviewMeritAwardRevision"', '23514', /append-only/);
-      assert.equal((await service.meritAwardHistory(roundId, placementId)).length, 4);
+      assert.equal((await service.meritAwardHistory(roundId, placementId)).length, 5);
       assert.deepEqual(await meritWithoutAwards(), meritBeforeAwards);
       assert.deepEqual(await sourceSnapshot(), sourcesBeforeAwards);
       assert.deepEqual(await ownerDb!.interviewAssessmentRevision.findMany({ orderBy: { id: 'asc' } }), assessmentsBeforeAwards);
