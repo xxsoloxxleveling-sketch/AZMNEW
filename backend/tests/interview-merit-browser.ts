@@ -179,6 +179,39 @@ async function run() {
     assertSevenColumnPdf(globalPdfRaw);
     assertPdfCandidate(globalPdfRaw, ['2', 'SYN-M-1', 'Synthetic Candidate 001', 'Synthetic Father 001', 'Synthetic Institute 001', '96.00%', '-']);
     assertPdfCandidate(globalPdfRaw, ['16', 'SYN-M-35', 'Synthetic Other Class Two', 'Synthetic Father 035', 'Synthetic Institute 035', '82.50%', '-']);
+    // School search applies to the full current class/round before the limit,
+    // ordering and pagination, including the same membership in both exports.
+    const suggestedSchools = await (await field(page, 'School filter')).evaluate(element =>
+      Array.from(element.list?.options ?? []).map(option => option.value));
+    assert.equal(suggestedSchools.length, 35);
+    assert(suggestedSchools.includes('Synthetic Institute 035'));
+    await fill(page, 'School filter', 'SYNTHETIC--INSTITUTE 00');
+    await waitText(page, '9 matching candidates');
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')), [1,2,3,4,5,6,7,8,9]);
+    assert((await visibleRows(page))[0][1].includes('Synthetic Institute 001'));
+    const schoolCsv = await download(page, 'Export CSV', '.csv', downloads, path.join(output, 'school-filtered.csv'), /SYNTHETIC-INSTITUTE-00/);
+    const schoolPdf = await download(page, 'Download PDF', '.pdf', downloads, path.join(output, 'school-filtered.pdf'), /SYNTHETIC-INSTITUTE-00/);
+    const schoolCsvText = fs.readFileSync(schoolCsv, 'utf8'), schoolPdfText = pdfContents(schoolPdf);
+    assert.deepEqual(rolls(schoolCsvText), [1,2,3,4,5,6,7,8,9]);
+    assert.deepEqual(rolls(schoolPdfText), [1,2,3,4,5,6,7,8,9]);
+    assert.match(schoolCsvText.split('\r\n')[0], /"School \/ institute"/);
+    assert(csvRow(schoolCsvText, 1).includes('Synthetic Institute 001'));
+    assert.equal(csvRow(schoolCsvText, 1)[2], '2');
+    assert.match(schoolPdfText, /School filter:\s*SYNTHETIC--INSTITUTE 00/);
+    assertSevenColumnPdf(pdfContents(schoolPdf, 'raw'));
+    await (await field(page, 'Students in merit list')).select('custom');
+    await fill(page, 'Custom student limit', '3');
+    await waitText(page, '3 selected of 9 matching ready candidates');
+    assert.deepEqual(rolls((await visibleRows(page)).map(row => row[1]).join('\n')), [1,2,3]);
+    await (await field(page, 'Students in merit list')).select('all');
+    await (await field(page, 'Class filter')).select('Class 10th');
+    await waitText(page, 'No candidates match these filters.');
+    assert(await buttonDisabled(page, 'Export CSV') && await buttonDisabled(page, 'Download PDF'));
+    await (await field(page, 'Class filter')).select('');
+    await waitText(page, '9 matching candidates');
+    await clickButton(page, 'Clear school filter');
+    await waitText(page, '35 matching candidates');
+    assert.equal(awardRequests.length, 0, 'School filtering and exporting never writes an award');
     await (await field(page, 'Order')).select('asc');
     await waitText(page, 'page 1 of 2');
     shown = await visibleRows(page);
@@ -506,7 +539,7 @@ async function run() {
     await (await field(page, awardLabel)).select('LAPTOP');
     assert.equal(awardRequests.length, 0, 'Choosing an award does not save it');
     assert(await buttonDisabled(page, 'Download PDF') && await buttonDisabled(page, 'Export CSV'), 'Unsaved award choices cannot appear in a download');
-    for (const label of ['Merit grouping', 'Class filter', 'Readiness', 'Name or roll number', 'Sort by', 'Order', 'Students in merit list']) {
+    for (const label of ['Merit grouping', 'Class filter', 'School filter', 'Readiness', 'Name or roll number', 'Sort by', 'Order', 'Students in merit list']) {
       assert(await (await field(page, label)).evaluate(element => element.disabled), 'Unsaved awards lock ' + label);
     }
     await clickButton(page, 'Discard unsaved awards');
